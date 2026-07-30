@@ -1,7 +1,7 @@
 use gpui::prelude::*;
 use gpui::{Context, FontWeight, IntoElement, div, px, rgb};
 
-use super::super::common::network_item_overflow_menu;
+use super::super::common::{NetworkItemMenuConfig, network_item_overflow_menu};
 use super::helpers::proxy_protocol_label;
 use crate::features::NyaTermApp;
 use crate::models::NetworkTab;
@@ -75,15 +75,17 @@ pub(in crate::features::pages::tunnels) fn proxy_network_row(
                 ),
         )
         .child(network_item_overflow_menu(
-            palette,
-            app.shell_surface_color(palette.surface),
-            format!("proxy-actions-{}", proxy.id),
-            menu_open,
-            app.tr("common.more"),
-            app.tr("common.edit"),
-            app.tr("network.moveToGroup"),
-            app.tr("common.delete"),
-            !app.tunnel_state.proxy_groups().is_empty(),
+            NetworkItemMenuConfig {
+                palette,
+                background: app.shell_surface_color(palette.surface),
+                id: format!("proxy-actions-{}", proxy.id),
+                open: menu_open,
+                more_label: app.tr("common.more"),
+                edit_label: app.tr("common.edit"),
+                move_label: app.tr("network.moveToGroup"),
+                delete_label: app.tr("common.delete"),
+                can_move: !app.tunnel_state.proxy_groups().is_empty(),
+            },
             cx.listener({
                 let id = proxy.id.clone();
                 move |this, _, _, cx| {

@@ -56,33 +56,23 @@ pub enum AiMode {
     Agent,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "lowercase")]
 pub enum RiskLevel {
     Low,
+    #[default]
     Medium,
     High,
     Critical,
 }
 
-impl Default for RiskLevel {
-    fn default() -> Self {
-        Self::Medium
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentCommandExecutionMode {
+    #[default]
     ConfirmEach,
     Smart,
     Auto,
-}
-
-impl Default for AgentCommandExecutionMode {
-    fn default() -> Self {
-        Self::ConfirmEach
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -887,12 +877,11 @@ pub fn extract_json_object(raw_text: &str) -> Option<String> {
 
 pub fn extract_text_from_assistant(content: &str) -> String {
     let trimmed = content.trim();
-    if let Some(json_str) = extract_json_object(trimmed) {
-        if let Ok(output) = serde_json::from_str::<AiModelOutput>(&json_str) {
-            if !output.text.trim().is_empty() {
-                return output.text;
-            }
-        }
+    if let Some(json_str) = extract_json_object(trimmed)
+        && let Ok(output) = serde_json::from_str::<AiModelOutput>(&json_str)
+        && !output.text.trim().is_empty()
+    {
+        return output.text;
     }
     trimmed.to_string()
 }
@@ -1444,8 +1433,10 @@ mod tests {
 
     #[test]
     fn resolve_model_allows_ollama_without_api_key() {
-        let mut settings = AiSettings::default();
-        settings.active_profile_id = "ollama".to_string();
+        let mut settings = AiSettings {
+            active_profile_id: "ollama".to_string(),
+            ..AiSettings::default()
+        };
         settings.provider_profiles[4].enabled = true;
         settings.provider_credentials[4].enabled = true;
         normalize_ai_settings(&mut settings);
@@ -1477,8 +1468,10 @@ mod tests {
 
     #[test]
     fn user_agent_and_deepseek_mapping_match_legacy() {
-        let mut settings = AiSettings::default();
-        settings.request_user_agent = "   ".to_string();
+        let mut settings = AiSettings {
+            request_user_agent: "   ".to_string(),
+            ..AiSettings::default()
+        };
         assert_eq!(
             effective_ai_request_user_agent(&settings),
             AI_REQUEST_USER_AGENT_DEFAULT

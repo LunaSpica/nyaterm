@@ -2,16 +2,40 @@ use gpui::{IntoElement, SharedString, div, prelude::*, px, rgb, svg};
 
 use crate::widgets::status_pill;
 
-pub(super) fn quick_command_row_actions(
+pub(super) struct QuickCommandRowPresentation<'a> {
+    pub command_id: &'a str,
+    pub show_badge: bool,
+    pub execution_mode: &'a str,
+    pub menu_open: bool,
+}
+
+pub(super) struct QuickCommandRowHandlers<OnRun, OnDetails, OnMore> {
+    pub on_run: OnRun,
+    pub on_details: OnDetails,
+    pub on_more: OnMore,
+}
+
+pub(super) fn quick_command_row_actions<OnRun, OnDetails, OnMore>(
     palette: crate::theme::ThemePalette,
-    command_id: &str,
-    show_badge: bool,
-    execution_mode: &str,
-    menu_open: bool,
-    on_run: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
-    on_details: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
-    on_more: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
-) -> impl IntoElement {
+    presentation: QuickCommandRowPresentation<'_>,
+    handlers: QuickCommandRowHandlers<OnRun, OnDetails, OnMore>,
+) -> impl IntoElement
+where
+    OnRun: Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+    OnDetails: Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+    OnMore: Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+{
+    let QuickCommandRowPresentation {
+        command_id,
+        show_badge,
+        execution_mode,
+        menu_open,
+    } = presentation;
+    let QuickCommandRowHandlers {
+        on_run,
+        on_details,
+        on_more,
+    } = handlers;
     // Tauri renderCommandActions: optional badge + Send + Details + More menu.
     div()
         .flex()

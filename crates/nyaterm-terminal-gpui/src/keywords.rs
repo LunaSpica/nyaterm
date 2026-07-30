@@ -1,8 +1,13 @@
-use super::*;
 use std::collections::{HashMap, hash_map::DefaultHasher};
 use std::hash::{Hash, Hasher};
 use std::ops::Range;
 use std::sync::Arc;
+
+use nyaterm_core::ResolvedKeywordHighlightRule;
+use nyaterm_terminal::{TerminalSnapshot, terminal_cell_col_for_byte_index};
+
+use crate::element::{TerminalBufferMatch, TerminalSearchFlags};
+use crate::types::{TerminalHighlightSpan, TerminalKeywordRange};
 
 pub(super) type CompiledKeywordRules = Vec<(regex::Regex, u32)>;
 
@@ -675,7 +680,20 @@ pub(super) fn parse_hex_rgb(value: &str) -> Option<u32> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::sync::Arc;
+
+    use nyaterm_core::ResolvedKeywordHighlightRule;
+    use nyaterm_terminal::{
+        TerminalScreen, TerminalSnapshot, terminal_char_cell_width, terminal_is_zero_width_mark,
+    };
+
+    use super::{
+        TerminalKeywordHighlightLookup, compile_terminal_keyword_highlighter,
+        keyword_highlight_spans_compiled, precompute_terminal_keyword_highlights,
+        precompute_terminal_keyword_highlights_for_rows, terminal_buffer_matches,
+    };
+    use crate::element::TerminalSearchFlags;
+    use crate::types::TerminalKeywordRange;
 
     fn set_snapshot_row(
         snapshot: &mut TerminalSnapshot,

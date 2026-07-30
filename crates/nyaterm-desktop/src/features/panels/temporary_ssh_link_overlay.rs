@@ -23,7 +23,7 @@ impl NyaTermApp {
         );
         let input_focus = input.read(cx).focus_handle();
         let parsed = parse_temporary_ssh_link(&draft);
-        let can_submit = draft.trim().len() > 0 && parsed.is_ok();
+        let can_submit = !draft.trim().is_empty() && parsed.is_ok();
         let error_key = self.session.dialog_temporary_ssh_link_error().or_else(|| {
             if draft.trim().is_empty() {
                 None

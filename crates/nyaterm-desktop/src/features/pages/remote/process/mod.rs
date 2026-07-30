@@ -11,4 +11,7 @@ pub(super) use details::{
     ProcessDetailLabels, ProcessSignalLabels, process_details, process_signal_confirm_panel,
 };
 pub(super) use resources::usage_color;
-pub(super) use table::{ProcessTableLabels, process_sort_button, process_table_row};
+pub(super) use table::{
+    ProcessTableLabels, ProcessTableRowActions, ProcessTableRowPresentation, process_sort_button,
+    process_table_row,
+};

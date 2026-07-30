@@ -1,4 +1,5 @@
-use super::*;
+use crate::keywords::keyword_highlight_spans_compiled;
+use crate::types::TerminalHighlightSpan;
 
 pub(super) fn ansi_to_highlight_spans_compiled(
     ansi: &[nyaterm_terminal::StyledSpan],
@@ -132,7 +133,7 @@ fn push_ansi_segment(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::ansi_to_highlight_spans_compiled;
 
     fn spans(text: &str, style: nyaterm_terminal::CellStyle) -> Vec<nyaterm_terminal::StyledSpan> {
         vec![nyaterm_terminal::StyledSpan {

@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SftpTransferSummary {
@@ -81,18 +82,13 @@ impl SftpTransferOptions {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum SftpDuplicatePolicy {
+    #[default]
     Overwrite,
     Skip,
     Rename,
     Ask,
-}
-
-impl Default for SftpDuplicatePolicy {
-    fn default() -> Self {
-        Self::Overwrite
-    }
 }
 
 impl SftpDuplicatePolicy {
@@ -134,6 +130,49 @@ pub trait SftpDuplicateResolver: Send + Sync {
     ) -> Result<SftpDuplicateDecision, String>;
 }
 
+#[derive(Clone)]
+pub struct SftpPathTransferOptions {
+    duplicate_policy: SftpDuplicatePolicy,
+    duplicate_resolver: Option<Arc<dyn SftpDuplicateResolver>>,
+    transfer: SftpTransferOptions,
+}
+
+impl Default for SftpPathTransferOptions {
+    fn default() -> Self {
+        Self {
+            duplicate_policy: SftpDuplicatePolicy::Overwrite,
+            duplicate_resolver: None,
+            transfer: SftpTransferOptions::default(),
+        }
+    }
+}
+
+impl SftpPathTransferOptions {
+    pub fn new(
+        duplicate_policy: SftpDuplicatePolicy,
+        duplicate_resolver: Option<Arc<dyn SftpDuplicateResolver>>,
+        transfer: SftpTransferOptions,
+    ) -> Self {
+        Self {
+            duplicate_policy,
+            duplicate_resolver,
+            transfer,
+        }
+    }
+
+    pub fn duplicate_policy(&self) -> SftpDuplicatePolicy {
+        self.duplicate_policy
+    }
+
+    pub fn duplicate_resolver(&self) -> Option<&dyn SftpDuplicateResolver> {
+        self.duplicate_resolver.as_deref()
+    }
+
+    pub fn transfer_options(&self) -> &SftpTransferOptions {
+        &self.transfer
+    }
+}
+
 fn parse_sftp_file_mode(permissions: &str) -> Option<u32> {
     let trimmed = permissions.trim().trim_start_matches("0o");
     if trimmed.is_empty()
@@ -148,11 +187,25 @@ fn parse_sftp_file_mode(permissions: &str) -> Option<u32> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::{
         SFTP_TRANSFER_DEFAULT_BUFFER_SIZE, SFTP_TRANSFER_MAX_BUFFER_SIZE,
-        SFTP_TRANSFER_MAX_RETRIES, SFTP_TRANSFER_MIN_BUFFER_SIZE, SftpDuplicatePolicy,
+        SFTP_TRANSFER_MAX_RETRIES, SFTP_TRANSFER_MIN_BUFFER_SIZE, SftpDuplicateDecision,
+        SftpDuplicatePolicy, SftpDuplicateRequest, SftpDuplicateResolver, SftpPathTransferOptions,
         SftpTransferOptions, parse_sftp_file_mode,
     };
+
+    struct TestDuplicateResolver;
+
+    impl SftpDuplicateResolver for TestDuplicateResolver {
+        fn resolve_duplicate(
+            &self,
+            _request: &SftpDuplicateRequest,
+        ) -> Result<SftpDuplicateDecision, String> {
+            Ok(SftpDuplicateDecision::Overwrite)
+        }
+    }
 
     #[test]
     fn sftp_transfer_options_clamp_execution_settings() {
@@ -241,5 +294,23 @@ mod tests {
             SftpDuplicatePolicy::from_legacy_value("rename"),
             SftpDuplicatePolicy::Rename
         );
+    }
+
+    #[test]
+    fn path_transfer_options_keep_conflict_and_execution_settings_together() {
+        let options = SftpPathTransferOptions::new(
+            SftpDuplicatePolicy::Ask,
+            Some(Arc::new(TestDuplicateResolver)),
+            SftpTransferOptions::default().with_max_retries(3),
+        );
+
+        assert_eq!(options.duplicate_policy(), SftpDuplicatePolicy::Ask);
+        assert!(options.duplicate_resolver().is_some());
+        assert_eq!(options.transfer_options().max_retries(), 3);
+
+        let defaults = SftpPathTransferOptions::default();
+        assert_eq!(defaults.duplicate_policy(), SftpDuplicatePolicy::Overwrite);
+        assert!(defaults.duplicate_resolver().is_none());
+        assert_eq!(defaults.transfer_options(), &SftpTransferOptions::default());
     }
 }

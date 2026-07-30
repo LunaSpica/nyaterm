@@ -25,8 +25,8 @@ impl NyaTermApp {
             .ai
             .chat_command_cards()
             .iter()
-            .cloned()
             .take(8)
+            .cloned()
             .enumerate()
         {
             rows = rows.child(Self::ai_command_card_view(palette, index, card, cx));
@@ -48,21 +48,21 @@ impl NyaTermApp {
             card.title.clone()
         };
         let command = card.command.clone();
-        let command_for_copy = command.clone();
         let explanation = card.explanation.clone();
         let expected = card.expected_effect.clone();
         let rollback = card.rollback.clone().unwrap_or_default();
 
         Self::ai_command_card_shell(
-            palette,
-            format!("idx-{index}"),
-            risk,
-            title,
-            command,
-            command_for_copy,
-            explanation,
-            expected,
-            rollback,
+            AiCommandCardPresentation {
+                palette,
+                key: format!("idx-{index}"),
+                risk,
+                title,
+                command,
+                explanation,
+                expected,
+                rollback,
+            },
             cx.listener(move |this, _, _, cx| {
                 this.insert_ai_command_card(index, cx);
             }),
@@ -91,7 +91,6 @@ impl NyaTermApp {
             card.title.clone()
         };
         let command = card.command.clone();
-        let command_for_copy = command.clone();
         let explanation = card.explanation.clone();
         let expected = card.expected_effect.clone();
         let rollback = card.rollback.clone().unwrap_or_default();
@@ -100,15 +99,16 @@ impl NyaTermApp {
         let run_id = card_id.clone();
 
         Self::ai_command_card_shell(
-            palette,
-            key,
-            risk,
-            title,
-            command,
-            command_for_copy,
-            explanation,
-            expected,
-            rollback,
+            AiCommandCardPresentation {
+                palette,
+                key,
+                risk,
+                title,
+                command,
+                explanation,
+                expected,
+                rollback,
+            },
             cx.listener(move |this, _, _, cx| {
                 this.insert_ai_command_card_by_id(insert_id.clone(), cx);
             }),
@@ -122,21 +122,24 @@ impl NyaTermApp {
         )
     }
 
-    pub(in crate::features) fn ai_command_card_shell(
-        palette: crate::theme::ThemePalette,
-        key: String,
-        risk: &'static str,
-        title: String,
-        command: String,
-        command_for_copy: String,
-        explanation: String,
-        expected: String,
-        rollback: String,
+    fn ai_command_card_shell(
+        presentation: AiCommandCardPresentation,
         on_insert: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
         on_save: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
         on_run: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
+        let AiCommandCardPresentation {
+            palette,
+            key,
+            risk,
+            title,
+            command,
+            explanation,
+            expected,
+            rollback,
+        } = presentation;
+        let command_for_copy = command.clone();
         div()
             .id(SharedString::from(format!("ai-command-card-{key}")))
             .rounded_md()
@@ -252,4 +255,15 @@ impl NyaTermApp {
             )
             .into_any_element()
     }
+}
+
+struct AiCommandCardPresentation {
+    palette: crate::theme::ThemePalette,
+    key: String,
+    risk: &'static str,
+    title: String,
+    command: String,
+    explanation: String,
+    expected: String,
+    rollback: String,
 }

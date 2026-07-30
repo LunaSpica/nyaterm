@@ -1,7 +1,17 @@
 use nyaterm_core::AiExecutionProfile;
-use nyaterm_transport::SessionKind;
+use nyaterm_transport::{SessionKind, SshMultiplexHandle, SshSessionConfig};
 
+use super::state::SavedConnectionStartOptions;
 use crate::models::{SessionLaunchConfig, StartupCommandRequest};
+
+pub(in crate::features) struct MultiplexSshStartRequest {
+    pub connection_name: String,
+    pub config: SshSessionConfig,
+    pub source_connection_id: Option<String>,
+    pub ai_execution_profile: AiExecutionProfile,
+    pub options: SavedConnectionStartOptions,
+    pub existing_multiplex: Option<SshMultiplexHandle>,
+}
 
 pub(in crate::features) struct PendingSessionStartRegistration {
     pub(in crate::features) connection_name: String,

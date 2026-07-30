@@ -260,6 +260,24 @@ pub(in crate::features) fn modal_dialog_shell(
         )
 }
 
+/// Bounds a dialog to the available viewport while preserving the historical
+/// fallback to the preferred width when GPUI has not published a finite size.
+pub(in crate::features) fn bounded_dialog_width(
+    viewport_width: f32,
+    horizontal_inset: f32,
+    minimum_width: f32,
+    preferred_width: f32,
+) -> f32 {
+    let available_width = viewport_width - horizontal_inset;
+    if available_width.is_nan() || available_width > preferred_width {
+        preferred_width
+    } else if available_width < minimum_width {
+        minimum_width
+    } else {
+        available_width
+    }
+}
+
 pub(in crate::features) fn dialog_action_button(
     palette: ThemePalette,
     id: impl Into<String>,
@@ -372,4 +390,17 @@ pub(in crate::features) fn modal_dialog_footer_localized_danger(
             true,
             on_action,
         ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::bounded_dialog_width;
+
+    #[test]
+    fn dialog_width_bounds_available_space_and_keeps_non_finite_fallback() {
+        assert_eq!(bounded_dialog_width(1280., 32., 280., 448.), 448.);
+        assert_eq!(bounded_dialog_width(400., 32., 280., 448.), 368.);
+        assert_eq!(bounded_dialog_width(200., 32., 280., 448.), 280.);
+        assert_eq!(bounded_dialog_width(f32::NAN, 32., 280., 448.), 448.);
+    }
 }

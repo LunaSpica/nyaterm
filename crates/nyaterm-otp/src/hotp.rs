@@ -227,7 +227,7 @@ impl Hotp {
         let label = if self.issuer().is_empty() {
             encoding::url::encode(self.label().as_bytes())
         } else {
-            encoding::url::encode(format!("{}:{}", &self.issuer(), &self.label()).as_bytes())
+            encoding::url::encode(format!("{}:{}", self.issuer(), self.label()).as_bytes())
         };
         let issuer = if !self.issuer().is_empty() {
             format!(

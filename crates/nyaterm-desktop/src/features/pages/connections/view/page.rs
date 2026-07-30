@@ -193,11 +193,13 @@ impl NyaTermApp {
                                         .text_color(rgb(palette.text_dimmed))
                                         .child(empty_group_label),
                                 ),
-                                ConnectionListRow::Connection { connection, depth } => item.child(
-                                    div()
-                                        .w_full()
-                                        .child(this.saved_connection_row(connection, depth, cx)),
-                                ),
+                                ConnectionListRow::Connection { connection, depth } => {
+                                    item.child(div().w_full().child(this.saved_connection_row(
+                                        *connection,
+                                        depth,
+                                        cx,
+                                    )))
+                                }
                             });
                         }
                         items

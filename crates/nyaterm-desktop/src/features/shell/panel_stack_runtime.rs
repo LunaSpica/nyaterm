@@ -30,20 +30,20 @@ impl NyaTermApp {
     pub(in crate::features) fn toggle_panel_multi_open(&mut self, cx: &mut Context<Self>) {
         self.shell.panels.multi_open = !self.shell.panels.multi_open;
         if self.shell.panels.multi_open {
-            if self.shell.panels.left_open.is_empty() {
-                if let Some(panel) = self.shell.panels.active_left {
-                    let id = panel.persistence_id().to_string();
-                    if Self::is_stackable_panel_id(&id) {
-                        self.shell.panels.left_open.push(id);
-                    }
+            if self.shell.panels.left_open.is_empty()
+                && let Some(panel) = self.shell.panels.active_left
+            {
+                let id = panel.persistence_id().to_string();
+                if Self::is_stackable_panel_id(&id) {
+                    self.shell.panels.left_open.push(id);
                 }
             }
-            if self.shell.panels.right_open.is_empty() {
-                if let Some(panel) = self.shell.panels.active_right {
-                    let id = panel.persistence_id().to_string();
-                    if Self::is_stackable_panel_id(&id) {
-                        self.shell.panels.right_open.push(id);
-                    }
+            if self.shell.panels.right_open.is_empty()
+                && let Some(panel) = self.shell.panels.active_right
+            {
+                let id = panel.persistence_id().to_string();
+                if Self::is_stackable_panel_id(&id) {
+                    self.shell.panels.right_open.push(id);
                 }
             }
             self.shell
@@ -376,23 +376,24 @@ impl NyaTermApp {
             .summary()
             .ui_panel_stack_sizes
             .iter()
-            .filter_map(|(key, value)| (*value > 0).then(|| (key.clone(), (*value as f32) / 1000.)))
+            .filter(|(_, value)| **value > 0)
+            .map(|(key, value)| (key.clone(), (*value as f32) / 1000.))
             .collect();
         if self.shell.panels.multi_open {
-            if self.shell.panels.left_open.is_empty() {
-                if let Some(panel) = self.shell.panels.active_left {
-                    let id = panel.persistence_id().to_string();
-                    if Self::is_stackable_panel_id(&id) {
-                        self.shell.panels.left_open.push(id);
-                    }
+            if self.shell.panels.left_open.is_empty()
+                && let Some(panel) = self.shell.panels.active_left
+            {
+                let id = panel.persistence_id().to_string();
+                if Self::is_stackable_panel_id(&id) {
+                    self.shell.panels.left_open.push(id);
                 }
             }
-            if self.shell.panels.right_open.is_empty() {
-                if let Some(panel) = self.shell.panels.active_right {
-                    let id = panel.persistence_id().to_string();
-                    if Self::is_stackable_panel_id(&id) {
-                        self.shell.panels.right_open.push(id);
-                    }
+            if self.shell.panels.right_open.is_empty()
+                && let Some(panel) = self.shell.panels.active_right
+            {
+                let id = panel.persistence_id().to_string();
+                if Self::is_stackable_panel_id(&id) {
+                    self.shell.panels.right_open.push(id);
                 }
             }
         }

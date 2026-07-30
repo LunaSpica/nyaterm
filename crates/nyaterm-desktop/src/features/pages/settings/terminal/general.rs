@@ -357,42 +357,54 @@ impl NyaTermApp {
                             .gap_2()
                             .child(terminal_action_matcher_row(
                                 palette,
-                                "terminal-action-links-ipv4",
-                                self.tr("settings.actionLinksMatcherIpv4"),
-                                "192.168.1.1",
-                                self.tr("settings.actionLinksMatcherIpv4Desc"),
-                                self.settings.summary().terminal_action_links_matchers.ipv4,
-                                action_links_enabled,
+                                TerminalActionMatcherPresentation {
+                                    id: "terminal-action-links-ipv4",
+                                    label: self.tr("settings.actionLinksMatcherIpv4"),
+                                    example: "192.168.1.1",
+                                    description: self.tr("settings.actionLinksMatcherIpv4Desc"),
+                                    checked: self
+                                        .settings
+                                        .summary()
+                                        .terminal_action_links_matchers
+                                        .ipv4,
+                                    enabled: action_links_enabled,
+                                },
                                 cx.listener(|this, _, _, cx| {
                                     this.toggle_terminal_action_links_matcher("ipv4", cx);
                                 }),
                             ))
                             .child(terminal_action_matcher_row(
                                 palette,
-                                "terminal-action-links-host-port",
-                                self.tr("settings.actionLinksMatcherHostPort"),
-                                "localhost:8080",
-                                self.tr("settings.actionLinksMatcherHostPortDesc"),
-                                self.settings
-                                    .summary()
-                                    .terminal_action_links_matchers
-                                    .host_port,
-                                action_links_enabled,
+                                TerminalActionMatcherPresentation {
+                                    id: "terminal-action-links-host-port",
+                                    label: self.tr("settings.actionLinksMatcherHostPort"),
+                                    example: "localhost:8080",
+                                    description: self.tr("settings.actionLinksMatcherHostPortDesc"),
+                                    checked: self
+                                        .settings
+                                        .summary()
+                                        .terminal_action_links_matchers
+                                        .host_port,
+                                    enabled: action_links_enabled,
+                                },
                                 cx.listener(|this, _, _, cx| {
                                     this.toggle_terminal_action_links_matcher("host_port", cx);
                                 }),
                             ))
                             .child(terminal_action_matcher_row(
                                 palette,
-                                "terminal-action-links-archive",
-                                self.tr("settings.actionLinksMatcherArchive"),
-                                "backup.tar.gz",
-                                self.tr("settings.actionLinksMatcherArchiveDesc"),
-                                self.settings
-                                    .summary()
-                                    .terminal_action_links_matchers
-                                    .archive,
-                                action_links_enabled,
+                                TerminalActionMatcherPresentation {
+                                    id: "terminal-action-links-archive",
+                                    label: self.tr("settings.actionLinksMatcherArchive"),
+                                    example: "backup.tar.gz",
+                                    description: self.tr("settings.actionLinksMatcherArchiveDesc"),
+                                    checked: self
+                                        .settings
+                                        .summary()
+                                        .terminal_action_links_matchers
+                                        .archive,
+                                    enabled: action_links_enabled,
+                                },
                                 cx.listener(|this, _, _, cx| {
                                     this.toggle_terminal_action_links_matcher("archive", cx);
                                 }),
@@ -453,14 +465,17 @@ fn terminal_settings_field_meta(
 
 fn terminal_action_matcher_row(
     palette: ThemePalette,
-    id: &'static str,
-    label: &'static str,
-    example: &'static str,
-    desc: &'static str,
-    checked: bool,
-    enabled: bool,
+    presentation: TerminalActionMatcherPresentation,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let TerminalActionMatcherPresentation {
+        id,
+        label,
+        example,
+        description,
+        checked,
+        enabled,
+    } = presentation;
     div()
         .rounded_md()
         .border_1()
@@ -505,10 +520,19 @@ fn terminal_action_matcher_row(
                         .mt_1()
                         .text_size(px(11.))
                         .text_color(rgb(palette.text_dimmed))
-                        .child(desc),
+                        .child(description),
                 ),
         )
         .child(settings_switch_with_enabled(
             palette, id, checked, enabled, on_click,
         ))
+}
+
+struct TerminalActionMatcherPresentation {
+    id: &'static str,
+    label: &'static str,
+    example: &'static str,
+    description: &'static str,
+    checked: bool,
+    enabled: bool,
 }

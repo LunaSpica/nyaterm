@@ -254,9 +254,7 @@ impl NyaTermApp {
         let cloud_snapshot_prompt = self.settings.snapshot_password_prompt().filter(|prompt| {
             matches!(
                 prompt.kind,
-                SnapshotPasswordPromptKind::CloudPush
-                    | SnapshotPasswordPromptKind::CloudPull
-                    | SnapshotPasswordPromptKind::CloudForcePush
+                SnapshotPasswordPromptKind::CloudForcePush
                     | SnapshotPasswordPromptKind::CloudForcePull
                     | SnapshotPasswordPromptKind::CloudProviderPush
                     | SnapshotPasswordPromptKind::CloudProviderPull
@@ -281,7 +279,9 @@ impl NyaTermApp {
         } else {
             validation_key.map(|key| self.tr(key))
         };
-        let actions_busy = cloud_snapshot_prompt.is_some() || self.cloud_sync.job_running();
+        let prompt_busy = self.settings.snapshot_password_prompt_active()
+            || self.settings.config_path_prompt_active();
+        let actions_busy = prompt_busy || self.cloud_sync.job_running();
         let can_run_actions = action_block_message.is_none() && !actions_busy;
         let can_run_enabled_actions = can_run_actions && self.cloud_sync.settings().enabled;
         let sync_state_key = cloud_sync_state_i18n_key(
@@ -392,6 +392,43 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .gap_5()
+            .child(settings_form_section(
+                palette,
+                Some(self.tr("settings.localBackup")),
+                Some(self.tr("settings.localBackupDesc")),
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_3()
+                    .child(settings_form_row(
+                        palette,
+                        self.tr("settings.exportConfig"),
+                        Some(SharedString::from(self.tr("settings.exportConfigDesc"))),
+                        cloud_sync_action_button(
+                            palette,
+                            "settings-local-backup-export",
+                            self.tr("settings.exportConfig"),
+                            !actions_busy,
+                            cx.listener(|this, _, window, cx| {
+                                this.prompt_encrypted_portable_snapshot_export(window, cx);
+                            }),
+                        ),
+                    ))
+                    .child(settings_form_row(
+                        palette,
+                        self.tr("settings.importConfig"),
+                        Some(SharedString::from(self.tr("settings.importConfigDesc"))),
+                        cloud_sync_action_button(
+                            palette,
+                            "settings-local-backup-import",
+                            self.tr("settings.importConfig"),
+                            !actions_busy,
+                            cx.listener(|this, _, window, cx| {
+                                this.prompt_encrypted_portable_snapshot_import(window, cx);
+                            }),
+                        ),
+                    )),
+            ))
             .child(settings_form_section(
                 palette,
                 Some(self.tr("settings.syncProviderConfig")),

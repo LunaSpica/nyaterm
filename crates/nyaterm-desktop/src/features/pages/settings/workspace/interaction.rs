@@ -251,29 +251,35 @@ impl NyaTermApp {
                     .gap_3()
                     .child(self.tab_mouse_action_settings_field(
                         palette,
-                        self.tr("settings.tabDoubleClickAction"),
-                        self.tr("settings.tabDoubleClickActionDesc"),
-                        "interaction-tab-double",
-                        TabMouseActionTarget::Double,
-                        &double_action,
+                        TabMouseActionPresentation {
+                            label: self.tr("settings.tabDoubleClickAction"),
+                            description: self.tr("settings.tabDoubleClickActionDesc"),
+                            id_prefix: "interaction-tab-double",
+                            target: TabMouseActionTarget::Double,
+                            current: &double_action,
+                        },
                         cx,
                     ))
                     .child(self.tab_mouse_action_settings_field(
                         palette,
-                        self.tr("settings.tabMiddleClickAction"),
-                        self.tr("settings.tabMiddleClickActionDesc"),
-                        "interaction-tab-middle",
-                        TabMouseActionTarget::Middle,
-                        &middle_action,
+                        TabMouseActionPresentation {
+                            label: self.tr("settings.tabMiddleClickAction"),
+                            description: self.tr("settings.tabMiddleClickActionDesc"),
+                            id_prefix: "interaction-tab-middle",
+                            target: TabMouseActionTarget::Middle,
+                            current: &middle_action,
+                        },
                         cx,
                     ))
                     .child(self.tab_mouse_action_settings_field(
                         palette,
-                        self.tr("settings.tabRightClickAction"),
-                        self.tr("settings.tabRightClickActionDesc"),
-                        "interaction-tab-right",
-                        TabMouseActionTarget::Right,
-                        &right_action,
+                        TabMouseActionPresentation {
+                            label: self.tr("settings.tabRightClickAction"),
+                            description: self.tr("settings.tabRightClickActionDesc"),
+                            id_prefix: "interaction-tab-right",
+                            target: TabMouseActionTarget::Right,
+                            current: &right_action,
+                        },
                         cx,
                     )),
             ))
@@ -319,13 +325,16 @@ impl NyaTermApp {
     fn tab_mouse_action_settings_field(
         &mut self,
         palette: ThemePalette,
-        label: &'static str,
-        desc: &'static str,
-        id_prefix: &'static str,
-        target: TabMouseActionTarget,
-        current: &str,
+        presentation: TabMouseActionPresentation<'_>,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let TabMouseActionPresentation {
+            label,
+            description,
+            id_prefix,
+            target,
+            current,
+        } = presentation;
         let chips = TAB_MOUSE_ACTIONS.iter().fold(
             div().flex().flex_wrap().gap_1().max_w(px(640.)),
             |row, action| {
@@ -349,9 +358,17 @@ impl NyaTermApp {
             .flex()
             .flex_col()
             .gap_2()
-            .child(settings_field_meta(palette, label, desc))
+            .child(settings_field_meta(palette, label, description))
             .child(chips)
     }
+}
+
+struct TabMouseActionPresentation<'a> {
+    label: &'static str,
+    description: &'static str,
+    id_prefix: &'static str,
+    target: TabMouseActionTarget,
+    current: &'a str,
 }
 
 fn interaction_number_stepper(

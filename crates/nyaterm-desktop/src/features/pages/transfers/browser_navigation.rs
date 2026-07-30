@@ -19,7 +19,7 @@ impl NyaTermApp {
             return;
         }
 
-        let current_path = normalized_transfer_browser_path(&self.transfer.browser_view().path);
+        let current_path = normalized_transfer_browser_path(self.transfer.browser_view().path);
         if current_path.is_empty() {
             return;
         }
@@ -144,7 +144,7 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        let path = normalized_transfer_browser_path(&self.transfer.browser_view().path);
+        let path = normalized_transfer_browser_path(self.transfer.browser_view().path);
         self.add_transfer_browser_favorite_path(path, cx);
     }
 
@@ -337,7 +337,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let rollback = self.prepare_transfer_browser_navigation();
-        let current_path = normalized_transfer_browser_path(&self.transfer.browser_view().path);
+        let current_path = normalized_transfer_browser_path(self.transfer.browser_view().path);
         if current_path == "/" || current_path == "." {
             self.transfer
                 .set_browser_status("already at the top remote directory");

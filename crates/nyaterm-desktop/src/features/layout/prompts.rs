@@ -12,7 +12,7 @@ use crate::features::session::{
     credential_text_input_id, keyboard_interactive_text_input_id, unix_seconds_now,
 };
 use crate::features::view_widgets::dialog_action_button;
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, TextInputSetup, bounded_dialog_width};
 use crate::models::{SnapshotPasswordPromptKind, SnapshotPasswordPromptState};
 use crate::widgets::small_button;
 
@@ -67,7 +67,12 @@ impl NyaTermApp {
             .child(
                 div()
                     .id("duplicate-prompt-dialog")
-                    .w(px((self.shell.viewport_size().0 - 32.).min(448.).max(280.)))
+                    .w(px(bounded_dialog_width(
+                        self.shell.viewport_size().0,
+                        32.,
+                        280.,
+                        448.,
+                    )))
                     .rounded_md()
                     .border_1()
                     .border_color(rgb(palette.border))
@@ -673,8 +678,6 @@ impl NyaTermApp {
         let title = match prompt.kind {
             SnapshotPasswordPromptKind::Export => self.tr("runtimePrompt.snapshotExport"),
             SnapshotPasswordPromptKind::Import => self.tr("runtimePrompt.snapshotImport"),
-            SnapshotPasswordPromptKind::CloudPush => self.tr("runtimePrompt.cloudPush"),
-            SnapshotPasswordPromptKind::CloudPull => self.tr("runtimePrompt.cloudPull"),
             SnapshotPasswordPromptKind::CloudForcePush => self.tr("runtimePrompt.cloudForcePush"),
             SnapshotPasswordPromptKind::CloudForcePull => self.tr("runtimePrompt.cloudForcePull"),
             SnapshotPasswordPromptKind::CloudProviderPush => {
@@ -691,9 +694,7 @@ impl NyaTermApp {
             }
         };
         let description = match prompt.kind {
-            SnapshotPasswordPromptKind::CloudPush
-            | SnapshotPasswordPromptKind::CloudPull
-            | SnapshotPasswordPromptKind::CloudForcePush
+            SnapshotPasswordPromptKind::CloudForcePush
             | SnapshotPasswordPromptKind::CloudForcePull
             | SnapshotPasswordPromptKind::CloudProviderPush
             | SnapshotPasswordPromptKind::CloudProviderPull

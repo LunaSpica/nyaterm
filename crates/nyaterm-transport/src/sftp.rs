@@ -14,10 +14,10 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use super::{
     PROCESS_TIMEOUT, SFTP_TRANSFER_CANCELLED, SftpAttributeUpdate, SftpDuplicateDecision,
     SftpDuplicatePolicy, SftpDuplicateRequest, SftpDuplicateResolver, SftpFileEntry,
-    SftpFileProperties, SftpFileType, SftpRemoteTextFile, SftpService, SftpTransferControl,
-    SftpTransferDirection, SftpTransferOptions, SftpTransferProgress, SftpTransferSummary,
-    SftpWriteTextResult, SshMultiplexHandle, SshProcessService, SshSessionConfig,
-    close_sftp_session, open_sftp_session, run_sftp_operation,
+    SftpFileProperties, SftpFileType, SftpPathTransferOptions, SftpRemoteTextFile, SftpService,
+    SftpTransferControl, SftpTransferDirection, SftpTransferOptions, SftpTransferProgress,
+    SftpTransferSummary, SftpWriteTextResult, SshMultiplexHandle, SshProcessService,
+    SshSessionConfig, close_sftp_session, open_sftp_session, run_sftp_operation,
 };
 
 impl SftpService {
@@ -544,25 +544,25 @@ impl SftpService {
     where
         F: FnMut(SftpTransferProgress) + Send + 'static,
     {
-        self.download_path_with_progress_options_and_resolver_options(
+        self.download_path_with_progress_and_path_options(
             remote_path,
             local_path,
             control,
-            duplicate_policy,
-            duplicate_resolver,
-            SftpTransferOptions::default(),
+            SftpPathTransferOptions::new(
+                duplicate_policy,
+                duplicate_resolver,
+                SftpTransferOptions::default(),
+            ),
             progress,
         )
     }
 
-    pub fn download_path_with_progress_options_and_resolver_options<F>(
+    pub fn download_path_with_progress_and_path_options<F>(
         &self,
         remote_path: impl AsRef<str>,
         local_path: impl Into<PathBuf>,
         control: SftpTransferControl,
-        duplicate_policy: SftpDuplicatePolicy,
-        duplicate_resolver: Option<Arc<dyn SftpDuplicateResolver>>,
-        options: SftpTransferOptions,
+        path_options: SftpPathTransferOptions,
         mut progress: F,
     ) -> anyhow::Result<SftpTransferSummary>
     where
@@ -574,7 +574,7 @@ impl SftpService {
         let multiplex = self.multiplex.clone();
         self.run_operation(async move {
             let mut last_error = None;
-            for _attempt in 0..=options.max_retries() {
+            for _attempt in 0..=path_options.transfer_options().max_retries() {
                 control.check_cancelled()?;
                 let result = async {
                     let session = open_sftp_session(&config, multiplex.as_ref()).await?;
@@ -586,8 +586,8 @@ impl SftpService {
                         &remote_path,
                         &local_path,
                         is_directory,
-                        duplicate_policy,
-                        duplicate_resolver.as_deref(),
+                        path_options.duplicate_policy(),
+                        path_options.duplicate_resolver(),
                     )?
                     else {
                         close_sftp_session(session).await;
@@ -604,9 +604,7 @@ impl SftpService {
                             &remote_path,
                             &local_target,
                             &control,
-                            duplicate_policy,
-                            duplicate_resolver.as_deref(),
-                            &options,
+                            &path_options,
                             &mut progress,
                         )
                         .await?
@@ -616,7 +614,7 @@ impl SftpService {
                             &remote_path,
                             &local_target,
                             &control,
-                            &options,
+                            path_options.transfer_options(),
                             &mut progress,
                         )
                         .await?
@@ -803,25 +801,25 @@ impl SftpService {
     where
         F: FnMut(SftpTransferProgress) + Send + 'static,
     {
-        self.upload_path_with_progress_options_and_resolver_options(
+        self.upload_path_with_progress_and_path_options(
             local_path,
             remote_path,
             control,
-            duplicate_policy,
-            duplicate_resolver,
-            SftpTransferOptions::default(),
+            SftpPathTransferOptions::new(
+                duplicate_policy,
+                duplicate_resolver,
+                SftpTransferOptions::default(),
+            ),
             progress,
         )
     }
 
-    pub fn upload_path_with_progress_options_and_resolver_options<F>(
+    pub fn upload_path_with_progress_and_path_options<F>(
         &self,
         local_path: impl Into<PathBuf>,
         remote_path: impl AsRef<str>,
         control: SftpTransferControl,
-        duplicate_policy: SftpDuplicatePolicy,
-        duplicate_resolver: Option<Arc<dyn SftpDuplicateResolver>>,
-        options: SftpTransferOptions,
+        path_options: SftpPathTransferOptions,
         mut progress: F,
     ) -> anyhow::Result<SftpTransferSummary>
     where
@@ -835,7 +833,7 @@ impl SftpService {
             let metadata = tokio::fs::metadata(&local_path).await?;
             let remote_path = resolve_remote_upload_target(&local_path, &remote_path)?;
             let mut last_error = None;
-            for _attempt in 0..=options.max_retries() {
+            for _attempt in 0..=path_options.transfer_options().max_retries() {
                 control.check_cancelled()?;
                 let result = async {
                     let session = open_sftp_session(&config, multiplex.as_ref()).await?;
@@ -846,8 +844,8 @@ impl SftpService {
                         &local_path.display().to_string(),
                         &remote_path,
                         metadata.is_dir(),
-                        duplicate_policy,
-                        duplicate_resolver.as_deref(),
+                        path_options.duplicate_policy(),
+                        path_options.duplicate_resolver(),
                     )
                     .await?
                     else {
@@ -865,9 +863,7 @@ impl SftpService {
                             &local_path,
                             &remote_target,
                             &control,
-                            duplicate_policy,
-                            duplicate_resolver.as_deref(),
-                            &options,
+                            &path_options,
                             &mut progress,
                         )
                         .await?
@@ -877,7 +873,7 @@ impl SftpService {
                             &local_path,
                             &remote_target,
                             &control,
-                            &options,
+                            path_options.transfer_options(),
                             &mut progress,
                         )
                         .await?
@@ -1272,9 +1268,7 @@ async fn download_remote_directory<F>(
     remote_path: &str,
     local_path: &Path,
     control: &SftpTransferControl,
-    duplicate_policy: SftpDuplicatePolicy,
-    duplicate_resolver: Option<&dyn SftpDuplicateResolver>,
-    options: &SftpTransferOptions,
+    path_options: &SftpPathTransferOptions,
     progress: &mut F,
 ) -> anyhow::Result<u64>
 where
@@ -1304,8 +1298,8 @@ where
                         &remote_child,
                         &local_child,
                         true,
-                        duplicate_policy,
-                        duplicate_resolver,
+                        path_options.duplicate_policy(),
+                        path_options.duplicate_resolver(),
                     )? {
                         pending.push((remote_child, local_child));
                     }
@@ -1315,8 +1309,8 @@ where
                         &remote_child,
                         &local_child,
                         false,
-                        duplicate_policy,
-                        duplicate_resolver,
+                        path_options.duplicate_policy(),
+                        path_options.duplicate_resolver(),
                     )? {
                         let completed_bytes = total_bytes;
                         let mut aggregate_progress = |current| {
@@ -1333,7 +1327,7 @@ where
                             &remote_child,
                             &local_child,
                             control,
-                            options,
+                            path_options.transfer_options(),
                             &mut aggregate_progress,
                         )
                         .await?;
@@ -1413,9 +1407,7 @@ async fn upload_local_directory<F>(
     local_path: &Path,
     remote_path: &str,
     control: &SftpTransferControl,
-    duplicate_policy: SftpDuplicatePolicy,
-    duplicate_resolver: Option<&dyn SftpDuplicateResolver>,
-    options: &SftpTransferOptions,
+    path_options: &SftpPathTransferOptions,
     progress: &mut F,
 ) -> anyhow::Result<u64>
 where
@@ -1444,8 +1436,8 @@ where
                     &local_child.display().to_string(),
                     &remote_child,
                     true,
-                    duplicate_policy,
-                    duplicate_resolver,
+                    path_options.duplicate_policy(),
+                    path_options.duplicate_resolver(),
                 )
                 .await?
                 {
@@ -1457,8 +1449,8 @@ where
                     &local_child.display().to_string(),
                     &remote_child,
                     false,
-                    duplicate_policy,
-                    duplicate_resolver,
+                    path_options.duplicate_policy(),
+                    path_options.duplicate_resolver(),
                 )
                 .await?
                 {
@@ -1477,7 +1469,7 @@ where
                         &local_child,
                         &remote_child,
                         control,
-                        options,
+                        path_options.transfer_options(),
                         &mut aggregate_progress,
                     )
                     .await?;

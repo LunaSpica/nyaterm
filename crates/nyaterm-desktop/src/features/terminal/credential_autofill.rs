@@ -55,10 +55,10 @@ impl NyaTermApp {
     ) -> bool {
         self.prune_recent_credential_prompts(now);
         let key = format!("{kind:?}:{prompt_text}");
-        if let Some(last) = self.terminal.assist.credential_autofill_recent.get(&key) {
-            if now.saturating_sub(*last) < RECENT_PROMPT_TTL_MS {
-                return false;
-            }
+        if let Some(last) = self.terminal.assist.credential_autofill_recent.get(&key)
+            && now.saturating_sub(*last) < RECENT_PROMPT_TTL_MS
+        {
+            return false;
         }
         self.terminal
             .assist
@@ -123,19 +123,28 @@ impl NyaTermApp {
         }
         let mut dirty = self.drain_credential_autofill_match_events(cx);
         let detection_was_pending = self.terminal.assist.credential_autofill_detection_pending;
+        let runtime_backlog = CredentialAutofillRuntimeBacklog {
+            queued_output_bytes: self.shell.session_event_queued_output_bytes(),
+            pending_session_events: self.session.pending_event_count(),
+            pending_terminal_frame_events: self.terminal.view.pending_frame_events.len(),
+            queued_terminal_frame_events: self.terminal.view.frame_pipeline.queued_event_count(),
+            queued_terminal_frame_output_bytes: self
+                .terminal
+                .view
+                .frame_pipeline
+                .queued_output_bytes(),
+        };
+        let match_request_pending = self
+            .terminal
+            .assist
+            .credential_autofill_pending_request
+            .is_some();
         if credential_autofill_snapshot_detection_can_run(
             self.session.active_id(),
             !self.security.credentials().is_empty()
                 || self.terminal.assist.credential_autofill_pending.is_some(),
-            self.shell.session_event_queued_output_bytes(),
-            self.session.pending_event_count(),
-            self.terminal.view.pending_frame_events.len(),
-            self.terminal.view.frame_pipeline.queued_event_count(),
-            self.terminal.view.frame_pipeline.queued_output_bytes(),
-            self.terminal
-                .assist
-                .credential_autofill_pending_request
-                .is_some(),
+            runtime_backlog,
+            match_request_pending,
         ) {
             dirty |= self.sync_credential_autofill_from_active_snapshot(cx);
         }
@@ -144,15 +153,8 @@ impl NyaTermApp {
             credential_autofill_pending_detection_can_run(
                 self.session.active_id(),
                 self.terminal.assist.credential_autofill_detection_pending,
-                self.shell.session_event_queued_output_bytes(),
-                self.session.pending_event_count(),
-                self.terminal.view.pending_frame_events.len(),
-                self.terminal.view.frame_pipeline.queued_event_count(),
-                self.terminal.view.frame_pipeline.queued_output_bytes(),
-                self.terminal
-                    .assist
-                    .credential_autofill_pending_request
-                    .is_some(),
+                runtime_backlog,
+                match_request_pending,
             ),
         ) {
             return dirty;
@@ -271,16 +273,16 @@ impl NyaTermApp {
         };
         let credentials = self.security.credentials().to_vec();
 
-        if let Some(pending) = self.terminal.assist.credential_autofill_pending.clone() {
-            if pending.expires_at_ms <= now {
-                self.terminal.assist.credential_autofill_pending = None;
-            }
+        if let Some(pending) = self.terminal.assist.credential_autofill_pending.clone()
+            && pending.expires_at_ms <= now
+        {
+            self.terminal.assist.credential_autofill_pending = None;
         }
 
-        if let Some(pending) = self.terminal.assist.credential_autofill_pending.clone() {
-            if pending.session_id != active_session_id {
-                self.terminal.assist.credential_autofill_pending = None;
-            }
+        if let Some(pending) = self.terminal.assist.credential_autofill_pending.clone()
+            && pending.session_id != active_session_id
+        {
+            self.terminal.assist.credential_autofill_pending = None;
         }
 
         if self.terminal.assist.credential_autofill_pending.is_none()
@@ -723,41 +725,41 @@ impl NyaTermApp {
 fn credential_autofill_snapshot_detection_can_run(
     active_session_id: Option<&str>,
     has_credentials_or_pending: bool,
-    queued_output_bytes: usize,
-    pending_session_events: usize,
-    pending_terminal_frame_events: usize,
-    queued_terminal_frame_events: usize,
-    queued_terminal_frame_output_bytes: usize,
+    backlog: CredentialAutofillRuntimeBacklog,
     match_request_pending: bool,
 ) -> bool {
     active_session_id.is_some()
         && has_credentials_or_pending
-        && queued_output_bytes == 0
-        && pending_session_events == 0
-        && pending_terminal_frame_events == 0
-        && queued_terminal_frame_events == 0
-        && queued_terminal_frame_output_bytes == 0
+        && backlog.is_empty()
         && !match_request_pending
 }
 
 fn credential_autofill_pending_detection_can_run(
     active_session_id: Option<&str>,
     detection_pending: bool,
+    backlog: CredentialAutofillRuntimeBacklog,
+    match_request_pending: bool,
+) -> bool {
+    active_session_id.is_some() && detection_pending && backlog.is_empty() && !match_request_pending
+}
+
+#[derive(Clone, Copy, Default)]
+struct CredentialAutofillRuntimeBacklog {
     queued_output_bytes: usize,
     pending_session_events: usize,
     pending_terminal_frame_events: usize,
     queued_terminal_frame_events: usize,
     queued_terminal_frame_output_bytes: usize,
-    match_request_pending: bool,
-) -> bool {
-    active_session_id.is_some()
-        && detection_pending
-        && queued_output_bytes == 0
-        && pending_session_events == 0
-        && pending_terminal_frame_events == 0
-        && queued_terminal_frame_events == 0
-        && queued_terminal_frame_output_bytes == 0
-        && !match_request_pending
+}
+
+impl CredentialAutofillRuntimeBacklog {
+    fn is_empty(self) -> bool {
+        self.queued_output_bytes == 0
+            && self.pending_session_events == 0
+            && self.pending_terminal_frame_events == 0
+            && self.queued_terminal_frame_events == 0
+            && self.queued_terminal_frame_output_bytes == 0
+    }
 }
 
 fn credential_autofill_detection_should_run_this_tick(
@@ -784,6 +786,7 @@ fn credential_autofill_prompt_line_from_snapshot(snapshot: &TerminalSnapshot) ->
         .map(|row| row.text.as_str())
 }
 
+#[cfg(test)]
 fn credential_autofill_prompt_line_from_viewport(
     lines: &[String],
     cursor_row: usize,
@@ -822,10 +825,7 @@ fn credential_autofill_prompt_text_from_visible(output: &str) -> String {
     }
 
     let tail = credential_autofill_visible_tail(output);
-    let prompt_start = tail
-        .rfind(|ch| ch == '\r' || ch == '\n')
-        .map(|index| index + 1)
-        .unwrap_or(0);
+    let prompt_start = tail.rfind(['\r', '\n']).map(|index| index + 1).unwrap_or(0);
     let prompt = tail[prompt_start..].trim();
     let prompt_len = prompt.chars().count();
     if prompt_len > 500 {
@@ -886,47 +886,54 @@ mod tests {
     use nyaterm_core::CredentialPromptKind;
 
     use super::{
-        CREDENTIAL_AUTOFILL_INPUT_TAIL_LIMIT, credential_autofill_detect_prompt_kind,
-        credential_autofill_detection_should_run_this_tick,
+        CREDENTIAL_AUTOFILL_INPUT_TAIL_LIMIT, CredentialAutofillRuntimeBacklog,
+        credential_autofill_detect_prompt_kind, credential_autofill_detection_should_run_this_tick,
         credential_autofill_pending_detection_can_run,
         credential_autofill_prompt_line_from_viewport,
         credential_autofill_prompt_text_from_visible,
         credential_autofill_snapshot_detection_can_run, credential_autofill_visible_tail,
     };
 
+    fn backlog(
+        queued_output_bytes: usize,
+        pending_session_events: usize,
+        pending_terminal_frame_events: usize,
+        queued_terminal_frame_events: usize,
+        queued_terminal_frame_output_bytes: usize,
+    ) -> CredentialAutofillRuntimeBacklog {
+        CredentialAutofillRuntimeBacklog {
+            queued_output_bytes,
+            pending_session_events,
+            pending_terminal_frame_events,
+            queued_terminal_frame_events,
+            queued_terminal_frame_output_bytes,
+        }
+    }
+
     #[test]
     fn credential_autofill_snapshot_detection_requires_active_session_and_credentials() {
         assert!(credential_autofill_snapshot_detection_can_run(
             Some("active"),
             true,
-            0,
-            0,
-            0,
-            0,
-            0,
+            backlog(0, 0, 0, 0, 0),
             false
         ));
         assert!(!credential_autofill_snapshot_detection_can_run(
-            None, true, 0, 0, 0, 0, 0, false
+            None,
+            true,
+            backlog(0, 0, 0, 0, 0),
+            false
         ));
         assert!(!credential_autofill_snapshot_detection_can_run(
             Some("active"),
             false,
-            0,
-            0,
-            0,
-            0,
-            0,
+            backlog(0, 0, 0, 0, 0),
             false
         ));
         assert!(!credential_autofill_snapshot_detection_can_run(
             Some("active"),
             true,
-            0,
-            0,
-            0,
-            0,
-            0,
+            backlog(0, 0, 0, 0, 0),
             true
         ));
     }
@@ -936,51 +943,31 @@ mod tests {
         assert!(!credential_autofill_snapshot_detection_can_run(
             Some("active"),
             true,
-            1,
-            0,
-            0,
-            0,
-            0,
+            backlog(1, 0, 0, 0, 0),
             false
         ));
         assert!(!credential_autofill_snapshot_detection_can_run(
             Some("active"),
             true,
-            0,
-            1,
-            0,
-            0,
-            0,
+            backlog(0, 1, 0, 0, 0),
             false
         ));
         assert!(!credential_autofill_snapshot_detection_can_run(
             Some("active"),
             true,
-            0,
-            0,
-            1,
-            0,
-            0,
+            backlog(0, 0, 1, 0, 0),
             false
         ));
         assert!(!credential_autofill_snapshot_detection_can_run(
             Some("active"),
             true,
-            0,
-            0,
-            0,
-            1,
-            0,
+            backlog(0, 0, 0, 1, 0),
             false
         ));
         assert!(!credential_autofill_snapshot_detection_can_run(
             Some("active"),
             true,
-            0,
-            0,
-            0,
-            0,
-            1,
+            backlog(0, 0, 0, 0, 1),
             false
         ));
     }
@@ -990,64 +977,43 @@ mod tests {
         assert!(credential_autofill_pending_detection_can_run(
             Some("active"),
             true,
-            0,
-            0,
-            0,
-            0,
-            0,
+            backlog(0, 0, 0, 0, 0),
             false
         ));
         assert!(!credential_autofill_pending_detection_can_run(
-            None, true, 0, 0, 0, 0, 0, false
+            None,
+            true,
+            backlog(0, 0, 0, 0, 0),
+            false
         ));
         assert!(!credential_autofill_pending_detection_can_run(
             Some("active"),
             false,
-            0,
-            0,
-            0,
-            0,
-            0,
+            backlog(0, 0, 0, 0, 0),
             false
         ));
         assert!(!credential_autofill_pending_detection_can_run(
             Some("active"),
             true,
-            1,
-            0,
-            0,
-            0,
-            0,
+            backlog(1, 0, 0, 0, 0),
             false
         ));
         assert!(!credential_autofill_pending_detection_can_run(
             Some("active"),
             true,
-            0,
-            0,
-            0,
-            1,
-            0,
+            backlog(0, 0, 0, 1, 0),
             false
         ));
         assert!(!credential_autofill_pending_detection_can_run(
             Some("active"),
             true,
-            0,
-            0,
-            0,
-            0,
-            1,
+            backlog(0, 0, 0, 0, 1),
             false
         ));
         assert!(!credential_autofill_pending_detection_can_run(
             Some("active"),
             true,
-            0,
-            0,
-            0,
-            0,
-            0,
+            backlog(0, 0, 0, 0, 0),
             true
         ));
     }

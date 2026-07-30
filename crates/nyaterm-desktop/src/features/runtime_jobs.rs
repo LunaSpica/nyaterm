@@ -167,7 +167,7 @@ pub(in crate::features) enum AiAgentStepStatus {
 
 #[derive(Clone)]
 pub(in crate::features) enum AiAgentBackgroundTarget {
-    Ssh(SshSessionConfig),
+    Ssh(Box<SshSessionConfig>),
     Local { working_dir: Option<PathBuf> },
 }
 

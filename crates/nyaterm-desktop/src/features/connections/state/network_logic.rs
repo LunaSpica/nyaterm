@@ -137,39 +137,6 @@ pub(super) fn remove_network_group_references(
     }
 }
 
-pub(super) fn remove_network_group_and_item_references(
-    group_editor: &mut Option<NetworkGroupEditorState>,
-    group_delete_confirm: &mut Option<NetworkGroupDeleteConfirmState>,
-    expanded_sections: &mut HashSet<String>,
-    delete_confirm: &mut Option<NetworkDeleteConfirmState>,
-    item_menu: &mut Option<NetworkItemMenuState>,
-    move_picker: &mut Option<NetworkMovePickerState>,
-    tunnel_editor: &mut Option<NetworkTunnelEditorState>,
-    proxy_editor: &mut Option<NetworkProxyEditorState>,
-    tab: NetworkTab,
-    group_id: &str,
-    deleted_item_ids: &[String],
-) {
-    remove_network_group_references(
-        group_editor,
-        group_delete_confirm,
-        expanded_sections,
-        tab,
-        group_id,
-    );
-    for item_id in deleted_item_ids {
-        remove_network_item_references(
-            delete_confirm,
-            item_menu,
-            move_picker,
-            tunnel_editor,
-            proxy_editor,
-            tab,
-            item_id,
-        );
-    }
-}
-
 pub(super) fn clear_network_tunnel_editor(tunnel_editor: &mut Option<NetworkTunnelEditorState>) {
     *tunnel_editor = None;
 }

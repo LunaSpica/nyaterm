@@ -552,8 +552,11 @@ impl NyaTermApp {
                     ZmodemDirection::Upload => "↑",
                     ZmodemDirection::Download => "↓",
                 };
-                if total_size > 0 {
-                    let pct = (bytes_transferred.saturating_mul(100) / total_size).min(100);
+                if let Some(pct) = bytes_transferred
+                    .saturating_mul(100)
+                    .checked_div(total_size)
+                    .map(|pct| pct.min(100))
+                {
                     self.shell.set_status(format!(
                         "ZMODEM {dir} {file_name}: {pct}% ({bytes_transferred}/{total_size})"
                     ));
@@ -563,13 +566,15 @@ impl NyaTermApp {
                     ));
                 }
                 self.upsert_zmodem_transfer_job(
-                    session_id,
-                    direction,
-                    &file_name,
-                    bytes_transferred,
-                    total_size,
-                    false,
-                    None,
+                    ZmodemTransferJobUpdate {
+                        session_id,
+                        direction,
+                        file_name: &file_name,
+                        bytes_transferred,
+                        total_size,
+                        completed: false,
+                        fail_reason: None,
+                    },
                     cx,
                 );
             }
@@ -602,15 +607,18 @@ impl NyaTermApp {
 
     fn upsert_zmodem_transfer_job(
         &mut self,
-        session_id: &str,
-        direction: ZmodemDirection,
-        file_name: &str,
-        bytes_transferred: u64,
-        total_size: u64,
-        completed: bool,
-        fail_reason: Option<&str>,
+        update: ZmodemTransferJobUpdate<'_>,
         cx: &mut Context<Self>,
     ) {
+        let ZmodemTransferJobUpdate {
+            session_id,
+            direction,
+            file_name,
+            bytes_transferred,
+            total_size,
+            completed,
+            fail_reason,
+        } = update;
         let short = short_id(session_id);
         let kind = match direction {
             ZmodemDirection::Upload => TransferJobKind::ZmodemUpload {
@@ -772,6 +780,16 @@ impl NyaTermApp {
         })
         .detach();
     }
+}
+
+struct ZmodemTransferJobUpdate<'a> {
+    session_id: &'a str,
+    direction: ZmodemDirection,
+    file_name: &'a str,
+    bytes_transferred: u64,
+    total_size: u64,
+    completed: bool,
+    fail_reason: Option<&'a str>,
 }
 
 fn run_zmodem_worker(

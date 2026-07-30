@@ -13,11 +13,9 @@ impl NyaTermApp {
         palette: crate::theme::ThemePalette,
         cx: &mut Context<Self>,
     ) -> gpui::Div {
-        let credential_edit = self.ai.settings_credential_edit().cloned();
         let credential_secret_drafts = self.ai.settings_credential_secret_drafts().clone();
         let profile_name_label = self.tr("ai.profileName");
         let base_url_label = self.tr("ai.baseUrl");
-        let api_key_label = self.tr("settings.apiKey");
         let delete_label = self.tr("common.delete");
         let save_label = self.tr("common.save");
 
@@ -44,9 +42,6 @@ impl NyaTermApp {
                         | "zai"
                         | "groq"
                 );
-                let active_field = credential_edit
-                    .as_ref()
-                    .and_then(|(id, field)| (id == &credential.id).then_some(*field));
                 let secret_draft = credential_secret_drafts
                     .get(&credential.id)
                     .cloned()
@@ -148,8 +143,6 @@ impl NyaTermApp {
                                 ),
                         )
                         .when(!is_builtin, |body| {
-                            let cred_name = credential_id.clone();
-                            let cred_base = credential_id.clone();
                             body.child(
                                 div()
                                     .grid()

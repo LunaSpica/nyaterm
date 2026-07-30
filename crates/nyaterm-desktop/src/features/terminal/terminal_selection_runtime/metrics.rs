@@ -4,8 +4,8 @@ use nyaterm_core::TerminalViewportInsets;
 
 use crate::features::NyaTermApp;
 use crate::features::terminal::terminal_surface_entity::{
-    TerminalSurfaceHitTestScrollGeometry, terminal_effective_visual_scroll_offset_px,
-    terminal_snapshot_anchor_row_for_display_offset,
+    TerminalSurfaceHitTestScrollGeometry, TerminalVisualScrollGeometry,
+    terminal_effective_visual_scroll_offset_px, terminal_snapshot_anchor_row_for_display_offset,
 };
 use crate::models::TerminalCellPos;
 
@@ -38,7 +38,6 @@ impl NyaTermApp {
     }
 
     /// Refresh monospaced cell metrics from GPUI TextSystem for the configured terminal font.
-
     pub(in crate::features) fn refresh_terminal_cell_metrics(&mut self, cx: &App) {
         let font_size = self.settings.summary().terminal_font_size.max(8) as f32;
         let family = self.gpui_terminal_font_family();
@@ -49,7 +48,7 @@ impl NyaTermApp {
             .ch_advance(font_id, size)
             .or_else(|_| text_system.em_advance(font_id, size))
             .ok()
-            .map(|w| f32::from(w))
+            .map(f32::from)
             .filter(|w| w.is_finite() && *w > 1.0);
         let ascent = f32::from(text_system.ascent(font_id, size));
         let descent = f32::from(text_system.descent(font_id, size)).abs();
@@ -259,16 +258,16 @@ impl NyaTermApp {
                 self.terminal_scroll_residual_for_session(None),
             )
         };
-        let visual_y_offset = terminal_hit_test_visual_y_offset_px(
-            scroll_geometry.snapshot_pending,
-            scroll_offset,
-            scroll_geometry.display_offset,
+        let visual_y_offset = terminal_hit_test_visual_y_offset_px(TerminalVisualScrollGeometry {
+            snapshot_pending: scroll_geometry.snapshot_pending,
+            target_offset: scroll_offset,
+            displayed_offset: scroll_geometry.display_offset,
             residual_lines,
-            scroll_geometry.viewport_anchor_row,
-            scroll_geometry.snapshot_rows,
+            viewport_anchor_row: scroll_geometry.viewport_anchor_row,
+            snapshot_rows: scroll_geometry.snapshot_rows,
             viewport_rows,
-            cell_h,
-        );
+            cell_height: cell_h,
+        });
         Some(TerminalHitTestGeometry {
             bounds,
             cell_w,
@@ -350,26 +349,9 @@ pub(in crate::features) struct TerminalHitTestGeometry {
     pub(in crate::features) visual_y_offset: f32,
 }
 
-fn terminal_hit_test_visual_y_offset_px(
-    snapshot_pending: bool,
-    target_offset: usize,
-    displayed_offset: usize,
-    residual_lines: f32,
-    viewport_anchor_row: usize,
-    snapshot_rows: usize,
-    viewport_rows: usize,
-    cell_height: f32,
-) -> f32 {
-    terminal_effective_visual_scroll_offset_px(
-        snapshot_pending,
-        target_offset,
-        displayed_offset,
-        residual_lines,
-        viewport_anchor_row,
-        snapshot_rows,
-        viewport_rows,
-        cell_height,
-    ) - viewport_anchor_row as f32 * cell_height.max(1.0)
+fn terminal_hit_test_visual_y_offset_px(geometry: TerminalVisualScrollGeometry) -> f32 {
+    terminal_effective_visual_scroll_offset_px(geometry)
+        - geometry.viewport_anchor_row as f32 * geometry.cell_height.max(1.0)
 }
 
 pub(in crate::features) fn terminal_cell_for_visual_geometry(
@@ -490,9 +472,9 @@ mod tests {
     use crate::models::TerminalCellPos;
 
     use super::{
-        TerminalHitTestGeometry, terminal_cell_for_visual_geometry, terminal_gutter_metrics,
-        terminal_hit_test_visual_y_offset_px, terminal_line_number_digits_for_end,
-        terminal_snapshot_row_for_viewport_row,
+        TerminalHitTestGeometry, TerminalVisualScrollGeometry, terminal_cell_for_visual_geometry,
+        terminal_gutter_metrics, terminal_hit_test_visual_y_offset_px,
+        terminal_line_number_digits_for_end, terminal_snapshot_row_for_viewport_row,
     };
 
     fn terminal_output_lines(count: usize) -> String {
@@ -649,16 +631,16 @@ mod tests {
     fn terminal_visual_hit_test_clamps_pending_scroll_to_retained_rows() {
         let cell_h = 16.0;
         let viewport_anchor_row = 12;
-        let visual_y_offset = terminal_hit_test_visual_y_offset_px(
-            true,
-            40,
-            0,
-            0.0,
+        let visual_y_offset = terminal_hit_test_visual_y_offset_px(TerminalVisualScrollGeometry {
+            snapshot_pending: true,
+            target_offset: 40,
+            displayed_offset: 0,
+            residual_lines: 0.0,
             viewport_anchor_row,
-            40,
-            20,
-            cell_h,
-        );
+            snapshot_rows: 40,
+            viewport_rows: 20,
+            cell_height: cell_h,
+        });
         let geometry = TerminalHitTestGeometry {
             bounds: gpui::bounds(
                 Point {

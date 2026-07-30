@@ -14,17 +14,17 @@ use nyaterm_transport::{SessionManager, SftpDuplicatePolicy};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use super::super::settings::{SettingsFeatureFocus, SettingsFeatureState};
+use super::super::settings::{SettingsFeatureFocus, SettingsFeatureInit, SettingsFeatureState};
 use super::super::{
-    AiFeatureFocus, AiFeatureState, CloudSyncFeatureState, CommandFeatureInit, CommandFeatureState,
-    ConnectionFeatureFocus, ConnectionFeatureState, NativeOtpProvider, QuickCommandFeatureFocus,
-    RecordingFeatureState, RemoteOpsFeatureFocus, RemoteOpsFeatureState, SecurityCatalogState,
-    SecurityFeatureFocus, SecurityFeatureState, SendCommandFeatureFocus, SendCommandFeatureState,
-    SessionFeatureFocus, SessionFeatureState, ShellFeatureInit, ShellFeatureState,
-    SyncInputFeatureState, TerminalFeatureFocus, TerminalFeatureState, TextInputRegistry,
-    TransferFeatureFocus, TransferFeatureState, TranslationFeatureState, TunnelCatalogState,
-    TunnelFeatureState, UpdateFeatureState, ai_active_profile_drafts, ai_usage_counts,
-    appearance_font_options, quick_command_sort_mode_from_setting,
+    AiFeatureFocus, AiFeatureInit, AiFeatureState, CloudSyncFeatureState, CommandFeatureInit,
+    CommandFeatureState, ConnectionFeatureFocus, ConnectionFeatureState, NativeOtpProvider,
+    QuickCommandFeatureFocus, RecordingFeatureState, RemoteOpsFeatureFocus, RemoteOpsFeatureState,
+    SecurityCatalogState, SecurityFeatureFocus, SecurityFeatureState, SendCommandFeatureFocus,
+    SendCommandFeatureState, SessionFeatureFocus, SessionFeatureState, ShellFeatureInit,
+    ShellFeatureState, SyncInputFeatureState, TerminalFeatureFocus, TerminalFeatureState,
+    TextInputRegistry, TransferFeatureFocus, TransferFeatureState, TranslationFeatureState,
+    TunnelCatalogState, TunnelFeatureState, UpdateFeatureState, ai_active_profile_drafts,
+    ai_usage_counts, appearance_font_options, quick_command_sort_mode_from_setting,
     quick_command_view_mode_from_setting,
 };
 use super::NyaTermApp;
@@ -244,7 +244,8 @@ impl NyaTermApp {
         let panel_stack_sizes = settings
             .ui_panel_stack_sizes
             .iter()
-            .filter_map(|(key, value)| (*value > 0).then(|| (key.clone(), (*value as f32) / 1000.)))
+            .filter(|(_, value)| **value > 0)
+            .map(|(key, value)| (key.clone(), (*value as f32) / 1000.))
             .collect::<HashMap<_, _>>();
         let panel_multi_open = settings.ui_panel_multi_open;
         let mut terminal_output_decoder = TerminalOutputDecoder::default();
@@ -310,19 +311,20 @@ impl NyaTermApp {
                 1.0,
                 TerminalFeatureFocus {
                     actions: cx.focus_handle(),
-                    x11_display: cx.focus_handle(),
                     terminal: cx.focus_handle(),
                     paste: cx.focus_handle(),
                 },
             ),
             ai: AiFeatureState::new(
-                ai_settings,
-                ai_model_draft,
-                ai_base_url_draft,
-                format!("ai-session-{}", uuid()),
-                ai_session_count,
-                ai_message_count,
-                ai_audit_count,
+                AiFeatureInit {
+                    settings: ai_settings,
+                    model_draft: ai_model_draft,
+                    base_url_draft: ai_base_url_draft,
+                    chat_session_id: format!("ai-session-{}", uuid()),
+                    session_count: ai_session_count,
+                    message_count: ai_message_count,
+                    audit_count: ai_audit_count,
+                },
                 AiFeatureFocus {
                     chat: cx.focus_handle(),
                     clear_history_confirm: cx.focus_handle(),
@@ -341,7 +343,6 @@ impl NyaTermApp {
                     panel: cx.focus_handle(),
                     queue: cx.focus_handle(),
                     job_delete: cx.focus_handle(),
-                    download_path: cx.focus_handle(),
                     browser: cx.focus_handle(),
                     rename: cx.focus_handle(),
                     move_to: cx.focus_handle(),
@@ -352,7 +353,6 @@ impl NyaTermApp {
                     properties: cx.focus_handle(),
                     unknown_file: cx.focus_handle(),
                     editor: cx.focus_handle(),
-                    default_editor: cx.focus_handle(),
                     external_sync: cx.focus_handle(),
                 },
             ),
@@ -423,13 +423,15 @@ impl NyaTermApp {
             }),
             sync_input: SyncInputFeatureState::new(cx.focus_handle()),
             settings: SettingsFeatureState::new(
-                settings,
-                keyword_highlights,
-                store_status.0,
-                store_status.1,
-                store_status.2,
-                appearance_ui_font_options,
-                appearance_terminal_font_options,
+                SettingsFeatureInit {
+                    summary: settings,
+                    keyword_config: keyword_highlights,
+                    store_path: store_status.0,
+                    store_message: store_status.1,
+                    store_ready: store_status.2,
+                    ui_font_options: appearance_ui_font_options,
+                    terminal_font_options: appearance_terminal_font_options,
+                },
                 SettingsFeatureFocus {
                     search_engine: cx.focus_handle(),
                     keyword_highlight: cx.focus_handle(),

@@ -12,21 +12,35 @@ use crate::models::{DockerConfirmAction, DockerConfirmState};
 use crate::theme::ThemePalette;
 use crate::widgets::{empty_panel, status_pill, svg_icon_button};
 
-use super::DockerLabels;
+use super::DockerRenderContext;
+
+pub(in crate::features::pages::remote) struct DockerContainersPanelState<'a> {
+    pub has_snapshot: bool,
+    pub has_session: bool,
+    pub docker_available: bool,
+    pub filtered_containers: &'a [DockerContainer],
+    pub query_empty: bool,
+    pub open_menu_id: Option<&'a str>,
+    pub list_offset: usize,
+}
 
 pub(in crate::features::pages::remote) fn docker_containers_panel(
-    palette: ThemePalette,
-    menu_bg: gpui::Rgba,
-    has_snapshot: bool,
-    has_session: bool,
-    docker_available: bool,
-    filtered_containers: &[DockerContainer],
-    query_empty: bool,
-    open_menu_id: Option<&str>,
-    list_offset: usize,
-    labels: DockerLabels,
+    context: DockerRenderContext,
+    state: DockerContainersPanelState<'_>,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+    let DockerRenderContext {
+        palette, labels, ..
+    } = context;
+    let DockerContainersPanelState {
+        has_snapshot,
+        has_session,
+        docker_available,
+        filtered_containers,
+        query_empty,
+        open_menu_id,
+        list_offset,
+    } = state;
     // Tauri Docker containers tab: dense ~66px rows, left accent, ⋮ action menu.
     if !has_snapshot {
         return div()
@@ -100,9 +114,7 @@ pub(in crate::features::pages::remote) fn docker_containers_panel(
     }
     for container in visible {
         let menu_open = open_menu_id == Some(container.id.as_str());
-        rows = rows.child(docker_container_row(
-            palette, menu_bg, container, menu_open, labels, cx,
-        ));
+        rows = rows.child(docker_container_row(context, container, menu_open, cx));
     }
     if pad_bottom > 0. {
         rows = rows.child(div().h(px(pad_bottom)).w_full().flex_none());
@@ -136,13 +148,14 @@ pub(in crate::features::pages::remote) fn docker_containers_panel(
 }
 
 fn docker_container_row(
-    palette: ThemePalette,
-    menu_bg: gpui::Rgba,
+    context: DockerRenderContext,
     container: DockerContainer,
     menu_open: bool,
-    labels: DockerLabels,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+    let DockerRenderContext {
+        palette, labels, ..
+    } = context;
     let container_id = container.id.clone();
     let details_id = container.id.clone();
     let menu_id = container.id.clone();
@@ -245,12 +258,10 @@ fn docker_container_row(
                     ))
                     .when(menu_open, |this| {
                         this.child(docker_container_action_menu(
-                            palette,
-                            menu_bg,
+                            context,
                             container_id.clone(),
                             container.name.clone(),
                             running,
-                            labels,
                             cx,
                         ))
                     }),
@@ -259,14 +270,17 @@ fn docker_container_row(
 }
 
 fn docker_container_action_menu(
-    palette: ThemePalette,
-    menu_bg: gpui::Rgba,
+    context: DockerRenderContext,
     container_id: String,
     container_name: String,
     running: bool,
-    labels: DockerLabels,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+    let DockerRenderContext {
+        palette,
+        menu_bg,
+        labels,
+    } = context;
     let short = compact_id(&container_id);
     let logs_id = container_id.clone();
     let enter_id = container_id.clone();

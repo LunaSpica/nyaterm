@@ -53,7 +53,6 @@ impl NyaTermApp {
                     self.open_transfer_default(entry, window, cx);
                 }
             }
-            return;
         }
     }
 
@@ -294,7 +293,7 @@ impl NyaTermApp {
     ) {
         window.focus(self.transfer.browser_view().focus);
         self.transfer.clear_browser_selection();
-        let path = normalized_transfer_browser_path(&self.transfer.browser_view().path);
+        let path = normalized_transfer_browser_path(self.transfer.browser_view().path);
         self.transfer.open_browser_context_menu(
             TransferBrowserContextMenuState {
                 name: if path == "/" {

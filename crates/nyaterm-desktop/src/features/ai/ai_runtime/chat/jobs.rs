@@ -340,10 +340,8 @@ impl NyaTermApp {
                 .and_then(|(_, context)| context.arch.clone()),
             recent_output: contexts
                 .iter()
-                .filter_map(|(label, context)| {
-                    (!context.recent_output.trim().is_empty())
-                        .then(|| format!("[{label}]\n{}", context.recent_output))
-                })
+                .filter(|(_, context)| !context.recent_output.trim().is_empty())
+                .map(|(label, context)| format!("[{label}]\n{}", context.recent_output))
                 .collect::<Vec<_>>()
                 .join("\n---\n"),
             selected_text: contexts
@@ -419,7 +417,7 @@ impl NyaTermApp {
     ) -> AiContext {
         let metadata = session_id.and_then(|session_id| self.session.metadata(session_id));
         let ssh = match metadata.map(|metadata| &metadata.launch_config) {
-            Some(SessionLaunchConfig::Ssh(config)) => Some(config),
+            Some(SessionLaunchConfig::Ssh(config)) => Some(config.as_ref()),
             _ if session_id == self.session.active_id() => self.session.active_ssh_config(),
             _ => None,
         };

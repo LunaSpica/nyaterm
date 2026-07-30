@@ -3,8 +3,7 @@ use nyaterm_core::{ConnectionStore, SavedPassword};
 
 use crate::features::{NyaTermApp, compact_id};
 use crate::models::{
-    SecurityAuthTab, SecurityDeleteConfirmState, SecurityPasswordEditorField,
-    SecurityPasswordEditorState, SecurityUnlockAction,
+    SecurityAuthTab, SecurityDeleteConfirmState, SecurityPasswordEditorState, SecurityUnlockAction,
 };
 
 impl NyaTermApp {
@@ -42,7 +41,6 @@ impl NyaTermApp {
                 password: String::new(),
                 has_password: entry.has_password,
                 show_password: false,
-                focused_field: SecurityPasswordEditorField::Name,
                 error: None,
             }
         } else {
@@ -52,7 +50,6 @@ impl NyaTermApp {
                 password: String::new(),
                 has_password: false,
                 show_password: false,
-                focused_field: SecurityPasswordEditorField::Name,
                 error: None,
             }
         };
@@ -84,11 +81,9 @@ impl NyaTermApp {
         match keystroke.key.as_str() {
             "escape" => {
                 self.close_security_password_editor(cx);
-                return;
             }
             "enter" => {
                 self.save_security_password_editor(window, cx);
-                return;
             }
             _ => {}
         }

@@ -140,11 +140,10 @@ impl NyaTermApp {
                             ConnectionDragKind::Group,
                             section.group_id.as_deref(),
                         ) == Some(ConnectionDropPosition::Inside);
-                        if drop_inside {
-                            rgb(palette.hover)
-                        } else if self
-                            .connection_state
-                            .list_group_is_hovered(section.group_id.as_deref())
+                        if drop_inside
+                            || self
+                                .connection_state
+                                .list_group_is_hovered(section.group_id.as_deref())
                         {
                             rgb(palette.hover)
                         } else {
@@ -161,13 +160,12 @@ impl NyaTermApp {
                     .on_hover({
                         let hover_group = section.group_id.clone();
                         cx.listener(move |this, hovered: &bool, _, cx| {
-                            if let Some(group_id) = hover_group.clone() {
-                                if this
+                            if let Some(group_id) = hover_group.clone()
+                                && this
                                     .connection_state
                                     .set_list_group_hover(group_id, *hovered)
-                                {
-                                    cx.notify();
-                                }
+                            {
+                                cx.notify();
                             }
                         })
                     })

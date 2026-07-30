@@ -55,7 +55,7 @@ impl StartupCommandAction {
 #[derive(Clone)]
 pub(crate) enum SessionLaunchConfig {
     Local(LocalSessionConfig),
-    Ssh(SshSessionConfig),
+    Ssh(Box<SshSessionConfig>),
     Telnet(TelnetSessionConfig),
     Serial(SerialSessionConfig),
 }
@@ -69,7 +69,7 @@ pub(crate) enum QuickSwitchItem {
         active: bool,
     },
     Connection {
-        connection: SavedConnection,
+        connection: Box<SavedConnection>,
         title: String,
         subtitle: String,
     },

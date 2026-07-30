@@ -22,7 +22,7 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let display_browser_path = display_transfer_browser_home_path(
             &current_browser_path,
-            &self.transfer.browser_view().home_dir,
+            self.transfer.browser_view().home_dir,
         );
         let is_current_favorite = self
             .transfer
@@ -35,8 +35,8 @@ impl NyaTermApp {
             .browser_view()
             .visited_history
             .iter()
-            .cloned()
             .take(5)
+            .cloned()
             .collect::<Vec<_>>();
         let palette = self.theme_palette();
         let path_input = self.transfer.browser_view().path_editing.then(|| {
@@ -72,7 +72,7 @@ impl NyaTermApp {
         });
         let breadcrumbs = build_transfer_browser_breadcrumbs(
             &current_browser_path,
-            &self.transfer.browser_view().home_dir,
+            self.transfer.browser_view().home_dir,
         );
         let (visible_breadcrumbs, overflow_breadcrumbs) =
             collapse_transfer_browser_breadcrumbs(&breadcrumbs);
@@ -126,14 +126,20 @@ impl NyaTermApp {
                     })
                     .when(!self.transfer.browser_view().path_editing, |this| {
                         this.child(transfer_browser_breadcrumb_row(
-                            palette,
-                            display_browser_path.clone(),
-                            current_browser_path.clone(),
-                            breadcrumbs.clone(),
-                            visible_breadcrumbs.clone(),
-                            overflow_breadcrumbs.clone(),
-                            self.tr("fileExplorer.breadcrumbOverflow").to_string(),
-                            self.tr("fileExplorer.showChildDirectories").to_string(),
+                            TransferBrowserBreadcrumbRowPresentation {
+                                palette,
+                                display_path: display_browser_path.clone(),
+                                current_path: current_browser_path.clone(),
+                                all_segments: breadcrumbs.clone(),
+                                visible_segments: visible_breadcrumbs.clone(),
+                                overflow_segments: overflow_breadcrumbs.clone(),
+                                overflow_label: self
+                                    .tr("fileExplorer.breadcrumbOverflow")
+                                    .to_string(),
+                                show_child_directories_label: self
+                                    .tr("fileExplorer.showChildDirectories")
+                                    .to_string(),
+                            },
                             cx,
                         ))
                     })
@@ -205,7 +211,7 @@ impl NyaTermApp {
     }
 
     pub(super) fn copy_current_transfer_browser_path(&mut self, cx: &mut Context<Self>) {
-        let path = normalized_transfer_browser_path(&self.transfer.browser_view().path);
+        let path = normalized_transfer_browser_path(self.transfer.browser_view().path);
         cx.write_to_clipboard(ClipboardItem::new_string(path.clone()));
         self.shell
             .set_status("copied current remote directory".to_string());
@@ -243,10 +249,10 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let path = normalized_transfer_browser_path(&path);
-        let current_path = normalized_transfer_browser_path(&self.transfer.browser_view().path);
+        let current_path = normalized_transfer_browser_path(self.transfer.browser_view().path);
         let status = if path == current_path {
             TransferBrowserChildrenMenuStatus::Ready(transfer_browser_child_directories(
-                &self.transfer.browser_view().entries,
+                self.transfer.browser_view().entries,
                 self.settings.summary().ui_file_explorer_show_hidden_files,
             ))
         } else {
@@ -440,7 +446,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        let path = normalized_transfer_browser_path(&self.transfer.browser_view().path);
+        let path = normalized_transfer_browser_path(self.transfer.browser_view().path);
         if self.send_terminal_input(path.clone().into_bytes(), cx) {
             self.shell
                 .set_status("sent current remote directory to terminal".to_string());
@@ -495,8 +501,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let path = expand_transfer_browser_home_path(
-            &self.transfer.browser_view().path_draft,
-            &self.transfer.browser_view().home_dir,
+            self.transfer.browser_view().path_draft,
+            self.transfer.browser_view().home_dir,
         );
         if path.is_empty() {
             self.transfer
@@ -521,16 +527,19 @@ impl NyaTermApp {
 }
 
 fn transfer_browser_breadcrumb_row(
-    palette: crate::theme::ThemePalette,
-    display_path: String,
-    current_path: String,
-    all_segments: Vec<TransferBrowserBreadcrumbSegment>,
-    visible_segments: Vec<TransferBrowserBreadcrumbSegment>,
-    overflow_segments: Vec<TransferBrowserBreadcrumbSegment>,
-    breadcrumb_overflow_label: String,
-    show_child_directories_label: String,
+    presentation: TransferBrowserBreadcrumbRowPresentation,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+    let TransferBrowserBreadcrumbRowPresentation {
+        palette,
+        display_path,
+        current_path,
+        all_segments,
+        visible_segments,
+        overflow_segments,
+        overflow_label,
+        show_child_directories_label,
+    } = presentation;
     let mut row = div()
         .id(SharedString::from("transfer-browser-path-display"))
         .min_w_0()
@@ -563,10 +572,8 @@ fn transfer_browser_breadcrumb_row(
                         .text_color(rgb(palette.text))
                 })
                 .tooltip(move |_, cx| {
-                    cx.new(|_| {
-                        crate::features::ChromeTooltip::new(breadcrumb_overflow_label.clone())
-                    })
-                    .into()
+                    cx.new(|_| crate::features::ChromeTooltip::new(overflow_label.clone()))
+                        .into()
                 })
                 .on_mouse_down(
                     MouseButton::Left,
@@ -687,6 +694,17 @@ fn transfer_browser_breadcrumb_row(
         );
     }
     row
+}
+
+struct TransferBrowserBreadcrumbRowPresentation {
+    palette: crate::theme::ThemePalette,
+    display_path: String,
+    current_path: String,
+    all_segments: Vec<TransferBrowserBreadcrumbSegment>,
+    visible_segments: Vec<TransferBrowserBreadcrumbSegment>,
+    overflow_segments: Vec<TransferBrowserBreadcrumbSegment>,
+    overflow_label: String,
+    show_child_directories_label: String,
 }
 
 fn transfer_browser_path_menu_entries(

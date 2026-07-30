@@ -39,7 +39,6 @@ pub(in crate::features) struct TerminalFeatureState {
 /// Focus handles the terminal feature needs at construction time.
 pub(in crate::features) struct TerminalFeatureFocus {
     pub actions: FocusHandle,
-    pub x11_display: FocusHandle,
     pub terminal: FocusHandle,
     pub paste: FocusHandle,
 }
@@ -561,7 +560,6 @@ mod tests {
                 1.0,
                 TerminalFeatureFocus {
                     actions: cx.focus_handle(),
-                    x11_display: cx.focus_handle(),
                     terminal: cx.focus_handle(),
                     paste: cx.focus_handle(),
                 },

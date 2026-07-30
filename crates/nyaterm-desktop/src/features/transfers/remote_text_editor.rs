@@ -974,16 +974,16 @@ impl Element for RemoteTextElement {
         let palette = editor.app.read(cx).theme_palette();
         let line_height = layout.line_height();
         let cursor_position = layout.position_for_index(editor.head.min(editor.content.len()));
-        let cursor = (!editor.selected_range().is_empty())
-            .then_some(None)
-            .unwrap_or_else(|| {
-                cursor_position.map(|position| {
-                    fill(
-                        Bounds::new(position, size(px(1.5), line_height)),
-                        rgb(palette.focus_ring),
-                    )
-                })
-            });
+        let cursor = if !editor.selected_range().is_empty() {
+            None
+        } else {
+            cursor_position.map(|position| {
+                fill(
+                    Bounds::new(position, size(px(1.5), line_height)),
+                    rgb(palette.focus_ring),
+                )
+            })
+        };
         let active_start = line_start(&editor.content, editor.head.min(editor.content.len()));
         let active_number = editor.content[..active_start]
             .bytes()

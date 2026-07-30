@@ -421,8 +421,7 @@ impl NyaTermApp {
                             continue;
                         }
 
-                        let protocol_output = state.protocol.filter_terminal_output(&bytes);
-                        protocol_output
+                        state.protocol.filter_terminal_output(&bytes)
                     };
                     for frame in protocol_output.frames.clone() {
                         self.handle_trzsz_protocol_frame(

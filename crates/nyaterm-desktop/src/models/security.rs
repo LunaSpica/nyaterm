@@ -43,7 +43,6 @@ pub(crate) enum SecurityKeyEditorField {
     Name,
     KeyPath,
     CertPath,
-    Passphrase,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -59,16 +58,6 @@ pub(crate) struct SecurityKeyEditorState {
     pub(crate) error: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum SecurityOtpEditorField {
-    Issuer,
-    Username,
-    Secret,
-    Digits,
-    Period,
-    Counter,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SecurityOtpEditorState {
     pub(crate) id: Option<String>,
@@ -81,7 +70,6 @@ pub(crate) struct SecurityOtpEditorState {
     pub(crate) period: String,
     pub(crate) counter: String,
     pub(crate) has_secret: bool,
-    pub(crate) focused_field: SecurityOtpEditorField,
     pub(crate) error: Option<String>,
 }
 
@@ -92,12 +80,6 @@ pub(crate) struct SecurityDeleteConfirmState {
     pub(crate) label: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum SecurityPasswordEditorField {
-    Name,
-    Password,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SecurityPasswordEditorState {
     pub(crate) id: Option<String>,
@@ -105,17 +87,7 @@ pub(crate) struct SecurityPasswordEditorState {
     pub(crate) password: String,
     pub(crate) has_password: bool,
     pub(crate) show_password: bool,
-    pub(crate) focused_field: SecurityPasswordEditorField,
     pub(crate) error: Option<String>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum SecurityCredentialEditorField {
-    Name,
-    Username,
-    Password,
-    UsernameRegex,
-    PasswordRegex,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -128,6 +100,5 @@ pub(crate) struct SecurityCredentialEditorState {
     pub(crate) password_prompt_regex: String,
     pub(crate) enabled: bool,
     pub(crate) has_password: bool,
-    pub(crate) focused_field: SecurityCredentialEditorField,
     pub(crate) error: Option<String>,
 }

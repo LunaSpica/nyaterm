@@ -28,40 +28,33 @@ impl NyaTermApp {
             let Some(root) = self.shell.workspace.pane_roots.remove(&tab_root) else {
                 continue;
             };
-            match root.prune(&live_ids) {
-                Some(node) => {
-                    if node.is_split() {
-                        // Keep map key as original tab root when still present; else rekey.
-                        let key = if node.contains_session(&tab_root) {
-                            tab_root.clone()
-                        } else {
-                            node.session_ids()
-                                .into_iter()
-                                .next()
-                                .unwrap_or_else(|| tab_root.clone())
-                        };
-                        self.shell.workspace.pane_roots.insert(key, node);
-                    }
-                    // Single leaf collapses to no stored tree for this tab.
-                }
-                None => {}
+            if let Some(node) = root.prune(&live_ids)
+                && node.is_split()
+            {
+                // Keep map key as original tab root when still present; else rekey.
+                let key = if node.contains_session(&tab_root) {
+                    tab_root.clone()
+                } else {
+                    node.session_ids()
+                        .into_iter()
+                        .next()
+                        .unwrap_or_else(|| tab_root.clone())
+                };
+                self.shell.workspace.pane_roots.insert(key, node);
             }
+            // Single leaf collapses to no stored tree for this tab.
         }
         // Also prune legacy workspace_split if roots empty (migration path).
-        if self.shell.workspace.pane_roots.is_empty() {
-            if let Some(root) = self.shell.workspace.split.take() {
-                match root.prune(&live_ids) {
-                    Some(node) => {
-                        if node.is_split() {
-                            if let Some(first) = node.session_ids().into_iter().next() {
-                                self.shell.workspace.pane_roots.insert(first.clone(), node);
-                            }
-                        } else if let WorkspacePaneNode::Leaf { session_id } = node {
-                            self.session.select_active_session_if_none(session_id);
-                        }
-                    }
-                    None => {}
+        if self.shell.workspace.pane_roots.is_empty()
+            && let Some(root) = self.shell.workspace.split.take()
+            && let Some(node) = root.prune(&live_ids)
+        {
+            if node.is_split() {
+                if let Some(first) = node.session_ids().into_iter().next() {
+                    self.shell.workspace.pane_roots.insert(first.clone(), node);
                 }
+            } else if let WorkspacePaneNode::Leaf { session_id } = node {
+                self.session.select_active_session_if_none(session_id);
             }
         }
         self.rebuild_session_tab_owners();
@@ -112,11 +105,11 @@ impl NyaTermApp {
             return;
         };
         let tab_root = self.tab_root_for_session(&active);
-        if let Some(root) = self.shell.workspace.split.clone() {
-            if root.is_split() {
-                self.shell.workspace.pane_roots.insert(tab_root, root);
-                self.rebuild_session_tab_owners();
-            }
+        if let Some(root) = self.shell.workspace.split.clone()
+            && root.is_split()
+        {
+            self.shell.workspace.pane_roots.insert(tab_root, root);
+            self.rebuild_session_tab_owners();
         }
     }
 
@@ -128,24 +121,24 @@ impl NyaTermApp {
     ) {
         let split_id = uuid();
         let tab_root = self.tab_root_for_session(&primary_session_id);
-        if let Some(root) = self.shell.workspace.pane_roots.get_mut(&tab_root) {
-            if root.split_leaf(
+        if let Some(root) = self.shell.workspace.pane_roots.get_mut(&tab_root)
+            && root.split_leaf(
                 &primary_session_id,
                 secondary_session_id.clone(),
                 direction,
                 split_id.clone(),
-            ) {
-                self.rebuild_session_tab_owners();
-                self.activate_session_id(&secondary_session_id);
-                self.sync_workspace_split_from_active_tab();
-                self.shell.navigation.selected_nav = NavItem::Workspace;
-                self.shell.navigation.main_mode = MainMode::Workspace;
-                self.persist_workspace_pane_layout();
-                if self.session.restore_is_complete() {
-                    self.persist_open_tabs();
-                }
-                return;
+            )
+        {
+            self.rebuild_session_tab_owners();
+            self.activate_session_id(&secondary_session_id);
+            self.sync_workspace_split_from_active_tab();
+            self.shell.navigation.selected_nav = NavItem::Workspace;
+            self.shell.navigation.main_mode = MainMode::Workspace;
+            self.persist_workspace_pane_layout();
+            if self.session.restore_is_complete() {
+                self.persist_open_tabs();
             }
+            return;
         }
         // Create a new per-tab dual split rooted at the primary session tab.
         let root = WorkspacePaneNode::Split {
@@ -341,13 +334,12 @@ impl NyaTermApp {
         let mut applied = self
             .terminal
             .set_terminal_window_split_ratio(&state.split_id, next);
-        if !applied {
-            if let Some(root) = self.shell.workspace.split.as_mut() {
-                if root.set_ratio_for_split(&state.split_id, next) {
-                    applied = true;
-                    self.write_back_active_tab_pane_root();
-                }
-            }
+        if !applied
+            && let Some(root) = self.shell.workspace.split.as_mut()
+            && root.set_ratio_for_split(&state.split_id, next)
+        {
+            applied = true;
+            self.write_back_active_tab_pane_root();
         }
         if applied {
             self.shell.set_status(format!("split ratio {next}%"));
@@ -529,10 +521,10 @@ impl NyaTermApp {
         }
         // Prefer active session still present in the restored tree.
         if let Some(active) = self.session.active_id_owned() {
-            if !restored.contains_session(&active) {
-                if let Some(first) = restored.session_ids().into_iter().next() {
-                    self.session.select_active_session(first);
-                }
+            if !restored.contains_session(&active)
+                && let Some(first) = restored.session_ids().into_iter().next()
+            {
+                self.session.select_active_session(first);
             }
         } else if let Some(first) = restored.session_ids().into_iter().next() {
             self.session.select_active_session(first);

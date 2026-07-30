@@ -83,23 +83,23 @@ impl NyaTermApp {
                     );
                     return;
                 };
-                if let Some(tabs) = tabs.as_ref() {
-                    if let Err(error) = store.save_open_tabs(tabs) {
-                        tracing::warn!(
-                            diagnostic = "session_persist",
-                            error = %error,
-                            "failed to save open tabs in background"
-                        );
-                    }
+                if let Some(tabs) = tabs.as_ref()
+                    && let Err(error) = store.save_open_tabs(tabs)
+                {
+                    tracing::warn!(
+                        diagnostic = "session_persist",
+                        error = %error,
+                        "failed to save open tabs in background"
+                    );
                 }
-                if let Some(layout) = layout.as_ref() {
-                    if let Err(error) = store.save_terminal_window_layout(layout.as_ref()) {
-                        tracing::warn!(
-                            diagnostic = "session_persist",
-                            error = %error,
-                            "failed to save window layout in background"
-                        );
-                    }
+                if let Some(layout) = layout.as_ref()
+                    && let Err(error) = store.save_terminal_window_layout(layout.as_ref())
+                {
+                    tracing::warn!(
+                        diagnostic = "session_persist",
+                        error = %error,
+                        "failed to save window layout in background"
+                    );
                 }
             })
             .ok();
@@ -171,13 +171,12 @@ impl NyaTermApp {
             .into_iter()
             .map(|session| {
                 let mut tab = self.serialize_open_tab_for_session(&session);
-                if let Some(root) = self.shell.workspace_pane_root(&session.id) {
-                    if root.is_split() {
-                        if let Some(pane_root) = self.workspace_pane_to_restorable_pane(root) {
-                            tab.root = Some(pane_root);
-                            tab.active_pane_id = Some(self.active_pane_for_tab_root(&session.id));
-                        }
-                    }
+                if let Some(root) = self.shell.workspace_pane_root(&session.id)
+                    && root.is_split()
+                    && let Some(pane_root) = self.workspace_pane_to_restorable_pane(root)
+                {
+                    tab.root = Some(pane_root);
+                    tab.active_pane_id = Some(self.active_pane_for_tab_root(&session.id));
                 }
                 tab
             })
@@ -354,14 +353,12 @@ impl NyaTermApp {
             }
             if let (Some(root), Some(active_pane_id)) =
                 (tab.root.as_ref(), tab.active_pane_id.as_ref())
-            {
-                if let Some(leaf_offset) = root
+                && let Some(leaf_offset) = root
                     .collect_leaves()
                     .iter()
                     .position(|leaf| &leaf.id == active_pane_id)
-                {
-                    pending_active_pane_indexes.push(base_index + leaf_offset);
-                }
+            {
+                pending_active_pane_indexes.push(base_index + leaf_offset);
             }
             let sessions = tab.expanded_sessions();
             base_index += sessions.len();
@@ -531,12 +528,11 @@ impl NyaTermApp {
                 SessionLaunchConfig::Local(config),
                 None,
                 AiExecutionProfile::Posix,
-                custom_name,
-                tab_color,
-                None,
-                None,
-                None,
-                None,
+                SavedConnectionStartOptions {
+                    custom_name,
+                    tab_color,
+                    ..Default::default()
+                },
                 cx,
             );
             return true;
@@ -573,10 +569,10 @@ impl NyaTermApp {
             return;
         };
         // Avoid clobbering an existing distinct per-tab tree for the same root.
-        if let Some(existing) = self.shell.workspace_pane_root(&first) {
-            if existing != &restored {
-                // Prefer the newly restored tree from open_tabs for this root.
-            }
+        if let Some(existing) = self.shell.workspace_pane_root(&first)
+            && existing != &restored
+        {
+            // Prefer the newly restored tree from open_tabs for this root.
         }
         self.shell
             .insert_workspace_pane_root(first.clone(), restored);

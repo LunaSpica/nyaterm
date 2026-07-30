@@ -263,14 +263,11 @@ impl NyaTermApp {
         if text != "\t"
             && self.terminal.assist.command_input_tracker.desynced
             && self.terminal.assist.command_input_tracker.desync_reason == Some("tab")
+            && let Some(line) = self.read_active_terminal_input_line()
+            && let Some(recovered) =
+                resync_from_terminal_line(&self.terminal.assist.command_input_tracker, &line)
         {
-            if let Some(line) = self.read_active_terminal_input_line() {
-                if let Some(recovered) =
-                    resync_from_terminal_line(&self.terminal.assist.command_input_tracker, &line)
-                {
-                    self.terminal.assist.command_input_tracker = recovered;
-                }
-            }
+            self.terminal.assist.command_input_tracker = recovered;
         }
         timing.resync = resync_started_at.elapsed();
 
@@ -798,7 +795,6 @@ impl NyaTermApp {
     }
 
     /// Handle suggestion popup keys. Returns true when the key was consumed.
-
     pub(in crate::features) fn handle_command_suggestion_key(
         &mut self,
         event: &KeyDownEvent,
@@ -1163,16 +1159,17 @@ impl NyaTermApp {
         let bounds = self.terminal_surface_bounds_for_session(session_id)?;
         let insets = self.terminal_content_insets();
         Some(suggestion_overlay_position(
-            bounds,
-            self.terminal_cell_size(),
-            insets.left,
-            insets.top,
-            self.terminal_gutter_width_px_for_session(session_id),
-            self.shell.viewport_size(),
-            cursor_row,
-            cursor_col,
-            menu_w,
-            menu_h,
+            SuggestionOverlayGeometry {
+                bounds,
+                cell_size: self.terminal_cell_size(),
+                content_origin: (insets.left, insets.top),
+                gutter: self.terminal_gutter_width_px_for_session(session_id),
+                viewport_size: self.shell.viewport_size(),
+            },
+            SuggestionOverlayTarget {
+                cursor: (cursor_row, cursor_col),
+                menu_size: (menu_w, menu_h),
+            },
         ))
     }
 }
@@ -1185,17 +1182,20 @@ fn command_suggestion_state_changed(
 }
 
 pub(in crate::features) fn suggestion_overlay_position(
-    bounds: Bounds<Pixels>,
-    cell_size: (f32, f32),
-    pad_left: f32,
-    pad_top: f32,
-    gutter: f32,
-    viewport_size: (f32, f32),
-    cursor_row: usize,
-    cursor_col: usize,
-    menu_w: f32,
-    menu_h: f32,
+    geometry: SuggestionOverlayGeometry,
+    target: SuggestionOverlayTarget,
 ) -> (f32, f32) {
+    let SuggestionOverlayGeometry {
+        bounds,
+        cell_size,
+        content_origin: (pad_left, pad_top),
+        gutter,
+        viewport_size,
+    } = geometry;
+    let SuggestionOverlayTarget {
+        cursor: (cursor_row, cursor_col),
+        menu_size: (menu_w, menu_h),
+    } = target;
     let (cell_w, cell_h) = cell_size;
     let base_x = f32::from(bounds.origin.x) + pad_left + gutter + cursor_col as f32 * cell_w;
     let base_y = f32::from(bounds.origin.y) + pad_top + (cursor_row as f32 + 1.0) * cell_h;
@@ -1211,25 +1211,41 @@ pub(in crate::features) fn suggestion_overlay_position(
     (x.max(8.0), y.max(8.0))
 }
 
+#[derive(Clone, Copy)]
+pub(in crate::features) struct SuggestionOverlayGeometry {
+    pub bounds: Bounds<Pixels>,
+    pub cell_size: (f32, f32),
+    pub content_origin: (f32, f32),
+    pub gutter: f32,
+    pub viewport_size: (f32, f32),
+}
+
+#[derive(Clone, Copy)]
+pub(in crate::features) struct SuggestionOverlayTarget {
+    pub cursor: (usize, usize),
+    pub menu_size: (f32, f32),
+}
+
 #[cfg(test)]
 mod overlay_position_tests {
     use gpui::{Bounds, point, px, size};
 
-    use super::suggestion_overlay_position;
+    use super::{SuggestionOverlayGeometry, SuggestionOverlayTarget, suggestion_overlay_position};
 
     #[test]
     fn suggestion_overlay_position_anchors_below_cursor() {
         let (x, y) = suggestion_overlay_position(
-            Bounds::new(point(px(10.0), px(20.0)), size(px(800.0), px(400.0))),
-            (8.0, 16.0),
-            8.0,
-            0.0,
-            0.0,
-            (1024.0, 768.0),
-            2,
-            4,
-            300.0,
-            120.0,
+            SuggestionOverlayGeometry {
+                bounds: Bounds::new(point(px(10.0), px(20.0)), size(px(800.0), px(400.0))),
+                cell_size: (8.0, 16.0),
+                content_origin: (8.0, 0.0),
+                gutter: 0.0,
+                viewport_size: (1024.0, 768.0),
+            },
+            SuggestionOverlayTarget {
+                cursor: (2, 4),
+                menu_size: (300.0, 120.0),
+            },
         );
 
         assert_eq!(x, 50.0);
@@ -1239,16 +1255,17 @@ mod overlay_position_tests {
     #[test]
     fn suggestion_overlay_position_clamps_and_flips_inside_viewport() {
         let (x, y) = suggestion_overlay_position(
-            Bounds::new(point(px(700.0), px(500.0)), size(px(200.0), px(160.0))),
-            (8.0, 16.0),
-            8.0,
-            0.0,
-            0.0,
-            (900.0, 620.0),
-            4,
-            30,
-            300.0,
-            140.0,
+            SuggestionOverlayGeometry {
+                bounds: Bounds::new(point(px(700.0), px(500.0)), size(px(200.0), px(160.0))),
+                cell_size: (8.0, 16.0),
+                content_origin: (8.0, 0.0),
+                gutter: 0.0,
+                viewport_size: (900.0, 620.0),
+            },
+            SuggestionOverlayTarget {
+                cursor: (4, 30),
+                menu_size: (300.0, 140.0),
+            },
         );
 
         assert_eq!(x, 592.0);

@@ -23,25 +23,13 @@ pub(super) fn clear_connection_editor_runtime_state(
     *window_open_pending = false;
 }
 
-pub(super) fn finish_connection_editor_save_state(
-    draft: &mut Option<ConnectionEditorState>,
-    icon_picker_open: &mut bool,
-    menu: &mut Option<ConnectionEditorMenu>,
-    window: &mut Option<WindowHandle<ConnectionEditorWindow>>,
-    window_open_pending: &mut bool,
+pub(super) fn select_saved_connection_after_editor_save(
     selected_ids: &mut HashSet<String>,
     last_selected_id: &mut Option<String>,
     expanded_group_ids: &mut HashSet<String>,
     connection_id: String,
     group_id: Option<String>,
 ) {
-    clear_connection_editor_runtime_state(
-        draft,
-        icon_picker_open,
-        menu,
-        window,
-        window_open_pending,
-    );
     selected_ids.clear();
     selected_ids.insert(connection_id.clone());
     *last_selected_id = Some(connection_id);

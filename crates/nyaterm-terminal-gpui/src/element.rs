@@ -1,8 +1,29 @@
-use super::*;
 use std::collections::{HashMap, VecDeque, hash_map::DefaultHasher};
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
+
+use gpui::{
+    App, Bounds, ContentMask, Element, ElementId, Font, GlobalElementId, InspectorElementId,
+    IntoElement, LayoutId, PaintQuad, Pixels, ShapedLine, SharedString, Style, TextRun, Window,
+    fill, font, point, px, relative, rgb, size,
+};
+use nyaterm_core::ResolvedKeywordHighlightRule;
+use nyaterm_terminal::{
+    TerminalSnapshot, terminal_cell_count, terminal_char_cell_width, terminal_is_zero_width_mark,
+};
+
+use crate::keywords::{
+    CompiledKeywordRules, TerminalKeywordHighlightSnapshot, compile_keyword_rules,
+    terminal_keyword_rules_key,
+};
+use crate::paint::{
+    apply_search_ranges, flatten_highlight_spans, flush_bg, line_strike_color, push_col_range_bg,
+    terminal_cell_text_at_col, terminal_highlight_spans_compiled,
+    terminal_highlight_spans_with_keyword_ranges, terminal_keyword_exclusion_ranges,
+    terminal_run_font,
+};
+use crate::types::{TerminalHighlightSpan, TerminalPaintGeometry};
 
 #[derive(Debug, Clone)]
 pub struct TerminalBufferMatch {
@@ -49,6 +70,14 @@ struct TerminalRowUnderlineRange {
     color: u32,
     start: usize,
     end: usize,
+}
+
+#[cfg(test)]
+#[derive(Clone, Copy)]
+struct TerminalKeywordLayoutState {
+    rules_key: u64,
+    spans_present: bool,
+    result_known_empty: bool,
 }
 
 #[derive(Debug, Default)]
@@ -238,1110 +267,7 @@ impl NyaTerminalLayoutCache {
 }
 
 #[cfg(test)]
-mod layout_cache_tests {
-    use super::*;
-
-    fn edit_snapshot_row(
-        snapshot: &mut TerminalSnapshot,
-        row: usize,
-        edit: impl FnOnce(&mut nyaterm_terminal::TerminalSnapshotRow),
-    ) {
-        let rows = Arc::make_mut(&mut snapshot.row_data);
-        edit(Arc::make_mut(&mut rows[row]));
-    }
-
-    #[test]
-    fn shaped_line_cache_reuses_matching_row_key() {
-        let mut cache = NyaTerminalLayoutCache::default();
-
-        let _ = cache.shaped_line(0, 42, || {
-            (Arc::new(ShapedLine::default()), std::time::Duration::ZERO)
-        });
-        let _ = cache.shaped_line(7, 42, || {
-            panic!("matching key should reuse cached row even at another viewport row")
-        });
-
-        assert_eq!(cache.misses, 1);
-        assert_eq!(cache.hits, 1);
-    }
-
-    #[test]
-    fn clear_resets_shaped_line_cache() {
-        let mut cache = NyaTerminalLayoutCache::default();
-        let _ = cache.shaped_line(0, 42, || {
-            (Arc::new(ShapedLine::default()), std::time::Duration::ZERO)
-        });
-
-        cache.clear();
-
-        assert_eq!(cache.misses, 0);
-        assert_eq!(cache.hits, 0);
-        let _ = cache.shaped_line(0, 42, || {
-            (Arc::new(ShapedLine::default()), std::time::Duration::ZERO)
-        });
-        assert_eq!(cache.misses, 1);
-        assert_eq!(cache.row_order.len(), 1);
-    }
-
-    #[test]
-    fn cursor_glyph_cache_reuses_matching_layout() {
-        let mut cache = NyaTerminalLayoutCache::default();
-
-        let (first, did_shape, _) = cache.cursor_glyph(42, || {
-            (Arc::new(ShapedLine::default()), std::time::Duration::ZERO)
-        });
-        assert!(did_shape);
-
-        let (second, did_shape, _) = cache.cursor_glyph(42, || {
-            panic!("matching cursor glyph should reuse its shaped layout")
-        });
-        assert!(!did_shape);
-        assert!(Arc::ptr_eq(&first, &second));
-        assert_eq!(cache.misses, 1);
-        assert_eq!(cache.hits, 1);
-        assert_eq!(cache.shape_calls, 1);
-    }
-
-    #[test]
-    fn keyword_rules_key_reuses_equal_rule_sets() {
-        let mut cache = NyaTerminalLayoutCache::default();
-        let first = Arc::new(vec![ResolvedKeywordHighlightRule {
-            id: "error".to_string(),
-            name: "Error".to_string(),
-            patterns: vec!["error".to_string()],
-            color: "#ff0000".to_string(),
-            enabled: true,
-        }]);
-        let second = Arc::new(vec![ResolvedKeywordHighlightRule {
-            id: "error".to_string(),
-            name: "Error".to_string(),
-            patterns: vec!["error".to_string()],
-            color: "#ff0000".to_string(),
-            enabled: true,
-        }]);
-
-        let key = cache.keyword_rules_key(&first);
-        assert_eq!(cache.keyword_rules_key(&second), key);
-        assert!(
-            cache
-                .keyword_rules_source
-                .as_ref()
-                .is_some_and(|cached| Arc::ptr_eq(cached, &second))
-        );
-    }
-
-    #[test]
-    fn shaped_line_cache_misses_on_style_key_change() {
-        let mut cache = NyaTerminalLayoutCache::default();
-
-        let _ = cache.shaped_line(0, 42, || {
-            (Arc::new(ShapedLine::default()), std::time::Duration::ZERO)
-        });
-        let _ = cache.shaped_line(0, 43, || {
-            (Arc::new(ShapedLine::default()), std::time::Duration::ZERO)
-        });
-
-        assert_eq!(cache.misses, 2);
-        assert_eq!(cache.hits, 0);
-    }
-
-    #[test]
-    fn row_cache_evicts_incrementally_when_full() {
-        let mut cache = NyaTerminalLayoutCache::default();
-        for key in 0..=TERMINAL_LAYOUT_CACHE_ROW_CAP as u64 {
-            let _ = cache.paint_row(0, key, || {
-                (
-                    Arc::new(ShapedLine::default()),
-                    std::time::Duration::ZERO,
-                    1,
-                    Vec::new(),
-                    Vec::new(),
-                )
-            });
-        }
-
-        assert_eq!(cache.rows.len(), TERMINAL_LAYOUT_CACHE_ROW_CAP);
-        assert!(!cache.rows.contains_key(&0));
-        assert!(cache.rows.contains_key(&1));
-        assert!(
-            cache
-                .rows
-                .contains_key(&(TERMINAL_LAYOUT_CACHE_ROW_CAP as u64))
-        );
-
-        let _ = cache.paint_row(0, 1, || {
-            panic!("remaining rows should survive cache pressure");
-        });
-        assert_eq!(cache.hits, 1);
-    }
-
-    #[test]
-    fn styled_span_hash_tracks_style_changes() {
-        let plain = vec![nyaterm_terminal::StyledSpan {
-            text: "same".to_string(),
-            style: nyaterm_terminal::CellStyle::default(),
-        }];
-        let bold_style = nyaterm_terminal::CellStyle {
-            bold: true,
-            ..Default::default()
-        };
-        let bold = vec![nyaterm_terminal::StyledSpan {
-            text: "same".to_string(),
-            style: bold_style,
-        }];
-
-        let mut plain_hasher = DefaultHasher::new();
-        hash_styled_spans(Some(&plain), &mut plain_hasher);
-        let mut bold_hasher = DefaultHasher::new();
-        hash_styled_spans(Some(&bold), &mut bold_hasher);
-
-        assert_ne!(plain_hasher.finish(), bold_hasher.finish());
-    }
-
-    #[test]
-    fn row_layout_key_falls_back_to_styled_spans_without_signature() {
-        let decorations = TerminalLineDecorations::default();
-        let plain = vec![nyaterm_terminal::StyledSpan {
-            text: "same".to_string(),
-            style: nyaterm_terminal::CellStyle::default(),
-        }];
-        let bold_style = nyaterm_terminal::CellStyle {
-            bold: true,
-            ..Default::default()
-        };
-        let bold = vec![nyaterm_terminal::StyledSpan {
-            text: "same".to_string(),
-            style: bold_style,
-        }];
-
-        assert_ne!(
-            terminal_row_layout_key(None, "same", Some(&plain), &decorations, &[], false, 0),
-            terminal_row_layout_key(None, "same", Some(&bold), &decorations, &[], false, 0)
-        );
-    }
-
-    #[test]
-    fn row_layout_key_uses_authoritative_line_signature() {
-        let mut first_snapshot = TerminalScreen::default().snapshot();
-        edit_snapshot_row(&mut first_snapshot, 0, |row| row.signature = 7);
-        let mut second_snapshot = first_snapshot.clone();
-        edit_snapshot_row(&mut second_snapshot, 0, |row| row.signature = 8);
-        let make_element = |snapshot| {
-            NyaTerminalElement::new(
-                Arc::new(snapshot),
-                Arc::new(Vec::new()),
-                Vec::new(),
-                false,
-                "block",
-                8.0,
-                16.0,
-                nyaterm_ui::theme_palette("github-dark"),
-                "monospace".to_string(),
-                14.0,
-                400.0,
-                700.0,
-            )
-        };
-        let first = make_element(first_snapshot);
-        let second = make_element(second_snapshot);
-        let decorations = TerminalLineDecorations::default();
-
-        assert_ne!(
-            first.row_layout_key(0, "same", None, &decorations),
-            second.row_layout_key(0, "same", None, &decorations),
-        );
-    }
-
-    #[test]
-    fn row_layout_key_tracks_display_text_even_with_signature() {
-        let mut snapshot = TerminalScreen::default().snapshot();
-        edit_snapshot_row(&mut snapshot, 0, |row| row.signature = 7);
-        let element = NyaTerminalElement::new(
-            Arc::new(snapshot),
-            Arc::new(Vec::new()),
-            Vec::new(),
-            false,
-            "block",
-            8.0,
-            16.0,
-            nyaterm_ui::theme_palette("github-dark"),
-            "monospace".to_string(),
-            14.0,
-            400.0,
-            700.0,
-        );
-        let decorations = TerminalLineDecorations::default();
-
-        assert_ne!(
-            element.row_layout_key(
-                0,
-                "Management: https://landscape.canonical.com",
-                None,
-                &decorations
-            ),
-            element.row_layout_key(0, "Users logged in:", None, &decorations),
-        );
-    }
-
-    #[test]
-    fn row_layout_key_tracks_cell_width() {
-        let mut snapshot = TerminalScreen::default().snapshot();
-        edit_snapshot_row(&mut snapshot, 0, |row| {
-            row.text = "same".to_string();
-            row.signature = 7;
-        });
-        let make_element = |cell_width| {
-            NyaTerminalElement::new(
-                Arc::new(snapshot.clone()),
-                Arc::new(Vec::new()),
-                Vec::new(),
-                false,
-                "block",
-                cell_width,
-                16.0,
-                nyaterm_ui::theme_palette("github-dark"),
-                "monospace".to_string(),
-                14.0,
-                400.0,
-                700.0,
-            )
-        };
-        let narrow = make_element(8.0);
-        let wide = make_element(12.0);
-        let decorations = TerminalLineDecorations::default();
-
-        assert_ne!(
-            narrow.row_layout_key(0, "same", None, &decorations),
-            wide.row_layout_key(0, "same", None, &decorations),
-        );
-    }
-
-    #[test]
-    fn row_layout_key_ignores_dynamic_overlay_decorations() {
-        let mut snapshot = TerminalScreen::default().snapshot();
-        edit_snapshot_row(&mut snapshot, 0, |row| {
-            row.text = "same".to_string();
-            row.signature = 7;
-        });
-        let element = NyaTerminalElement::new(
-            Arc::new(snapshot),
-            Arc::new(Vec::new()),
-            Vec::new(),
-            false,
-            "block",
-            8.0,
-            16.0,
-            nyaterm_ui::theme_palette("github-dark"),
-            "monospace".to_string(),
-            14.0,
-            400.0,
-            700.0,
-        );
-        let base = TerminalLineDecorations::default();
-        let dynamic = TerminalLineDecorations {
-            search_ranges: vec![(0, 2)],
-            selection_cols: Some((1, 3)),
-            command_mark: Some(nyaterm_terminal::ShellCommandMark::Prompt),
-            ..TerminalLineDecorations::default()
-        };
-
-        assert_eq!(
-            element.row_layout_key(0, "same", None, &base),
-            element.row_layout_key(0, "same", None, &dynamic)
-        );
-    }
-
-    #[test]
-    fn row_layout_key_tracks_active_search_glyph_decorations() {
-        let mut snapshot = TerminalScreen::default().snapshot();
-        edit_snapshot_row(&mut snapshot, 0, |row| {
-            row.text = "same".to_string();
-            row.signature = 7;
-        });
-        let element = NyaTerminalElement::new(
-            Arc::new(snapshot),
-            Arc::new(Vec::new()),
-            Vec::new(),
-            false,
-            "block",
-            8.0,
-            16.0,
-            nyaterm_ui::theme_palette("github-dark"),
-            "monospace".to_string(),
-            14.0,
-            400.0,
-            700.0,
-        );
-        let base = TerminalLineDecorations::default();
-        let active = TerminalLineDecorations {
-            active_search_ranges: vec![(0, 2)],
-            ..TerminalLineDecorations::default()
-        };
-
-        assert_ne!(
-            element.row_layout_key(0, "same", None, &base),
-            element.row_layout_key(0, "same", None, &active)
-        );
-    }
-
-    #[test]
-    fn paint_row_cache_reuses_full_row_payload() {
-        let mut cache = NyaTerminalLayoutCache::default();
-        let mut build_calls = 0usize;
-
-        let (row, did_shape, duration) = cache.paint_row(0, 42, || {
-            build_calls += 1;
-            (
-                Arc::new(ShapedLine::default()),
-                std::time::Duration::ZERO,
-                3,
-                vec![TerminalRowBackgroundRange {
-                    bg: 0xff00ff,
-                    start: 2,
-                    end: 4,
-                }],
-                vec![TerminalRowUnderlineRange {
-                    color: 0x00ffff,
-                    start: 1,
-                    end: 3,
-                }],
-            )
-        });
-
-        assert!(did_shape);
-        assert_eq!(duration, std::time::Duration::ZERO);
-        assert_eq!(build_calls, 1);
-        assert_eq!(row.text_run_count, 3);
-        assert_eq!(row.background_ranges.len(), 1);
-        assert_eq!(row.underline_ranges.len(), 1);
-
-        let (cached, did_shape, duration) = cache.paint_row(0, 42, || {
-            panic!("cached row should not rebuild");
-        });
-
-        assert!(!did_shape);
-        assert_eq!(duration, std::time::Duration::ZERO);
-        assert_eq!(build_calls, 1);
-        assert_eq!(cached.text_run_count, 3);
-        assert_eq!(cached.background_ranges[0].bg, 0xff00ff);
-        assert_eq!(cached.background_ranges[0].start, 2);
-        assert_eq!(cached.background_ranges[0].end, 4);
-        assert_eq!(cached.underline_ranges[0].color, 0x00ffff);
-        assert_eq!(cached.underline_ranges[0].start, 1);
-        assert_eq!(cached.underline_ranges[0].end, 3);
-    }
-
-    #[test]
-    fn paint_row_cache_promotes_equivalent_keyword_result() {
-        let mut cache = NyaTerminalLayoutCache::default();
-
-        let (pending, did_shape, _) = cache.paint_row(0, 41, || {
-            (
-                Arc::new(ShapedLine::default()),
-                std::time::Duration::ZERO,
-                1,
-                Vec::new(),
-                Vec::new(),
-            )
-        });
-        assert!(did_shape);
-
-        let (parsed, did_shape, _) = cache.paint_row_reusing(0, 42, Some(41), || {
-            panic!("equivalent parsed keyword result should reuse pending layout")
-        });
-
-        assert!(!did_shape);
-        assert!(Arc::ptr_eq(&pending, &parsed));
-        assert!(!cache.rows.contains_key(&41));
-        assert!(cache.rows.contains_key(&42));
-        assert_eq!(cache.misses, 1);
-        assert_eq!(cache.hits, 1);
-        assert_eq!(cache.shape_calls, 1);
-    }
-
-    fn highlight_span(
-        text: &str,
-        color: Option<u32>,
-        bg: Option<u32>,
-        keyword: bool,
-    ) -> TerminalHighlightSpan {
-        TerminalHighlightSpan {
-            text: text.to_string(),
-            color,
-            bg,
-            keyword,
-            underline: false,
-            strikeout: false,
-            bold: false,
-            italic: false,
-        }
-    }
-
-    #[test]
-    fn keyword_spans_do_not_create_background_ranges() {
-        let palette = nyaterm_ui::theme_palette("github-dark");
-        let span = highlight_span("ERROR", Some(0xff2244), None, true);
-        let ranges = terminal_background_ranges_for_spans(std::slice::from_ref(&span));
-        let run = terminal_text_run_for_span(
-            &span,
-            span.text.len(),
-            font(SharedString::from("monospace")),
-            400.0,
-            700.0,
-            palette,
-        );
-
-        assert!(ranges.is_empty());
-        assert_eq!(run.color, rgb(0xff2244).into());
-    }
-
-    #[test]
-    fn explicit_background_ranges_survive_keyword_foreground() {
-        let span = highlight_span("WARN", Some(0xffcc00), Some(0x112233), true);
-        let ranges = terminal_background_ranges_for_spans(std::slice::from_ref(&span));
-
-        assert_eq!(ranges.len(), 1);
-        assert_eq!(ranges[0].bg, 0x112233);
-        assert_eq!(ranges[0].start, 0);
-        assert_eq!(ranges[0].end, 4);
-    }
-
-    #[test]
-    fn cached_keyword_rows_reuse_without_surface_background() {
-        let mut cache = NyaTerminalLayoutCache::default();
-        let span = highlight_span("ERROR", Some(0xff2244), None, true);
-        let background_ranges = terminal_background_ranges_for_spans(std::slice::from_ref(&span));
-
-        let (row, did_shape, _) = cache.paint_row(0, 42, || {
-            (
-                Arc::new(ShapedLine::default()),
-                std::time::Duration::ZERO,
-                1,
-                background_ranges,
-                Vec::new(),
-            )
-        });
-        assert!(did_shape);
-        assert!(row.background_ranges.is_empty());
-
-        let (cached, did_shape, _) = cache.paint_row(0, 42, || {
-            panic!("cached keyword row should reuse without rebuilding")
-        });
-        assert!(!did_shape);
-        assert!(cached.background_ranges.is_empty());
-    }
-
-    fn underline_span(text: &str, color: Option<u32>) -> TerminalHighlightSpan {
-        TerminalHighlightSpan {
-            text: text.to_string(),
-            color,
-            bg: None,
-            keyword: false,
-            underline: true,
-            strikeout: false,
-            bold: false,
-            italic: false,
-        }
-    }
-
-    #[test]
-    fn underline_ranges_capture_ansi_underlines_without_text_run_underlines() {
-        let palette = nyaterm_ui::theme_palette("github-dark");
-        let span = underline_span("ERROR", Some(0xff2244));
-        let ranges = terminal_underline_ranges_for_spans(std::slice::from_ref(&span), palette);
-        let run = terminal_text_run_for_span(
-            &span,
-            span.text.len(),
-            font(SharedString::from("monospace")),
-            400.0,
-            700.0,
-            palette,
-        );
-
-        assert_eq!(ranges.len(), 1);
-        assert_eq!(ranges[0].start, 0);
-        assert_eq!(ranges[0].end, 5);
-        assert_eq!(ranges[0].color, 0xff2244);
-        assert!(run.underline.is_none());
-    }
-
-    #[test]
-    fn underline_ranges_clamp_action_links_to_actual_text() {
-        let palette = nyaterm_ui::theme_palette("github-dark");
-        let spans = apply_action_link_ranges(
-            vec![TerminalHighlightSpan {
-                text: "abc".to_string(),
-                color: None,
-                bg: None,
-                keyword: false,
-                underline: false,
-                strikeout: false,
-                bold: false,
-                italic: false,
-            }],
-            &[(1, 99)],
-            palette,
-        );
-        let ranges = terminal_underline_ranges_for_spans(&spans, palette);
-
-        assert_eq!(ranges.len(), 1);
-        assert_eq!(ranges[0].start, 1);
-        assert_eq!(ranges[0].end, 3);
-        assert_eq!(ranges[0].color, palette.accent);
-    }
-
-    #[test]
-    fn pad_wide_cells_gives_every_column_a_glyph() {
-        assert_eq!(pad_wide_cells("ab"), "ab");
-        assert_eq!(pad_wide_cells("a\u{4f60}b"), "a\u{4f60} b");
-        assert_eq!(pad_wide_cells("\u{4f60}\u{597d}"), "\u{4f60} \u{597d} ");
-    }
-
-    #[test]
-    fn pad_wide_cells_leaves_attached_marks_alone() {
-        // A combining mark belongs to the cell before it and takes none of its
-        // own, so padding it would push the rest of the row sideways.
-        assert_eq!(pad_wide_cells("e\u{0301}"), "e\u{0301}");
-    }
-
-    #[test]
-    fn underline_ranges_count_wide_and_attached_marks_as_terminal_cells() {
-        let palette = nyaterm_ui::theme_palette("github-dark");
-        let wide =
-            terminal_underline_ranges_for_spans(&[underline_span("界x", Some(0xff2244))], palette);
-        let combining = terminal_underline_ranges_for_spans(
-            &[underline_span("e\u{301}x", Some(0xff2244))],
-            palette,
-        );
-        let variation = terminal_underline_ranges_for_spans(
-            &[underline_span("a\u{fe0f}x", Some(0xff2244))],
-            palette,
-        );
-
-        assert_eq!(wide[0].start, 0);
-        assert_eq!(wide[0].end, 3);
-        assert_eq!(combining[0].start, 0);
-        assert_eq!(combining[0].end, 2);
-        assert_eq!(variation[0].start, 0);
-        assert_eq!(variation[0].end, 2);
-    }
-
-    #[test]
-    fn underline_bounds_follow_visual_scroll_offset() {
-        let bounds = Bounds::new(point(px(10.0), px(20.0)), size(px(200.0), px(120.0)));
-
-        let base = terminal_underline_bounds(2, 1, 4, bounds, 0.0, 8.0, 16.0);
-        let shifted = terminal_underline_bounds(2, 1, 4, bounds, -8.0, 8.0, 16.0);
-
-        assert_eq!(f32::from(base.left()), 18.0);
-        assert_eq!(f32::from(base.top()), 66.0);
-        assert_eq!(f32::from(base.size.width), 24.0);
-        assert_eq!(f32::from(shifted.top()), 58.0);
-    }
-
-    #[test]
-    fn dynamic_link_underlines_follow_visual_offset_and_clamp_to_text() {
-        let palette = nyaterm_ui::theme_palette("github-dark");
-        let bounds = Bounds::new(point(px(10.0), px(20.0)), size(px(200.0), px(120.0)));
-        let decorations = TerminalLineDecorations {
-            link_ranges: vec![(1, 99)],
-            ..TerminalLineDecorations::default()
-        };
-        let mut out = Vec::new();
-
-        push_dynamic_link_underlines(
-            2,
-            "abc",
-            &decorations,
-            palette,
-            bounds,
-            -8.0,
-            8.0,
-            16.0,
-            &mut out,
-        );
-
-        assert_eq!(out.len(), 1);
-        assert_eq!(f32::from(out[0].bounds.left()), 18.0);
-        assert_eq!(f32::from(out[0].bounds.top()), 58.0);
-        assert_eq!(f32::from(out[0].bounds.size.width), 16.0);
-        assert_eq!(terminal_link_underline_color(palette), palette.text_muted);
-        assert_ne!(terminal_link_underline_color(palette), palette.accent);
-
-        out.clear();
-        push_dynamic_link_underlines(
-            0,
-            "",
-            &decorations,
-            palette,
-            bounds,
-            0.0,
-            8.0,
-            16.0,
-            &mut out,
-        );
-        assert!(out.is_empty());
-    }
-
-    #[test]
-    fn row_layout_key_ignores_dynamic_link_underlines() {
-        let mut snapshot = TerminalScreen::default().snapshot();
-        edit_snapshot_row(&mut snapshot, 0, |row| {
-            row.text = "same".to_string();
-            row.signature = 7;
-        });
-        let element = NyaTerminalElement::new(
-            Arc::new(snapshot),
-            Arc::new(Vec::new()),
-            Vec::new(),
-            false,
-            "block",
-            8.0,
-            16.0,
-            nyaterm_ui::theme_palette("github-dark"),
-            "monospace".to_string(),
-            14.0,
-            400.0,
-            700.0,
-        );
-        let base = TerminalLineDecorations::default();
-        let linked = TerminalLineDecorations {
-            link_ranges: vec![(0, 2)],
-            ..TerminalLineDecorations::default()
-        };
-
-        assert_eq!(
-            element.row_layout_key(0, "same", None, &base),
-            element.row_layout_key(0, "same", None, &linked)
-        );
-    }
-
-    #[test]
-    fn row_layout_key_tracks_link_ranges_when_keyword_rules_can_paint() {
-        let mut snapshot = TerminalScreen::default().snapshot();
-        edit_snapshot_row(&mut snapshot, 0, |row| {
-            row.text = "https://help.ubuntu.com".to_string();
-            row.signature = 7;
-        });
-        let keyword_rule = ResolvedKeywordHighlightRule {
-            id: "url".to_string(),
-            name: "URL".to_string(),
-            patterns: vec![r"https://[^\s]+".to_string()],
-            color: "#8be9fd".to_string(),
-            enabled: true,
-        };
-        let keyword_rules = Arc::new(vec![keyword_rule]);
-        let make_element = |decorations: Vec<TerminalLineDecorations>| {
-            NyaTerminalElement::new(
-                Arc::new(snapshot.clone()),
-                keyword_rules.clone(),
-                decorations,
-                false,
-                "block",
-                8.0,
-                16.0,
-                nyaterm_ui::theme_palette("github-dark"),
-                "monospace".to_string(),
-                14.0,
-                400.0,
-                700.0,
-            )
-        };
-        let base = make_element(vec![TerminalLineDecorations::default()]);
-        let linked = make_element(vec![TerminalLineDecorations {
-            link_ranges: vec![(0, "https://help.ubuntu.com".len())],
-            ..TerminalLineDecorations::default()
-        }]);
-        let rules_key = terminal_keyword_rules_key(keyword_rules.as_ref());
-        let base_paint_key = base.paint_style_key(rules_key);
-        let base_empty_key = base.paint_style_key(0);
-        let linked_paint_key = linked.paint_style_key(rules_key);
-        let linked_empty_key = linked.paint_style_key(0);
-
-        assert_ne!(
-            base.row_layout_cache_keys(0, base_paint_key, base_empty_key)
-                .0,
-            linked
-                .row_layout_cache_keys(0, linked_paint_key, linked_empty_key)
-                .0
-        );
-    }
-
-    #[test]
-    fn row_layout_key_tracks_precomputed_keyword_presence() {
-        let mut snapshot = TerminalScreen::default().snapshot();
-        edit_snapshot_row(&mut snapshot, 0, |row| {
-            row.text = "ERROR".to_string();
-            row.signature = 7;
-        });
-        let keyword_rule = ResolvedKeywordHighlightRule {
-            id: "errors".to_string(),
-            name: "Errors".to_string(),
-            patterns: vec!["ERROR".to_string()],
-            color: "#ff0000".to_string(),
-            enabled: true,
-        };
-        let element = NyaTerminalElement::new(
-            Arc::new(snapshot),
-            Arc::new(Vec::new()),
-            Vec::new(),
-            false,
-            "block",
-            8.0,
-            16.0,
-            nyaterm_ui::theme_palette("github-dark"),
-            "monospace".to_string(),
-            14.0,
-            400.0,
-            700.0,
-        );
-        let decorations = TerminalLineDecorations::default();
-        let keyword_rules_key = terminal_keyword_rules_key(&[keyword_rule]);
-
-        assert_ne!(
-            element.row_layout_key_with_keyword_key(
-                0,
-                "ERROR",
-                None,
-                &decorations,
-                keyword_rules_key,
-                false,
-            ),
-            element.row_layout_key_with_keyword_key(
-                0,
-                "ERROR",
-                None,
-                &decorations,
-                keyword_rules_key,
-                true,
-            ),
-        );
-    }
-
-    #[test]
-    fn precomputed_keyword_match_does_not_reuse_plain_pending_row() {
-        let mut snapshot = TerminalScreen::default().snapshot();
-        edit_snapshot_row(&mut snapshot, 0, |row| {
-            row.text = "ERROR".to_string();
-            row.styled_spans = vec![nyaterm_terminal::StyledSpan {
-                text: "ERROR".to_string(),
-                style: nyaterm_terminal::CellStyle::default(),
-            }]
-            .into_boxed_slice();
-            for (idx, ch) in "ERROR".chars().enumerate() {
-                row.cells[idx].text = ch.to_string();
-                row.cells[idx].width = 1;
-            }
-            row.signature = 7;
-        });
-        let rules = vec![ResolvedKeywordHighlightRule {
-            id: "errors".to_string(),
-            name: "Errors".to_string(),
-            patterns: vec!["ERROR".to_string()],
-            color: "#ff0000".to_string(),
-            enabled: true,
-        }];
-        let highlighter = compile_terminal_keyword_highlighter(&rules);
-        let palette = nyaterm_ui::theme_palette("github-dark");
-        let highlights = Arc::new(precompute_terminal_keyword_highlights(
-            &snapshot,
-            &highlighter,
-            palette,
-            None,
-        ));
-        let element = NyaTerminalElement::new(
-            Arc::new(snapshot),
-            Arc::new(Vec::new()),
-            Vec::new(),
-            false,
-            "block",
-            8.0,
-            16.0,
-            palette,
-            "monospace".to_string(),
-            14.0,
-            400.0,
-            700.0,
-        )
-        .with_keyword_highlights(highlights.clone());
-        let keyword_paint_style_key = element.paint_style_key(highlights.rules_key());
-        let empty_keyword_paint_style_key = element.paint_style_key(0);
-
-        let (_, pending_key) = element.row_layout_cache_keys(
-            0,
-            keyword_paint_style_key,
-            empty_keyword_paint_style_key,
-        );
-
-        assert!(pending_key.is_none());
-    }
-
-    #[test]
-    fn row_layout_key_ignores_keyword_rules_for_known_empty_keyword_rows() {
-        let mut snapshot = TerminalScreen::default().snapshot();
-        edit_snapshot_row(&mut snapshot, 0, |row| {
-            row.text = "plain".to_string();
-            row.signature = 7;
-        });
-        let element = NyaTerminalElement::new(
-            Arc::new(snapshot),
-            Arc::new(Vec::new()),
-            Vec::new(),
-            false,
-            "block",
-            8.0,
-            16.0,
-            nyaterm_ui::theme_palette("github-dark"),
-            "monospace".to_string(),
-            14.0,
-            400.0,
-            700.0,
-        );
-        let decorations = TerminalLineDecorations::default();
-
-        assert_eq!(
-            element.row_layout_key_with_keyword_state(
-                0,
-                "plain",
-                None,
-                &decorations,
-                11,
-                false,
-                true,
-            ),
-            element.row_layout_key_with_keyword_state(
-                0,
-                "plain",
-                None,
-                &decorations,
-                99,
-                false,
-                true,
-            ),
-        );
-    }
-
-    #[test]
-    fn row_layout_key_keeps_keyword_rules_for_pending_keyword_rows() {
-        let mut snapshot = TerminalScreen::default().snapshot();
-        edit_snapshot_row(&mut snapshot, 0, |row| {
-            row.text = "plain".to_string();
-            row.signature = 7;
-        });
-        let element = NyaTerminalElement::new(
-            Arc::new(snapshot),
-            Arc::new(Vec::new()),
-            Vec::new(),
-            false,
-            "block",
-            8.0,
-            16.0,
-            nyaterm_ui::theme_palette("github-dark"),
-            "monospace".to_string(),
-            14.0,
-            400.0,
-            700.0,
-        );
-        let decorations = TerminalLineDecorations::default();
-
-        assert_ne!(
-            element.row_layout_key_with_keyword_state(
-                0,
-                "plain",
-                None,
-                &decorations,
-                11,
-                false,
-                false,
-            ),
-            element.row_layout_key_with_keyword_state(
-                0,
-                "plain",
-                None,
-                &decorations,
-                99,
-                false,
-                false,
-            ),
-        );
-    }
-
-    #[test]
-    fn terminal_glyph_decorations_detects_glyph_only_work() {
-        assert!(!terminal_glyph_decorations_needed(
-            &TerminalLineDecorations::default()
-        ));
-
-        let mut decorations = TerminalLineDecorations {
-            command_mark: Some(nyaterm_terminal::ShellCommandMark::Prompt),
-            ..TerminalLineDecorations::default()
-        };
-        assert!(!terminal_glyph_decorations_needed(&decorations));
-
-        decorations.link_ranges.push((1, 3));
-        assert!(!terminal_glyph_decorations_needed(&decorations));
-
-        decorations.link_ranges.clear();
-        decorations.selection_cols = Some((0, 2));
-        assert!(!terminal_glyph_decorations_needed(&decorations));
-
-        decorations.selection_cols = None;
-        decorations.search_ranges.push((2, 4));
-        assert!(!terminal_glyph_decorations_needed(&decorations));
-
-        decorations.search_ranges.clear();
-        decorations.active_search_ranges.push((2, 4));
-        assert!(terminal_glyph_decorations_needed(&decorations));
-    }
-
-    #[test]
-    fn plain_row_fast_path_accepts_unstyled_rows() {
-        let default_spans = [nyaterm_terminal::StyledSpan {
-            text: "plain".to_string(),
-            style: nyaterm_terminal::CellStyle::default(),
-        }];
-
-        assert!(terminal_plain_row_fast_path(
-            None,
-            &[],
-            &TerminalLineDecorations::default()
-        ));
-        assert!(terminal_plain_row_fast_path(
-            Some(&default_spans),
-            &[],
-            &TerminalLineDecorations::default()
-        ));
-    }
-
-    #[test]
-    fn plain_row_fast_path_rejects_enhanced_rows() {
-        let mut styled = nyaterm_terminal::CellStyle::default();
-        styled.bold = true;
-        let styled_spans = [nyaterm_terminal::StyledSpan {
-            text: "bold".to_string(),
-            style: styled,
-        }];
-        let keyword_rule = ResolvedKeywordHighlightRule {
-            id: "errors".to_string(),
-            name: "Errors".to_string(),
-            patterns: vec!["error".to_string()],
-            color: "#ff0000".to_string(),
-            enabled: true,
-        };
-        let selection = TerminalLineDecorations {
-            selection_cols: Some((0, 2)),
-            ..TerminalLineDecorations::default()
-        };
-        let command_mark = TerminalLineDecorations {
-            command_mark: Some(nyaterm_terminal::ShellCommandMark::Prompt),
-            ..TerminalLineDecorations::default()
-        };
-        let active_search = TerminalLineDecorations {
-            active_search_ranges: vec![(0, 2)],
-            ..TerminalLineDecorations::default()
-        };
-
-        assert!(!terminal_plain_row_fast_path(
-            Some(&styled_spans),
-            &[],
-            &TerminalLineDecorations::default()
-        ));
-        assert!(!terminal_plain_row_fast_path(
-            None,
-            &[keyword_rule],
-            &TerminalLineDecorations::default()
-        ));
-        assert!(terminal_plain_row_fast_path(None, &[], &selection));
-        assert!(terminal_plain_row_fast_path(None, &[], &command_mark));
-        assert!(!terminal_plain_row_fast_path(None, &[], &active_search));
-    }
-
-    #[test]
-    fn dynamic_decoration_backgrounds_include_plain_selection_and_search() {
-        let palette = nyaterm_ui::theme_palette("github-dark");
-        let bounds = Bounds::new(point(px(0.), px(0.)), size(px(120.), px(40.)));
-        let mut out = Vec::new();
-        let decorations = TerminalLineDecorations {
-            search_ranges: vec![(0, 2)],
-            active_search_ranges: vec![(2, 4)],
-            selection_cols: Some((4, 6)),
-            ..TerminalLineDecorations::default()
-        };
-
-        push_dynamic_decoration_backgrounds(0, &decorations, palette, bounds, 8.0, 16.0, &mut out);
-
-        assert_eq!(out.len(), 3);
-    }
-
-    #[test]
-    fn visible_rows_expand_for_visual_scroll_offset() {
-        let bounds = Bounds::new(point(px(0.), px(0.)), size(px(100.), px(32.)));
-
-        assert_eq!(terminal_visible_rows_for_bounds(bounds, 16., 10, 0.0), 0..3);
-        assert_eq!(
-            terminal_visible_rows_for_bounds(bounds, 16., 10, -8.0),
-            0..4
-        );
-        assert_eq!(
-            terminal_visible_rows_for_bounds(bounds, 16., 10, -20.0),
-            0..5
-        );
-        assert_eq!(terminal_visible_rows_for_bounds(bounds, 16., 10, 8.0), 0..3);
-        assert_eq!(
-            terminal_visible_rows_for_bounds(bounds, 16., 10, 20.0),
-            0..2
-        );
-    }
-
-    #[test]
-    fn visible_rows_use_parent_content_mask_intersection() {
-        let bounds = Bounds::new(point(px(0.), px(0.)), size(px(100.), px(160.)));
-        let clipped = Bounds::new(point(px(0.), px(64.)), size(px(100.), px(32.)));
-
-        assert_eq!(
-            terminal_visible_rows_for_clipped_bounds(bounds, clipped, 16., 10, 0.0),
-            3..7
-        );
-    }
-
-    #[test]
-    fn layout_prefetch_waits_until_every_visible_row_is_cached() {
-        assert_eq!(terminal_layout_prefetch_row(2..4, 8, |row| row == 2), None);
-    }
-
-    #[test]
-    fn layout_prefetch_moves_outward_from_the_visible_viewport() {
-        assert_eq!(
-            terminal_layout_prefetch_row(2..4, 8, |row| matches!(row, 2 | 3)),
-            Some(1)
-        );
-        assert_eq!(
-            terminal_layout_prefetch_row(2..4, 8, |row| matches!(row, 1 | 2 | 3)),
-            Some(4)
-        );
-        assert_eq!(terminal_layout_prefetch_row(2..4, 4, |_| true), None);
-    }
-
-    #[test]
-    fn layout_height_can_use_viewport_rows_instead_of_snapshot_window_rows() {
-        assert_eq!(terminal_layout_height_px(16.0, 80, None), 1280.0);
-        assert_eq!(terminal_layout_height_px(16.0, 80, Some(24)), 384.0);
-        assert_eq!(terminal_layout_height_px(0.0, 0, Some(0)), 1.0);
-    }
-
-    #[test]
-    fn concealed_cursor_cell_suppresses_cursor_glyph() {
-        let mut snapshot = TerminalScreen::default().snapshot();
-        snapshot.cursor.row = 0;
-        snapshot.cursor.col = 0;
-        edit_snapshot_row(&mut snapshot, 0, |row| row.cells[0].style.hidden = true);
-
-        assert!(terminal_cursor_cell_hidden(&snapshot));
-
-        edit_snapshot_row(&mut snapshot, 0, |row| row.cells[0].style.hidden = false);
-        assert!(!terminal_cursor_cell_hidden(&snapshot));
-    }
-}
+mod layout_cache_tests;
 
 pub struct NyaTerminalElement {
     snapshot: Arc<TerminalSnapshot>,
@@ -1505,9 +431,11 @@ impl NyaTerminalElement {
             display_line,
             ansi_spans,
             decorations,
-            keyword_rules_key,
-            keyword_spans_present,
-            false,
+            TerminalKeywordLayoutState {
+                rules_key: keyword_rules_key,
+                spans_present: keyword_spans_present,
+                result_known_empty: false,
+            },
         )
     }
 
@@ -1518,12 +446,12 @@ impl NyaTerminalElement {
         display_line: &str,
         ansi_spans: Option<&[nyaterm_terminal::StyledSpan]>,
         decorations: &TerminalLineDecorations,
-        keyword_rules_key: u64,
-        keyword_spans_present: bool,
-        keyword_result_known_empty: bool,
+        keyword_state: TerminalKeywordLayoutState,
     ) -> u64 {
-        let effective_keyword_rules_key =
-            terminal_effective_keyword_rules_key(keyword_rules_key, keyword_result_known_empty);
+        let effective_keyword_rules_key = terminal_effective_keyword_rules_key(
+            keyword_state.rules_key,
+            keyword_state.result_known_empty,
+        );
         let paint_style_key = self.paint_style_key(effective_keyword_rules_key);
         terminal_row_layout_key(
             self.snapshot.row(row).map(|row| row.signature),
@@ -1531,7 +459,7 @@ impl NyaTerminalElement {
             ansi_spans,
             decorations,
             &[],
-            keyword_spans_present,
+            keyword_state.spans_present,
             paint_style_key,
         )
     }
@@ -1861,18 +789,16 @@ fn terminal_underline_ranges_for_spans(
 fn push_terminal_background_ranges(
     row: usize,
     ranges: &[TerminalRowBackgroundRange],
-    bounds: Bounds<Pixels>,
-    cell_w: f32,
-    cell_h: f32,
+    geometry: TerminalPaintGeometry,
     out: &mut Vec<PaintQuad>,
 ) {
     for range in ranges {
         flush_bg(
             Some((range.bg, range.start, range.end)),
             row,
-            bounds,
-            cell_w,
-            cell_h,
+            geometry.bounds,
+            geometry.cell_width,
+            geometry.cell_height,
             out,
         );
     }
@@ -1882,15 +808,14 @@ fn terminal_underline_bounds(
     row: usize,
     start: usize,
     end: usize,
-    bounds: Bounds<Pixels>,
-    visual_y_offset: f32,
-    cell_w: f32,
-    cell_h: f32,
+    geometry: TerminalPaintGeometry,
 ) -> Bounds<Pixels> {
-    let left = (f32::from(bounds.left()) + start as f32 * cell_w).floor();
-    let right = (f32::from(bounds.left()) + end as f32 * cell_w).ceil();
-    let row_top = f32::from(bounds.top()) + visual_y_offset + row as f32 * cell_h;
-    let bottom = (row_top + cell_h).floor();
+    let left = (f32::from(geometry.bounds.left()) + start as f32 * geometry.cell_width).floor();
+    let right = (f32::from(geometry.bounds.left()) + end as f32 * geometry.cell_width).ceil();
+    let row_top = f32::from(geometry.bounds.top())
+        + geometry.visual_y_offset
+        + row as f32 * geometry.cell_height;
+    let bottom = (row_top + geometry.cell_height).floor();
     let top = (bottom - 2.0).max(row_top);
     Bounds::new(
         point(px(left), px(top)),
@@ -1901,10 +826,7 @@ fn terminal_underline_bounds(
 fn push_terminal_underline_ranges(
     row: usize,
     ranges: &[TerminalRowUnderlineRange],
-    bounds: Bounds<Pixels>,
-    visual_y_offset: f32,
-    cell_w: f32,
-    cell_h: f32,
+    geometry: TerminalPaintGeometry,
     out: &mut Vec<PaintQuad>,
 ) {
     for range in ranges {
@@ -1912,15 +834,7 @@ fn push_terminal_underline_ranges(
             continue;
         }
         out.push(fill(
-            terminal_underline_bounds(
-                row,
-                range.start,
-                range.end,
-                bounds,
-                visual_y_offset,
-                cell_w,
-                cell_h,
-            ),
+            terminal_underline_bounds(row, range.start, range.end, geometry),
             rgb(range.color),
         ));
     }
@@ -1931,10 +845,7 @@ fn push_dynamic_link_underlines(
     line: &str,
     decorations: &TerminalLineDecorations,
     palette: nyaterm_ui::ThemePalette,
-    bounds: Bounds<Pixels>,
-    visual_y_offset: f32,
-    cell_w: f32,
-    cell_h: f32,
+    geometry: TerminalPaintGeometry,
     out: &mut Vec<PaintQuad>,
 ) {
     if decorations.link_ranges.is_empty() {
@@ -1951,7 +862,7 @@ fn push_dynamic_link_underlines(
             continue;
         }
         out.push(fill(
-            terminal_underline_bounds(row, start, end, bounds, visual_y_offset, cell_w, cell_h),
+            terminal_underline_bounds(row, start, end, geometry),
             rgb(terminal_link_underline_color(palette)),
         ));
     }
@@ -1965,46 +876,17 @@ fn push_dynamic_decoration_backgrounds(
     row: usize,
     decorations: &TerminalLineDecorations,
     palette: nyaterm_ui::ThemePalette,
-    bounds: Bounds<Pixels>,
-    cell_w: f32,
-    cell_h: f32,
+    geometry: TerminalPaintGeometry,
     out: &mut Vec<PaintQuad>,
 ) {
     for &(start, end) in &decorations.search_ranges {
-        push_col_range_bg(
-            row,
-            start,
-            end,
-            palette.terminal_selection,
-            bounds,
-            cell_w,
-            cell_h,
-            out,
-        );
+        push_col_range_bg(row, start, end, palette.terminal_selection, geometry, out);
     }
     for &(start, end) in &decorations.active_search_ranges {
-        push_col_range_bg(
-            row,
-            start,
-            end,
-            palette.warning,
-            bounds,
-            cell_w,
-            cell_h,
-            out,
-        );
+        push_col_range_bg(row, start, end, palette.warning, geometry, out);
     }
     if let Some((start, end)) = decorations.selection_cols {
-        push_col_range_bg(
-            row,
-            start,
-            end,
-            palette.terminal_selection,
-            bounds,
-            cell_w,
-            cell_h,
-            out,
-        );
+        push_col_range_bg(row, start, end, palette.terminal_selection, geometry, out);
     }
 }
 
@@ -2099,6 +981,12 @@ impl Element for NyaTerminalElement {
         };
 
         let visual_y_offset = self.visual_y_offset;
+        let paint_geometry = TerminalPaintGeometry {
+            bounds,
+            visual_y_offset,
+            cell_width: cell_w,
+            cell_height: cell_h,
+        };
         let visible_rows = terminal_visible_rows_for_clipped_bounds(
             bounds,
             visible_bounds,
@@ -2198,9 +1086,7 @@ impl Element for NyaTerminalElement {
                     row,
                     decorations,
                     self.palette,
-                    bounds,
-                    cell_w,
-                    cell_h,
+                    paint_geometry,
                     &mut plan.decoration_backgrounds,
                 );
                 push_dynamic_link_underlines(
@@ -2208,10 +1094,7 @@ impl Element for NyaTerminalElement {
                     line,
                     decorations,
                     self.palette,
-                    bounds,
-                    visual_y_offset,
-                    cell_w,
-                    cell_h,
+                    paint_geometry,
                     &mut plan.underlines,
                 );
             }
@@ -2402,9 +1285,7 @@ impl Element for NyaTerminalElement {
                 push_terminal_background_ranges(
                     row,
                     &painted_row.background_ranges,
-                    bounds,
-                    cell_w,
-                    cell_h,
+                    paint_geometry,
                     &mut plan.backgrounds,
                 );
                 plan.text_run_count = plan
@@ -2417,10 +1298,7 @@ impl Element for NyaTerminalElement {
                 push_terminal_underline_ranges(
                     row,
                     &painted_row.underline_ranges,
-                    bounds,
-                    visual_y_offset,
-                    cell_w,
-                    cell_h,
+                    paint_geometry,
                     &mut plan.underlines,
                 );
             } else {
@@ -2450,7 +1328,7 @@ impl Element for NyaTerminalElement {
             let w = px(image.image_width_cells as f32 * cell_w);
             let h = px(image.image_height_cells as f32 * cell_h);
             let rect = Bounds::new(point(x, y), size(w, h));
-            if let Some(decoded) = crate::cached_render_image(image.id, &image.data) {
+            if let Some(decoded) = crate::images::cached_render_image(image.id, &image.data) {
                 let paint = TerminalImagePaint {
                     bounds: rect,
                     image: decoded,

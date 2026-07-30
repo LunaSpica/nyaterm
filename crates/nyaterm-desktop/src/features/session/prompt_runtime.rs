@@ -271,7 +271,7 @@ impl NyaTermApp {
         if !self
             .session
             .prompts
-            .apply_keyboard_interactive_input(&prompt_id, index, text)
+            .apply_keyboard_interactive_input(prompt_id, index, text)
         {
             return;
         }

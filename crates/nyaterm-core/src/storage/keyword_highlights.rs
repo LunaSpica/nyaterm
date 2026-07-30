@@ -59,7 +59,8 @@ pub(super) fn merge_keyword_highlight_rules(
     let mut indexes = existing
         .iter()
         .enumerate()
-        .filter_map(|(index, rule)| (!rule.id.trim().is_empty()).then(|| (rule.id.clone(), index)))
+        .filter(|(_, rule)| !rule.id.trim().is_empty())
+        .map(|(index, rule)| (rule.id.clone(), index))
         .collect::<HashMap<_, _>>();
 
     for mut rule in imported

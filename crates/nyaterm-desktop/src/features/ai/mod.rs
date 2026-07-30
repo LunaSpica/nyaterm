@@ -10,7 +10,9 @@ mod state;
 pub(in crate::features) use ai_jobs::{
     ai_active_profile_drafts, ai_usage_counts, is_agent_command_card,
 };
-pub(in crate::features) use state::{AiFeatureFocus, AiFeatureState, AiSettingsMutation};
+pub(in crate::features) use state::{
+    AiFeatureFocus, AiFeatureInit, AiFeatureState, AiSettingsMutation,
+};
 
 const AGENT_OBSERVATION_MIN_WAIT: Duration = Duration::from_millis(700);
 const AGENT_OBSERVATION_QUIET: Duration = Duration::from_millis(900);

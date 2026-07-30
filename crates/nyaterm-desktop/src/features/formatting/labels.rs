@@ -291,7 +291,7 @@ pub(in crate::features) fn cloud_sync_history_summary(entry: &CloudSyncHistoryEn
     }
     // Prefer first sentence when short enough.
     let first = normalized
-        .split(|ch| ch == '.' || ch == '!' || ch == '?')
+        .split(['.', '!', '?'])
         .next()
         .unwrap_or("")
         .trim();

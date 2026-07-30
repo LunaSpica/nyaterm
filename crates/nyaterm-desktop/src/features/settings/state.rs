@@ -41,6 +41,16 @@ pub(in crate::features) struct SettingsFeatureFocus {
     pub keybindings: FocusHandle,
 }
 
+pub(in crate::features) struct SettingsFeatureInit {
+    pub summary: AppSettingsSummary,
+    pub keyword_config: KeywordHighlightConfig,
+    pub store_path: String,
+    pub store_message: String,
+    pub store_ready: bool,
+    pub ui_font_options: Vec<String>,
+    pub terminal_font_options: Vec<String>,
+}
+
 pub(in crate::features) struct StoreStatusView<'a> {
     pub path: &'a str,
     pub message: &'a str,
@@ -133,16 +143,16 @@ pub(in crate::features) enum SearchEngineMenu {
 }
 
 impl SettingsFeatureState {
-    pub(in crate::features) fn new(
-        summary: AppSettingsSummary,
-        keyword_config: KeywordHighlightConfig,
-        store_path: String,
-        store_message: String,
-        store_ready: bool,
-        ui_font_options: Vec<String>,
-        terminal_font_options: Vec<String>,
-        focus: SettingsFeatureFocus,
-    ) -> Self {
+    pub(in crate::features) fn new(init: SettingsFeatureInit, focus: SettingsFeatureFocus) -> Self {
+        let SettingsFeatureInit {
+            summary,
+            keyword_config,
+            store_path,
+            store_message,
+            store_ready,
+            ui_font_options,
+            terminal_font_options,
+        } = init;
         let master_password = SettingsMasterPasswordState::new(summary.has_master_password);
         Self {
             summary,
@@ -1156,7 +1166,7 @@ impl SettingsFeatureState {
         &mut self,
         kind: crate::models::SnapshotPasswordPromptKind,
     ) -> bool {
-        if self.prompts.config_path.is_some() {
+        if self.prompts.config_path.is_some() || self.prompts.snapshot_password.is_some() {
             return false;
         }
         self.prompts.snapshot_password = Some(SnapshotPasswordPromptState {
@@ -1225,7 +1235,8 @@ mod tests {
     };
 
     use super::{
-        SearchEngineMenu, SettingsFeatureFocus, SettingsFeatureState, UiLayoutSettingsUpdate,
+        SearchEngineMenu, SettingsFeatureFocus, SettingsFeatureInit, SettingsFeatureState,
+        UiLayoutSettingsUpdate,
     };
     use crate::models::{
         ConfigPathPromptKind, KeywordHighlightEditorField, SnapshotPasswordPromptKind,
@@ -1235,13 +1246,15 @@ mod tests {
         let cx = TestAppContext::single();
         let focus = || cx.update(|cx| cx.focus_handle());
         SettingsFeatureState::new(
-            AppSettingsSummary::default(),
-            KeywordHighlightConfig::default(),
-            String::new(),
-            String::new(),
-            true,
-            vec!["Inter".to_string()],
-            vec!["JetBrains Mono".to_string()],
+            SettingsFeatureInit {
+                summary: AppSettingsSummary::default(),
+                keyword_config: KeywordHighlightConfig::default(),
+                store_path: String::new(),
+                store_message: String::new(),
+                store_ready: true,
+                ui_font_options: vec!["Inter".to_string()],
+                terminal_font_options: vec!["JetBrains Mono".to_string()],
+            },
             SettingsFeatureFocus {
                 search_engine: focus(),
                 keyword_highlight: focus(),
@@ -1423,6 +1436,7 @@ mod tests {
         assert!(state.finish_config_path_prompt(ConfigPathPromptKind::Export));
 
         assert!(state.begin_snapshot_password_prompt(SnapshotPasswordPromptKind::CloudForcePush));
+        assert!(!state.begin_snapshot_password_prompt(SnapshotPasswordPromptKind::Export));
         assert!(state.apply_snapshot_password_input("secret".to_string()));
         let prompt = state.take_snapshot_password_prompt().expect("prompt");
         assert_eq!(prompt.kind, SnapshotPasswordPromptKind::CloudForcePush);

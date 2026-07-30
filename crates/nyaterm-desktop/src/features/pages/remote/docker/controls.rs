@@ -9,7 +9,12 @@ use crate::models::{DockerConfirmState, DockerTab};
 use crate::theme::ThemePalette;
 use crate::widgets::small_button;
 
-use super::DockerLabels;
+use super::{DockerLabels, DockerRenderContext};
+
+pub(in crate::features::pages::remote) struct DockerTabBarLabels {
+    pub tabs: [String; 5],
+    pub more: String,
+}
 
 pub(in crate::features::pages::remote) fn docker_overview_strip(
     palette: ThemePalette,
@@ -71,11 +76,7 @@ fn docker_overview_stat(
         .items_center()
         .gap_1()
         .text_size(px(10.))
-        .text_color(
-            accent
-                .map(|color| rgb(color))
-                .unwrap_or_else(|| rgb(palette.text_muted)),
-        )
+        .text_color(accent.map(rgb).unwrap_or_else(|| rgb(palette.text_muted)))
         .child(
             div()
                 .flex_none()
@@ -93,16 +94,21 @@ fn docker_overview_stat(
 }
 
 pub(in crate::features::pages::remote) fn docker_tab_bar(
-    palette: ThemePalette,
-    menu_bg: gpui::Rgba,
+    context: DockerRenderContext,
     active_tab: DockerTab,
     overview: &RemoteDockerOverview,
-    labels: [String; 5],
-    more_label: String,
+    labels: DockerTabBarLabels,
     panel_width: f32,
     menu_open: bool,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+    let DockerRenderContext {
+        palette, menu_bg, ..
+    } = context;
+    let DockerTabBarLabels {
+        tabs: labels,
+        more: more_label,
+    } = labels;
     let [
         containers_label,
         images_label,

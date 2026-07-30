@@ -195,8 +195,8 @@ pub(super) fn parse_xshell_quick_buttons_content(raw: &str) -> ImportConfig {
     }
 
     let commands = buttons
-        .into_iter()
-        .filter_map(|(_, fields)| {
+        .into_values()
+        .filter_map(|fields| {
             let button_type = fields.get("Type").map(String::as_str).unwrap_or("");
             if button_type.trim() != "1" {
                 return None;

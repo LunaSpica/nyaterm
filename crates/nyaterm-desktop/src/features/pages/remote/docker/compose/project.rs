@@ -5,25 +5,47 @@ use nyaterm_core::truncate_preview;
 use nyaterm_transport::{DockerComposeProject, DockerComposeService};
 
 use crate::features::{NyaTermApp, docker_compose_project_key, gpui_code_font_family};
-use crate::theme::ThemePalette;
 use crate::widgets::{empty_panel, status_pill, svg_icon_button};
 
-use super::super::{DockerLabels, resources::docker_resource_static_panel};
+use super::super::{DockerRenderContext, resources::docker_resource_static_panel};
 use super::menus::docker_compose_project_action_menu;
 use super::service::docker_compose_services_panel;
 use super::status::{compose_status_color, compose_status_label};
 
+pub(in crate::features::pages::remote) struct DockerComposePanelState<'a> {
+    pub projects: &'a [DockerComposeProject],
+    pub expanded_projects: &'a HashSet<String>,
+    pub services_by_project: &'a HashMap<String, Vec<DockerComposeService>>,
+    pub service_errors: &'a HashMap<String, String>,
+    pub open_menu_id: Option<&'a str>,
+}
+
+struct DockerComposeProjectRow<'a> {
+    project: &'a DockerComposeProject,
+    project_key: &'a str,
+    expanded: bool,
+    menu_open: bool,
+    menu_id: String,
+    services: Option<Vec<DockerComposeService>>,
+    error: Option<String>,
+    open_menu_id: Option<&'a str>,
+}
+
 pub(in crate::features::pages::remote) fn docker_compose_panel(
-    palette: ThemePalette,
-    menu_bg: gpui::Rgba,
-    projects: &[DockerComposeProject],
-    expanded_projects: &HashSet<String>,
-    services_by_project: &HashMap<String, Vec<DockerComposeService>>,
-    service_errors: &HashMap<String, String>,
-    open_menu_id: Option<&str>,
-    labels: DockerLabels,
+    context: DockerRenderContext,
+    state: DockerComposePanelState<'_>,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+    let DockerRenderContext {
+        palette, labels, ..
+    } = context;
+    let DockerComposePanelState {
+        projects,
+        expanded_projects,
+        services_by_project,
+        service_errors,
+        open_menu_id,
+    } = state;
     // Tauri Compose tab: dense project rows (≈74px) + chevron + ⋮ overflow; services ≈58px.
     let mut rows = div().flex().flex_col().gap_1();
     if projects.is_empty() {
@@ -31,7 +53,7 @@ pub(in crate::features::pages::remote) fn docker_compose_panel(
     } else {
         for project in projects {
             let config_files = Some(project.config_files.clone()).filter(|value| {
-                !value.trim().is_empty() && value.trim().to_ascii_lowercase() != "n/a"
+                !value.trim().is_empty() && !value.trim().eq_ignore_ascii_case("n/a")
             });
             let key = docker_compose_project_key(&project.name, config_files.as_deref());
             let expanded = expanded_projects.contains(&key);
@@ -40,17 +62,17 @@ pub(in crate::features::pages::remote) fn docker_compose_panel(
             let project_menu_id = format!("compose-project:{key}");
             let project_menu_open = open_menu_id == Some(project_menu_id.as_str());
             rows = rows.child(docker_compose_project_row(
-                palette,
-                menu_bg,
-                project,
-                &key,
-                expanded,
-                project_menu_open,
-                project_menu_id,
-                services,
-                error,
-                open_menu_id,
-                labels,
+                context,
+                DockerComposeProjectRow {
+                    project,
+                    project_key: &key,
+                    expanded,
+                    menu_open: project_menu_open,
+                    menu_id: project_menu_id,
+                    services,
+                    error,
+                    open_menu_id,
+                },
                 cx,
             ));
         }
@@ -59,23 +81,27 @@ pub(in crate::features::pages::remote) fn docker_compose_panel(
     docker_resource_static_panel(palette, "Compose", projects.len(), rows)
 }
 
-pub(in crate::features::pages::remote) fn docker_compose_project_row(
-    palette: ThemePalette,
-    menu_bg: gpui::Rgba,
-    project: &DockerComposeProject,
-    project_key: &str,
-    expanded: bool,
-    menu_open: bool,
-    menu_id: String,
-    services: Option<Vec<DockerComposeService>>,
-    error: Option<String>,
-    open_menu_id: Option<&str>,
-    labels: DockerLabels,
+fn docker_compose_project_row(
+    context: DockerRenderContext,
+    row: DockerComposeProjectRow<'_>,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+    let DockerRenderContext {
+        palette, labels, ..
+    } = context;
+    let DockerComposeProjectRow {
+        project,
+        project_key,
+        expanded,
+        menu_open,
+        menu_id,
+        services,
+        error,
+        open_menu_id,
+    } = row;
     let project_name = project.name.clone();
     let config_files = Some(project.config_files.clone())
-        .filter(|value| !value.trim().is_empty() && value.trim().to_ascii_lowercase() != "n/a");
+        .filter(|value| !value.trim().is_empty() && !value.trim().eq_ignore_ascii_case("n/a"));
     let status_label = compose_status_label(&project.status);
     let status_color = compose_status_color(palette, status_label);
     let display_status = if project.status.trim().is_empty() {
@@ -220,12 +246,10 @@ pub(in crate::features::pages::remote) fn docker_compose_project_row(
                             ))
                             .when(menu_open, |this| {
                                 this.child(docker_compose_project_action_menu(
-                                    palette,
-                                    menu_bg,
+                                    context,
                                     project_name.clone(),
                                     config_files.clone(),
                                     &key_for_toggle,
-                                    labels,
                                     cx,
                                 ))
                             }),
@@ -234,15 +258,15 @@ pub(in crate::features::pages::remote) fn docker_compose_project_row(
         )
         .when(expanded, |this| {
             this.child(docker_compose_services_panel(
-                palette,
-                menu_bg,
-                project_name,
-                config_files,
-                project_key.to_string(),
-                services,
-                error,
-                open_menu_id,
-                labels,
+                context,
+                super::service::DockerComposeServicesPanel {
+                    project_name,
+                    config_files,
+                    project_key: project_key.to_string(),
+                    services,
+                    error,
+                    open_menu_id,
+                },
                 cx,
             ))
         })

@@ -77,7 +77,6 @@ impl NyaTermApp {
                         reconnect_label,
                         "icons/session/reconnect.svg",
                         can_reconnect,
-                        busy_action.as_deref() == Some("reconnect"),
                         false,
                         cx.listener(move |this, _, window, cx| {
                             cx.stop_propagation();
@@ -98,7 +97,6 @@ impl NyaTermApp {
                         disconnect_label,
                         "icons/session/disconnect.svg",
                         can_disconnect,
-                        busy_action.as_deref() == Some("disconnect"),
                         true,
                         cx.listener(move |this, _, _, cx| {
                             cx.stop_propagation();
@@ -123,7 +121,6 @@ fn active_session_overlay_menu_item(
     label: impl Into<String>,
     icon_path: &'static str,
     enabled: bool,
-    busy: bool,
     destructive: bool,
     on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
 ) -> impl IntoElement {
@@ -158,7 +155,7 @@ fn active_session_overlay_menu_item(
             div()
                 .text_size(px(12.))
                 .text_color(rgb(text_color))
-                .child(if busy { format!("{label}") } else { label }),
+                .child(label),
         )
         .on_click(move |event, window, cx| {
             if enabled {

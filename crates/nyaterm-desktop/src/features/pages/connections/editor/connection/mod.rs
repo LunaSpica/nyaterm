@@ -15,12 +15,14 @@ use gpui::{
 use nyaterm_core::{ConnectionType, Group, SavedConnection, natural_compare, truncate_preview};
 
 use self::local::connection_editor_local_section;
-use self::serial::connection_editor_serial_section;
-use self::ssh::connection_editor_ssh_section;
+use self::serial::{SerialConnectionSectionOptions, connection_editor_serial_section};
+use self::ssh::{
+    SshConnectionSectionLabels, SshConnectionSectionOptions, connection_editor_ssh_section,
+};
 use self::telnet::connection_editor_telnet_section;
 use super::super::list::{
-    ConnectionEditorChoice, ConnectionEditorFields, ConnectionGroupChoice,
-    connection_editor_group_select, connection_kind_tab, editor_field,
+    ConnectionEditorChoice, ConnectionEditorFields, ConnectionEditorRenderContext,
+    ConnectionGroupChoice, connection_editor_group_select, connection_kind_tab, editor_field,
 };
 use crate::features::{
     CONNECTION_ICON_OPTIONS, DEFAULT_CONNECTION_ICON, NyaTermApp, modal_dialog_shell,
@@ -29,6 +31,16 @@ use crate::features::{
 use crate::models::{
     ConnectionEditorField, ConnectionEditorMenu, ConnectionEditorState, ConnectionKindTab,
 };
+
+#[derive(Clone, Copy)]
+struct ConnectionEditorSectionContext<'a> {
+    palette: crate::theme::ThemePalette,
+    editor: &'a ConnectionEditorState,
+    active_menu: Option<ConnectionEditorMenu>,
+    language: &'a str,
+    fields: &'a ConnectionEditorFields,
+}
+
 impl NyaTermApp {
     pub(in crate::features) fn connection_editor_panel(
         &mut self,
@@ -402,6 +414,13 @@ impl NyaTermApp {
         let validation_error = self.connection_editor_validation_error(&editor);
         let save_enabled = validation_error.is_none();
         let editor_focus = self.connection_state.editor_focus_handle();
+        let section_context = ConnectionEditorSectionContext {
+            palette,
+            editor: &editor,
+            active_menu,
+            language: &language,
+            fields: &fields,
+        };
         let mut icon_grid = div().grid().grid_cols(7).gap_1();
         for icon_key in CONNECTION_ICON_OPTIONS.iter().copied() {
             let icon = resolve_connection_icon(Some(icon_key), editor.kind.label());
@@ -631,75 +650,67 @@ impl NyaTermApp {
                             )))
                             .child(div().min_w(px(192.)).max_w(px(288.)).flex_1().child(
                                 connection_editor_group_select(
-                                    palette,
+                                    ConnectionEditorRenderContext {
+                                        palette,
+                                        fields: &fields,
+                                        cx,
+                                    },
                                     group_title,
                                     group_label,
                                     active_menu == Some(ConnectionEditorMenu::Group),
                                     group_options,
                                     group_parent_hint,
-                                    &fields,
-                                    cx,
                                 ),
                             )),
                     )
                     .when(editor.kind == ConnectionKindTab::Ssh, |this| {
                         this.child(connection_editor_ssh_section(
-                            palette,
-                            &editor,
-                            password_label.clone(),
-                            key_label.clone(),
-                            otp_label.clone(),
-                            proxy_label.clone(),
-                            jump_label.clone(),
-                            auth_options,
-                            password_options,
-                            key_options,
-                            otp_options,
-                            proxy_options,
-                            jump_options,
-                            backspace_options.clone(),
-                            active_menu,
-                            &language,
-                            &fields,
+                            section_context,
+                            SshConnectionSectionLabels {
+                                password: password_label.clone(),
+                                key: key_label.clone(),
+                                otp: otp_label.clone(),
+                                proxy: proxy_label.clone(),
+                                jump: jump_label.clone(),
+                            },
+                            SshConnectionSectionOptions {
+                                auth: auth_options,
+                                passwords: password_options,
+                                keys: key_options,
+                                otp: otp_options,
+                                proxies: proxy_options,
+                                jumps: jump_options,
+                                backspace: backspace_options.clone(),
+                            },
                             cx,
                         ))
                     })
                     .when(editor.kind == ConnectionKindTab::Local, |this| {
                         this.child(connection_editor_local_section(
-                            palette,
-                            &editor,
+                            section_context,
                             shell_label,
                             shell_options,
-                            active_menu,
-                            &language,
-                            &fields,
                             cx,
                         ))
                     })
                     .when(editor.kind == ConnectionKindTab::Telnet, |this| {
                         this.child(connection_editor_telnet_section(
-                            palette,
-                            &editor,
+                            section_context,
                             backspace_options.clone(),
-                            active_menu,
-                            &language,
-                            &fields,
                             cx,
                         ))
                     })
                     .when(editor.kind == ConnectionKindTab::Serial, |this| {
                         this.child(connection_editor_serial_section(
-                            palette,
-                            &editor,
-                            serial_port_options,
-                            baud_options,
-                            data_bits_options,
-                            parity_options,
-                            stop_bits_options,
-                            backspace_options,
-                            active_menu,
-                            &language,
-                            &fields,
+                            section_context,
+                            SerialConnectionSectionOptions {
+                                serial_ports: serial_port_options,
+                                baud_rates: baud_options,
+                                data_bits: data_bits_options,
+                                parity: parity_options,
+                                stop_bits: stop_bits_options,
+                                backspace: backspace_options,
+                            },
                             cx,
                         ))
                     })
@@ -916,46 +927,6 @@ fn connection_description_field(
         )
 }
 
-#[cfg(test)]
-mod tests {
-    use super::ordered_connection_groups;
-    use nyaterm_core::Group;
-
-    fn group(id: &str, name: &str, parent_id: Option<&str>, sort_order: i32) -> Group {
-        Group {
-            id: id.to_string(),
-            name: name.to_string(),
-            parent_id: parent_id.map(ToOwned::to_owned),
-            sort_order,
-            created_at_ms: None,
-            updated_at_ms: None,
-        }
-    }
-
-    #[test]
-    fn group_picker_orders_tree_and_keeps_orphans_visible() {
-        let groups = vec![
-            group("child", "Child", Some("parent"), 0),
-            group("orphan", "Orphan", Some("missing"), 2),
-            group("parent", "Parent", None, 1),
-        ];
-
-        let ordered = ordered_connection_groups(&groups)
-            .into_iter()
-            .map(|(group, depth)| (group.id, depth))
-            .collect::<Vec<_>>();
-
-        assert_eq!(
-            ordered,
-            vec![
-                ("parent".to_string(), 0),
-                ("child".to_string(), 1),
-                ("orphan".to_string(), 0),
-            ]
-        );
-    }
-}
-
 fn connection_editor_footer_button(
     palette: crate::theme::ThemePalette,
     id: &'static str,
@@ -1020,4 +991,45 @@ fn connection_proxy_jump_would_cycle(
             .and_then(|network| network.proxy_jump_id.clone());
     }
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use nyaterm_core::Group;
+
+    use super::ordered_connection_groups;
+
+    fn group(id: &str, name: &str, parent_id: Option<&str>, sort_order: i32) -> Group {
+        Group {
+            id: id.to_string(),
+            name: name.to_string(),
+            parent_id: parent_id.map(ToOwned::to_owned),
+            sort_order,
+            created_at_ms: None,
+            updated_at_ms: None,
+        }
+    }
+
+    #[test]
+    fn group_picker_orders_tree_and_keeps_orphans_visible() {
+        let groups = vec![
+            group("child", "Child", Some("parent"), 0),
+            group("orphan", "Orphan", Some("missing"), 2),
+            group("parent", "Parent", None, 1),
+        ];
+
+        let ordered = ordered_connection_groups(&groups)
+            .into_iter()
+            .map(|(group, depth)| (group.id, depth))
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            ordered,
+            vec![
+                ("parent".to_string(), 0),
+                ("child".to_string(), 1),
+                ("orphan".to_string(), 0),
+            ]
+        );
+    }
 }

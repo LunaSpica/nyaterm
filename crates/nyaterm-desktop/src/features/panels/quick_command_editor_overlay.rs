@@ -126,7 +126,7 @@ impl NyaTermApp {
         let icon_options = QUICK_COMMAND_ICON_OPTIONS
             .iter()
             .copied()
-            .filter_map(|icon| icon)
+            .flatten()
             .collect::<Vec<_>>();
         let mut icon_grid = div().mt_2().flex().items_center().gap_1().flex_wrap();
         for option in icon_options {

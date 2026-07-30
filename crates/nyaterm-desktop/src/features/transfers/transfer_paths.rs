@@ -4,12 +4,20 @@ use std::sync::Arc;
 use gpui::{Context, PathPromptOptions, SharedString, Window};
 use nyaterm_core::truncate_preview;
 use nyaterm_transport::{
-    SftpDuplicatePolicy, SftpDuplicateResolver, SftpTransferOptions, SshSessionConfig,
+    SftpDuplicatePolicy, SftpDuplicateResolver, SftpPathTransferOptions, SshSessionConfig,
 };
 
 use crate::features::NyaTermApp;
 use crate::features::formatting::download_file_name_from_remote_path;
 use crate::models::{NavItem, TransferPathPromptKind, TransferPathPromptResult};
+
+struct PendingBrowserUpload {
+    kind: TransferPathPromptKind,
+    remote_path: String,
+    session_id: Option<String>,
+    config: SshSessionConfig,
+    path_options: SftpPathTransferOptions,
+}
 
 impl NyaTermApp {
     pub(in crate::features) fn prompt_transfer_download_path_setting(
@@ -201,7 +209,11 @@ impl NyaTermApp {
         let duplicate_policy = self.transfer.duplicate_policy();
         let duplicate_resolver = (duplicate_policy == SftpDuplicatePolicy::Ask)
             .then(|| self.session.prompt_duplicate_broker() as Arc<dyn SftpDuplicateResolver>);
-        let transfer_options = self.sftp_transfer_options();
+        let path_options = SftpPathTransferOptions::new(
+            duplicate_policy,
+            duplicate_resolver,
+            self.sftp_transfer_options(),
+        );
         let options = PathPromptOptions {
             files: false,
             directories: true,
@@ -238,9 +250,7 @@ impl NyaTermApp {
                     remote_paths,
                     session_id,
                     config,
-                    duplicate_policy,
-                    duplicate_resolver,
-                    transfer_options,
+                    path_options,
                     result,
                     cx,
                 );
@@ -281,7 +291,11 @@ impl NyaTermApp {
         let duplicate_policy = self.transfer.duplicate_policy();
         let duplicate_resolver = (duplicate_policy == SftpDuplicatePolicy::Ask)
             .then(|| self.session.prompt_duplicate_broker() as Arc<dyn SftpDuplicateResolver>);
-        let transfer_options = self.sftp_transfer_options();
+        let path_options = SftpPathTransferOptions::new(
+            duplicate_policy,
+            duplicate_resolver,
+            self.sftp_transfer_options(),
+        );
 
         let options = match kind {
             TransferPathPromptKind::UploadFile => PathPromptOptions {
@@ -311,6 +325,13 @@ impl NyaTermApp {
             TransferPathPromptKind::UploadDirectory => "selecting upload directory".to_string(),
             TransferPathPromptKind::DownloadDirectory => unreachable!(),
         });
+        let pending = PendingBrowserUpload {
+            kind,
+            remote_path,
+            session_id,
+            config,
+            path_options,
+        };
         cx.spawn(async move |this, cx| {
             let result = match receiver.await {
                 Ok(Ok(Some(paths))) => {
@@ -325,17 +346,7 @@ impl NyaTermApp {
                 Err(_) => TransferPathPromptResult::Closed,
             };
             let _ = this.update(cx, |this, cx| {
-                this.apply_transfer_browser_upload_path_prompt_result(
-                    kind,
-                    remote_path,
-                    session_id,
-                    config,
-                    duplicate_policy,
-                    duplicate_resolver,
-                    transfer_options,
-                    result,
-                    cx,
-                );
+                this.apply_transfer_browser_upload_path_prompt_result(pending, result, cx);
                 cx.notify();
             });
         })
@@ -348,9 +359,7 @@ impl NyaTermApp {
         remote_paths: Vec<String>,
         session_id: Option<String>,
         config: SshSessionConfig,
-        duplicate_policy: SftpDuplicatePolicy,
-        duplicate_resolver: Option<Arc<dyn SftpDuplicateResolver>>,
-        transfer_options: SftpTransferOptions,
+        path_options: SftpPathTransferOptions,
         result: TransferPathPromptResult,
         cx: &mut Context<Self>,
     ) {
@@ -377,9 +386,7 @@ impl NyaTermApp {
                         config.clone(),
                         remote_path,
                         local_path,
-                        duplicate_policy,
-                        duplicate_resolver.clone(),
-                        transfer_options.clone(),
+                        path_options.clone(),
                         cx,
                     );
                 }
@@ -408,16 +415,17 @@ impl NyaTermApp {
 
     fn apply_transfer_browser_upload_path_prompt_result(
         &mut self,
-        kind: TransferPathPromptKind,
-        remote_path: String,
-        session_id: Option<String>,
-        config: SshSessionConfig,
-        duplicate_policy: SftpDuplicatePolicy,
-        duplicate_resolver: Option<Arc<dyn SftpDuplicateResolver>>,
-        transfer_options: SftpTransferOptions,
+        pending: PendingBrowserUpload,
         result: TransferPathPromptResult,
         cx: &mut Context<Self>,
     ) {
+        let PendingBrowserUpload {
+            kind,
+            remote_path,
+            session_id,
+            config,
+            path_options,
+        } = pending;
         if !self.transfer.finish_path_prompt(kind) {
             return;
         }
@@ -461,9 +469,7 @@ impl NyaTermApp {
                         config.clone(),
                         path,
                         target_path,
-                        duplicate_policy,
-                        duplicate_resolver.clone(),
-                        transfer_options.clone(),
+                        path_options.clone(),
                         cx,
                     );
                 }

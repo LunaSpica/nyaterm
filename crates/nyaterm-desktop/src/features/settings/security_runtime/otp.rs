@@ -4,9 +4,7 @@ use gpui::{
 use nyaterm_core::{ConnectionStore, OtpEntry};
 
 use crate::features::{NyaTermApp, compact_id};
-use crate::models::{
-    SecurityAuthTab, SecurityDeleteConfirmState, SecurityOtpEditorField, SecurityOtpEditorState,
-};
+use crate::models::{SecurityAuthTab, SecurityDeleteConfirmState, SecurityOtpEditorState};
 
 impl NyaTermApp {
     pub(in crate::features) fn import_security_otp_from_qr(&mut self, cx: &mut Context<Self>) {
@@ -85,7 +83,6 @@ fn decode_security_otp_qr(path: &std::path::Path) -> Result<SecurityOtpEditorSta
             period: totp.period().to_string(),
             counter: "0".to_string(),
             has_secret: false,
-            focused_field: SecurityOtpEditorField::Issuer,
             error: None,
         })
     } else if uri.starts_with("otpauth://hotp/") {
@@ -102,7 +99,6 @@ fn decode_security_otp_qr(path: &std::path::Path) -> Result<SecurityOtpEditorSta
             period: "30".to_string(),
             counter: hotp.counter().to_string(),
             has_secret: false,
-            focused_field: SecurityOtpEditorField::Issuer,
             error: None,
         })
     } else {
@@ -141,7 +137,6 @@ impl NyaTermApp {
                 period: entry.period.to_string(),
                 counter: entry.counter.to_string(),
                 has_secret: entry.has_secret,
-                focused_field: SecurityOtpEditorField::Issuer,
                 error: None,
             }
         } else {
@@ -156,7 +151,6 @@ impl NyaTermApp {
                 period: "30".to_string(),
                 counter: "0".to_string(),
                 has_secret: false,
-                focused_field: SecurityOtpEditorField::Issuer,
                 error: None,
             }
         };
@@ -204,11 +198,9 @@ impl NyaTermApp {
         match keystroke.key.as_str() {
             "escape" => {
                 self.close_security_otp_editor(cx);
-                return;
             }
             "enter" => {
                 self.save_security_otp_editor(window, cx);
-                return;
             }
             _ => {}
         }
@@ -359,12 +351,10 @@ impl NyaTermApp {
             .collect::<Vec<_>>();
         let mut refreshed = 0usize;
         for otp_id in ids {
-            match self.session.prompt_otp_provider().preview_otp_code(&otp_id) {
-                Ok(Some(preview)) => {
-                    self.security.reveal_otp_code(otp_id, preview.code);
-                    refreshed += 1;
-                }
-                Ok(None) | Err(_) => {}
+            if let Ok(Some(preview)) = self.session.prompt_otp_provider().preview_otp_code(&otp_id)
+            {
+                self.security.reveal_otp_code(otp_id, preview.code);
+                refreshed += 1;
             }
         }
         if refreshed > 0 {
@@ -381,15 +371,16 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(code) = self.security.revealed_otp_code(&otp_id).map(str::to_string) {
-            if code != "------" && !code.trim().is_empty() {
-                cx.write_to_clipboard(ClipboardItem::new_string(code));
-                self.security
-                    .set_status(format!("OTP code copied ({})", compact_id(&otp_id)));
-                self.shell.set_status("OTP code copied".to_string());
-                cx.notify();
-                return;
-            }
+        if let Some(code) = self.security.revealed_otp_code(&otp_id).map(str::to_string)
+            && code != "------"
+            && !code.trim().is_empty()
+        {
+            cx.write_to_clipboard(ClipboardItem::new_string(code));
+            self.security
+                .set_status(format!("OTP code copied ({})", compact_id(&otp_id)));
+            self.shell.set_status("OTP code copied".to_string());
+            cx.notify();
+            return;
         }
         self.generate_security_otp_code(otp_id.clone(), window, cx);
         if let Some(code) = self.security.revealed_otp_code(&otp_id).map(str::to_string)

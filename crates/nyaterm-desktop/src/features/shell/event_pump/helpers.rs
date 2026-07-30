@@ -205,16 +205,31 @@ pub(super) fn runtime_ui_notify_allowed(
     })
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) struct RuntimeOutputPressureCounts {
+    pub session_event_backlog_active: bool,
+    pub session_event_queued_output_bytes: usize,
+    pub pending_session_events: usize,
+    pub bridge_queued_events: usize,
+    pub bridge_queued_output_bytes: usize,
+    pub pending_terminal_frame_events: usize,
+    pub queued_terminal_frame_events: usize,
+    pub queued_terminal_frame_output_bytes: usize,
+}
+
 pub(super) fn runtime_output_pressure_active_from_counts(
-    session_event_backlog_active: bool,
-    session_event_queued_output_bytes: usize,
-    pending_session_events: usize,
-    bridge_queued_events: usize,
-    bridge_queued_output_bytes: usize,
-    pending_terminal_frame_events: usize,
-    queued_terminal_frame_events: usize,
-    queued_terminal_frame_output_bytes: usize,
+    counts: RuntimeOutputPressureCounts,
 ) -> bool {
+    let RuntimeOutputPressureCounts {
+        session_event_backlog_active,
+        session_event_queued_output_bytes,
+        pending_session_events,
+        bridge_queued_events,
+        bridge_queued_output_bytes,
+        pending_terminal_frame_events,
+        queued_terminal_frame_events,
+        queued_terminal_frame_output_bytes,
+    } = counts;
     session_event_backlog_active
         || session_event_queued_output_bytes > 0
         || pending_session_events > 0
@@ -402,10 +417,10 @@ mod tests {
 
     use super::{
         CONNECT_SETTLE_HOLD, PendingSessionAuthWait, RUNTIME_BACKGROUND_EVENT_DRAIN_WALL_BUDGET,
-        RUNTIME_IDLE_TICK_INTERVAL, RUNTIME_PRESSURE_TICK_INTERVAL, SESSION_EVENT_DRAIN_BATCH,
-        SESSION_EVENT_DRAIN_IDLE_OUTPUT_BUDGET, SESSION_EVENT_DRAIN_PRESSURE_OUTPUT_BUDGET,
-        SESSION_EVENT_DRAIN_SLOW_CHUNK, SESSION_EVENT_DRAIN_SLOW_TOTAL,
-        SESSION_EVENT_DRAIN_WALL_BUDGET, SLOW_DIAGNOSTIC_THROTTLE,
+        RUNTIME_IDLE_TICK_INTERVAL, RUNTIME_PRESSURE_TICK_INTERVAL, RuntimeOutputPressureCounts,
+        SESSION_EVENT_DRAIN_BATCH, SESSION_EVENT_DRAIN_IDLE_OUTPUT_BUDGET,
+        SESSION_EVENT_DRAIN_PRESSURE_OUTPUT_BUDGET, SESSION_EVENT_DRAIN_SLOW_CHUNK,
+        SESSION_EVENT_DRAIN_SLOW_TOTAL, SESSION_EVENT_DRAIN_WALL_BUDGET, SLOW_DIAGNOSTIC_THROTTLE,
         TERMINAL_FRAME_APPLY_PRESSURE_INTERVAL, UI_PAINT_THROTTLE, WINDOW_GEOMETRY_CHURN_HOLD,
         connect_settle_active, connect_settle_deadline, diagnostic_log_due,
         pending_session_status_message, runtime_background_event_drain_budget_exhausted,
@@ -585,31 +600,55 @@ mod tests {
     #[test]
     fn runtime_output_pressure_tracks_output_and_frame_backlog_only() {
         assert!(!runtime_output_pressure_active_from_counts(
-            false, 0, 0, 0, 0, 0, 0, 0
+            RuntimeOutputPressureCounts::default()
         ));
         assert!(runtime_output_pressure_active_from_counts(
-            true, 0, 0, 0, 0, 0, 0, 0
+            RuntimeOutputPressureCounts {
+                session_event_backlog_active: true,
+                ..Default::default()
+            }
         ));
         assert!(runtime_output_pressure_active_from_counts(
-            false, 1, 0, 0, 0, 0, 0, 0
+            RuntimeOutputPressureCounts {
+                session_event_queued_output_bytes: 1,
+                ..Default::default()
+            }
         ));
         assert!(runtime_output_pressure_active_from_counts(
-            false, 0, 1, 0, 0, 0, 0, 0
+            RuntimeOutputPressureCounts {
+                pending_session_events: 1,
+                ..Default::default()
+            }
         ));
         assert!(runtime_output_pressure_active_from_counts(
-            false, 0, 0, 1, 0, 0, 0, 0
+            RuntimeOutputPressureCounts {
+                bridge_queued_events: 1,
+                ..Default::default()
+            }
         ));
         assert!(runtime_output_pressure_active_from_counts(
-            false, 0, 0, 0, 1, 0, 0, 0
+            RuntimeOutputPressureCounts {
+                bridge_queued_output_bytes: 1,
+                ..Default::default()
+            }
         ));
         assert!(runtime_output_pressure_active_from_counts(
-            false, 0, 0, 0, 0, 1, 0, 0
+            RuntimeOutputPressureCounts {
+                pending_terminal_frame_events: 1,
+                ..Default::default()
+            }
         ));
         assert!(runtime_output_pressure_active_from_counts(
-            false, 0, 0, 0, 0, 0, 1, 0
+            RuntimeOutputPressureCounts {
+                queued_terminal_frame_events: 1,
+                ..Default::default()
+            }
         ));
         assert!(runtime_output_pressure_active_from_counts(
-            false, 0, 0, 0, 0, 0, 0, 1
+            RuntimeOutputPressureCounts {
+                queued_terminal_frame_output_bytes: 1,
+                ..Default::default()
+            }
         ));
     }
 

@@ -11,13 +11,33 @@ use nyaterm_core::truncate_preview;
 use crate::features::{ConnectionEditorToggle, NyaTermApp};
 use crate::models::{
     ConnectionEditorAdvancedTab, ConnectionEditorField, ConnectionEditorMenu,
-    ConnectionEditorPasswordSource, ConnectionEditorState,
+    ConnectionEditorPasswordSource,
 };
 
 use super::super::super::list::{
-    ConnectionEditorChoice, ConnectionEditorFields, connection_editor_select, editor_field,
+    ConnectionEditorChoice, ConnectionEditorRenderContext, connection_editor_select, editor_field,
     editor_stepper_field, required, toggle_chip,
 };
+
+use super::ConnectionEditorSectionContext;
+
+pub(super) struct SshConnectionSectionLabels {
+    pub(super) password: String,
+    pub(super) key: String,
+    pub(super) otp: String,
+    pub(super) proxy: String,
+    pub(super) jump: String,
+}
+
+pub(super) struct SshConnectionSectionOptions {
+    pub(super) auth: Vec<ConnectionEditorChoice>,
+    pub(super) passwords: Vec<ConnectionEditorChoice>,
+    pub(super) keys: Vec<ConnectionEditorChoice>,
+    pub(super) otp: Vec<ConnectionEditorChoice>,
+    pub(super) proxies: Vec<ConnectionEditorChoice>,
+    pub(super) jumps: Vec<ConnectionEditorChoice>,
+    pub(super) backspace: Vec<ConnectionEditorChoice>,
+}
 
 fn ssh_segment_tab(
     palette: crate::theme::ThemePalette,
@@ -98,25 +118,34 @@ fn ssh_advanced_content(
 }
 
 pub(super) fn connection_editor_ssh_section(
-    palette: crate::theme::ThemePalette,
-    editor: &ConnectionEditorState,
-    password_label: String,
-    key_label: String,
-    otp_label: String,
-    proxy_label: String,
-    jump_label: String,
-    auth_options: Vec<ConnectionEditorChoice>,
-    password_options: Vec<ConnectionEditorChoice>,
-    key_options: Vec<ConnectionEditorChoice>,
-    otp_options: Vec<ConnectionEditorChoice>,
-    proxy_options: Vec<ConnectionEditorChoice>,
-    jump_options: Vec<ConnectionEditorChoice>,
-    backspace_options: Vec<ConnectionEditorChoice>,
-    open_menu: Option<ConnectionEditorMenu>,
-    language: &str,
-    fields: &ConnectionEditorFields,
+    section: ConnectionEditorSectionContext<'_>,
+    labels: SshConnectionSectionLabels,
+    options: SshConnectionSectionOptions,
     cx: &mut Context<NyaTermApp>,
 ) -> gpui::Div {
+    let ConnectionEditorSectionContext {
+        palette,
+        editor,
+        active_menu: open_menu,
+        language,
+        fields,
+    } = section;
+    let SshConnectionSectionLabels {
+        password: password_label,
+        key: key_label,
+        otp: otp_label,
+        proxy: proxy_label,
+        jump: jump_label,
+    } = labels;
+    let SshConnectionSectionOptions {
+        auth: auth_options,
+        passwords: password_options,
+        keys: key_options,
+        otp: otp_options,
+        proxies: proxy_options,
+        jumps: jump_options,
+        backspace: backspace_options,
+    } = options;
     let tr = |key: &'static str| crate::i18n::text(language, key);
     let backspace_value = match editor.backspace_mode.as_str() {
         "ctrl-h" | "bs" | "ctrl_h" => tr("dialog.backspaceCtrlH"),
@@ -387,15 +416,17 @@ pub(super) fn connection_editor_ssh_section(
                         editor.password_source == ConnectionEditorPasswordSource::Saved,
                         |this| {
                             this.child(connection_editor_select(
-                                palette,
+                                ConnectionEditorRenderContext {
+                                    palette,
+                                    fields,
+                                    cx,
+                                },
                                 "connection-editor-saved-password",
                                 tr("dialog.savedPassword"),
                                 truncate_preview(&password_label, 36),
                                 ConnectionEditorMenu::SavedPassword,
                                 open_menu == Some(ConnectionEditorMenu::SavedPassword),
                                 password_options,
-                                fields,
-                                cx,
                             ))
                         },
                     ),
@@ -405,15 +436,17 @@ pub(super) fn connection_editor_ssh_section(
             editor.auth_mode == "key" || editor.auth_mode == "certificate",
             |this| {
                 this.child(connection_editor_select(
-                    palette,
+                    ConnectionEditorRenderContext {
+                        palette,
+                        fields,
+                        cx,
+                    },
                     "connection-editor-key",
                     tr("dialog.privateKey"),
                     truncate_preview(&key_label, 36),
                     ConnectionEditorMenu::SshKey,
                     open_menu == Some(ConnectionEditorMenu::SshKey),
                     key_options,
-                    fields,
-                    cx,
                 ))
             },
         )
@@ -459,15 +492,17 @@ pub(super) fn connection_editor_ssh_section(
                                 tr("dialog.proxySelect"),
                                 truncate_preview(&proxy_label, 48),
                                 connection_editor_select(
-                                    palette,
+                                    ConnectionEditorRenderContext {
+                                        palette,
+                                        fields,
+                                        cx,
+                                    },
                                     "connection-editor-proxy",
                                     tr("dialog.proxySelect"),
                                     truncate_preview(&proxy_label, 48),
                                     ConnectionEditorMenu::Proxy,
                                     open_menu == Some(ConnectionEditorMenu::Proxy),
                                     proxy_options,
-                                    fields,
-                                    cx,
                                 ),
                             ))
                         },
@@ -480,15 +515,17 @@ pub(super) fn connection_editor_ssh_section(
                                 tr("dialog.proxyJump"),
                                 truncate_preview(&jump_label, 48),
                                 connection_editor_select(
-                                    palette,
+                                    ConnectionEditorRenderContext {
+                                        palette,
+                                        fields,
+                                        cx,
+                                    },
                                     "connection-editor-jump",
                                     tr("dialog.selectProxyJump"),
                                     truncate_preview(&jump_label, 48),
                                     ConnectionEditorMenu::ProxyJump,
                                     open_menu == Some(ConnectionEditorMenu::ProxyJump),
                                     jump_options,
-                                    fields,
-                                    cx,
                                 ),
                             ))
                         },
@@ -505,15 +542,17 @@ pub(super) fn connection_editor_ssh_section(
                                     .flex_col()
                                     .gap_2()
                                     .child(connection_editor_select(
-                                        palette,
+                                        ConnectionEditorRenderContext {
+                                            palette,
+                                            fields,
+                                            cx,
+                                        },
                                         "connection-editor-otp",
                                         tr("dialog.selectOtp"),
                                         truncate_preview(&otp_label, 36),
                                         ConnectionEditorMenu::Otp,
                                         open_menu == Some(ConnectionEditorMenu::Otp),
                                         otp_options,
-                                        fields,
-                                        cx,
                                     ))
                                     .child(toggle_chip(
                                         palette,
@@ -602,15 +641,17 @@ pub(super) fn connection_editor_ssh_section(
                                 tr("dialog.backspaceMode"),
                                 tr("dialog.sshBackspaceModeDesc"),
                                 connection_editor_select(
-                                    palette,
+                                    ConnectionEditorRenderContext {
+                                        palette,
+                                        fields,
+                                        cx,
+                                    },
                                     "connection-editor-backspace",
                                     tr("dialog.backspaceMode"),
                                     backspace_value,
                                     ConnectionEditorMenu::Backspace,
                                     open_menu == Some(ConnectionEditorMenu::Backspace),
                                     backspace_options,
-                                    fields,
-                                    cx,
                                 ),
                             ))
                         },

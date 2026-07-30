@@ -393,11 +393,15 @@ impl RemoteOpsFeatureState {
     }
 
     pub(in crate::features) fn docker_details_refresh(&self) -> Option<(String, Instant)> {
-        Some((
+        let refresh = (
             self.docker.details_container_id.clone()?,
             self.docker.details_last_refresh_at?,
-        ))
-        .filter(|_| self.docker.details.is_some())
+        );
+        if self.docker.details.is_some() {
+            Some(refresh)
+        } else {
+            None
+        }
     }
 
     pub(in crate::features) fn set_docker_tab(&mut self, tab: DockerTab) {

@@ -92,11 +92,9 @@ impl NyaTermApp {
         match keystroke.key.as_str() {
             "escape" => {
                 self.close_security_key_editor(cx);
-                return;
             }
             "enter" => {
                 self.save_security_key_editor(window, cx);
-                return;
             }
             _ => {}
         }

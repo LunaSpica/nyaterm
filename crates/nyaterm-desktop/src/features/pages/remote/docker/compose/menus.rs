@@ -4,17 +4,28 @@ use crate::features::NyaTermApp;
 use crate::models::{DockerConfirmAction, DockerConfirmState};
 use crate::theme::ThemePalette;
 
-use super::super::DockerLabels;
+use super::super::DockerRenderContext;
 
-pub(in crate::features::pages::remote) fn docker_compose_project_action_menu(
-    palette: ThemePalette,
-    menu_bg: gpui::Rgba,
+pub(super) struct DockerComposeServiceMenu {
+    pub project_name: String,
+    pub config_files: Option<String>,
+    pub service_name: String,
+    pub running_container_id: Option<String>,
+    pub can_enter: bool,
+}
+
+pub(super) fn docker_compose_project_action_menu(
+    context: DockerRenderContext,
     project_name: String,
     config_files: Option<String>,
     project_key: &str,
-    labels: DockerLabels,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+    let DockerRenderContext {
+        palette,
+        menu_bg,
+        labels,
+    } = context;
     let short = project_key.replace(['/', ':', ' '], "-");
     div()
         .id(SharedString::from(format!(
@@ -97,17 +108,23 @@ pub(in crate::features::pages::remote) fn docker_compose_project_action_menu(
         ))
 }
 
-pub(in crate::features::pages::remote) fn docker_compose_service_action_menu(
-    palette: ThemePalette,
-    menu_bg: gpui::Rgba,
-    project_name: String,
-    config_files: Option<String>,
-    service_name: String,
-    running_container_id: Option<String>,
-    can_enter: bool,
-    labels: DockerLabels,
+pub(super) fn docker_compose_service_action_menu(
+    context: DockerRenderContext,
+    menu: DockerComposeServiceMenu,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+    let DockerRenderContext {
+        palette,
+        menu_bg,
+        labels,
+    } = context;
+    let DockerComposeServiceMenu {
+        project_name,
+        config_files,
+        service_name,
+        running_container_id,
+        can_enter,
+    } = menu;
     let short = format!("{project_name}-{service_name}").replace(['/', ':', ' '], "-");
     div()
         .id(SharedString::from(format!(

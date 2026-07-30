@@ -8,7 +8,9 @@ use crate::features::formatting::{
     cloud_sync_status_dot_color, cloud_sync_status_text_color, configured_cloud_sync_provider,
     format_cloud_provider, format_duration_ms,
 };
-use crate::features::view_widgets::{cloud_sync_history_row, dialog_action_button};
+use crate::features::view_widgets::{
+    CloudSyncHistoryRowLabels, cloud_sync_history_row, dialog_action_button,
+};
 use crate::widgets::small_button;
 
 impl NyaTermApp {
@@ -131,15 +133,17 @@ impl NyaTermApp {
                 rows = rows.child(cloud_sync_history_row(
                     palette,
                     entry,
-                    kind_label.to_string(),
-                    status_label.to_string(),
-                    trigger_label,
-                    provider_label,
-                    duration_label,
-                    self.tr("settings.historyRevision"),
-                    self.tr("settings.historyViewDetails"),
-                    self.tr("settings.historyHideDetails"),
-                    self.tr("settings.historyCopyMessage"),
+                    CloudSyncHistoryRowLabels {
+                        kind: kind_label.to_string(),
+                        status: status_label.to_string(),
+                        trigger: trigger_label,
+                        provider: provider_label,
+                        duration: duration_label,
+                        revision: self.tr("settings.historyRevision"),
+                        view_details: self.tr("settings.historyViewDetails"),
+                        hide_details: self.tr("settings.historyHideDetails"),
+                        copy_message: self.tr("settings.historyCopyMessage"),
+                    },
                     is_open,
                     cx.listener(move |this, _, _, cx| {
                         this.toggle_cloud_sync_history_details(&entry_id, cx);

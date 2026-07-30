@@ -763,24 +763,6 @@ fn fit_wallpaper_tile_size(viewport: (f32, f32), intrinsic: (f32, f32)) -> (f32,
     tile
 }
 
-#[cfg(test)]
-mod tests {
-    use super::{fit_wallpaper_tile_size, wallpaper_tile_grid};
-
-    #[test]
-    fn wallpaper_tiles_cover_viewport_and_cap_extreme_counts() {
-        assert_eq!(wallpaper_tile_grid((1280., 800.), (256., 256.)), (5, 4));
-        assert_eq!(wallpaper_tile_grid((1280., 800.), (2048., 2048.)), (1, 1));
-        let (columns, rows) = wallpaper_tile_grid((100_000., 100_000.), (1., 1.));
-        assert!(columns * rows <= 8192);
-        let tile = fit_wallpaper_tile_size((3840., 2160.), (1., 1.));
-        let (columns, rows) = wallpaper_tile_grid((3840., 2160.), tile);
-        assert!(columns * rows <= 8192);
-        assert!(columns as f32 * tile.0 >= 3840.);
-        assert!(rows as f32 * tile.1 >= 2160.);
-    }
-}
-
 impl Render for NyaTermApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let render_started_at = Instant::now();
@@ -811,5 +793,23 @@ impl Render for NyaTermApp {
             );
         }
         output
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{fit_wallpaper_tile_size, wallpaper_tile_grid};
+
+    #[test]
+    fn wallpaper_tiles_cover_viewport_and_cap_extreme_counts() {
+        assert_eq!(wallpaper_tile_grid((1280., 800.), (256., 256.)), (5, 4));
+        assert_eq!(wallpaper_tile_grid((1280., 800.), (2048., 2048.)), (1, 1));
+        let (columns, rows) = wallpaper_tile_grid((100_000., 100_000.), (1., 1.));
+        assert!(columns * rows <= 8192);
+        let tile = fit_wallpaper_tile_size((3840., 2160.), (1., 1.));
+        let (columns, rows) = wallpaper_tile_grid((3840., 2160.), tile);
+        assert!(columns * rows <= 8192);
+        assert!(columns as f32 * tile.0 >= 3840.);
+        assert!(rows as f32 * tile.1 >= 2160.);
     }
 }

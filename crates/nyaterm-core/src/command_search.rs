@@ -109,12 +109,9 @@ fn fuzzy_match(display: &str, pattern: &str) -> Option<(u32, Vec<u32>)> {
     let mut search_from = 0;
     let mut indices = Vec::new();
     for needle_char in needle_lower {
-        let Some(relative_index) = haystack_lower[search_from..]
+        let relative_index = haystack_lower[search_from..]
             .iter()
-            .position(|haystack_char| *haystack_char == needle_char)
-        else {
-            return None;
-        };
+            .position(|haystack_char| *haystack_char == needle_char)?;
         let index = search_from + relative_index;
         indices.push(index as u32);
         search_from = index.saturating_add(1);

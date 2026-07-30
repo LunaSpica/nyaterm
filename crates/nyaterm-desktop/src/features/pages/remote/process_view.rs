@@ -10,9 +10,9 @@ use crate::widgets::empty_panel;
 
 use super::process::{
     ProcessDetailLabels, ProcessDisplayMode, ProcessSignalLabels, ProcessTableLabels,
-    process_details, process_details_height_px, process_display_mode, process_matches,
-    process_row_height_px, process_signal_confirm_panel, process_sort_button, process_table_row,
-    sort_processes,
+    ProcessTableRowActions, ProcessTableRowPresentation, process_details,
+    process_details_height_px, process_display_mode, process_matches, process_row_height_px,
+    process_signal_confirm_panel, process_sort_button, process_table_row, sort_processes,
 };
 
 impl NyaTermApp {
@@ -153,7 +153,7 @@ impl NyaTermApp {
             self.text_input_box(
                 format!("remote.process.{}.nice", process.pid),
                 &process_state.nice_draft.clone(),
-                TextInputSetup::default(),
+                TextInputSetup::placeholder(detail_labels.nice_value),
                 cx,
             )
             .into_any_element()
@@ -174,60 +174,64 @@ impl NyaTermApp {
                 let selected = process_state.selected_pid == Some(pid);
                 rows = rows.child(
                     process_table_row(
-                        palette,
-                        menu_bg,
+                        ProcessTableRowPresentation {
+                            palette,
+                            menu_bg,
+                            mode,
+                            labels: table_labels,
+                            selected,
+                            menu_open: process_state.menu_pid == Some(pid),
+                        },
                         process,
-                        mode,
-                        table_labels,
-                        selected,
-                        process_state.menu_pid == Some(pid),
-                        cx.listener(move |this, _, _, cx| {
-                            this.remote_ops.close_process_menu();
-                            this.toggle_process_selection(pid, cx);
-                        }),
-                        cx.listener(move |this, _, _, cx| {
-                            cx.stop_propagation();
-                            this.remote_ops.toggle_process_menu(pid);
-                            cx.notify();
-                        }),
-                        cx.listener({
-                            let value = pid.to_string();
-                            move |this, _, _, cx| {
+                        ProcessTableRowActions {
+                            on_select: cx.listener(move |this, _, _, cx| {
                                 this.remote_ops.close_process_menu();
-                                this.copy_process_text(value.clone(), "pid", cx);
-                            }
-                        }),
-                        cx.listener({
-                            let value = if process.command_line.trim().is_empty() {
-                                process.command.clone()
-                            } else {
-                                process.command_line.clone()
-                            };
-                            move |this, _, _, cx| {
+                                this.toggle_process_selection(pid, cx);
+                            }),
+                            on_menu: cx.listener(move |this, _, _, cx| {
+                                cx.stop_propagation();
+                                this.remote_ops.toggle_process_menu(pid);
+                                cx.notify();
+                            }),
+                            on_copy_pid: cx.listener({
+                                let value = pid.to_string();
+                                move |this, _, _, cx| {
+                                    this.remote_ops.close_process_menu();
+                                    this.copy_process_text(value.clone(), "pid", cx);
+                                }
+                            }),
+                            on_copy_command: cx.listener({
+                                let value = if process.command_line.trim().is_empty() {
+                                    process.command.clone()
+                                } else {
+                                    process.command_line.clone()
+                                };
+                                move |this, _, _, cx| {
+                                    this.remote_ops.close_process_menu();
+                                    this.copy_process_text(value.clone(), "command", cx);
+                                }
+                            }),
+                            on_term: cx.listener(move |this, _, window, cx| {
                                 this.remote_ops.close_process_menu();
-                                this.copy_process_text(value.clone(), "command", cx);
-                            }
-                        }),
-                        cx.listener(move |this, _, window, cx| {
-                            this.remote_ops.close_process_menu();
-                            this.request_process_signal(pid, "TERM", window, cx);
-                        }),
-                        cx.listener(move |this, _, window, cx| {
-                            this.remote_ops.close_process_menu();
-                            this.request_process_signal(pid, "HUP", window, cx);
-                        }),
-                        cx.listener(move |this, _, window, cx| {
-                            this.remote_ops.close_process_menu();
-                            this.request_process_signal(pid, "STOP", window, cx);
-                        }),
-                        cx.listener(move |this, _, window, cx| {
-                            this.remote_ops.close_process_menu();
-                            this.request_process_signal(pid, "CONT", window, cx);
-                        }),
-                        cx.listener(move |this, _, window, cx| {
-                            this.remote_ops.close_process_menu();
-                            this.request_process_signal(pid, "KILL", window, cx);
-                        }),
+                                this.request_process_signal(pid, "TERM", window, cx);
+                            }),
+                            on_hup: cx.listener(move |this, _, window, cx| {
+                                this.remote_ops.close_process_menu();
+                                this.request_process_signal(pid, "HUP", window, cx);
+                            }),
+                            on_stop: cx.listener(move |this, _, window, cx| {
+                                this.remote_ops.close_process_menu();
+                                this.request_process_signal(pid, "STOP", window, cx);
+                            }),
+                            on_cont: cx.listener(move |this, _, window, cx| {
+                                this.remote_ops.close_process_menu();
+                                this.request_process_signal(pid, "CONT", window, cx);
+                            }),
+                            on_kill: cx.listener(move |this, _, window, cx| {
+                                this.remote_ops.close_process_menu();
+                                this.request_process_signal(pid, "KILL", window, cx);
+                            }),
+                        },
                     )
                     .child(
                         selected_process

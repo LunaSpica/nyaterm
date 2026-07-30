@@ -85,7 +85,7 @@ const SOURCE_EXTS: &[&str] = &[
 fn looks_like_file_host(host: &str) -> bool {
     let host = host.to_ascii_lowercase();
     let ext = host.rsplit('.').next().unwrap_or("");
-    SOURCE_EXTS.iter().any(|item| *item == ext)
+    SOURCE_EXTS.contains(&ext)
 }
 
 fn is_valid_ipv4(text: &str) -> bool {

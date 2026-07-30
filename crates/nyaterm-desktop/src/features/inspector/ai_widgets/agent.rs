@@ -35,9 +35,9 @@ impl NyaTermApp {
             .command
             .clone()
             .or_else(|| {
-                if step.detail.trim().is_empty() {
-                    None
-                } else if thought.as_ref().is_some_and(|t| t == &step.detail) {
+                if step.detail.trim().is_empty()
+                    || thought.as_ref().is_some_and(|t| t == &step.detail)
+                {
                     None
                 } else {
                     Some(step.detail.clone())
@@ -116,20 +116,18 @@ impl NyaTermApp {
                     .child(status_pill(label, rgb(fg), rgb(bg))),
             );
 
-        if thought_open {
-            if let Some(thought_text) = thought.clone() {
-                card = card.child(
-                    div()
-                        .ml_4()
-                        .text_size(px(11.))
-                        .text_color(rgb(palette.text_muted))
-                        .line_height(px(16.))
-                        .child(markdown_content_view(
-                            palette,
-                            &truncate_preview(&thought_text, 800),
-                        )),
-                );
-            }
+        if thought_open && let Some(thought_text) = thought.clone() {
+            card = card.child(
+                div()
+                    .ml_4()
+                    .text_size(px(11.))
+                    .text_color(rgb(palette.text_muted))
+                    .line_height(px(16.))
+                    .child(markdown_content_view(
+                        palette,
+                        &truncate_preview(&thought_text, 800),
+                    )),
+            );
         }
 
         if let Some(command_text) = command {

@@ -145,13 +145,11 @@ pub fn decode_sixel_rgba(dcs_body: &[u8]) -> Option<(u32, u32, Vec<u8>)> {
     let width = declared_w
         .unwrap_or(max_x)
         .max(max_x)
-        .max(1)
-        .min(MAX_SIXEL_DIMENSION);
+        .clamp(1, MAX_SIXEL_DIMENSION);
     let height = declared_h
         .unwrap_or(max_y)
         .max(max_y)
-        .max(1)
-        .min(MAX_SIXEL_DIMENSION);
+        .clamp(1, MAX_SIXEL_DIMENSION);
     if max_x == 0 && max_y == 0 {
         return None;
     }

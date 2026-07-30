@@ -100,10 +100,7 @@ fn build_powershell_capture_command(marker_id: &str, command: &str) -> String {
 }
 
 fn build_cmd_capture_command(marker_id: &str, command: &str) -> String {
-    let command = command
-        .replace("\r\n", " & ")
-        .replace('\n', " & ")
-        .replace('\r', " & ");
+    let command = command.replace("\r\n", " & ").replace(['\n', '\r'], " & ");
     let command = command.trim();
     let command_segment = if command.is_empty() {
         String::new()

@@ -182,7 +182,7 @@ impl NyaTermApp {
             .filter(|c| c.group_id == group_id && c.id != source_id)
             .cloned()
             .collect::<Vec<_>>();
-        siblings.sort_by(|a, b| a.sort_order.cmp(&b.sort_order));
+        siblings.sort_by_key(|connection| connection.sort_order);
         let mut moved = source;
         moved.group_id = group_id.clone();
         siblings.push(moved);
@@ -292,7 +292,7 @@ impl NyaTermApp {
             .filter(|g| g.parent_id == parent && g.id != source_id)
             .cloned()
             .collect::<Vec<_>>();
-        siblings.sort_by(|a, b| a.sort_order.cmp(&b.sort_order));
+        siblings.sort_by_key(|group| group.sort_order);
         let target_idx = siblings
             .iter()
             .position(|g| g.id == target_id)
@@ -327,13 +327,13 @@ impl NyaTermApp {
             return;
         }
         // Prevent cycles: parent cannot be descendant of source.
-        if let Some(pid) = parent_id.as_ref() {
-            if self.connection_state.group_is_descendant(pid, &source_id) {
-                self.shell
-                    .set_status("cannot create group cycle".to_string());
-                cx.notify();
-                return;
-            }
+        if let Some(pid) = parent_id.as_ref()
+            && self.connection_state.group_is_descendant(pid, &source_id)
+        {
+            self.shell
+                .set_status("cannot create group cycle".to_string());
+            cx.notify();
+            return;
         }
         let Some(source) = self
             .connection_state
@@ -351,7 +351,7 @@ impl NyaTermApp {
             .filter(|g| g.parent_id == parent_id && g.id != source_id)
             .cloned()
             .collect::<Vec<_>>();
-        siblings.sort_by(|a, b| a.sort_order.cmp(&b.sort_order));
+        siblings.sort_by_key(|group| group.sort_order);
         let mut moved = source;
         moved.parent_id = parent_id;
         siblings.push(moved);

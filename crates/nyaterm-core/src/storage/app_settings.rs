@@ -31,8 +31,7 @@ impl ConnectionStore {
             ),
             background_image_opacity: {
                 let raw = json_path(&value, &["appearance", "background_image_opacity"]);
-                let pct = raw
-                    .and_then(|v| v.as_f64())
+                raw.and_then(|v| v.as_f64())
                     .map(|v| {
                         // Accept both 0..1 float (Tauri) and 0..100 percent.
                         if v <= 1.0 {
@@ -42,13 +41,11 @@ impl ConnectionStore {
                         }
                     })
                     .unwrap_or(45)
-                    .clamp(0, 100);
-                pct
+                    .clamp(0, 100)
             },
             background_content_opacity: {
                 let raw = json_path(&value, &["appearance", "background_opacity"]);
-                let pct = raw
-                    .and_then(|v| v.as_f64())
+                raw.and_then(|v| v.as_f64())
                     .map(|v| {
                         if v <= 1.0 {
                             (v * 100.0).round() as u8
@@ -57,8 +54,7 @@ impl ConnectionStore {
                         }
                     })
                     .unwrap_or(82)
-                    .clamp(0, 100);
-                pct
+                    .clamp(0, 100)
             },
             // Tauri UiConfig.language (not translation.target_language).
             language: json_string(&value, &["ui", "language"], "en"),
@@ -77,12 +73,11 @@ impl ConnectionStore {
             },
             cursor_blink: json_bool(&value, &["appearance", "cursor_blink"], true),
             terminal_theme: {
-                let raw = json_path(&value, &["appearance", "terminal_theme"])
+                json_path(&value, &["appearance", "terminal_theme"])
                     .and_then(|v| v.as_str())
                     .map(str::trim)
                     .filter(|s| !s.is_empty())
-                    .map(|s| s.to_string());
-                raw
+                    .map(|s| s.to_string())
             },
             minimum_contrast_ratio: {
                 let raw = json_path(&value, &["appearance", "minimum_contrast_ratio"]);
@@ -1411,10 +1406,12 @@ fn json_u16(value: &serde_json::Value, path: &[&str], fallback: u16) -> u16 {
     if let Some(number) = value.as_u64() {
         return number.try_into().unwrap_or(fallback);
     }
-    if let Some(number) = value.as_f64() {
-        if number.is_finite() && number >= 0.0 && number <= f64::from(u16::MAX) {
-            return number.round() as u16;
-        }
+    if let Some(number) = value.as_f64()
+        && number.is_finite()
+        && number >= 0.0
+        && number <= f64::from(u16::MAX)
+    {
+        return number.round() as u16;
     }
     fallback
 }
@@ -1426,10 +1423,12 @@ fn json_u32(value: &serde_json::Value, path: &[&str], fallback: u32) -> u32 {
     if let Some(number) = value.as_u64() {
         return number.try_into().unwrap_or(fallback);
     }
-    if let Some(number) = value.as_f64() {
-        if number.is_finite() && number >= 0.0 && number <= f64::from(u32::MAX) {
-            return number.round() as u32;
-        }
+    if let Some(number) = value.as_f64()
+        && number.is_finite()
+        && number >= 0.0
+        && number <= f64::from(u32::MAX)
+    {
+        return number.round() as u32;
     }
     fallback
 }
@@ -1443,10 +1442,10 @@ fn json_u32_map(value: &serde_json::Value, path: &[&str]) -> HashMap<String, u32
         let number = raw
             .as_u64()
             .or_else(|| raw.as_f64().map(|value| value.round() as u64));
-        if let Some(number) = number {
-            if number > 0 {
-                map.insert(key.clone(), number.min(u32::MAX as u64) as u32);
-            }
+        if let Some(number) = number
+            && number > 0
+        {
+            map.insert(key.clone(), number.min(u32::MAX as u64) as u32);
         }
     }
     map
@@ -1459,10 +1458,12 @@ fn json_u64(value: &serde_json::Value, path: &[&str], fallback: u64) -> u64 {
     if let Some(number) = value.as_u64() {
         return number;
     }
-    if let Some(number) = value.as_f64() {
-        if number.is_finite() && number >= 0.0 && number <= u64::MAX as f64 {
-            return number.round() as u64;
-        }
+    if let Some(number) = value.as_f64()
+        && number.is_finite()
+        && number >= 0.0
+        && number <= u64::MAX as f64
+    {
+        return number.round() as u64;
     }
     fallback
 }

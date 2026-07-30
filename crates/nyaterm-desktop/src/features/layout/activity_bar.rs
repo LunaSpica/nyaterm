@@ -357,8 +357,6 @@ impl NyaTermApp {
             .on_drag(
                 ActivityBarDragPayload {
                     entry_id: entry_id.clone(),
-                    zone,
-                    index,
                     label: tooltip.clone(),
                     icon_path,
                 },

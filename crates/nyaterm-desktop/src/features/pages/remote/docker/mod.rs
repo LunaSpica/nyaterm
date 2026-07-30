@@ -1,4 +1,7 @@
+use gpui::Rgba;
+
 use crate::features::docker_state_label;
+use crate::theme::ThemePalette;
 
 #[derive(Clone, Copy)]
 pub(in crate::features::pages::remote) struct DockerLabels {
@@ -101,6 +104,13 @@ impl DockerLabels {
     }
 }
 
+#[derive(Clone, Copy)]
+pub(in crate::features::pages::remote) struct DockerRenderContext {
+    pub palette: ThemePalette,
+    pub menu_bg: Rgba,
+    pub labels: DockerLabels,
+}
+
 mod compose;
 mod containers;
 mod controls;
@@ -108,9 +118,11 @@ mod details;
 mod matchers;
 mod resources;
 
-pub(super) use compose::docker_compose_panel;
-pub(super) use containers::docker_containers_panel;
-pub(super) use controls::{docker_confirm_panel, docker_overview_strip, docker_tab_bar};
+pub(super) use compose::{DockerComposePanelState, docker_compose_panel};
+pub(super) use containers::{DockerContainersPanelState, docker_containers_panel};
+pub(super) use controls::{
+    DockerTabBarLabels, docker_confirm_panel, docker_overview_strip, docker_tab_bar,
+};
 pub(super) use details::docker_details_panel;
 pub(super) use matchers::{
     docker_compose_project_matches, docker_container_matches, docker_image_matches,

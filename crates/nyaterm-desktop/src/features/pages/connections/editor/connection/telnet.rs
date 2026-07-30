@@ -7,14 +7,14 @@ use gpui::{
 };
 
 use crate::features::{ConnectionEditorToggle, NyaTermApp};
-use crate::models::{
-    ConnectionEditorField, ConnectionEditorMenu, ConnectionEditorState, ConnectionEditorTelnetTab,
-};
+use crate::models::{ConnectionEditorField, ConnectionEditorMenu, ConnectionEditorTelnetTab};
 
 use super::super::super::list::{
-    ConnectionEditorChoice, ConnectionEditorFields, connection_editor_select, editor_field,
+    ConnectionEditorChoice, ConnectionEditorRenderContext, connection_editor_select, editor_field,
     editor_stepper_field, required,
 };
+
+use super::ConnectionEditorSectionContext;
 
 fn telnet_segment_tab(
     palette: crate::theme::ThemePalette,
@@ -130,14 +130,17 @@ fn telnet_switch_row(
 }
 
 pub(super) fn connection_editor_telnet_section(
-    palette: crate::theme::ThemePalette,
-    editor: &ConnectionEditorState,
+    section: ConnectionEditorSectionContext<'_>,
     backspace_options: Vec<ConnectionEditorChoice>,
-    open_menu: Option<ConnectionEditorMenu>,
-    language: &str,
-    fields: &ConnectionEditorFields,
     cx: &mut Context<NyaTermApp>,
 ) -> gpui::Div {
+    let ConnectionEditorSectionContext {
+        palette,
+        editor,
+        active_menu: open_menu,
+        language,
+        fields,
+    } = section;
     let tr = |key: &'static str| crate::i18n::text(language, key);
     let backspace_value = match editor.backspace_mode.as_str() {
         "ctrl-h" | "bs" | "ctrl_h" => tr("dialog.backspaceCtrlH"),
@@ -263,18 +266,24 @@ pub(super) fn connection_editor_telnet_section(
                                         .grid_cols(2)
                                         .gap_2()
                                         .child(connection_editor_select(
-                                            palette,
+                                            ConnectionEditorRenderContext {
+                                                palette,
+                                                fields,
+                                                cx,
+                                            },
                                             "connection-editor-telnet-backspace",
                                             tr("dialog.backspaceMode"),
                                             backspace_value,
                                             ConnectionEditorMenu::Backspace,
                                             open_menu == Some(ConnectionEditorMenu::Backspace),
                                             backspace_options,
-                                            fields,
-                                            cx,
                                         ))
                                         .child(connection_editor_select(
-                                            palette,
+                                            ConnectionEditorRenderContext {
+                                                palette,
+                                                fields,
+                                                cx,
+                                            },
                                             "connection-editor-telnet-enter-mode",
                                             tr("dialog.telnetEnterMode"),
                                             enter_value,
@@ -282,8 +291,6 @@ pub(super) fn connection_editor_telnet_section(
                                             open_menu
                                                 == Some(ConnectionEditorMenu::TelnetEnterMode),
                                             enter_options,
-                                            fields,
-                                            cx,
                                         )),
                                 ),
                         )

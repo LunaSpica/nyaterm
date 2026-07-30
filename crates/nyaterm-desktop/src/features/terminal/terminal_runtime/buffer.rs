@@ -4,7 +4,7 @@ use std::fmt::Write as _;
 use std::time::{Duration, Instant};
 
 use gpui::{ClipboardItem, Context, Timer};
-use nyaterm_terminal::{TerminalEffects, TerminalSnapshot};
+use nyaterm_terminal::{TerminalClipboardLoad, TerminalEffects, TerminalSnapshot};
 
 use crate::features::NyaTermApp;
 use crate::features::formatting::trim_terminal_output_to;
@@ -13,8 +13,8 @@ use crate::features::terminal::terminal_surface_entity::{
     terminal_snapshot_covers_display_offset, terminal_surface_paint_count,
 };
 use crate::models::{
-    MainMode, TERMINAL_UI_OUTPUT_TAIL_CAP, TerminalFrameActionLinks, TerminalFrameBufferTextEvent,
-    TerminalFrameEvent, TerminalFrameOutputEvent, TerminalFrameOutputSubmission,
+    MainMode, TERMINAL_UI_OUTPUT_TAIL_CAP, TerminalFrameActionLinks, TerminalFrameEvent,
+    TerminalFrameOutputEvent, TerminalFrameOutputSubmission, TerminalFrameParts,
     TerminalFrameSearchEvent, TerminalFrameSearchKey, TerminalFrameSnapshotEvent,
     TerminalSearchMode, TerminalViewState, TerminalWindowNode, WorkspacePaneNode,
     append_terminal_ui_output_tail, terminal_action_link_matcher_key,
@@ -601,10 +601,10 @@ impl NyaTermApp {
         self.fill_pending_terminal_frame_events(max_events);
 
         while drained_events < max_events {
-            if self.terminal.view.pending_frame_events.is_empty() {
-                if self.fill_pending_terminal_frame_events(max_events) == 0 {
-                    break;
-                }
+            if self.terminal.view.pending_frame_events.is_empty()
+                && self.fill_pending_terminal_frame_events(max_events) == 0
+            {
+                break;
             }
 
             let (session_event_backlog_active, session_event_queued_output_bytes) =
@@ -715,9 +715,6 @@ impl NyaTermApp {
                 self.apply_terminal_snapshot_frame(snapshot, cx)
             }
             TerminalFrameEvent::Search(search) => self.apply_terminal_search_frame(search),
-            TerminalFrameEvent::BufferText(buffer) => {
-                TerminalFrameApplyResult::chrome(self.apply_terminal_buffer_text_frame(buffer, cx))
-            }
         }
     }
 
@@ -774,15 +771,15 @@ impl NyaTermApp {
             });
             if is_visible {
                 if let Some(snapshot) = snapshot {
-                    view.apply_terminal_frame_parts(
-                        &visible_text,
+                    view.apply_terminal_frame_parts(TerminalFrameParts {
+                        visible_text: &visible_text,
                         snapshot,
                         action_links,
                         protocol_state,
                         accepted_bytes,
                         skipped_output_bytes,
                         revision,
-                    );
+                    });
                 } else {
                     // Priority lag: visible surface without a snapshot yet — keep
                     // protocol/revision current and request a live snapshot.
@@ -879,9 +876,7 @@ impl NyaTermApp {
         if session_id.is_empty() || self.shell.main_mode() != MainMode::Workspace {
             return false;
         }
-        self.visible_terminal_session_ids()
-            .iter()
-            .any(|id| *id == session_id)
+        self.visible_terminal_session_ids().contains(&session_id)
     }
 
     pub(in crate::features) fn visible_terminal_session_ids(&self) -> Vec<&str> {
@@ -1028,8 +1023,11 @@ impl NyaTermApp {
         }
         TerminalFrameApplyResult {
             chrome_dirty: false,
-            surface_notify: should_paint
-                .then(|| TerminalSurfaceFrameNotify::Full(frame.session_id)),
+            surface_notify: if should_paint {
+                Some(TerminalSurfaceFrameNotify::Full(frame.session_id))
+            } else {
+                None
+            },
         }
     }
 
@@ -1091,43 +1089,11 @@ impl NyaTermApp {
             self.session.active_id(),
             self.terminal.search.open,
             self.terminal.search.mode,
-            current_search_key.as_ref(),
-            &result_key,
+            TerminalFrameSearchKeys {
+                current: current_search_key.as_ref(),
+                result: &result_key,
+            },
         )
-    }
-
-    fn apply_terminal_buffer_text_frame(
-        &mut self,
-        frame: TerminalFrameBufferTextEvent,
-        cx: &mut Context<Self>,
-    ) -> bool {
-        let text_bytes = frame.text.len();
-        if frame.text.trim().is_empty() {
-            self.shell
-                .set_status("terminal buffer is empty".to_string());
-        } else {
-            let char_count = frame.text.chars().count();
-            cx.write_to_clipboard(ClipboardItem::new_string(frame.text));
-            self.shell.set_status(if frame.truncated {
-                format!("copied terminal buffer tail ({char_count} chars)")
-            } else {
-                format!("copied terminal buffer ({char_count} chars)")
-            });
-        }
-        if frame.process_duration >= Duration::from_millis(20)
-            && self.should_log_slow_diagnostic("terminal_frame_buffer_text", Instant::now())
-        {
-            tracing::warn!(
-                diagnostic = "terminal_frame_buffer_text",
-                session_id = %frame.session_id,
-                request_id = %frame.request_id,
-                text_bytes,
-                truncated = frame.truncated,
-                process_ms = frame.process_duration.as_millis(),
-                "slow terminal frame buffer text"
-            );
-        }
-        true
     }
 
     pub(in crate::features) fn enforce_terminal_scrollback_limit(&mut self) {
@@ -1179,7 +1145,7 @@ impl NyaTermApp {
         session_id: Option<&str>,
         text: &str,
         mark_unread: bool,
-        mut cx: Option<&mut Context<Self>>,
+        cx: Option<&mut Context<Self>>,
     ) {
         if text.is_empty() {
             return;
@@ -1248,21 +1214,21 @@ impl NyaTermApp {
             &mut clipboard_store,
             &mut clipboard_loads,
             &mut pending_pty_writes,
-            cx.as_deref_mut(),
+            cx,
         );
 
         if let Some(session_id) = session_id {
             self.write_terminal_pty_responses(session_id, pending_pty_writes);
         }
-        if shell_started || shell_finished {
-            if let Some(session_id) = session_id {
-                self.apply_shell_integration_edges(
-                    session_id,
-                    shell_started,
-                    shell_finished,
-                    shell_running,
-                );
-            }
+        if (shell_started || shell_finished)
+            && let Some(session_id) = session_id
+        {
+            self.apply_shell_integration_edges(
+                session_id,
+                shell_started,
+                shell_finished,
+                shell_running,
+            );
         }
         if let (Some(session_id), Some(cwd)) = (session_id, pending_cwd) {
             self.apply_session_cwd(session_id, cwd);
@@ -1324,7 +1290,7 @@ impl NyaTermApp {
     fn handle_terminal_clipboard_effects(
         &mut self,
         clipboard_store: &mut Option<String>,
-        clipboard_loads: &mut Vec<std::sync::Arc<dyn Fn(&str) -> String + Sync + Send + 'static>>,
+        clipboard_loads: &mut Vec<TerminalClipboardLoad>,
         pending_pty_writes: &mut Vec<Vec<u8>>,
         cx: Option<&mut Context<Self>>,
     ) {
@@ -1361,15 +1327,6 @@ impl NyaTermApp {
 struct TerminalFrameApplyResult {
     chrome_dirty: bool,
     surface_notify: Option<TerminalSurfaceFrameNotify>,
-}
-
-impl TerminalFrameApplyResult {
-    fn chrome(chrome_dirty: bool) -> Self {
-        Self {
-            chrome_dirty,
-            surface_notify: None,
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1809,8 +1766,9 @@ mod frame_event_queue_tests {
 
     use crate::models::TerminalProtocolState;
     use crate::models::{
-        TerminalFrameActionLinks, TerminalFrameBufferTextEvent, TerminalFrameEvent,
-        TerminalFrameOutputEvent, TerminalFrameSnapshotEvent, TerminalViewState,
+        TerminalFrameActionLinks, TerminalFrameEvent, TerminalFrameOutputEvent,
+        TerminalFrameSearchEvent, TerminalFrameSearchKey, TerminalFrameSearchResult,
+        TerminalFrameSnapshotEvent, TerminalViewState,
     };
     use nyaterm_core::ActionLinksMatcherSettings;
 
@@ -1853,12 +1811,20 @@ mod frame_event_queue_tests {
         })
     }
 
-    fn buffer_text_frame(session_id: &str) -> TerminalFrameEvent {
-        TerminalFrameEvent::BufferText(TerminalFrameBufferTextEvent {
+    fn search_frame(session_id: &str) -> TerminalFrameEvent {
+        TerminalFrameEvent::Search(TerminalFrameSearchEvent {
             session_id: session_id.to_string(),
-            request_id: "request".to_string(),
-            text: "buffer".to_string(),
-            truncated: false,
+            result: TerminalFrameSearchResult {
+                key: TerminalFrameSearchKey {
+                    query: "query".to_string(),
+                    case_sensitive: false,
+                    regex: false,
+                    whole_word: false,
+                    limit: 100,
+                },
+                revision: 1,
+                matches: Ok(Vec::new()),
+            },
             process_duration: Duration::ZERO,
         })
     }
@@ -2335,7 +2301,7 @@ mod frame_event_queue_tests {
     fn terminal_frame_apply_does_not_coalesce_across_non_output_events() {
         let mut events = VecDeque::from([
             output_frame("a", 1),
-            buffer_text_frame("a"),
+            search_frame("a"),
             output_frame("a", 2),
         ]);
 
@@ -2350,7 +2316,7 @@ mod frame_event_queue_tests {
             TerminalFrameEvent::Output(frame) if frame.revision == 1
         ));
         assert_eq!(second_coalesced, 0);
-        assert!(matches!(second[0], TerminalFrameEvent::BufferText(_)));
+        assert!(matches!(second[0], TerminalFrameEvent::Search(_)));
         assert_eq!(third_coalesced, 0);
         assert!(matches!(
             &third[0],
@@ -2362,7 +2328,7 @@ mod frame_event_queue_tests {
     #[test]
     fn terminal_frame_apply_skips_deferred_events_under_output_pressure() {
         let mut events = VecDeque::from([
-            buffer_text_frame("a"),
+            search_frame("a"),
             output_frame("a", 1),
             output_frame("a", 2),
         ]);
@@ -2378,7 +2344,7 @@ mod frame_event_queue_tests {
         assert_eq!(events.len(), 1);
         assert!(matches!(
             events.front(),
-            Some(TerminalFrameEvent::BufferText(_))
+            Some(TerminalFrameEvent::Search(_))
         ));
 
         let (pressure_frames, _) = pop_terminal_frame_events_for_apply(&mut events, &[], false);
@@ -2388,7 +2354,7 @@ mod frame_event_queue_tests {
         let (idle_frames, _) = pop_terminal_frame_events_for_apply(&mut events, &[], true);
         assert!(matches!(
             idle_frames.first(),
-            Some(TerminalFrameEvent::BufferText(_))
+            Some(TerminalFrameEvent::Search(_))
         ));
         assert!(events.is_empty());
     }
@@ -2396,7 +2362,7 @@ mod frame_event_queue_tests {
     #[test]
     fn terminal_frame_apply_keeps_snapshots_critical_under_output_pressure() {
         let mut events = VecDeque::from([
-            buffer_text_frame("a"),
+            search_frame("a"),
             snapshot_frame("a", 4),
             output_frame("a", 1),
         ]);
@@ -2412,7 +2378,7 @@ mod frame_event_queue_tests {
         assert_eq!(events.len(), 2);
         assert!(matches!(
             events.front(),
-            Some(TerminalFrameEvent::BufferText(_))
+            Some(TerminalFrameEvent::Search(_))
         ));
 
         let (frames, coalesced) = pop_terminal_frame_events_for_apply(&mut events, &[], false);
@@ -2425,7 +2391,7 @@ mod frame_event_queue_tests {
         ));
         assert!(matches!(
             events.front(),
-            Some(TerminalFrameEvent::BufferText(_))
+            Some(TerminalFrameEvent::Search(_))
         ));
     }
 
@@ -2520,7 +2486,7 @@ fn limit_osc52_clipboard_reply_text(text: &str) -> std::borrow::Cow<'_, str> {
 }
 
 fn queue_osc52_clipboard_load_replies(
-    clipboard_loads: &mut Vec<std::sync::Arc<dyn Fn(&str) -> String + Sync + Send + 'static>>,
+    clipboard_loads: &mut Vec<TerminalClipboardLoad>,
     clipboard_text: &str,
     pending_pty_writes: &mut Vec<Vec<u8>>,
 ) {
@@ -2576,15 +2542,14 @@ fn terminal_search_frame_apply_result(
     active_session_id: Option<&str>,
     search_open: bool,
     search_mode: TerminalSearchMode,
-    current_search_key: Option<&TerminalFrameSearchKey>,
-    result_key: &TerminalFrameSearchKey,
+    keys: TerminalFrameSearchKeys<'_>,
 ) -> TerminalFrameApplyResult {
     let updates_active_buffer_search = is_current_revision
         && is_visible
         && search_open
         && search_mode == TerminalSearchMode::Buffer
         && active_session_id == Some(session_id.as_str())
-        && current_search_key == Some(result_key);
+        && keys.current == Some(keys.result);
     TerminalFrameApplyResult {
         // Search-bar count/status is shell chrome. Terminal highlights are owned
         // by the surface entity, so notify both only for the visible active
@@ -2594,6 +2559,11 @@ fn terminal_search_frame_apply_result(
         surface_notify: updates_active_buffer_search
             .then_some(TerminalSurfaceFrameNotify::Full(session_id)),
     }
+}
+
+struct TerminalFrameSearchKeys<'a> {
+    current: Option<&'a TerminalFrameSearchKey>,
+    result: &'a TerminalFrameSearchKey,
 }
 
 fn terminal_window_node_visible_tab_ids(root: &TerminalWindowNode) -> Vec<&str> {
@@ -2620,222 +2590,4 @@ fn collect_terminal_window_node_visible_tab_ids<'a>(
 }
 
 #[cfg(test)]
-mod tests {
-    use crate::models::WorkspaceSplitDirection;
-    use crate::models::{TerminalFrameSearchKey, TerminalSearchMode, TerminalWindowNode};
-    use nyaterm_terminal::TerminalEffects;
-    use std::sync::Arc;
-
-    use super::{
-        MAX_OSC52_REPLY_CHARS, TERMINAL_FRAME_EVENT_DRAIN_BATCH,
-        TERMINAL_FRAME_EVENT_DRAIN_WALL_BUDGET, TERMINAL_FRAME_INPUT_WAKE_EVENT_DRAIN_BATCH,
-        TERMINAL_FRAME_INPUT_WAKE_EVENT_DRAIN_WALL_BUDGET, TerminalSurfaceFrameNotify,
-        limit_osc52_clipboard_reply_text, queue_osc52_clipboard_load_replies,
-        terminal_effects_need_ui_apply, terminal_local_log_text,
-        terminal_output_frame_needs_chrome_notify, terminal_output_frame_surface_notify,
-        terminal_search_frame_apply_result, terminal_window_node_visible_tab_ids,
-    };
-
-    fn search_key(query: &str) -> TerminalFrameSearchKey {
-        TerminalFrameSearchKey {
-            query: query.to_string(),
-            case_sensitive: false,
-            regex: false,
-            whole_word: false,
-            limit: 1000,
-        }
-    }
-
-    #[test]
-    fn terminal_frame_input_wake_budget_prioritizes_ui_latency() {
-        assert!(TERMINAL_FRAME_INPUT_WAKE_EVENT_DRAIN_BATCH < TERMINAL_FRAME_EVENT_DRAIN_BATCH);
-        assert!(
-            TERMINAL_FRAME_INPUT_WAKE_EVENT_DRAIN_WALL_BUDGET
-                < TERMINAL_FRAME_EVENT_DRAIN_WALL_BUDGET
-        );
-    }
-
-    #[test]
-    fn osc52_clipboard_reply_limit_borrows_small_text() {
-        let text = "small clipboard";
-        let limited = limit_osc52_clipboard_reply_text(text);
-        assert!(matches!(limited, std::borrow::Cow::Borrowed(_)));
-        assert_eq!(limited.as_ref(), text);
-    }
-
-    #[test]
-    fn osc52_clipboard_reply_limit_preserves_utf8_boundary() {
-        let text = format!("{}界", "好".repeat(MAX_OSC52_REPLY_CHARS));
-        let limited = limit_osc52_clipboard_reply_text(&text);
-        assert!(matches!(limited, std::borrow::Cow::Owned(_)));
-        assert_eq!(limited.chars().count(), MAX_OSC52_REPLY_CHARS);
-        assert!(limited.chars().all(|ch| ch == '好'));
-    }
-
-    #[test]
-    fn osc52_clipboard_load_reply_uses_empty_text_when_clipboard_unavailable() {
-        let mut formatters: Vec<Arc<dyn Fn(&str) -> String + Sync + Send + 'static>> =
-            vec![Arc::new(|text| format!("reply:{text}"))];
-        let mut replies = Vec::new();
-
-        queue_osc52_clipboard_load_replies(&mut formatters, "", &mut replies);
-
-        assert!(formatters.is_empty());
-        assert_eq!(replies, vec![b"reply:".to_vec()]);
-    }
-
-    #[test]
-    fn terminal_effects_skip_ui_apply_for_plain_output() {
-        assert!(!terminal_effects_need_ui_apply(&TerminalEffects::default()));
-
-        let mut effects = TerminalEffects::default();
-        effects.bell = true;
-        assert!(terminal_effects_need_ui_apply(&effects));
-
-        let mut effects = TerminalEffects::default();
-        effects.pty_write.push(b"\x1b[6n".to_vec());
-        assert!(terminal_effects_need_ui_apply(&effects));
-
-        let mut effects = TerminalEffects::default();
-        effects.shell_command_finished = true;
-        assert!(terminal_effects_need_ui_apply(&effects));
-    }
-
-    #[test]
-    fn terminal_output_frame_notify_tracks_visible_unread_or_effects() {
-        assert!(!terminal_output_frame_needs_chrome_notify(false, false));
-        assert!(!terminal_output_frame_needs_chrome_notify(false, false));
-        assert!(terminal_output_frame_needs_chrome_notify(true, false));
-        assert!(terminal_output_frame_needs_chrome_notify(false, true));
-        assert_eq!(
-            terminal_output_frame_surface_notify(true, 0, 8),
-            Some(TerminalSurfaceFrameNotify::Full(String::new()))
-        );
-        assert_eq!(
-            terminal_output_frame_surface_notify(true, 5, 8),
-            Some(TerminalSurfaceFrameNotify::ScrollPositionOnly(String::new()))
-        );
-        assert_eq!(terminal_output_frame_surface_notify(false, 0, 8), None);
-        assert_eq!(terminal_output_frame_surface_notify(true, 0, 0), None);
-    }
-
-    #[test]
-    fn terminal_search_frame_notify_targets_active_visible_buffer_query() {
-        let key = search_key("needle");
-
-        let result = terminal_search_frame_apply_result(
-            "active".to_string(),
-            true,
-            true,
-            Some("active"),
-            true,
-            TerminalSearchMode::Buffer,
-            Some(&key),
-            &key,
-        );
-
-        assert!(result.chrome_dirty);
-        assert_eq!(
-            result.surface_notify,
-            Some(TerminalSurfaceFrameNotify::Full("active".to_string()))
-        );
-    }
-
-    #[test]
-    fn terminal_search_frame_notify_ignores_non_visible_or_stale_queries() {
-        let key = search_key("needle");
-        let other = search_key("other");
-
-        for result in [
-            terminal_search_frame_apply_result(
-                "active".to_string(),
-                false,
-                true,
-                Some("active"),
-                true,
-                TerminalSearchMode::Buffer,
-                Some(&key),
-                &key,
-            ),
-            terminal_search_frame_apply_result(
-                "active".to_string(),
-                true,
-                false,
-                Some("active"),
-                true,
-                TerminalSearchMode::Buffer,
-                Some(&key),
-                &key,
-            ),
-            terminal_search_frame_apply_result(
-                "background".to_string(),
-                true,
-                true,
-                Some("active"),
-                true,
-                TerminalSearchMode::Buffer,
-                Some(&key),
-                &key,
-            ),
-            terminal_search_frame_apply_result(
-                "active".to_string(),
-                true,
-                true,
-                Some("active"),
-                true,
-                TerminalSearchMode::History,
-                Some(&key),
-                &key,
-            ),
-            terminal_search_frame_apply_result(
-                "active".to_string(),
-                true,
-                true,
-                Some("active"),
-                true,
-                TerminalSearchMode::Buffer,
-                Some(&other),
-                &key,
-            ),
-        ] {
-            assert!(!result.chrome_dirty);
-            assert_eq!(result.surface_notify, None);
-        }
-    }
-
-    #[test]
-    fn terminal_window_visible_tab_ids_returns_leaf_active_tabs() {
-        let root = TerminalWindowNode::Split {
-            id: "split".to_string(),
-            direction: WorkspaceSplitDirection::Vertical,
-            ratio_percent: 50,
-            first: Box::new(TerminalWindowNode::Leaf {
-                id: "left".to_string(),
-                tab_ids: vec!["a".to_string(), "b".to_string()],
-                active_tab_id: Some("b".to_string()),
-            }),
-            second: Box::new(TerminalWindowNode::Leaf {
-                id: "right".to_string(),
-                tab_ids: vec!["c".to_string()],
-                active_tab_id: Some("c".to_string()),
-            }),
-        };
-
-        assert_eq!(terminal_window_node_visible_tab_ids(&root), vec!["b", "c"]);
-    }
-
-    #[test]
-    fn terminal_local_log_text_preserves_framing_but_escapes_controls() {
-        let text = "\n# started evil\x1b]52;c;AAAA\x07\tpath\r\n";
-        let escaped = terminal_local_log_text(text);
-
-        assert_eq!(
-            escaped.as_ref(),
-            "\n# started evil\\x1b]52;c;AAAA\\u{7}\tpath\r\n"
-        );
-        assert!(!escaped.contains('\x1b'));
-        assert!(!escaped.contains('\x07'));
-        assert!(escaped.starts_with('\n'));
-        assert!(escaped.ends_with("\r\n"));
-    }
-}
+mod tests;

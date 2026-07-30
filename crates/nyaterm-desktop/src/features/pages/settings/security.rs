@@ -45,11 +45,6 @@ impl NyaTermApp {
             "settings.masterPassword"
         });
         let master_input_desc = self.tr("settings.masterPasswordDesc");
-        let master_input_placeholder = self.tr(if has_stored_master_password {
-            "settings.masterPasswordNewPlaceholder"
-        } else {
-            "settings.masterPasswordPlaceholder"
-        });
         let session_security_label = self.tr("settings.sessionSecurity");
         let screen_lock_label = self.tr("settings.enableScreenLock");
         let screen_lock_desc = self.tr("settings.enableScreenLockDesc");

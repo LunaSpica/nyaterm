@@ -1,5 +1,5 @@
 use super::{
-    SmartSplitMode, SplitEdge, TabDockEdge, TabDockZone, TerminalWindowNode, WorkspacePaneNode,
+    SmartSplitMode, TabDockEdge, TabDockZone, TerminalWindowNode, WorkspacePaneNode,
     WorkspaceSplitDirection,
 };
 
@@ -55,13 +55,38 @@ mod workspace_pane_tests {
 
 #[cfg(test)]
 mod terminal_window_tests {
-    use super::{SmartSplitMode, SplitEdge, TerminalWindowNode, WorkspaceSplitDirection};
+    use super::{
+        SmartSplitMode, TabDockEdge, TabDockZone, TerminalWindowNode, WorkspaceSplitDirection,
+    };
+
+    fn split_tab_to_edge(
+        root: &mut TerminalWindowNode,
+        tab_id: &str,
+        direction: WorkspaceSplitDirection,
+        before: bool,
+    ) -> bool {
+        let Some(target_leaf_id) = root.first_leaf_id() else {
+            return false;
+        };
+        let edge = match (direction, before) {
+            (WorkspaceSplitDirection::Vertical, true) => TabDockEdge::Left,
+            (WorkspaceSplitDirection::Vertical, false) => TabDockEdge::Right,
+            (WorkspaceSplitDirection::Horizontal, true) => TabDockEdge::Top,
+            (WorkspaceSplitDirection::Horizontal, false) => TabDockEdge::Bottom,
+        };
+        root.dock_tab(tab_id, &target_leaf_id, TabDockZone::Edge(edge))
+    }
 
     #[test]
     fn split_tab_creates_two_leaves() {
         let mut root =
             TerminalWindowNode::leaf(vec!["a".into(), "b".into(), "c".into()], Some("a".into()));
-        assert!(root.split_tab_to_edge("b", WorkspaceSplitDirection::Vertical, SplitEdge::After,));
+        assert!(split_tab_to_edge(
+            &mut root,
+            "b",
+            WorkspaceSplitDirection::Vertical,
+            false,
+        ));
         assert!(matches!(root, TerminalWindowNode::Split { .. }));
         let tabs = root.collect_tab_ids();
         assert_eq!(tabs.len(), 3);
@@ -72,10 +97,11 @@ mod terminal_window_tests {
     #[test]
     fn remove_tab_collapses_empty_leaf() {
         let mut root = TerminalWindowNode::leaf(vec!["a".into(), "b".into()], Some("a".into()));
-        assert!(root.split_tab_to_edge(
+        assert!(split_tab_to_edge(
+            &mut root,
             "b",
             WorkspaceSplitDirection::Horizontal,
-            SplitEdge::Before,
+            true,
         ));
         let next = root.remove_tab("b").expect("remaining leaf");
         assert!(matches!(next, TerminalWindowNode::Leaf { .. }));
@@ -96,7 +122,12 @@ mod terminal_window_tests {
     #[test]
     fn move_tab_to_other_leaf() {
         let mut root = TerminalWindowNode::leaf(vec!["a".into(), "b".into()], Some("a".into()));
-        assert!(root.split_tab_to_edge("b", WorkspaceSplitDirection::Vertical, SplitEdge::After,));
+        assert!(split_tab_to_edge(
+            &mut root,
+            "b",
+            WorkspaceSplitDirection::Vertical,
+            false,
+        ));
         let leaves = root.leaf_ids();
         assert_eq!(leaves.len(), 2);
         // move a into b's leaf
@@ -121,10 +152,14 @@ mod terminal_window_tests {
 
     #[test]
     fn dock_tab_to_edge_splits_target() {
-        use super::{TabDockEdge, TabDockZone};
         let mut root = TerminalWindowNode::leaf(vec!["a".into(), "b".into()], Some("a".into()));
         // Create two leaves first via split
-        assert!(root.split_tab_to_edge("b", WorkspaceSplitDirection::Vertical, SplitEdge::After,));
+        assert!(split_tab_to_edge(
+            &mut root,
+            "b",
+            WorkspaceSplitDirection::Vertical,
+            false,
+        ));
         let leaves = root.leaf_ids();
         assert_eq!(leaves.len(), 2);
         let a_leaf = leaves
@@ -185,7 +220,12 @@ mod terminal_window_tests {
         use nyaterm_core::RestorableTerminalWindowNode;
         let ordered = vec!["a".into(), "b".into(), "c".into()];
         let mut root = TerminalWindowNode::leaf(ordered.clone(), Some("a".into()));
-        assert!(root.split_tab_to_edge("b", WorkspaceSplitDirection::Vertical, SplitEdge::After,));
+        assert!(split_tab_to_edge(
+            &mut root,
+            "b",
+            WorkspaceSplitDirection::Vertical,
+            false,
+        ));
         let layout = root.serialize_layout(&ordered).expect("layout");
         match &layout {
             RestorableTerminalWindowNode::Split { .. } => {}
@@ -216,7 +256,12 @@ mod terminal_window_tests {
             root.collect_tab_ids(),
             vec!["c".to_string(), "a".to_string(), "b".to_string()]
         );
-        assert!(root.split_tab_to_edge("b", WorkspaceSplitDirection::Vertical, SplitEdge::After,));
+        assert!(split_tab_to_edge(
+            &mut root,
+            "b",
+            WorkspaceSplitDirection::Vertical,
+            false,
+        ));
         // Move c next to b (other leaf)
         assert!(root.place_tab_before("c", "b"));
         assert!(root.contains_tab("c") && root.contains_tab("b"));

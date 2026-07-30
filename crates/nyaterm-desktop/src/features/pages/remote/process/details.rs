@@ -269,7 +269,7 @@ pub(in crate::features::pages::remote) fn process_signal_confirm_panel(
 ) -> impl IntoElement {
     let description = labels
         .description
-        .replace("{{signal}}", &confirm.signal)
+        .replace("{{signal}}", confirm.signal)
         .replace("{{pid}}", &confirm.pid.to_string())
         .replace(
             "{{command}}",

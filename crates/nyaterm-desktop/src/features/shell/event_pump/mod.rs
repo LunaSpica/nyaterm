@@ -6,9 +6,9 @@ use gpui::{Context, Timer, Window};
 use crate::features::shell::event_pump::helpers::{
     PENDING_SESSION_STATUS_INTERVAL, PENDING_SESSION_STILL_CONNECTING_AFTER,
     PendingSessionAuthWait, RUNTIME_IDLE_TICK_INTERVAL, RUNTIME_QUIET_TICK_INTERVAL,
-    SLOW_DIAGNOSTIC_THROTTLE, TITLE_DRAG_ACTIVE_HOLD, TRANSFER_AUTO_SYNC_CWD_INTERVAL_SECONDS,
-    connect_settle_active, connect_settle_deadline, pending_session_status_message,
-    remote_refresh_due, runtime_output_pressure_active_from_counts,
+    RuntimeOutputPressureCounts, SLOW_DIAGNOSTIC_THROTTLE, TITLE_DRAG_ACTIVE_HOLD,
+    TRANSFER_AUTO_SYNC_CWD_INTERVAL_SECONDS, connect_settle_active, connect_settle_deadline,
+    pending_session_status_message, remote_refresh_due, runtime_output_pressure_active_from_counts,
     runtime_tick_interval_for_pressure, runtime_ui_notify_allowed,
     terminal_cell_metrics_refresh_needed, terminal_input_idle_remaining_delay,
     viewport_change_terminal_session_ids, window_geometry_churn_active,
@@ -108,7 +108,7 @@ impl NyaTermApp {
         // state coalesces a burst of keys into one deferred drain.
         let app = cx.entity();
         cx.defer(move |cx| {
-            let _ = app.update(cx, |this, cx| {
+            app.update(cx, |this, cx| {
                 this.drain_terminal_input_wake(cx);
             });
         });
@@ -410,18 +410,18 @@ impl NyaTermApp {
 
     pub(in crate::features) fn runtime_output_pressure_active(&self) -> bool {
         let frame = self.terminal.frame_queue_metrics();
-        runtime_output_pressure_active_from_counts(
-            self.shell.runtime.session_event_backlog_active,
-            self.shell.runtime.session_event_queued_output_bytes,
-            self.session.pending_event_count(),
-            self.session.event_bridge_queued_event_count()
+        runtime_output_pressure_active_from_counts(RuntimeOutputPressureCounts {
+            session_event_backlog_active: self.shell.runtime.session_event_backlog_active,
+            session_event_queued_output_bytes: self.shell.runtime.session_event_queued_output_bytes,
+            pending_session_events: self.session.pending_event_count(),
+            bridge_queued_events: self.session.event_bridge_queued_event_count()
                 + self.session.event_bridge_source_queued_event_count(),
-            self.session.event_bridge_queued_output_bytes()
+            bridge_queued_output_bytes: self.session.event_bridge_queued_output_bytes()
                 + self.session.event_bridge_source_queued_output_bytes(),
-            frame.pending_event_count,
-            frame.event_count,
-            frame.output_bytes,
-        )
+            pending_terminal_frame_events: frame.pending_event_count,
+            queued_terminal_frame_events: frame.event_count,
+            queued_terminal_frame_output_bytes: frame.output_bytes,
+        })
     }
 
     pub(in crate::features) fn runtime_quiet_tick_allowed(&self) -> bool {

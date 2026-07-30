@@ -51,24 +51,61 @@ pub(in crate::features::pages::remote) fn process_sort_button(
         .on_click(on_click)
 }
 
-pub(in crate::features::pages::remote) fn process_table_row(
-    palette: ThemePalette,
-    menu_bg: gpui::Rgba,
+pub(in crate::features::pages::remote) fn process_table_row<
+    Select,
+    Menu,
+    CopyPid,
+    CopyCommand,
+    Term,
+    Hup,
+    Stop,
+    Cont,
+    Kill,
+>(
+    presentation: ProcessTableRowPresentation,
     process: &RemoteProcess,
-    mode: ProcessDisplayMode,
-    labels: ProcessTableLabels,
-    selected: bool,
-    menu_open: bool,
-    on_select: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    on_menu: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    on_copy_pid: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    on_copy_command: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    on_term: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    on_hup: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    on_stop: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    on_cont: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    on_kill: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> gpui::Div {
+    actions: ProcessTableRowActions<
+        Select,
+        Menu,
+        CopyPid,
+        CopyCommand,
+        Term,
+        Hup,
+        Stop,
+        Cont,
+        Kill,
+    >,
+) -> gpui::Div
+where
+    Select: Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    Menu: Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    CopyPid: Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    CopyCommand: Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    Term: Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    Hup: Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    Stop: Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    Cont: Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    Kill: Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+{
+    let ProcessTableRowPresentation {
+        palette,
+        menu_bg,
+        mode,
+        labels,
+        selected,
+        menu_open,
+    } = presentation;
+    let ProcessTableRowActions {
+        on_select,
+        on_menu,
+        on_copy_pid,
+        on_copy_command,
+        on_term,
+        on_hup,
+        on_stop,
+        on_cont,
+        on_kill,
+    } = actions;
     // Tauri ProcessManager: left accent + mode-aware columns (compact/narrow/medium/wide).
     let accent = if process.cpu_percent >= 80.0 {
         rgb(palette.danger)
@@ -311,6 +348,38 @@ pub(in crate::features::pages::remote) struct ProcessTableLabels {
     pub signal_stop: &'static str,
     pub signal_cont: &'static str,
     pub signal_kill: &'static str,
+}
+
+#[derive(Clone, Copy)]
+pub(in crate::features::pages::remote) struct ProcessTableRowPresentation {
+    pub palette: ThemePalette,
+    pub menu_bg: gpui::Rgba,
+    pub mode: ProcessDisplayMode,
+    pub labels: ProcessTableLabels,
+    pub selected: bool,
+    pub menu_open: bool,
+}
+
+pub(in crate::features::pages::remote) struct ProcessTableRowActions<
+    Select,
+    Menu,
+    CopyPid,
+    CopyCommand,
+    Term,
+    Hup,
+    Stop,
+    Cont,
+    Kill,
+> {
+    pub on_select: Select,
+    pub on_menu: Menu,
+    pub on_copy_pid: CopyPid,
+    pub on_copy_command: CopyCommand,
+    pub on_term: Term,
+    pub on_hup: Hup,
+    pub on_stop: Stop,
+    pub on_cont: Cont,
+    pub on_kill: Kill,
 }
 
 fn process_menu_item(

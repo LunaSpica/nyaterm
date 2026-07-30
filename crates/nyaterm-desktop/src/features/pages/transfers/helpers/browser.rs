@@ -25,18 +25,19 @@ pub(in crate::features::pages::transfers) fn transfer_browser_search_status(
 
 pub(in crate::features::pages::transfers) fn sort_header_cell(
     palette: ThemePalette,
-    header_bg: Rgba,
     column: TransferBrowserSortColumn,
     width: Pixels,
-    active_column: TransferBrowserSortColumn,
-    direction: TransferBrowserSortDirection,
-    resizing_column: Option<TransferBrowserSortColumn>,
+    state: TransferBrowserSortHeaderState,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-    let is_active = column == active_column;
-    let is_resizing = resizing_column == Some(column);
+    let is_active = column == state.active_column;
+    let is_resizing = state.resizing_column == Some(column);
     let label = if is_active {
-        format!("{} {}", column.label().to_uppercase(), direction.marker())
+        format!(
+            "{} {}",
+            column.label().to_uppercase(),
+            state.direction.marker()
+        )
     } else {
         column.label().to_uppercase()
     };
@@ -59,7 +60,7 @@ pub(in crate::features::pages::transfers) fn sort_header_cell(
         .bg(if is_active {
             rgba((palette.primary << 8) | 0x14)
         } else {
-            header_bg
+            state.header_bg
         })
         .text_size(px(10.))
         .font_weight(FontWeight(800.))
@@ -103,6 +104,14 @@ pub(in crate::features::pages::transfers) fn sort_header_cell(
                     }),
                 ),
         )
+}
+
+#[derive(Clone, Copy)]
+pub(in crate::features::pages::transfers) struct TransferBrowserSortHeaderState {
+    pub header_bg: Rgba,
+    pub active_column: TransferBrowserSortColumn,
+    pub direction: TransferBrowserSortDirection,
+    pub resizing_column: Option<TransferBrowserSortColumn>,
 }
 
 pub(in crate::features::pages::transfers) fn compare_transfer_browser_entries(

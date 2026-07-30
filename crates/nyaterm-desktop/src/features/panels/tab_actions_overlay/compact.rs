@@ -1,40 +1,79 @@
-use gpui::{
-    App, ClickEvent, Context, IntoElement, KeyDownEvent, MouseButton, SharedString, Window, div,
-    prelude::*, px, rgb, rgba, svg,
+use super::{
+    TabActionsMenuGeometry, TabActionsSubmenuGeometry, clamp_tab_actions_position,
+    tab_actions_submenu_position,
 };
-use nyaterm_transport::SessionInfo;
-
-use super::{clamp_tab_actions_position, tab_actions_submenu_position};
 use crate::features::NyaTermApp;
 use crate::features::view_widgets::{tab_menu_item, tab_menu_item_enabled, tab_menu_separator};
 use crate::models::{StartupCommandAction, TabActionsSubmenu, WorkspaceSplitDirection};
 use crate::theme::ThemePalette;
+use gpui::{
+    App, ClickEvent, Context, IntoElement, KeyDownEvent, MouseButton, SharedString, Window, div,
+    prelude::*, px, rgb, rgba, svg,
+};
 
 use super::super::TAB_PRESET_COLORS;
 
+#[derive(Clone, Copy)]
+pub(super) struct TabActionCapabilities {
+    pub can_copy_ssh: bool,
+    pub can_spawn_session: bool,
+    pub can_multiplex: bool,
+    pub can_reconnect: bool,
+    pub can_disconnect: bool,
+    pub can_use_ai: bool,
+    pub can_session_info: bool,
+    pub can_close_inactive: bool,
+    pub can_close_right: bool,
+    pub can_unsplit: bool,
+}
+
+pub(super) struct CompactTabActionsMenuState {
+    pub session_id: String,
+    pub active_color: Option<u32>,
+    pub capabilities: TabActionCapabilities,
+    pub visible_for_ai: String,
+    pub buffer_for_ai: String,
+}
+
+struct TabActionsSubmenuItem {
+    id: &'static str,
+    icon_path: &'static str,
+    label: &'static str,
+    enabled: bool,
+    active: bool,
+}
+
+struct TabActionsSubmenuHandlers<OnHover, OnClick> {
+    on_hover: OnHover,
+    on_click: OnClick,
+}
+
 impl NyaTermApp {
-    pub(in crate::features) fn compact_tab_actions_menu(
+    pub(super) fn compact_tab_actions_menu(
         &mut self,
         palette: ThemePalette,
-        session_id: String,
-        _session: &SessionInfo,
-        _display_name: &str,
-        active_color: Option<u32>,
-        can_copy_ssh: bool,
-        can_spawn_session: bool,
-        can_multiplex: bool,
-        can_reconnect: bool,
-        can_disconnect: bool,
-        can_use_ai: bool,
-        can_session_info: bool,
-        can_close_inactive: bool,
-        can_close_right: bool,
-        can_unsplit: bool,
-        visible_for_ai: String,
-        buffer_for_ai: String,
-        _session_count: usize,
+        state: CompactTabActionsMenuState,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
+        let CompactTabActionsMenuState {
+            session_id,
+            active_color,
+            capabilities:
+                TabActionCapabilities {
+                    can_copy_ssh,
+                    can_spawn_session,
+                    can_multiplex,
+                    can_reconnect,
+                    can_disconnect,
+                    can_use_ai,
+                    can_session_info,
+                    can_close_inactive,
+                    can_close_right,
+                    can_unsplit,
+                },
+            visible_for_ai,
+            buffer_for_ai,
+        } = state;
         let (viewport_w, viewport_h) = self.shell.viewport_size();
         let menu_max_height = (viewport_h - 16.).clamp(160., 440.);
         let (menu_x, menu_y) = if let Some((x, y)) = self.session.dialog_tab_actions_anchor() {
@@ -110,14 +149,17 @@ impl NyaTermApp {
                 TabActionsSubmenu::Ai => 252.,
             };
             let (submenu_x, submenu_y) = tab_actions_submenu_position(
-                menu_x,
-                menu_y,
-                240.,
-                submenu_width,
-                trigger_offset,
-                submenu_height,
-                viewport_w,
-                viewport_h,
+                TabActionsMenuGeometry {
+                    x: menu_x,
+                    y: menu_y,
+                    width: 240.,
+                },
+                TabActionsSubmenuGeometry {
+                    width: submenu_width,
+                    trigger_offset,
+                    height: submenu_height,
+                },
+                (viewport_w, viewport_h),
             );
             let mut panel = div()
                 .id(SharedString::from("tab-actions-submenu"))
@@ -306,19 +348,23 @@ impl NyaTermApp {
                     .on_click(|_, _, cx| cx.stop_propagation())
                     .child(tab_actions_submenu_item(
                         palette,
-                        "tab-ctx-set-color",
-                        "icons/menu/palette.svg",
-                        self.tr("tabCtx.setColor"),
-                        true,
-                        active_submenu == Some(TabActionsSubmenu::Color),
-                        cx.listener(|this, hovered: &bool, _, cx| {
-                            if *hovered {
+                        TabActionsSubmenuItem {
+                            id: "tab-ctx-set-color",
+                            icon_path: "icons/menu/palette.svg",
+                            label: self.tr("tabCtx.setColor"),
+                            enabled: true,
+                            active: active_submenu == Some(TabActionsSubmenu::Color),
+                        },
+                        TabActionsSubmenuHandlers {
+                            on_hover: cx.listener(|this, hovered: &bool, _, cx| {
+                                if *hovered {
+                                    this.open_tab_actions_submenu(TabActionsSubmenu::Color, cx);
+                                }
+                            }),
+                            on_click: cx.listener(|this, _, _, cx| {
                                 this.open_tab_actions_submenu(TabActionsSubmenu::Color, cx);
-                            }
-                        }),
-                        cx.listener(|this, _, _, cx| {
-                            this.open_tab_actions_submenu(TabActionsSubmenu::Color, cx);
-                        }),
+                            }),
+                        },
                     ))
                     .child(tab_menu_item(
                         palette,
@@ -387,21 +433,31 @@ impl NyaTermApp {
                     ))
                     .child(tab_actions_submenu_item(
                         palette,
-                        "tab-ctx-ssh-advanced",
-                        "icons/menu/split.svg",
-                        self.tr("tabCtx.sshAdvanced"),
-                        can_multiplex,
-                        active_submenu == Some(TabActionsSubmenu::SshAdvanced),
-                        cx.listener(move |this, hovered: &bool, _, cx| {
-                            if *hovered && can_multiplex {
-                                this.open_tab_actions_submenu(TabActionsSubmenu::SshAdvanced, cx);
-                            }
-                        }),
-                        cx.listener(move |this, _, _, cx| {
-                            if can_multiplex {
-                                this.open_tab_actions_submenu(TabActionsSubmenu::SshAdvanced, cx);
-                            }
-                        }),
+                        TabActionsSubmenuItem {
+                            id: "tab-ctx-ssh-advanced",
+                            icon_path: "icons/menu/split.svg",
+                            label: self.tr("tabCtx.sshAdvanced"),
+                            enabled: can_multiplex,
+                            active: active_submenu == Some(TabActionsSubmenu::SshAdvanced),
+                        },
+                        TabActionsSubmenuHandlers {
+                            on_hover: cx.listener(move |this, hovered: &bool, _, cx| {
+                                if *hovered && can_multiplex {
+                                    this.open_tab_actions_submenu(
+                                        TabActionsSubmenu::SshAdvanced,
+                                        cx,
+                                    );
+                                }
+                            }),
+                            on_click: cx.listener(move |this, _, _, cx| {
+                                if can_multiplex {
+                                    this.open_tab_actions_submenu(
+                                        TabActionsSubmenu::SshAdvanced,
+                                        cx,
+                                    );
+                                }
+                            }),
+                        },
                     ))
                     .child(tab_menu_item_enabled(
                         palette,
@@ -438,19 +494,23 @@ impl NyaTermApp {
                     ))
                     .child(tab_actions_submenu_item(
                         palette,
-                        "tab-ctx-ai",
-                        "icons/ai.svg",
-                        self.tr("ai.title"),
-                        true,
-                        active_submenu == Some(TabActionsSubmenu::Ai),
-                        cx.listener(|this, hovered: &bool, _, cx| {
-                            if *hovered {
+                        TabActionsSubmenuItem {
+                            id: "tab-ctx-ai",
+                            icon_path: "icons/ai.svg",
+                            label: self.tr("ai.title"),
+                            enabled: true,
+                            active: active_submenu == Some(TabActionsSubmenu::Ai),
+                        },
+                        TabActionsSubmenuHandlers {
+                            on_hover: cx.listener(|this, hovered: &bool, _, cx| {
+                                if *hovered {
+                                    this.open_tab_actions_submenu(TabActionsSubmenu::Ai, cx);
+                                }
+                            }),
+                            on_click: cx.listener(|this, _, _, cx| {
                                 this.open_tab_actions_submenu(TabActionsSubmenu::Ai, cx);
-                            }
-                        }),
-                        cx.listener(|this, _, _, cx| {
-                            this.open_tab_actions_submenu(TabActionsSubmenu::Ai, cx);
-                        }),
+                            }),
+                        },
                     ))
                     .child(tab_menu_separator(palette))
                     .child(tab_menu_item_enabled(
@@ -577,23 +637,30 @@ impl NyaTermApp {
     }
 }
 
-fn tab_actions_submenu_item(
+fn tab_actions_submenu_item<OnHover, OnClick>(
     palette: ThemePalette,
-    id: impl Into<String>,
-    icon_path: &'static str,
-    label: impl Into<String>,
-    enabled: bool,
-    active: bool,
-    on_hover: impl Fn(&bool, &mut Window, &mut App) + 'static,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
+    item: TabActionsSubmenuItem,
+    handlers: TabActionsSubmenuHandlers<OnHover, OnClick>,
+) -> impl IntoElement
+where
+    OnHover: Fn(&bool, &mut Window, &mut App) + 'static,
+    OnClick: Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+{
+    let TabActionsSubmenuItem {
+        id,
+        icon_path,
+        label,
+        enabled,
+        active,
+    } = item;
+    let TabActionsSubmenuHandlers { on_hover, on_click } = handlers;
     let text_color = if enabled {
         rgb(palette.text)
     } else {
         rgb(palette.text_dimmed)
     };
     div()
-        .id(SharedString::from(id.into()))
+        .id(SharedString::from(id))
         .h(px(28.))
         .px_3()
         .flex()
@@ -615,7 +682,7 @@ fn tab_actions_submenu_item(
                 .path(icon_path)
                 .text_color(text_color),
         )
-        .child(div().min_w_0().flex_1().child(label.into()))
+        .child(div().min_w_0().flex_1().child(label))
         .child(
             svg()
                 .size(px(12.))

@@ -4,17 +4,17 @@ use gpui::Context;
 use nyaterm_core::{AiExecutionProfile, ConnectionStore, uuid};
 use nyaterm_transport::{
     LocalSessionConfig, SerialSessionConfig, SessionInfo, SessionKind, SessionManager,
-    SshMultiplexHandle, SshSessionConfig, TelnetSessionConfig, open_ssh_multiplex_handle,
+    SshSessionConfig, TelnetSessionConfig, open_ssh_multiplex_handle,
 };
 
 use super::super::state::{failed_session_start_display_name, pending_session_start_display_name};
-use super::PendingSessionStartRegistration;
+use super::{MultiplexSshStartRequest, PendingSessionStartRegistration};
 use crate::features::formatting::{session_kind_label, short_id, ssh_multiplex_key};
 use crate::features::{
-    NyaTermApp, PendingSessionStart, SessionStartEventRequest, SessionStartResult,
-    SessionStartSuccess,
+    NyaTermApp, PendingSessionStart, SavedConnectionStartOptions, SessionStartEventRequest,
+    SessionStartResult, SessionStartSuccess,
 };
-use crate::models::{NavItem, SessionLaunchConfig, SessionRuntimeMetadata, StartupCommandRequest};
+use crate::models::{NavItem, SessionLaunchConfig, SessionRuntimeMetadata};
 
 const SESSION_START_EVENT_DRAIN_LIMIT: usize = 8;
 
@@ -141,14 +141,17 @@ impl NyaTermApp {
         launch_config: SessionLaunchConfig,
         source_connection_id: Option<String>,
         ai_execution_profile: AiExecutionProfile,
-        custom_name: Option<String>,
-        tab_color: Option<u32>,
-        after_session_id: Option<String>,
-        insert_index: Option<usize>,
-        seed_output: Option<String>,
-        startup_command: Option<StartupCommandRequest>,
+        options: SavedConnectionStartOptions,
         cx: &mut Context<Self>,
     ) {
+        let SavedConnectionStartOptions {
+            custom_name,
+            tab_color,
+            after_session_id,
+            insert_index,
+            seed_output,
+            startup_command,
+        } = options;
         let kind = session_kind_for_launch_config(&launch_config);
         let request_id = self.register_pending_session_start(
             PendingSessionStartRegistration {
@@ -200,14 +203,17 @@ impl NyaTermApp {
         mut config: SshSessionConfig,
         source_connection_id: Option<String>,
         ai_execution_profile: AiExecutionProfile,
-        custom_name: Option<String>,
-        tab_color: Option<u32>,
-        after_session_id: Option<String>,
-        insert_index: Option<usize>,
-        seed_output: Option<String>,
-        startup_command: Option<StartupCommandRequest>,
+        options: SavedConnectionStartOptions,
         cx: &mut Context<Self>,
     ) {
+        let SavedConnectionStartOptions {
+            custom_name,
+            tab_color,
+            after_session_id,
+            insert_index,
+            seed_output,
+            startup_command,
+        } = options;
         config.deferred_pty = true;
         let geometry_session_hint = after_session_id
             .as_deref()
@@ -223,7 +229,7 @@ impl NyaTermApp {
         let request_id = self.register_pending_session_start(
             PendingSessionStartRegistration {
                 connection_name: connection_name.clone(),
-                launch_config: Some(SessionLaunchConfig::Ssh(config.clone())),
+                launch_config: Some(SessionLaunchConfig::Ssh(Box::new(config.clone()))),
                 kind: SessionKind::Ssh,
                 ai_execution_profile,
                 custom_name,
@@ -250,7 +256,7 @@ impl NyaTermApp {
                 .map(|info| SessionStartSuccess {
                     session_info: info,
                     multiplex_handle: None,
-                    launch_config: Some(SessionLaunchConfig::Ssh(config)),
+                    launch_config: Some(SessionLaunchConfig::Ssh(Box::new(config))),
                 })
                 .map_err(|error| error.to_string());
             let worker_finished_at = Instant::now();
@@ -267,17 +273,25 @@ impl NyaTermApp {
 
     pub(in crate::features) fn begin_background_multiplex_ssh_start(
         &mut self,
-        connection_name: String,
-        mut config: SshSessionConfig,
-        source_connection_id: Option<String>,
-        ai_execution_profile: AiExecutionProfile,
-        custom_name: Option<String>,
-        tab_color: Option<u32>,
-        after_session_id: Option<String>,
-        startup_command: Option<StartupCommandRequest>,
-        existing_multiplex: Option<SshMultiplexHandle>,
+        request: MultiplexSshStartRequest,
         cx: &mut Context<Self>,
     ) {
+        let MultiplexSshStartRequest {
+            connection_name,
+            mut config,
+            source_connection_id,
+            ai_execution_profile,
+            options,
+            existing_multiplex,
+        } = request;
+        let SavedConnectionStartOptions {
+            custom_name,
+            tab_color,
+            after_session_id,
+            insert_index,
+            seed_output,
+            startup_command,
+        } = options;
         config.deferred_pty = true;
         let geometry_session_hint = after_session_id
             .as_deref()
@@ -294,14 +308,14 @@ impl NyaTermApp {
         let request_id = self.register_pending_session_start(
             PendingSessionStartRegistration {
                 connection_name: connection_name.clone(),
-                launch_config: Some(SessionLaunchConfig::Ssh(config.clone())),
+                launch_config: Some(SessionLaunchConfig::Ssh(Box::new(config.clone()))),
                 kind: SessionKind::Ssh,
                 ai_execution_profile,
                 custom_name,
                 tab_color,
                 after_session_id,
-                insert_index: None,
-                seed_output: None,
+                insert_index,
+                seed_output,
                 startup_command,
                 multiplex_key: Some(multiplex_key.clone()),
                 source_connection_id,
@@ -328,7 +342,7 @@ impl NyaTermApp {
                 Ok(SessionStartSuccess {
                     session_info: info,
                     multiplex_handle: Some(multiplex),
-                    launch_config: Some(SessionLaunchConfig::Ssh(config)),
+                    launch_config: Some(SessionLaunchConfig::Ssh(Box::new(config))),
                 })
             })();
             let worker_finished_at = Instant::now();
@@ -452,7 +466,7 @@ impl NyaTermApp {
                         })
                         .unwrap_or_else(|| launch_config_for_session_info(&session_info));
                     let ssh_config = match &launch_config {
-                        SessionLaunchConfig::Ssh(config) => Some(config.clone()),
+                        SessionLaunchConfig::Ssh(config) => Some(config.as_ref().clone()),
                         _ => None,
                     };
                     let ssh_multiplex_key = pending
@@ -536,13 +550,13 @@ impl NyaTermApp {
                         self.session
                             .move_session_to_index(&session_id, insert_index);
                     }
-                    if let Some(stale_id) = reconnect_session_id {
-                        if stale_id != session_id {
-                            self.migrate_reconnected_session_state(&stale_id, &session_id);
-                            self.remove_session_state(&stale_id);
-                            self.persist_workspace_pane_layout();
-                            self.persist_terminal_window_layout();
-                        }
+                    if let Some(stale_id) = reconnect_session_id
+                        && stale_id != session_id
+                    {
+                        self.migrate_reconnected_session_state(&stale_id, &session_id);
+                        self.remove_session_state(&stale_id);
+                        self.persist_workspace_pane_layout();
+                        self.persist_terminal_window_layout();
                     }
                     let should_activate = self.session.start.complete_success(
                         pending
@@ -679,7 +693,7 @@ fn create_session_from_launch_config(
 ) -> Result<SessionInfo, nyaterm_transport::SessionError> {
     match launch_config {
         SessionLaunchConfig::Local(config) => session_manager.create_local_session(config),
-        SessionLaunchConfig::Ssh(config) => session_manager.create_ssh_session(config),
+        SessionLaunchConfig::Ssh(config) => session_manager.create_ssh_session(*config),
         SessionLaunchConfig::Telnet(config) => session_manager.create_telnet_session(config),
         SessionLaunchConfig::Serial(config) => session_manager.create_serial_session(config),
     }
@@ -697,7 +711,7 @@ fn launch_config_for_session_info(info: &SessionInfo) -> SessionLaunchConfig {
             pixel_width: 0,
             pixel_height: 0,
         }),
-        SessionKind::Ssh => SessionLaunchConfig::Ssh(SshSessionConfig::default()),
+        SessionKind::Ssh => SessionLaunchConfig::Ssh(Box::default()),
         SessionKind::Telnet | SessionKind::RawTcp => {
             SessionLaunchConfig::Telnet(TelnetSessionConfig {
                 name: info.name.clone(),

@@ -331,11 +331,7 @@ impl NyaTermApp {
                 palette,
                 "connection-context-delete",
                 "icons/net/delete.svg",
-                if selected_count > 1 {
-                    self.tr("savedConnections.delete")
-                } else {
-                    self.tr("savedConnections.delete")
-                },
+                self.tr("savedConnections.delete"),
                 true,
                 cx.listener(move |this, _, _, cx| {
                     this.close_connection_context_menus(cx);

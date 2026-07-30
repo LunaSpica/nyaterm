@@ -159,11 +159,10 @@ impl NyaTermApp {
         if let Ok(store) = ConnectionStore::open_with_portable_key_path(
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
-        ) {
-            if let Ok(config) = store.load_keyword_highlights() {
-                self.settings.replace_keyword_config(config);
-                self.forget_text_inputs("keyword.highlight.");
-            }
+        ) && let Ok(config) = store.load_keyword_highlights()
+        {
+            self.settings.replace_keyword_config(config);
+            self.forget_text_inputs("keyword.highlight.");
         }
     }
 
@@ -329,11 +328,9 @@ impl NyaTermApp {
                 self.shell
                     .set_status("keyword rule edit cancelled".to_string());
                 cx.notify();
-                return;
             }
             "tab" => {
                 self.focus_keyword_highlight_field(rule_id, field.next(), window, cx);
-                return;
             }
             "enter" if field == KeywordHighlightEditorField::Name => {
                 self.focus_keyword_highlight_field(
@@ -342,13 +339,11 @@ impl NyaTermApp {
                     window,
                     cx,
                 );
-                return;
             }
             "enter" => {
                 self.settings.clear_keyword_highlight_edit();
                 window.focus(self.settings.keyword_highlight_focus());
                 self.save_keyword_highlights(cx);
-                return;
             }
             _ => {}
         }
@@ -421,6 +416,18 @@ fn normalize_keyword_highlight_color(value: &str) -> String {
     normalized
 }
 
+fn read_keyword_highlight_import_text(path: &std::path::Path) -> Result<String, String> {
+    let metadata = std::fs::metadata(path).map_err(|error| error.to_string())?;
+    if metadata.len() > MAX_KEYWORD_HIGHLIGHT_IMPORT_BYTES {
+        return Err(format!(
+            "import file is too large to import ({} bytes > {} bytes)",
+            metadata.len(),
+            MAX_KEYWORD_HIGHLIGHT_IMPORT_BYTES
+        ));
+    }
+    std::fs::read_to_string(path).map_err(|error| error.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::{normalize_keyword_highlight_color, parse_keyword_highlight_text_input_id};
@@ -446,16 +453,4 @@ mod tests {
         assert_eq!(normalize_keyword_highlight_color("A2-c4_FF9"), "#a2c4ff");
         assert_eq!(normalize_keyword_highlight_color(""), "#");
     }
-}
-
-fn read_keyword_highlight_import_text(path: &std::path::Path) -> Result<String, String> {
-    let metadata = std::fs::metadata(path).map_err(|error| error.to_string())?;
-    if metadata.len() > MAX_KEYWORD_HIGHLIGHT_IMPORT_BYTES {
-        return Err(format!(
-            "import file is too large to import ({} bytes > {} bytes)",
-            metadata.len(),
-            MAX_KEYWORD_HIGHLIGHT_IMPORT_BYTES
-        ));
-    }
-    std::fs::read_to_string(path).map_err(|error| error.to_string())
 }

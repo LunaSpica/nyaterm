@@ -56,18 +56,6 @@ pub(crate) enum NetworkTunnelEditorField {
     TargetPort,
 }
 
-impl NetworkTunnelEditorField {
-    pub(crate) fn next(self, dynamic: bool) -> Self {
-        match self {
-            Self::Name => Self::ListenPort,
-            Self::ListenPort if dynamic => Self::Name,
-            Self::ListenPort => Self::TargetHost,
-            Self::TargetHost => Self::TargetPort,
-            Self::TargetPort => Self::Name,
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct NetworkTunnelEditorState {
     pub(crate) id: Option<String>,
@@ -99,27 +87,6 @@ pub(crate) enum NetworkProxyEditorField {
     Command,
     Username,
     Password,
-}
-
-impl NetworkProxyEditorField {
-    pub(crate) fn next(self, command: bool) -> Self {
-        if command {
-            return match self {
-                Self::Name => Self::Command,
-                Self::Command => Self::Name,
-                _ => Self::Name,
-            };
-        }
-
-        match self {
-            Self::Name => Self::Host,
-            Self::Host => Self::Port,
-            Self::Port => Self::Username,
-            Self::Username => Self::Password,
-            Self::Password => Self::Name,
-            Self::Command => Self::Name,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

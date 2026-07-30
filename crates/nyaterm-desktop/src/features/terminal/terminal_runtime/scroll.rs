@@ -2,8 +2,7 @@ use std::time::{Duration, Instant};
 
 use gpui::{Context, KeyDownEvent, Timer};
 use nyaterm_core::{
-    TerminalInputState, TerminalResizeGeometry, TerminalViewportInsets,
-    terminal_resize_geometry_for_size_with_insets,
+    TerminalInputState, TerminalResizeGeometry,
     terminal_resize_geometry_for_size_with_insets_and_scale, terminal_snapped_cell_height,
 };
 use nyaterm_transport::SessionKind;
@@ -11,7 +10,7 @@ use nyaterm_transport::SessionKind;
 use crate::features::NyaTermApp;
 use crate::models::TerminalPerformanceOverlay;
 
-use super::view_io::terminal_visual_display_offset;
+use super::view_io::{TerminalMouseReportRequest, terminal_visual_display_offset};
 
 pub(in crate::features) fn terminal_scroll_track_ratio(
     bounds: gpui::Bounds<gpui::Pixels>,
@@ -251,23 +250,6 @@ pub(in crate::features) struct TerminalScrollWheelStateResult {
     pub handled: bool,
 }
 
-pub(in crate::features) fn terminal_resize_geometry_for_bounds(
-    bounds: gpui::Bounds<gpui::Pixels>,
-    cell_width: f32,
-    cell_height: f32,
-    padding: f32,
-    gutter_width: f32,
-) -> TerminalResizeGeometry {
-    terminal_resize_geometry_for_size_with_insets(
-        f32::from(bounds.size.width),
-        f32::from(bounds.size.height),
-        cell_width,
-        cell_height,
-        TerminalViewportInsets::symmetric(padding),
-        gutter_width,
-    )
-}
-
 fn terminal_should_apply_session_cwd(
     changed: bool,
     active_session: bool,
@@ -411,13 +393,15 @@ impl NyaTermApp {
             let mut reported = false;
             for _ in 0..steps {
                 if self.maybe_send_mouse_report_for_session(
-                    session_id,
-                    button,
-                    cell.col as u16,
-                    cell.row as u16,
-                    true,
-                    false,
-                    modifiers,
+                    TerminalMouseReportRequest {
+                        session_id,
+                        button,
+                        col: cell.col as u16,
+                        row: cell.row as u16,
+                        press: true,
+                        motion: false,
+                        modifiers,
+                    },
                     cx,
                 ) {
                     reported = true;
@@ -839,7 +823,8 @@ impl NyaTermApp {
         raw_lines: f32,
     ) -> i32 {
         let key = terminal_scroll_key(session_id);
-        let delta_lines = {
+
+        {
             let residual = self
                 .terminal
                 .view
@@ -847,8 +832,7 @@ impl NyaTermApp {
                 .entry(key.clone())
                 .or_insert(0.0);
             terminal_scroll_delta_lines_from_raw(residual, raw_lines)
-        };
-        delta_lines
+        }
     }
 
     pub(in crate::features) fn terminal_local_scroll_delta_lines_for_session(
@@ -924,7 +908,6 @@ impl NyaTermApp {
     }
 
     /// Insert quoted local file paths into the active session (Tauri Local drop).
-
     pub(in crate::features) fn handle_terminal_external_file_drop(
         &mut self,
         session_id: String,
@@ -1029,7 +1012,6 @@ impl NyaTermApp {
     }
 
     /// Apply OSC 133 command-start / command-finish edges (Tauri shell integration).
-
     pub(in crate::features) fn apply_shell_integration_edges(
         &mut self,
         session_id: &str,
@@ -1182,7 +1164,6 @@ impl NyaTermApp {
 
     /// Map a vertical pointer position (0..=1 top→bottom of track) to scroll_offset.
     /// Top of track = oldest history (max offset); bottom = live (0).
-
     pub(in crate::features) fn set_terminal_scroll_from_track_ratio_for_session(
         &mut self,
         session_id: Option<&str>,
@@ -1314,12 +1295,12 @@ impl NyaTermApp {
 
     pub(in crate::features) fn active_terminal_page_rows(&self) -> usize {
         // Prefer live screen rows when available; fall back to classic 24-row page.
-        if let Some(session_id) = self.session.active_id() {
-            if let Some(view) = self.terminal.view.views.get(session_id) {
-                let rows = view.viewport_rows_for_ui();
-                if rows > 0 {
-                    return rows;
-                }
+        if let Some(session_id) = self.session.active_id()
+            && let Some(view) = self.terminal.view.views.get(session_id)
+        {
+            let rows = view.viewport_rows_for_ui();
+            if rows > 0 {
+                return rows;
             }
         }
         let rows = self.terminal_snapshot_for_session(None, 0).row_count();
@@ -1356,13 +1337,6 @@ impl NyaTermApp {
             })
             .or(self.terminal.layout.surface_bounds)?;
         Some(self.terminal_resize_geometry_for_bounds_for_session(bounds, session_id))
-    }
-
-    pub(in crate::features) fn terminal_resize_geometry_for_bounds(
-        &self,
-        bounds: gpui::Bounds<gpui::Pixels>,
-    ) -> TerminalResizeGeometry {
-        self.terminal_resize_geometry_for_bounds_for_session(bounds, self.session.active_id())
     }
 
     pub(in crate::features) fn terminal_resize_geometry_for_bounds_for_session(
@@ -1511,7 +1485,6 @@ impl NyaTermApp {
 
     /// Shift+PageUp/PageDown/Home/End (and Ctrl+Shift+Up/Down) navigate local scrollback
     /// without sending CSI sequences to the remote PTY — common terminal emulator UX.
-
     pub(in crate::features) fn handle_terminal_scroll_key(
         &mut self,
         event: &KeyDownEvent,
@@ -1572,14 +1545,16 @@ mod tests {
     use std::time::{Duration, Instant};
 
     use gpui::{Bounds, point, px, size};
-    use nyaterm_core::TerminalResizeGeometry;
+    use nyaterm_core::{
+        TerminalResizeGeometry, TerminalViewportInsets,
+        terminal_resize_geometry_for_size_with_insets,
+    };
 
     use super::{
         TERMINAL_SCROLL_POSITION_NOTIFY_DELAY, TERMINAL_SCROLLBAR_DRAG_NOTIFY_DELAY,
         TerminalScrollVisualState, terminal_display_offset_from_state,
         terminal_fractional_scroll_prefetch_offset, terminal_local_scroll_delta_lines_from_state,
-        terminal_resize_geometry_for_bounds, terminal_scroll_delta_lines_from_raw,
-        terminal_scroll_needs_text_first_repaint,
+        terminal_scroll_delta_lines_from_raw, terminal_scroll_needs_text_first_repaint,
         terminal_scroll_offset_reanchored_for_scrollback_growth,
         terminal_scroll_offset_state_needs_update, terminal_scroll_predictive_prefetch_offset,
         terminal_scroll_residual_clamped_for_offset, terminal_scroll_should_consume_raw_lines,
@@ -1588,6 +1563,23 @@ mod tests {
         terminal_should_apply_session_cwd, terminal_user_scroll_idle_remaining_delay,
         terminal_visual_scroll_active_for_state,
     };
+
+    fn terminal_resize_geometry_for_bounds(
+        bounds: Bounds<gpui::Pixels>,
+        cell_width: f32,
+        cell_height: f32,
+        padding: f32,
+        gutter_width: f32,
+    ) -> TerminalResizeGeometry {
+        terminal_resize_geometry_for_size_with_insets(
+            f32::from(bounds.size.width),
+            f32::from(bounds.size.height),
+            cell_width,
+            cell_height,
+            TerminalViewportInsets::symmetric(padding),
+            gutter_width,
+        )
+    }
 
     #[test]
     fn terminal_cwd_sync_applies_only_to_an_active_enabled_session() {

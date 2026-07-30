@@ -520,9 +520,8 @@ impl ShellFeatureState {
     }
 
     pub(in crate::features) fn close_title_menus(&mut self) -> bool {
-        let changed = self.chrome.title_menu_open.take().is_some()
-            | self.chrome.title_menu_submenu.take().is_some();
-        changed
+        self.chrome.title_menu_open.take().is_some()
+            | self.chrome.title_menu_submenu.take().is_some()
     }
 
     pub(in crate::features) fn close_root_menus(&mut self) -> bool {
@@ -668,9 +667,8 @@ impl ShellFeatureState {
     }
 
     pub(in crate::features) fn clear_last_connect_failure(&mut self) -> bool {
-        let changed = self.chrome.last_connect_failure_name.take().is_some()
-            | self.chrome.last_connect_failure_error.take().is_some();
-        changed
+        self.chrome.last_connect_failure_name.take().is_some()
+            | self.chrome.last_connect_failure_error.take().is_some()
     }
 
     pub(in crate::features) fn workspace_split(&self) -> Option<&WorkspaceSplitState> {

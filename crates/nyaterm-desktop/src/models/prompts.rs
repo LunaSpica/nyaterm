@@ -194,12 +194,6 @@ impl AiInputField {
     pub(crate) fn from_input_key(key: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|field| field.input_key() == key)
     }
-
-    /// Whether this field holds a secret, and so is masked and never shown back.
-    pub(crate) fn is_secret(self) -> bool {
-        let key = self.input_key();
-        key.contains("api-key")
-    }
 }
 
 impl TranslateInputField {
@@ -297,27 +291,6 @@ impl AiActionEditorField {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum AiCredentialEditorField {
-    Name,
-    BaseUrl,
-    ApiKey,
-}
-
-impl AiCredentialEditorField {
-    pub(crate) fn next(self, builtin: bool) -> Self {
-        if builtin {
-            Self::ApiKey
-        } else {
-            match self {
-                Self::Name => Self::BaseUrl,
-                Self::BaseUrl => Self::ApiKey,
-                Self::ApiKey => Self::Name,
-            }
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TranslateInputField {
     TargetLanguage,
     Text,
@@ -404,8 +377,6 @@ pub(crate) enum RecordingPathPromptResult {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ConfigPathPromptKind {
     Export,
-    Import,
-    PortableExport,
     PortableImport,
     EncryptedPortableExport,
     EncryptedPortableImport,
@@ -424,8 +395,6 @@ pub(crate) enum ConfigPathPromptResult {
 pub(crate) enum SnapshotPasswordPromptKind {
     Export,
     Import,
-    CloudPush,
-    CloudPull,
     CloudForcePush,
     CloudForcePull,
     CloudProviderPush,

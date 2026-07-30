@@ -5,7 +5,8 @@ use crate::models::DockerTab;
 use crate::widgets::empty_panel;
 
 use super::docker::{
-    DockerLabels, docker_compose_panel, docker_compose_project_matches, docker_confirm_panel,
+    DockerComposePanelState, DockerContainersPanelState, DockerLabels, DockerRenderContext,
+    DockerTabBarLabels, docker_compose_panel, docker_compose_project_matches, docker_confirm_panel,
     docker_container_matches, docker_containers_panel, docker_details_panel, docker_image_matches,
     docker_images_panel, docker_network_matches, docker_networks_panel, docker_overview_strip,
     docker_tab_bar, docker_volume_matches, docker_volumes_panel,
@@ -171,18 +172,23 @@ impl NyaTermApp {
 
         let menu_bg = self.shell_surface_color(palette.surface);
         let dialog_bg = self.shell_surface_color(palette.bg);
+        let render_context = DockerRenderContext {
+            palette,
+            menu_bg,
+            labels,
+        };
         let docker_content = match active_tab {
             DockerTab::Containers => docker_containers_panel(
-                palette,
-                menu_bg,
-                true,
-                self.session.active_ssh_config().is_some(),
-                overview.available,
-                &filtered_containers,
-                query.is_empty(),
-                docker.container_menu_id.as_deref(),
-                docker.list_offset,
-                labels,
+                render_context,
+                DockerContainersPanelState {
+                    has_snapshot: true,
+                    has_session: self.session.active_ssh_config().is_some(),
+                    docker_available: overview.available,
+                    filtered_containers: &filtered_containers,
+                    query_empty: query.is_empty(),
+                    open_menu_id: docker.container_menu_id.as_deref(),
+                    list_offset: docker.list_offset,
+                },
                 cx,
             )
             .into_any_element(),
@@ -211,14 +217,14 @@ impl NyaTermApp {
             )
             .into_any_element(),
             DockerTab::Compose => docker_compose_panel(
-                palette,
-                menu_bg,
-                &filtered_compose_projects,
-                &docker.compose_expanded,
-                &docker.compose_services,
-                &docker.compose_service_errors,
-                docker.compose_menu_id.as_deref(),
-                labels,
+                render_context,
+                DockerComposePanelState {
+                    projects: &filtered_compose_projects,
+                    expanded_projects: &docker.compose_expanded,
+                    services_by_project: &docker.compose_services,
+                    service_errors: &docker.compose_service_errors,
+                    open_menu_id: docker.compose_menu_id.as_deref(),
+                },
                 cx,
             )
             .into_any_element(),
@@ -260,18 +266,19 @@ impl NyaTermApp {
                     .child(div().flex_1().min_w_0().child(docker_search_input)),
             )
             .child(docker_tab_bar(
-                palette,
-                menu_bg,
+                render_context,
                 active_tab,
                 &overview,
-                [
-                    self.tr("dockerManager.containers").to_string(),
-                    self.tr("dockerManager.images").to_string(),
-                    self.tr("dockerManager.volumes").to_string(),
-                    self.tr("dockerManager.networks").to_string(),
-                    self.tr("dockerManager.compose").to_string(),
-                ],
-                self.tr("common.more").to_string(),
+                DockerTabBarLabels {
+                    tabs: [
+                        self.tr("dockerManager.containers").to_string(),
+                        self.tr("dockerManager.images").to_string(),
+                        self.tr("dockerManager.volumes").to_string(),
+                        self.tr("dockerManager.networks").to_string(),
+                        self.tr("dockerManager.compose").to_string(),
+                    ],
+                    more: self.tr("common.more").to_string(),
+                },
                 self.shell.right_panel_width(),
                 docker.tab_menu_open,
                 cx,

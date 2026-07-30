@@ -88,13 +88,11 @@ impl NyaTermApp {
                     .key_char
                     .as_deref()
                     .filter(|input| !input.is_empty())
-                {
-                    if self
+                    && self
                         .connection_state
                         .apply_group_editor_name_key(keystroke.key.as_str(), Some(input))
-                    {
-                        cx.notify();
-                    }
+                {
+                    cx.notify();
                 }
             }
             _ => {}

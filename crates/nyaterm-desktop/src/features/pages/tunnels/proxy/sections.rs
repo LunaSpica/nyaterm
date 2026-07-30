@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use gpui::prelude::*;
 use gpui::{Context, FontWeight, IntoElement, div, px, rgb, rgba, svg};
 
-use super::super::common::network_item_overflow_menu;
+use super::super::common::{NetworkItemMenuConfig, network_item_overflow_menu};
 use super::rows::{proxy_move_picker, proxy_network_row};
 use crate::features::NyaTermApp;
 use crate::models::NetworkTab;
@@ -191,15 +191,17 @@ pub(in crate::features::pages::tunnels) fn proxy_section(
                         .connection_state
                         .network_item_menu_is_open(NetworkTab::Proxies, &menu_id);
                     this.child(network_item_overflow_menu(
-                        palette,
-                        app.shell_surface_color(palette.surface),
-                        format!("proxy-group-actions-{}", group.id),
-                        menu_open,
-                        app.tr("common.more"),
-                        app.tr("network.renameGroup"),
-                        app.tr("network.moveToGroup"),
-                        app.tr("network.deleteGroup"),
-                        false,
+                        NetworkItemMenuConfig {
+                            palette,
+                            background: app.shell_surface_color(palette.surface),
+                            id: format!("proxy-group-actions-{}", group.id),
+                            open: menu_open,
+                            more_label: app.tr("common.more"),
+                            edit_label: app.tr("network.renameGroup"),
+                            move_label: app.tr("network.moveToGroup"),
+                            delete_label: app.tr("network.deleteGroup"),
+                            can_move: false,
+                        },
                         cx.listener({
                             let id = menu_id.clone();
                             move |this, _, _, cx| {

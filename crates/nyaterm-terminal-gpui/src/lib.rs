@@ -1,22 +1,6 @@
 //! GPUI terminal painting helpers (element + line rendering).
 
-// Shared imports for submodules (`use super::*`).
-pub use gpui::{
-    App, Bounds, ContentMask, Element, ElementId, Font, FontStyle, FontWeight, GlobalElementId,
-    Hsla, InspectorElementId, IntoElement, KeyDownEvent, KeyUpEvent, LayoutId, PaintQuad, Pixels,
-    ShapedLine, SharedString, StrikethroughStyle, Style, TextRun, UnderlineStyle, Window, div,
-    fill, font, point, prelude::*, px, relative, rgb, size,
-};
-pub use nyaterm_core::ResolvedKeywordHighlightRule;
-pub use nyaterm_terminal::{
-    ShellCommandMark, TerminalScreen, TerminalSnapshot, TerminalTextCell,
-    alternate_scroll_key_bytes, terminal_byte_index_for_cell_col, terminal_cell_col_for_byte_index,
-    terminal_cell_count, terminal_char_cell_width, terminal_is_zero_width_mark,
-    terminal_text_cell_slice, terminal_text_cells,
-};
-
 mod types;
-use types::*;
 
 mod ansi;
 mod element;
@@ -24,12 +8,6 @@ mod images;
 mod input;
 mod keywords;
 mod paint;
-
-// Re-export helpers so sibling modules resolve them via `use super::*`.
-use ansi::*;
-use images::*;
-use keywords::*;
-use paint::*;
 
 pub use element::{
     NyaTerminalElement, NyaTerminalLayoutCache, TerminalBufferMatch, TerminalLineDecorations,

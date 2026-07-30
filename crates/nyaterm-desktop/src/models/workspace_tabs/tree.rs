@@ -42,7 +42,7 @@ impl TerminalWindowNode {
         if tab_ids.len() == 1 {
             return Self::leaf(tab_ids.to_vec(), tab_ids.first().cloned());
         }
-        let mid = (tab_ids.len() + 1) / 2; // ceil(len/2)
+        let mid = tab_ids.len().div_ceil(2);
         let mid = mid.max(1).min(tab_ids.len() - 1);
         let next_direction = if alternate {
             match direction {
@@ -169,10 +169,10 @@ impl TerminalWindowNode {
         if self.contains_tab(tab_id) {
             return;
         }
-        if let Some(leaf_id) = preferred_leaf {
-            if self.insert_tab_into_leaf(leaf_id, tab_id) {
-                return;
-            }
+        if let Some(leaf_id) = preferred_leaf
+            && self.insert_tab_into_leaf(leaf_id, tab_id)
+        {
+            return;
         }
         // Default: first leaf.
         self.insert_tab_into_first_leaf(tab_id);

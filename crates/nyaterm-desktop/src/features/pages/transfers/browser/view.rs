@@ -10,6 +10,7 @@ use crate::features::{NyaTermApp, TextInputSetup, format_file_size};
 use crate::models::TransferBrowserSortColumn;
 
 use super::super::{
+    TransferBrowserEntryRowPresentation, TransferBrowserSortHeaderState,
     normalized_transfer_browser_path, sort_header_cell, transfer_browser_entry_row,
     transfer_browser_parent_entry_row, transfer_browser_table_width,
 };
@@ -85,7 +86,7 @@ impl Element for TransferBrowserViewportElement {
     ) -> Self::PrepaintState {
         let height = f32::from(bounds.size.height).max(0.);
         let app = self.app.clone();
-        let _ = app.update(cx, |this, cx| {
+        app.update(cx, |this, cx| {
             if this.transfer.set_browser_viewport_height(height) {
                 cx.notify();
             }
@@ -183,7 +184,7 @@ impl NyaTermApp {
                 .into_any_element()
         });
         let current_browser_path =
-            normalized_transfer_browser_path(&self.transfer.browser_view().path);
+            normalized_transfer_browser_path(self.transfer.browser_view().path);
         let has_parent_entry =
             can_transfer && current_browser_path != "/" && current_browser_path != ".";
         let auto_sync_cwd = self.transfer_browser_auto_sync_cwd_enabled();
@@ -327,16 +328,25 @@ impl NyaTermApp {
                 } else if let Some(entry) = visible_entries.get(index.saturating_sub(parent_count))
                 {
                     rows = rows.child(transfer_browser_entry_row(
-                        palette,
-                        entry.clone(),
-                        self.transfer.browser_view().selected_remote_path.clone(),
-                        &self.transfer.browser_view().selected_remote_paths,
-                        column_widths,
-                        renaming.clone(),
-                        (renaming.as_ref().map(|state| state.old_path.as_str())
-                            == Some(entry.path.as_str()))
-                        .then(|| rename_input.take())
-                        .flatten(),
+                        TransferBrowserEntryRowPresentation {
+                            palette,
+                            entry: entry.clone(),
+                            selected_remote_path: self
+                                .transfer
+                                .browser_view()
+                                .selected_remote_path
+                                .clone(),
+                            selected_remote_paths: self
+                                .transfer
+                                .browser_view()
+                                .selected_remote_paths,
+                            column_widths,
+                            rename_state: renaming.clone(),
+                            rename_input: (renaming.as_ref().map(|state| state.old_path.as_str())
+                                == Some(entry.path.as_str()))
+                            .then(|| rename_input.take())
+                            .flatten(),
+                        },
                         cx,
                     ));
                 }
@@ -350,7 +360,7 @@ impl NyaTermApp {
             .flex_col()
             .overflow_hidden()
             .bg(transparent_surface)
-            .track_focus(&self.transfer.browser_view().focus)
+            .track_focus(self.transfer.browser_view().focus)
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 this.handle_transfer_browser_key_down(event, window, cx);
             }))
@@ -523,7 +533,7 @@ impl NyaTermApp {
                     .scrollbar_width(px(8.))
                     .on_scroll_wheel(cx.listener(|this, event: &ScrollWheelEvent, _, cx| {
                         let current_path =
-                            normalized_transfer_browser_path(&this.transfer.browser_view().path);
+                            normalized_transfer_browser_path(this.transfer.browser_view().path);
                         let parent_count = usize::from(current_path != "/" && current_path != ".");
                         let total = this.visible_transfer_browser_entries().len() + parent_count;
                         let viewport_rows = transfer_browser_viewport_rows(
@@ -567,62 +577,74 @@ impl NyaTermApp {
                                     .gap_0()
                                     .child(sort_header_cell(
                                         palette,
-                                        section_header,
                                         TransferBrowserSortColumn::Name,
                                         column_widths.name,
-                                        self.transfer.browser_view().sort_column,
-                                        self.transfer.browser_view().sort_direction,
-                                        resizing_column,
+                                        TransferBrowserSortHeaderState {
+                                            header_bg: section_header,
+                                            active_column: self.transfer.browser_view().sort_column,
+                                            direction: self.transfer.browser_view().sort_direction,
+                                            resizing_column,
+                                        },
                                         cx,
                                     ))
                                     .child(sort_header_cell(
                                         palette,
-                                        section_header,
                                         TransferBrowserSortColumn::Modified,
                                         column_widths.modified,
-                                        self.transfer.browser_view().sort_column,
-                                        self.transfer.browser_view().sort_direction,
-                                        resizing_column,
+                                        TransferBrowserSortHeaderState {
+                                            header_bg: section_header,
+                                            active_column: self.transfer.browser_view().sort_column,
+                                            direction: self.transfer.browser_view().sort_direction,
+                                            resizing_column,
+                                        },
                                         cx,
                                     ))
                                     .child(sort_header_cell(
                                         palette,
-                                        section_header,
                                         TransferBrowserSortColumn::Size,
                                         column_widths.size,
-                                        self.transfer.browser_view().sort_column,
-                                        self.transfer.browser_view().sort_direction,
-                                        resizing_column,
+                                        TransferBrowserSortHeaderState {
+                                            header_bg: section_header,
+                                            active_column: self.transfer.browser_view().sort_column,
+                                            direction: self.transfer.browser_view().sort_direction,
+                                            resizing_column,
+                                        },
                                         cx,
                                     ))
                                     .child(sort_header_cell(
                                         palette,
-                                        section_header,
                                         TransferBrowserSortColumn::Permissions,
                                         column_widths.permissions,
-                                        self.transfer.browser_view().sort_column,
-                                        self.transfer.browser_view().sort_direction,
-                                        resizing_column,
+                                        TransferBrowserSortHeaderState {
+                                            header_bg: section_header,
+                                            active_column: self.transfer.browser_view().sort_column,
+                                            direction: self.transfer.browser_view().sort_direction,
+                                            resizing_column,
+                                        },
                                         cx,
                                     ))
                                     .child(sort_header_cell(
                                         palette,
-                                        section_header,
                                         TransferBrowserSortColumn::Owner,
                                         column_widths.owner,
-                                        self.transfer.browser_view().sort_column,
-                                        self.transfer.browser_view().sort_direction,
-                                        resizing_column,
+                                        TransferBrowserSortHeaderState {
+                                            header_bg: section_header,
+                                            active_column: self.transfer.browser_view().sort_column,
+                                            direction: self.transfer.browser_view().sort_direction,
+                                            resizing_column,
+                                        },
                                         cx,
                                     ))
                                     .child(sort_header_cell(
                                         palette,
-                                        section_header,
                                         TransferBrowserSortColumn::Group,
                                         column_widths.group,
-                                        self.transfer.browser_view().sort_column,
-                                        self.transfer.browser_view().sort_direction,
-                                        resizing_column,
+                                        TransferBrowserSortHeaderState {
+                                            header_bg: section_header,
+                                            active_column: self.transfer.browser_view().sort_column,
+                                            direction: self.transfer.browser_view().sort_direction,
+                                            resizing_column,
+                                        },
                                         cx,
                                     )),
                             )

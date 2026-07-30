@@ -103,9 +103,9 @@ async fn authenticate_ssh_key(
         .map_err(|_| anyhow::anyhow!("SSH public-key authentication timed out"))??
     };
 
-    if auth_result.success() {
-        Ok(())
-    } else if try_keyboard_interactive_after_auth_result(handle, config, &auth_result).await? {
+    if auth_result.success()
+        || try_keyboard_interactive_after_auth_result(handle, config, &auth_result).await?
+    {
         Ok(())
     } else {
         anyhow::bail!("SSH public-key authentication rejected by server")

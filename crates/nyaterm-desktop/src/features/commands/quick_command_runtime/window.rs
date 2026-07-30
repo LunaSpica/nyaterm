@@ -97,7 +97,7 @@ impl NyaTermApp {
                 .update(cx, |_, window, _| window.activate_window())
                 .is_err()
             {
-                let _ = app.update(cx, |app, cx| {
+                app.update(cx, |app, cx| {
                     if app.commands.clear_quick_editor_window_if(handle) {
                         cx.notify();
                     }
@@ -135,7 +135,7 @@ impl NyaTermApp {
 
 fn open_quick_command_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut App) {
     if app.read(cx).commands.quick_editor_window().is_some() {
-        let _ = app.update(cx, |app, cx| {
+        app.update(cx, |app, cx| {
             app.commands.cancel_quick_editor_window_request();
             app.activate_quick_command_window(cx);
             cx.notify();
@@ -143,7 +143,7 @@ fn open_quick_command_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut App)
         return;
     }
     if app.read(cx).commands.quick_editor().is_none() {
-        let _ = app.update(cx, |app, cx| {
+        app.update(cx, |app, cx| {
             app.commands.cancel_quick_editor_window_request();
             cx.notify();
         });
@@ -179,7 +179,7 @@ fn open_quick_command_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut App)
         },
     );
 
-    let _ = app.update(cx, |app, cx| match result {
+    app.update(cx, |app, cx| match result {
         Ok(handle) => {
             app.commands.finish_quick_editor_window_open(Some(handle));
             cx.notify();

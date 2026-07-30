@@ -25,7 +25,7 @@ pub(super) enum ConnectionListRow {
         depth: usize,
     },
     Connection {
-        connection: SavedConnection,
+        connection: Box<SavedConnection>,
         depth: usize,
     },
 }
@@ -58,7 +58,7 @@ pub(super) fn flatten_connection_rows(
     }
     for connection in root_connections {
         rows.push(ConnectionListRow::Connection {
-            connection,
+            connection: Box::new(connection),
             depth: 0,
         });
     }
@@ -96,7 +96,7 @@ fn append_connection_section_rows(
     }
     for connection in section.connections {
         rows.push(ConnectionListRow::Connection {
-            connection,
+            connection: Box::new(connection),
             depth: section.depth + 1,
         });
     }
@@ -352,16 +352,25 @@ pub(super) struct ConnectionGroupChoice {
     pub selected: bool,
 }
 
+pub(super) struct ConnectionEditorRenderContext<'a, 'cx> {
+    pub palette: crate::theme::ThemePalette,
+    pub fields: &'a ConnectionEditorFields,
+    pub cx: &'a mut Context<'cx, NyaTermApp>,
+}
+
 pub(super) fn connection_editor_group_select(
-    palette: crate::theme::ThemePalette,
+    render: ConnectionEditorRenderContext<'_, '_>,
     label: &'static str,
     value: impl Into<SharedString>,
     open: bool,
     options: Vec<ConnectionGroupChoice>,
     parent_hint: String,
-    fields: &ConnectionEditorFields,
-    cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+    let ConnectionEditorRenderContext {
+        palette,
+        fields,
+        cx,
+    } = render;
     let value = value.into();
     let new_group_entity = fields.get(&ConnectionEditorField::NewGroupName);
     let new_group_field = new_group_entity.cloned();
@@ -628,16 +637,19 @@ pub(super) fn connection_editor_group_select(
 }
 
 pub(super) fn connection_editor_select(
-    palette: crate::theme::ThemePalette,
+    render: ConnectionEditorRenderContext<'_, '_>,
     id: &'static str,
     label: impl Into<FieldLabel>,
     value: impl Into<SharedString>,
     menu: ConnectionEditorMenu,
     open: bool,
     options: Vec<ConnectionEditorChoice>,
-    fields: &ConnectionEditorFields,
-    cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+    let ConnectionEditorRenderContext {
+        palette,
+        fields,
+        cx,
+    } = render;
     let label = label.into();
     let show_label = !label.is_empty();
     let value = value.into();

@@ -42,7 +42,6 @@ pub(in crate::features) struct InlineMarkdown {
 }
 
 /// Strip `<think>…</think>` segments (Tauri `extractThinkContent`).
-
 pub(in crate::features) fn extract_think_content(content: &str) -> (String, Option<String>) {
     let mut reasoning_parts: Vec<String> = Vec::new();
     let mut visible = String::new();
@@ -126,7 +125,6 @@ fn is_thematic_break(line: &str) -> bool {
 }
 
 /// Parse common GFM-ish inline markers into plain text + highlight ranges.
-
 pub(in crate::features) fn parse_inline_markdown(input: &str) -> InlineMarkdown {
     let bytes = input.as_bytes();
     let mut text = String::new();
@@ -135,33 +133,33 @@ pub(in crate::features) fn parse_inline_markdown(input: &str) -> InlineMarkdown 
 
     while i < bytes.len() {
         // Fenced-style inline code: `code`
-        if bytes[i] == b'`' {
-            if let Some(end) = input[i + 1..].find('`') {
-                let inner = &input[i + 1..i + 1 + end];
-                if !inner.is_empty() && !inner.contains('\n') {
-                    let start = text.len();
-                    text.push_str(inner);
-                    highlights.push((start..text.len(), InlineMdStyle::Code));
-                    i = i + 1 + end + 1;
-                    continue;
-                }
+        if bytes[i] == b'`'
+            && let Some(end) = input[i + 1..].find('`')
+        {
+            let inner = &input[i + 1..i + 1 + end];
+            if !inner.is_empty() && !inner.contains('\n') {
+                let start = text.len();
+                text.push_str(inner);
+                highlights.push((start..text.len(), InlineMdStyle::Code));
+                i = i + 1 + end + 1;
+                continue;
             }
         }
 
         // Links: [label](url)
-        if bytes[i] == b'[' {
-            if let Some(label_end) = input[i + 1..].find(']') {
-                let after_label = i + 1 + label_end + 1;
-                if input[after_label..].starts_with('(') {
-                    if let Some(url_end) = input[after_label + 1..].find(')') {
-                        let label = &input[i + 1..i + 1 + label_end];
-                        let start = text.len();
-                        text.push_str(label);
-                        highlights.push((start..text.len(), InlineMdStyle::Link));
-                        i = after_label + 1 + url_end + 1;
-                        continue;
-                    }
-                }
+        if bytes[i] == b'['
+            && let Some(label_end) = input[i + 1..].find(']')
+        {
+            let after_label = i + 1 + label_end + 1;
+            if input[after_label..].starts_with('(')
+                && let Some(url_end) = input[after_label + 1..].find(')')
+            {
+                let label = &input[i + 1..i + 1 + label_end];
+                let start = text.len();
+                text.push_str(label);
+                highlights.push((start..text.len(), InlineMdStyle::Link));
+                i = after_label + 1 + url_end + 1;
+                continue;
             }
         }
 
@@ -232,16 +230,16 @@ pub(in crate::features) fn parse_inline_markdown(input: &str) -> InlineMarkdown 
         }
 
         // Strikethrough: ~~text~~
-        if input[i..].starts_with("~~") {
-            if let Some(end) = input[i + 2..].find("~~") {
-                let inner = &input[i + 2..i + 2 + end];
-                if !inner.is_empty() && !inner.contains('\n') {
-                    let start = text.len();
-                    text.push_str(inner);
-                    highlights.push((start..text.len(), InlineMdStyle::Strike));
-                    i = i + 2 + end + 2;
-                    continue;
-                }
+        if input[i..].starts_with("~~")
+            && let Some(end) = input[i + 2..].find("~~")
+        {
+            let inner = &input[i + 2..i + 2 + end];
+            if !inner.is_empty() && !inner.contains('\n') {
+                let start = text.len();
+                text.push_str(inner);
+                highlights.push((start..text.len(), InlineMdStyle::Strike));
+                i = i + 2 + end + 2;
+                continue;
             }
         }
 
@@ -279,7 +277,7 @@ pub(in crate::features) fn parse_markdown_blocks(content: &str) -> Vec<MarkdownB
             flush_paragraph(&mut paragraph, &mut blocks);
             let language = rest.trim().to_string();
             let mut code_lines = Vec::new();
-            while let Some(code_line) = lines.next() {
+            for code_line in lines.by_ref() {
                 if code_line.trim_start().starts_with("```") {
                     break;
                 }
@@ -293,30 +291,29 @@ pub(in crate::features) fn parse_markdown_blocks(content: &str) -> Vec<MarkdownB
         }
 
         // GFM pipe table: header + separator + body rows.
-        if looks_like_table_header(trimmed) {
-            if let Some(next) = lines.peek().copied() {
-                if is_table_separator_row(next) {
-                    flush_paragraph(&mut paragraph, &mut blocks);
-                    let headers = split_table_row(trimmed);
-                    lines.next(); // consume separator
-                    let mut rows = Vec::new();
-                    while let Some(body) = lines.peek().copied() {
-                        if body.trim().is_empty() || !body.trim().contains('|') {
-                            break;
-                        }
-                        if body.trim_start().starts_with("```")
-                            || body.trim_start().starts_with('#')
-                            || body.trim_start().starts_with('>')
-                        {
-                            break;
-                        }
-                        rows.push(split_table_row(body));
-                        lines.next();
-                    }
-                    blocks.push(MarkdownBlock::Table { headers, rows });
-                    continue;
+        if looks_like_table_header(trimmed)
+            && let Some(next) = lines.peek().copied()
+            && is_table_separator_row(next)
+        {
+            flush_paragraph(&mut paragraph, &mut blocks);
+            let headers = split_table_row(trimmed);
+            lines.next(); // consume separator
+            let mut rows = Vec::new();
+            while let Some(body) = lines.peek().copied() {
+                if body.trim().is_empty() || !body.trim().contains('|') {
+                    break;
                 }
+                if body.trim_start().starts_with("```")
+                    || body.trim_start().starts_with('#')
+                    || body.trim_start().starts_with('>')
+                {
+                    break;
+                }
+                rows.push(split_table_row(body));
+                lines.next();
             }
+            blocks.push(MarkdownBlock::Table { headers, rows });
+            continue;
         }
 
         if is_thematic_break(trimmed) {
@@ -373,15 +370,16 @@ pub(in crate::features) fn parse_markdown_blocks(content: &str) -> Vec<MarkdownB
             blocks.push(MarkdownBlock::Bullet(rest.to_string()));
             continue;
         }
-        if let Some((num, rest)) = bullet.split_once(". ") {
-            if !num.is_empty() && num.chars().all(|ch| ch.is_ascii_digit()) {
-                flush_paragraph(&mut paragraph, &mut blocks);
-                blocks.push(MarkdownBlock::Numbered {
-                    index: num.parse().unwrap_or(1),
-                    text: rest.to_string(),
-                });
-                continue;
-            }
+        if let Some((num, rest)) = bullet.split_once(". ")
+            && !num.is_empty()
+            && num.chars().all(|ch| ch.is_ascii_digit())
+        {
+            flush_paragraph(&mut paragraph, &mut blocks);
+            blocks.push(MarkdownBlock::Numbered {
+                index: num.parse().unwrap_or(1),
+                text: rest.to_string(),
+            });
+            continue;
         }
         paragraph.push(trimmed.trim().to_string());
     }

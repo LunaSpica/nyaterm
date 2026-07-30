@@ -3,25 +3,45 @@ use nyaterm_core::truncate_preview;
 use nyaterm_transport::DockerComposeService;
 
 use crate::features::{NyaTermApp, compact_id, gpui_code_font_family};
-use crate::theme::ThemePalette;
 use crate::widgets::{small_button, status_pill, svg_icon_button};
 
-use super::super::DockerLabels;
-use super::menus::docker_compose_service_action_menu;
+use super::super::DockerRenderContext;
+use super::menus::{DockerComposeServiceMenu, docker_compose_service_action_menu};
 use super::status::{compose_status_color, compose_status_label};
 
-pub(in crate::features::pages::remote) fn docker_compose_services_panel(
-    palette: ThemePalette,
-    menu_bg: gpui::Rgba,
+pub(super) struct DockerComposeServicesPanel<'a> {
+    pub project_name: String,
+    pub config_files: Option<String>,
+    pub project_key: String,
+    pub services: Option<Vec<DockerComposeService>>,
+    pub error: Option<String>,
+    pub open_menu_id: Option<&'a str>,
+}
+
+struct DockerComposeServiceRow {
     project_name: String,
     config_files: Option<String>,
-    project_key: String,
-    services: Option<Vec<DockerComposeService>>,
-    error: Option<String>,
-    open_menu_id: Option<&str>,
-    labels: DockerLabels,
+    service: DockerComposeService,
+    menu_open: bool,
+    menu_id: String,
+}
+
+pub(super) fn docker_compose_services_panel(
+    context: DockerRenderContext,
+    panel: DockerComposeServicesPanel<'_>,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+    let DockerRenderContext {
+        palette, labels, ..
+    } = context;
+    let DockerComposeServicesPanel {
+        project_name,
+        config_files,
+        project_key,
+        services,
+        error,
+        open_menu_id,
+    } = panel;
     let mut rows = div()
         .border_t_1()
         .border_color(rgb(palette.border))
@@ -85,14 +105,14 @@ pub(in crate::features::pages::remote) fn docker_compose_services_panel(
                 let service_menu_id = format!("compose-service:{project_key}:{}", service.name);
                 let menu_open = open_menu_id == Some(service_menu_id.as_str());
                 rows = rows.child(docker_compose_service_row(
-                    palette,
-                    menu_bg,
-                    project_name.clone(),
-                    config_files.clone(),
-                    service,
-                    menu_open,
-                    service_menu_id,
-                    labels,
+                    context,
+                    DockerComposeServiceRow {
+                        project_name: project_name.clone(),
+                        config_files: config_files.clone(),
+                        service,
+                        menu_open,
+                        menu_id: service_menu_id,
+                    },
                     cx,
                 ));
             }
@@ -112,17 +132,21 @@ pub(in crate::features::pages::remote) fn docker_compose_services_panel(
     rows
 }
 
-pub(in crate::features::pages::remote) fn docker_compose_service_row(
-    palette: ThemePalette,
-    menu_bg: gpui::Rgba,
-    project_name: String,
-    config_files: Option<String>,
-    service: DockerComposeService,
-    menu_open: bool,
-    menu_id: String,
-    labels: DockerLabels,
+fn docker_compose_service_row(
+    context: DockerRenderContext,
+    row: DockerComposeServiceRow,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+    let DockerRenderContext {
+        palette, labels, ..
+    } = context;
+    let DockerComposeServiceRow {
+        project_name,
+        config_files,
+        service,
+        menu_open,
+        menu_id,
+    } = row;
     let container_summary = if service.containers.is_empty() {
         labels.no_containers.to_string()
     } else {
@@ -226,14 +250,14 @@ pub(in crate::features::pages::remote) fn docker_compose_service_row(
                     ))
                     .when(menu_open, |this| {
                         this.child(docker_compose_service_action_menu(
-                            palette,
-                            menu_bg,
-                            project_name,
-                            config_files,
-                            service_name,
-                            running_container_id,
-                            can_enter,
-                            labels,
+                            context,
+                            DockerComposeServiceMenu {
+                                project_name,
+                                config_files,
+                                service_name,
+                                running_container_id,
+                                can_enter,
+                            },
                             cx,
                         ))
                     }),

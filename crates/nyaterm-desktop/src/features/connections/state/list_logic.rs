@@ -118,10 +118,11 @@ fn group_tree_ids(groups: &[Group], group_id: &str) -> HashSet<String> {
     while changed {
         changed = false;
         for group in groups {
-            if let Some(parent) = group.parent_id.as_ref() {
-                if group_ids.contains(parent) && group_ids.insert(group.id.clone()) {
-                    changed = true;
-                }
+            if let Some(parent) = group.parent_id.as_ref()
+                && group_ids.contains(parent)
+                && group_ids.insert(group.id.clone())
+            {
+                changed = true;
             }
         }
     }
@@ -166,10 +167,10 @@ fn sort_groups(groups: &mut [Group], mode: ConnectionSortMode) {
     });
 }
 
-fn append_visible_connection_ids<'a>(
+fn append_visible_connection_ids(
     group: Group,
     children_by_parent: &HashMap<Option<String>, Vec<Group>>,
-    by_group: &mut HashMap<Option<String>, Vec<&'a SavedConnection>>,
+    by_group: &mut HashMap<Option<String>, Vec<&SavedConnection>>,
     ids: &mut Vec<String>,
     visited: &mut HashSet<String>,
     expanded_group_ids: &HashSet<String>,
@@ -254,16 +255,12 @@ pub(super) fn remove_group_list_references(
     }
 }
 
-pub(super) fn retain_loaded_connection_list_references(
+pub(super) fn retain_loaded_connection_references(
     selected_ids: &mut HashSet<String>,
     last_selected_id: &mut Option<String>,
     context_menu: &mut Option<ConnectionContextMenuState>,
-    expanded_group_ids: &mut HashSet<String>,
-    hovered_group_id: &mut Option<String>,
-    group_context_menu: &mut Option<ConnectionGroupContextMenuState>,
     drop_target: &mut Option<ConnectionDropTarget>,
     connection_ids: &HashSet<String>,
-    group_ids: &HashSet<String>,
 ) {
     selected_ids.retain(|id| connection_ids.contains(id));
     if last_selected_id
@@ -278,7 +275,24 @@ pub(super) fn retain_loaded_connection_list_references(
     {
         *context_menu = None;
     }
+    if drop_target.as_ref().is_some_and(|target| {
+        target.kind == ConnectionDragKind::Connection
+            && target
+                .id
+                .as_ref()
+                .is_some_and(|id| !connection_ids.contains(id))
+    }) {
+        *drop_target = None;
+    }
+}
 
+pub(super) fn retain_loaded_group_list_references(
+    expanded_group_ids: &mut HashSet<String>,
+    hovered_group_id: &mut Option<String>,
+    group_context_menu: &mut Option<ConnectionGroupContextMenuState>,
+    drop_target: &mut Option<ConnectionDropTarget>,
+    group_ids: &HashSet<String>,
+) {
     expanded_group_ids.retain(|id| group_ids.contains(id));
     if hovered_group_id
         .as_ref()
@@ -292,18 +306,10 @@ pub(super) fn retain_loaded_connection_list_references(
     {
         *group_context_menu = None;
     }
-    if drop_target
-        .as_ref()
-        .is_some_and(|target| match target.kind {
-            ConnectionDragKind::Connection => target
-                .id
-                .as_ref()
-                .is_some_and(|id| !connection_ids.contains(id)),
-            ConnectionDragKind::Group => {
-                target.id.as_ref().is_some_and(|id| !group_ids.contains(id))
-            }
-        })
-    {
+    if drop_target.as_ref().is_some_and(|target| {
+        target.kind == ConnectionDragKind::Group
+            && target.id.as_ref().is_some_and(|id| !group_ids.contains(id))
+    }) {
         *drop_target = None;
     }
 }

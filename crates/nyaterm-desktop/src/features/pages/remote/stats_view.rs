@@ -9,6 +9,12 @@ use crate::widgets::empty_panel;
 
 use super::process::usage_color;
 
+#[derive(Clone, Copy)]
+struct ResourceRowPosition {
+    first: bool,
+    last: bool,
+}
+
 impl NyaTermApp {
     pub(in crate::features) fn stats_view(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let stats_state = self.remote_ops.stats_presentation();
@@ -69,8 +75,10 @@ impl NyaTermApp {
                     &network.nic,
                     network.tx_bytes_per_sec,
                     network.rx_bytes_per_sec,
-                    index == 0,
-                    index + 1 == total,
+                    ResourceRowPosition {
+                        first: index == 0,
+                        last: index + 1 == total,
+                    },
                 ));
             }
         }
@@ -88,8 +96,10 @@ impl NyaTermApp {
                     disk.available,
                     disk.use_percent,
                     available_label.clone(),
-                    index == 0,
-                    index + 1 == total,
+                    ResourceRowPosition {
+                        first: index == 0,
+                        last: index + 1 == total,
+                    },
                 ));
             }
         }
@@ -525,9 +535,9 @@ fn resource_network_row(
     nic: &str,
     tx: f64,
     rx: f64,
-    first: bool,
-    last: bool,
+    position: ResourceRowPosition,
 ) -> gpui::Div {
+    let ResourceRowPosition { first, last } = position;
     div()
         .when(!first, |this| this.pt_2())
         .when(!last, |this| {
@@ -576,9 +586,9 @@ fn resource_disk_row(
     available: u64,
     use_percent: u32,
     available_label: String,
-    first: bool,
-    last: bool,
+    position: ResourceRowPosition,
 ) -> gpui::Div {
+    let ResourceRowPosition { first, last } = position;
     let ratio = use_percent as f64 / 100.;
     div()
         .when(!first, |this| this.pt_2())

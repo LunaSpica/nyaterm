@@ -352,10 +352,10 @@ impl SessionCaptureState {
     }
 
     fn handle_backspace(&mut self) {
-        if let Some(removed) = self.input_buffer.pop() {
-            if self.live_echo_buffer.ends_with(removed) {
-                self.live_echo_buffer.pop();
-            }
+        if let Some(removed) = self.input_buffer.pop()
+            && self.live_echo_buffer.ends_with(removed)
+        {
+            self.live_echo_buffer.pop();
         }
     }
 
@@ -660,10 +660,10 @@ pub fn safe_recording_name(name: &str) -> String {
 
 fn prepare_output_file_path(file_path: &str) -> Result<PathBuf, RecordingError> {
     let path = PathBuf::from(file_path);
-    if let Some(parent) = path.parent() {
-        if !parent.as_os_str().is_empty() {
-            fs::create_dir_all(parent)?;
-        }
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        fs::create_dir_all(parent)?;
     }
     Ok(path)
 }

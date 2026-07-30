@@ -31,16 +31,10 @@ fn external_sync_button(
     let transparent = rgba(0x00000000);
     let (background, border, text) = match style {
         ExternalSyncButtonStyle::Ghost => (transparent, transparent, rgb(palette.text_muted)),
-        ExternalSyncButtonStyle::Outline => (
-            rgb(palette.bg).into(),
-            rgb(palette.border).into(),
-            rgb(palette.text),
-        ),
-        ExternalSyncButtonStyle::Primary => (
-            rgb(palette.link).into(),
-            rgb(palette.link).into(),
-            rgb(palette.bg),
-        ),
+        ExternalSyncButtonStyle::Outline => {
+            (rgb(palette.bg), rgb(palette.border), rgb(palette.text))
+        }
+        ExternalSyncButtonStyle::Primary => (rgb(palette.link), rgb(palette.link), rgb(palette.bg)),
     };
     div()
         .id(SharedString::from(id))
@@ -140,7 +134,7 @@ impl NyaTermApp {
                             .shadow_lg()
                     })
                     .bg(if standalone {
-                        rgb(palette.bg).into()
+                        rgb(palette.bg)
                     } else {
                         self.shell_surface_color(palette.bg)
                     })
@@ -605,7 +599,7 @@ impl NyaTermApp {
             .left_0()
             .right_0()
             .bg(if standalone {
-                rgb(palette.bg).into()
+                rgb(palette.bg)
             } else {
                 rgba(0x00000080)
             })
@@ -637,7 +631,7 @@ impl NyaTermApp {
                             .shadow_lg()
                     })
                     .bg(if standalone {
-                        rgb(palette.bg).into()
+                        rgb(palette.bg)
                     } else {
                         self.shell_surface_color(palette.bg)
                     })

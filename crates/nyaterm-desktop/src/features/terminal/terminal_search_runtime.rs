@@ -260,12 +260,11 @@ impl NyaTermApp {
         }
         self.terminal.search.active_index = (self.terminal.search.active_index as isize + direction)
             .rem_euclid(count as isize) as usize;
-        if self.terminal.search.mode == TerminalSearchMode::Buffer {
-            if let Ok(matches) = self.terminal_buffer_matches() {
-                if let Some(m) = matches.get(self.terminal.search.active_index) {
-                    self.reveal_terminal_absolute_line(m.line_index, cx);
-                }
-            }
+        if self.terminal.search.mode == TerminalSearchMode::Buffer
+            && let Ok(matches) = self.terminal_buffer_matches()
+            && let Some(m) = matches.get(self.terminal.search.active_index)
+        {
+            self.reveal_terminal_absolute_line(m.line_index, cx);
         }
         self.shell.set_status(format!(
             "terminal search match {}/{}",

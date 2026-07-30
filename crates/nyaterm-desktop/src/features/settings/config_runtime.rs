@@ -11,6 +11,31 @@ use crate::models::{
 };
 
 impl NyaTermApp {
+    pub(in crate::features) fn prompt_encrypted_portable_snapshot_export(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.start_snapshot_password_prompt(SnapshotPasswordPromptKind::Export, window, cx);
+    }
+
+    pub(in crate::features) fn prompt_encrypted_portable_snapshot_import(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.block_import_for_settings_draft(cx) {
+            return;
+        }
+        if self.session.active_id().is_some() || self.session.start_has_pending() {
+            self.shell
+                .set_status("close active session before importing config".to_string());
+            cx.notify();
+            return;
+        }
+        self.start_snapshot_password_prompt(SnapshotPasswordPromptKind::Import, window, cx);
+    }
+
     pub(in crate::features) fn prompt_config_export(&mut self, cx: &mut Context<Self>) {
         if !self
             .settings
@@ -133,7 +158,7 @@ impl NyaTermApp {
     ) {
         if !self.settings.begin_snapshot_password_prompt(kind) {
             self.shell
-                .set_status("config path picker is already open".to_string());
+                .set_status("backup or sync prompt is already open".to_string());
             cx.notify();
             return;
         }
@@ -144,8 +169,6 @@ impl NyaTermApp {
             match kind {
                 SnapshotPasswordPromptKind::Export => "enter password for encrypted .nya export",
                 SnapshotPasswordPromptKind::Import => "enter password for encrypted .nya import",
-                SnapshotPasswordPromptKind::CloudPush => "enter password for cloud sync push",
-                SnapshotPasswordPromptKind::CloudPull => "enter password for cloud sync pull",
                 SnapshotPasswordPromptKind::CloudForcePush => {
                     "enter password for forced cloud sync push"
                 }
@@ -168,9 +191,7 @@ impl NyaTermApp {
             .to_string(),
         );
         let store_message = match kind {
-            SnapshotPasswordPromptKind::CloudPush
-            | SnapshotPasswordPromptKind::CloudPull
-            | SnapshotPasswordPromptKind::CloudForcePush
+            SnapshotPasswordPromptKind::CloudForcePush
             | SnapshotPasswordPromptKind::CloudForcePull
             | SnapshotPasswordPromptKind::CloudProviderPush
             | SnapshotPasswordPromptKind::CloudProviderPull
@@ -206,12 +227,6 @@ impl NyaTermApp {
             SnapshotPasswordPromptKind::Import => {
                 self.prompt_encrypted_portable_snapshot_import_path(password, cx);
             }
-            SnapshotPasswordPromptKind::CloudPush => {
-                self.run_local_cloud_sync_push(password, false, cx);
-            }
-            SnapshotPasswordPromptKind::CloudPull => {
-                self.run_local_cloud_sync_pull(password, false, cx);
-            }
             SnapshotPasswordPromptKind::CloudForcePush => {
                 self.run_local_cloud_sync_push(password, true, cx);
             }
@@ -241,8 +256,6 @@ impl NyaTermApp {
         self.shell.set_status(match state.kind {
             SnapshotPasswordPromptKind::Export => "encrypted .nya export cancelled".to_string(),
             SnapshotPasswordPromptKind::Import => "encrypted .nya import cancelled".to_string(),
-            SnapshotPasswordPromptKind::CloudPush => "cloud sync push cancelled".to_string(),
-            SnapshotPasswordPromptKind::CloudPull => "cloud sync pull cancelled".to_string(),
             SnapshotPasswordPromptKind::CloudForcePush => {
                 "forced cloud sync push cancelled".to_string()
             }
@@ -428,9 +441,6 @@ impl NyaTermApp {
         match result {
             ConfigPathPromptResult::Exported(info) => {
                 let message = match kind {
-                    ConfigPathPromptKind::PortableExport => {
-                        format!("exported {} byte .nya snapshot", info.bytes)
-                    }
                     ConfigPathPromptKind::EncryptedPortableExport => {
                         format!("exported {} byte encrypted .nya snapshot", info.bytes)
                     }
@@ -442,12 +452,6 @@ impl NyaTermApp {
                     true,
                 );
                 self.shell.set_status(match kind {
-                    ConfigPathPromptKind::PortableExport => {
-                        format!(
-                            "portable snapshot exported to {}",
-                            info.backup_path.display()
-                        )
-                    }
                     ConfigPathPromptKind::EncryptedPortableExport => {
                         format!(
                             "encrypted portable snapshot exported to {}",
@@ -497,10 +501,6 @@ impl NyaTermApp {
             ConfigPathPromptResult::Cancelled => {
                 self.shell.set_status(match kind {
                     ConfigPathPromptKind::Export => "config export cancelled".to_string(),
-                    ConfigPathPromptKind::Import => "config import cancelled".to_string(),
-                    ConfigPathPromptKind::PortableExport => {
-                        "portable snapshot export cancelled".to_string()
-                    }
                     ConfigPathPromptKind::PortableImport => {
                         "portable snapshot import cancelled".to_string()
                     }
@@ -516,10 +516,6 @@ impl NyaTermApp {
             ConfigPathPromptResult::Failed(error) => {
                 self.shell.set_status(match kind {
                     ConfigPathPromptKind::Export => format!("config export failed: {error}"),
-                    ConfigPathPromptKind::Import => format!("config import failed: {error}"),
-                    ConfigPathPromptKind::PortableExport => {
-                        format!("portable snapshot export failed: {error}")
-                    }
                     ConfigPathPromptKind::PortableImport => {
                         format!("portable snapshot import failed: {error}")
                     }

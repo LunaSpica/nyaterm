@@ -32,7 +32,7 @@ pub(in crate::features) use crate::action_links::{
 };
 pub(in crate::features) use crate::theme::ThemePalette;
 pub(in crate::features) use ai::{
-    AiFeatureFocus, AiFeatureState, ai_active_profile_drafts, ai_usage_counts,
+    AiFeatureFocus, AiFeatureInit, AiFeatureState, ai_active_profile_drafts, ai_usage_counts,
     is_agent_command_card,
 };
 pub use app_state::NyaTermApp;
@@ -100,8 +100,9 @@ pub(in crate::features) use translation::TranslationFeatureState;
 pub(in crate::features) use tunnels::{TunnelCatalogState, TunnelFeatureState};
 pub(in crate::features) use update::UpdateFeatureState;
 pub(in crate::features) use view_widgets::{
-    child_window_header, child_window_titlebar, color_icon, connection_type_icon,
-    dialog_action_button, logo_mark, modal_close_icon_button, modal_dialog_footer_localized,
-    modal_dialog_footer_localized_danger, modal_dialog_shell, mono_icon, panel_header_with_actions,
-    stats_progress_bar, themed_icon, transfer_entry_icon, window_control_button,
+    bounded_dialog_width, child_window_header, child_window_titlebar, color_icon,
+    connection_type_icon, dialog_action_button, logo_mark, modal_close_icon_button,
+    modal_dialog_footer_localized, modal_dialog_footer_localized_danger, modal_dialog_shell,
+    mono_icon, panel_header_with_actions, stats_progress_bar, themed_icon, transfer_entry_icon,
+    window_control_button,
 };

@@ -90,15 +90,18 @@ fn transfer_browser_text_cell(
 }
 
 pub(super) fn transfer_browser_entry_row(
-    palette: ThemePalette,
-    entry: SftpFileEntry,
-    selected_remote_path: Option<String>,
-    selected_remote_paths: &HashSet<String>,
-    column_widths: TransferBrowserColumnWidths,
-    rename_state: Option<TransferRenameState>,
-    rename_input: Option<AnyElement>,
+    presentation: TransferBrowserEntryRowPresentation<'_>,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+    let TransferBrowserEntryRowPresentation {
+        palette,
+        entry,
+        selected_remote_path,
+        selected_remote_paths,
+        column_widths,
+        rename_state,
+        rename_input,
+    } = presentation;
     let entry_path = entry.path.clone();
     let mouse_down_path = entry.path.clone();
     let mouse_move_path = entry.path.clone();
@@ -307,4 +310,14 @@ pub(super) fn transfer_browser_entry_row(
                     entry.group.clone()
                 }),
         )
+}
+
+pub(super) struct TransferBrowserEntryRowPresentation<'a> {
+    pub palette: ThemePalette,
+    pub entry: SftpFileEntry,
+    pub selected_remote_path: Option<String>,
+    pub selected_remote_paths: &'a HashSet<String>,
+    pub column_widths: TransferBrowserColumnWidths,
+    pub rename_state: Option<TransferRenameState>,
+    pub rename_input: Option<AnyElement>,
 }

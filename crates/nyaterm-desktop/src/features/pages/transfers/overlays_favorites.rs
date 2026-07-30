@@ -46,7 +46,7 @@ impl NyaTermApp {
                 y: px(24.),
             },
         );
-        let current_path = normalized_transfer_browser_path(&self.transfer.browser_view().path);
+        let current_path = normalized_transfer_browser_path(self.transfer.browser_view().path);
         let favorite_paths = self
             .transfer
             .browser_view()

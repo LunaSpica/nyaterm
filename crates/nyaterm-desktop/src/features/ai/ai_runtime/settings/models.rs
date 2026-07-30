@@ -79,7 +79,6 @@ impl NyaTermApp {
                 let focus = self.ai.cancel_settings_manual_model_edit();
                 window.focus(&focus);
                 cx.notify();
-                return;
             }
             "enter" => {
                 if let Some((credential_id, name)) =
@@ -88,7 +87,6 @@ impl NyaTermApp {
                     self.add_ai_manual_model(credential_id, name, cx);
                     self.clear_ai_manual_model_draft(group_key, cx);
                 }
-                return;
             }
             _ => {}
         }

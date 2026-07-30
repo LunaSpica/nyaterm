@@ -291,10 +291,11 @@ impl NyaTermApp {
                     cx.stop_propagation();
                 }
             }
-            "enter" if !self.connection_state.list_search_is_empty() => {
-                if self.open_connection_keyboard_active(window, cx) {
-                    cx.stop_propagation();
-                }
+            "enter"
+                if !self.connection_state.list_search_is_empty()
+                    && self.open_connection_keyboard_active(window, cx) =>
+            {
+                cx.stop_propagation();
             }
             _ => {}
         }

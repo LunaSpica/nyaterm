@@ -113,16 +113,15 @@ impl NyaTermApp {
         if state.desynced || state.line_rewrite_required || state.paste_mode || state.multiline {
             return false;
         }
-        if let Some(session_id) = self.session.active_id() {
-            if !self.sync_peer_session_ids(session_id).is_empty() {
-                return false;
-            }
+        if let Some(session_id) = self.session.active_id()
+            && !self.sync_peer_session_ids(session_id).is_empty()
+        {
+            return false;
         }
         true
     }
 
     /// Map the painted terminal selection onto the tracked input line when it is fully contained.
-
     pub(in crate::features) fn smart_cursor_selected_input_range(
         &self,
     ) -> Option<InputSelectionRange> {
@@ -286,7 +285,6 @@ impl NyaTermApp {
 
     /// Handle Backspace/Delete/arrows/plain text against a smart input selection.
     /// Returns true when the key was consumed.
-
     pub(in crate::features) fn handle_smart_input_selection_key(
         &mut self,
         event: &KeyDownEvent,
@@ -321,10 +319,11 @@ impl NyaTermApp {
             _ => {}
         }
 
-        if let Some(ch) = keystroke.key_char.as_deref() {
-            if ch.chars().count() == 1 && !ch.chars().any(|c| c.is_control()) {
-                return self.replace_smart_input_selection(selected, ch, cx);
-            }
+        if let Some(ch) = keystroke.key_char.as_deref()
+            && ch.chars().count() == 1
+            && !ch.chars().any(|c| c.is_control())
+        {
+            return self.replace_smart_input_selection(selected, ch, cx);
         }
         false
     }

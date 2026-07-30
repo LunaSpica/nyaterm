@@ -97,7 +97,7 @@ impl NyaTermApp {
                 .update(cx, |_, window, _| window.activate_window())
                 .is_err()
             {
-                let _ = app.update(cx, |app, cx| {
+                app.update(cx, |app, cx| {
                     app.transfer.clear_external_sync_window_tracking(&prompt_id);
                     cx.notify();
                 });
@@ -118,7 +118,7 @@ impl NyaTermApp {
                     .update(cx, |_, window, _| window.activate_window())
                     .is_err()
                 {
-                    let _ = app.update(cx, |app, cx| {
+                    app.update(cx, |app, cx| {
                         app.transfer.clear_external_sync_window_tracking(&prompt_id);
                         cx.notify();
                     });
@@ -157,7 +157,7 @@ fn open_transfer_external_sync_window_now_from_app(
 ) {
     if let Some(handle) = app.read(cx).transfer.external_sync_window(&prompt_id) {
         let _ = handle.update(cx, |_, window, _| window.activate_window());
-        let _ = app.update(cx, |app, cx| {
+        app.update(cx, |app, cx| {
             app.transfer
                 .finish_external_sync_window_open(prompt_id.clone(), handle);
             cx.notify();
@@ -170,7 +170,7 @@ fn open_transfer_external_sync_window_now_from_app(
         .external_sync_prompt(&prompt_id)
         .is_none()
     {
-        let _ = app.update(cx, |app, cx| {
+        app.update(cx, |app, cx| {
             app.transfer.clear_external_sync_window_tracking(&prompt_id);
             cx.notify();
         });
@@ -205,7 +205,7 @@ fn open_transfer_external_sync_window_now_from_app(
         },
     );
 
-    let _ = app.update(cx, |app, cx| match result {
+    app.update(cx, |app, cx| match result {
         Ok(handle) => {
             app.transfer
                 .finish_external_sync_window_open(prompt_id.clone(), handle);

@@ -840,16 +840,16 @@ pub(super) fn promote_reasoning_to_text(
         _ => return (text, reasoning, cards),
     };
 
-    if let Some(json_str) = extract_json_object(reasoning_str) {
-        if let Ok(output) = serde_json::from_str::<AiModelOutput>(&json_str) {
-            let promoted_text = if output.text.trim().is_empty() {
-                json_str.clone()
-            } else {
-                output.text
-            };
-            let inner_reasoning = trim_optional_to_option(output.reasoning);
-            return (promoted_text, inner_reasoning, output.command_cards);
-        }
+    if let Some(json_str) = extract_json_object(reasoning_str)
+        && let Ok(output) = serde_json::from_str::<AiModelOutput>(&json_str)
+    {
+        let promoted_text = if output.text.trim().is_empty() {
+            json_str.clone()
+        } else {
+            output.text
+        };
+        let inner_reasoning = trim_optional_to_option(output.reasoning);
+        return (promoted_text, inner_reasoning, output.command_cards);
     }
 
     let (visible, inner_reasoning) = extract_think_block(reasoning_str);
@@ -917,8 +917,10 @@ mod tests {
 
     #[test]
     fn builds_openai_compatible_chat_body_with_history() {
-        let mut settings = AiSettings::default();
-        settings.context_line_limit = 10;
+        let settings = AiSettings {
+            context_line_limit: 10,
+            ..AiSettings::default()
+        };
         let request = sample_ai_request("en");
         let resolved = ResolvedAiModel {
             model_name: "deepseek-chat-none".to_string(),

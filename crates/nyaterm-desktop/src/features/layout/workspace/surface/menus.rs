@@ -311,8 +311,8 @@ impl NyaTermApp {
                 .filter(|connection| {
                     !matches!(connection.config, ConnectionType::LocalTerminal { .. })
                 })
-                .cloned()
                 .take(8)
+                .cloned()
                 .collect();
         }
 
@@ -767,11 +767,7 @@ impl NyaTermApp {
             ConnectionType::LocalTerminal { .. } => "icons/conn/terminal.svg",
         };
         let endpoint = connection.endpoint();
-        let label = if endpoint.is_empty() {
-            name.clone()
-        } else {
-            format!("{name}")
-        };
+        let label = name.clone();
         div()
             .id(SharedString::from(format!(
                 "new-session-conn-{connection_id}"

@@ -136,7 +136,7 @@ impl NyaTermApp {
                     .update(cx, |_, window, _| window.activate_window())
                     .is_err()
                 {
-                    let _ = app.update(cx, |app, cx| {
+                    app.update(cx, |app, cx| {
                         if app.transfer.clear_editor_window_if(handle) {
                             cx.notify();
                         }
@@ -165,7 +165,7 @@ impl NyaTermApp {
 fn open_remote_file_editor_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut App) {
     if let Some(handle) = app.read(cx).transfer.editor_window() {
         let activate_result = handle.update(cx, |_, window, _| window.activate_window());
-        let _ = app.update(cx, |app, cx| {
+        app.update(cx, |app, cx| {
             app.transfer
                 .finish_editor_window_activation(handle, activate_result.is_ok());
             cx.notify();
@@ -173,7 +173,7 @@ fn open_remote_file_editor_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut
         return;
     }
     if !app.read(cx).transfer.editor_has_workspace() {
-        let _ = app.update(cx, |app, cx| {
+        app.update(cx, |app, cx| {
             app.transfer.clear_editor_window_tracking();
             cx.notify();
         });
@@ -206,7 +206,7 @@ fn open_remote_file_editor_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut
         },
     );
 
-    let _ = app.update(cx, |app, cx| match result {
+    app.update(cx, |app, cx| match result {
         Ok(handle) => {
             app.transfer.finish_editor_window_open(handle);
             cx.notify();

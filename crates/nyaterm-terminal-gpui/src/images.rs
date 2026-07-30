@@ -190,7 +190,11 @@ pub fn cached_render_image(placement_id: u64, data: &[u8]) -> Option<Arc<RenderI
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{
+        DecodeCache, MAX_DECODE_CACHE_ENTRIES, MAX_DECODED_IMAGE_BYTES, cache, cache_key,
+        cached_render_image, decode_render_image, decoded_rgba_bytes,
+    };
+    use std::sync::Arc;
     use std::sync::Mutex;
 
     static TEST_CACHE_LOCK: Mutex<()> = Mutex::new(());

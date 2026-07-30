@@ -326,11 +326,11 @@ fn render_known_host_record(record: &KnownHostRecord) -> String {
     line.push_str(&record.key_type);
     line.push(' ');
     line.push_str(&record.key_base64);
-    if let Some(comment) = &record.comment {
-        if !comment.is_empty() {
-            line.push(' ');
-            line.push_str(comment);
-        }
+    if let Some(comment) = &record.comment
+        && !comment.is_empty()
+    {
+        line.push(' ');
+        line.push_str(comment);
     }
     line
 }

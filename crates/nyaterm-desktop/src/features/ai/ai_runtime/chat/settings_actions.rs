@@ -126,11 +126,9 @@ impl NyaTermApp {
                 let focus = self.ai.cancel_settings_action_edit();
                 window.focus(&focus);
                 cx.notify();
-                return;
             }
             "tab" => {
                 self.focus_ai_action_field(kind, action_id, field.next(), window, cx);
-                return;
             }
             "enter" if field == AiActionEditorField::Name => {
                 self.focus_ai_action_field(
@@ -140,7 +138,6 @@ impl NyaTermApp {
                     window,
                     cx,
                 );
-                return;
             }
             _ => {}
         }

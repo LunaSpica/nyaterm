@@ -230,13 +230,12 @@ impl NyaTermApp {
         if self.session.restore_is_complete() {
             self.persist_open_tabs();
         }
-        if let Some(multiplex_key) = multiplex_key {
-            if let Some(handle) = self
+        if let Some(multiplex_key) = multiplex_key
+            && let Some(handle) = self
                 .session
                 .take_multiplex_handle_if_unreferenced(&multiplex_key)
-            {
-                super::disconnect_multiplex_handle(handle);
-            }
+        {
+            super::disconnect_multiplex_handle(handle);
         }
     }
 }

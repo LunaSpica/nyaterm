@@ -1,28 +1,25 @@
 use gpui::prelude::*;
 use gpui::{App, ClickEvent, FontWeight, Hsla, IntoElement, Window, div, px, rgb};
 
-use super::super::common::network_item_overflow_menu;
+use super::super::common::{NetworkItemMenuConfig, network_item_overflow_menu};
 use crate::features::{tunnel_endpoint, tunnel_mode, tunnel_name};
 use crate::widgets::status_pill;
 use nyaterm_core::{TunnelConfig, truncate_preview};
 use nyaterm_transport::SshTunnelInfo;
 
+pub(in crate::features::pages::tunnels) struct TunnelNetworkRow<'a> {
+    pub tunnel: &'a TunnelConfig,
+    pub connection_label: String,
+    pub open_info: Option<SshTunnelInfo>,
+    pub pending: bool,
+    pub open_status_label: &'static str,
+    pub closed_status_label: &'static str,
+    pub mode_label: &'static str,
+    pub menu: NetworkItemMenuConfig,
+}
+
 pub(in crate::features::pages::tunnels) fn tunnel_network_row(
-    palette: crate::theme::ThemePalette,
-    menu_background: gpui::Rgba,
-    tunnel: &TunnelConfig,
-    connection_label: String,
-    open_info: Option<SshTunnelInfo>,
-    pending: bool,
-    group_count: usize,
-    menu_open: bool,
-    more_label: &'static str,
-    edit_label: &'static str,
-    move_label: &'static str,
-    delete_label: &'static str,
-    open_status_label: &'static str,
-    closed_status_label: &'static str,
-    mode_label: &'static str,
+    row: TunnelNetworkRow<'_>,
     on_toggle: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     on_open: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     on_close: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
@@ -30,6 +27,17 @@ pub(in crate::features::pages::tunnels) fn tunnel_network_row(
     on_move: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     on_delete: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let TunnelNetworkRow {
+        tunnel,
+        connection_label,
+        open_info,
+        pending,
+        open_status_label,
+        closed_status_label,
+        mode_label,
+        menu,
+    } = row;
+    let palette = menu.palette;
     let supported = tunnel_mode(tunnel).is_some();
     let is_open = open_info.is_some();
     let status = if pending {
@@ -142,19 +150,7 @@ pub(in crate::features::pages::tunnels) fn tunnel_network_row(
                 .gap_1()
                 .child(toggle)
                 .child(network_item_overflow_menu(
-                    palette,
-                    menu_background,
-                    format!("network-tunnel-actions-{}", tunnel.id),
-                    menu_open,
-                    more_label,
-                    edit_label,
-                    move_label,
-                    delete_label,
-                    group_count > 0,
-                    on_toggle,
-                    on_edit,
-                    on_move,
-                    on_delete,
+                    menu, on_toggle, on_edit, on_move, on_delete,
                 )),
         )
 }

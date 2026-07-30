@@ -18,7 +18,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let path = normalized_transfer_browser_path(&self.transfer.browser_view().path);
+        let path = normalized_transfer_browser_path(self.transfer.browser_view().path);
         if path.trim().is_empty() {
             self.shell
                 .set_status("open a remote directory first".to_string());

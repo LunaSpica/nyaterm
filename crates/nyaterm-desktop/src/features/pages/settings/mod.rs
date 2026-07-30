@@ -314,12 +314,14 @@ impl NyaTermApp {
 
         sidebar_nav = sidebar_nav
             .child(self.settings_group_header(
-                "workspace",
-                self.tr("settings.groupWorkspace"),
-                "icons/settings.svg",
-                workspace_expanded,
-                palette.link,
-                compact,
+                SettingsGroupHeaderPresentation {
+                    group: "workspace",
+                    title: self.tr("settings.groupWorkspace"),
+                    icon_path: "icons/settings.svg",
+                    expanded: workspace_expanded,
+                    accent: palette.link,
+                    compact,
+                },
                 cx,
             ))
             .when(workspace_expanded, |this| {
@@ -353,12 +355,14 @@ impl NyaTermApp {
                 ))
             })
             .child(self.settings_group_header(
-                "terminal_session",
-                self.tr("settings.groupTerminalSession"),
-                "icons/conn/terminal.svg",
-                terminal_expanded,
-                palette.success,
-                compact,
+                SettingsGroupHeaderPresentation {
+                    group: "terminal_session",
+                    title: self.tr("settings.groupTerminalSession"),
+                    icon_path: "icons/conn/terminal.svg",
+                    expanded: terminal_expanded,
+                    accent: palette.success,
+                    compact,
+                },
                 cx,
             ))
             .when(terminal_expanded, |this| {
@@ -385,12 +389,14 @@ impl NyaTermApp {
                 ))
             })
             .child(self.settings_group_header(
-                "ai_group",
-                self.tr("ai.title"),
-                "icons/ai.svg",
-                ai_expanded,
-                0xbc8cff,
-                compact,
+                SettingsGroupHeaderPresentation {
+                    group: "ai_group",
+                    title: self.tr("ai.title"),
+                    icon_path: "icons/ai.svg",
+                    expanded: ai_expanded,
+                    accent: 0xbc8cff,
+                    compact,
+                },
                 cx,
             ))
             .when(ai_expanded, |this| {
@@ -482,14 +488,17 @@ impl NyaTermApp {
 
     fn settings_group_header(
         &self,
-        group: &'static str,
-        title: &'static str,
-        icon_path: &'static str,
-        expanded: bool,
-        accent: u32,
-        compact: bool,
+        presentation: SettingsGroupHeaderPresentation,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let SettingsGroupHeaderPresentation {
+            group,
+            title,
+            icon_path,
+            expanded,
+            accent,
+            compact,
+        } = presentation;
         let palette = self.theme_palette();
         div()
             .id(SharedString::from(format!("settings-group-{group}")))
@@ -704,6 +713,15 @@ impl NyaTermApp {
             SettingsTab::SyncBackup => self.cloud_sync_settings_section(cx).into_any_element(),
         }
     }
+}
+
+struct SettingsGroupHeaderPresentation {
+    group: &'static str,
+    title: &'static str,
+    icon_path: &'static str,
+    expanded: bool,
+    accent: u32,
+    compact: bool,
 }
 
 /// Tauri SettingSection: rounded card with optional title/desc and body.

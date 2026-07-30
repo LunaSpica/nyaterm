@@ -1,5 +1,15 @@
 //! Shared terminal paint types.
 
+use gpui::{Bounds, Pixels};
+
+#[derive(Clone, Copy)]
+pub(super) struct TerminalPaintGeometry {
+    pub(super) bounds: Bounds<Pixels>,
+    pub(super) visual_y_offset: f32,
+    pub(super) cell_width: f32,
+    pub(super) cell_height: f32,
+}
+
 #[derive(Clone)]
 pub(super) struct TerminalHighlightSpan {
     pub(super) text: String,

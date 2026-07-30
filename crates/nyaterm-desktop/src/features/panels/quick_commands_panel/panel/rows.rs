@@ -5,7 +5,9 @@ use gpui::{
 use nyaterm_core::{QuickCommand, truncate_preview};
 
 use super::super::super::{quick_command_icon_mark, quick_command_pin_mark};
-use super::super::helpers::quick_command_row_actions;
+use super::super::helpers::{
+    QuickCommandRowHandlers, QuickCommandRowPresentation, quick_command_row_actions,
+};
 use crate::features::{ChromeTooltip, NyaTermApp};
 use crate::models::{QuickCommandRowMenuState, QuickCommandViewMode};
 
@@ -105,39 +107,43 @@ impl NyaTermApp {
                     // Tauri compact: send + details + more (edit / send-all / delete).
                     let actions = quick_command_row_actions(
                         palette,
-                        &command_id,
-                        false,
-                        execution_mode,
-                        menu_open,
-                        cx.listener(move |this, _, _, cx| {
-                            this.commands.close_quick_row_menu();
-                            this.run_quick_command_by_id(run_command_id.clone(), cx);
-                        }),
-                        cx.listener(move |this, event: &ClickEvent, window, cx| {
-                            this.commands.close_quick_row_menu();
-                            let position = event.position();
-                            this.open_quick_command_details(
-                                detail_command_id.clone(),
-                                position.x,
-                                position.y,
-                                window,
-                                cx,
-                            );
-                        }),
-                        cx.listener({
-                            let menu_command_id = command_id.clone();
-                            move |this, event: &ClickEvent, _, cx| {
-                                cx.stop_propagation();
+                        QuickCommandRowPresentation {
+                            command_id: &command_id,
+                            show_badge: false,
+                            execution_mode,
+                            menu_open,
+                        },
+                        QuickCommandRowHandlers {
+                            on_run: cx.listener(move |this, _, _, cx| {
+                                this.commands.close_quick_row_menu();
+                                this.run_quick_command_by_id(run_command_id.clone(), cx);
+                            }),
+                            on_details: cx.listener(move |this, event: &ClickEvent, window, cx| {
+                                this.commands.close_quick_row_menu();
                                 let position = event.position();
-                                this.commands
-                                    .toggle_quick_row_menu(QuickCommandRowMenuState {
-                                        command_id: menu_command_id.clone(),
-                                        x: position.x,
-                                        y: position.y,
-                                    });
-                                cx.notify();
-                            }
-                        }),
+                                this.open_quick_command_details(
+                                    detail_command_id.clone(),
+                                    position.x,
+                                    position.y,
+                                    window,
+                                    cx,
+                                );
+                            }),
+                            on_more: cx.listener({
+                                let menu_command_id = command_id.clone();
+                                move |this, event: &ClickEvent, _, cx| {
+                                    cx.stop_propagation();
+                                    let position = event.position();
+                                    this.commands
+                                        .toggle_quick_row_menu(QuickCommandRowMenuState {
+                                            command_id: menu_command_id.clone(),
+                                            x: position.x,
+                                            y: position.y,
+                                        });
+                                    cx.notify();
+                                }
+                            }),
+                        },
                     );
 
                     div()
@@ -223,39 +229,43 @@ impl NyaTermApp {
                     // Tauri list: badge + send + details + more.
                     let actions = quick_command_row_actions(
                         palette,
-                        &command_id,
-                        true,
-                        execution_mode,
-                        menu_open,
-                        cx.listener(move |this, _, _, cx| {
-                            this.commands.close_quick_row_menu();
-                            this.run_quick_command_by_id(run_command_id.clone(), cx);
-                        }),
-                        cx.listener(move |this, event: &ClickEvent, window, cx| {
-                            this.commands.close_quick_row_menu();
-                            let position = event.position();
-                            this.open_quick_command_details(
-                                detail_command_id.clone(),
-                                position.x,
-                                position.y,
-                                window,
-                                cx,
-                            );
-                        }),
-                        cx.listener({
-                            let menu_command_id = command_id.clone();
-                            move |this, event: &ClickEvent, _, cx| {
-                                cx.stop_propagation();
+                        QuickCommandRowPresentation {
+                            command_id: &command_id,
+                            show_badge: true,
+                            execution_mode,
+                            menu_open,
+                        },
+                        QuickCommandRowHandlers {
+                            on_run: cx.listener(move |this, _, _, cx| {
+                                this.commands.close_quick_row_menu();
+                                this.run_quick_command_by_id(run_command_id.clone(), cx);
+                            }),
+                            on_details: cx.listener(move |this, event: &ClickEvent, window, cx| {
+                                this.commands.close_quick_row_menu();
                                 let position = event.position();
-                                this.commands
-                                    .toggle_quick_row_menu(QuickCommandRowMenuState {
-                                        command_id: menu_command_id.clone(),
-                                        x: position.x,
-                                        y: position.y,
-                                    });
-                                cx.notify();
-                            }
-                        }),
+                                this.open_quick_command_details(
+                                    detail_command_id.clone(),
+                                    position.x,
+                                    position.y,
+                                    window,
+                                    cx,
+                                );
+                            }),
+                            on_more: cx.listener({
+                                let menu_command_id = command_id.clone();
+                                move |this, event: &ClickEvent, _, cx| {
+                                    cx.stop_propagation();
+                                    let position = event.position();
+                                    this.commands
+                                        .toggle_quick_row_menu(QuickCommandRowMenuState {
+                                            command_id: menu_command_id.clone(),
+                                            x: position.x,
+                                            y: position.y,
+                                        });
+                                    cx.notify();
+                                }
+                            }),
+                        },
                     );
 
                     div()

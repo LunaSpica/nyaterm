@@ -68,7 +68,7 @@ impl NyaTermApp {
         let sessions = self.session.ordered_sessions();
         let mut session_items = Vec::new();
         for session in &sessions {
-            let title = self.session.display_name_by_info(&session);
+            let title = self.session.display_name_by_info(session);
             let active = self.session.active_id() == Some(session.id.as_str());
             let mut subtitle = format!(
                 "{} - {}",
@@ -186,7 +186,7 @@ impl NyaTermApp {
             items.push(QuickSwitchItem::Connection {
                 title: connection.name.clone(),
                 subtitle: format!("{} - {}", connection.kind_label(), connection.endpoint()),
-                connection,
+                connection: Box::new(connection),
             });
         }
         items
@@ -244,7 +244,7 @@ impl NyaTermApp {
                 self.select_session(id, cx);
             }
             QuickSwitchItem::Connection { connection, .. } => {
-                self.start_saved_connection(connection, window, cx);
+                self.start_saved_connection(*connection, window, cx);
             }
             QuickSwitchItem::Pending {
                 request_id, failed, ..

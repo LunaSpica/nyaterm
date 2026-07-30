@@ -25,7 +25,10 @@ mod path_bar;
 mod properties;
 mod queue;
 
-use entry_row::{transfer_browser_entry_row, transfer_browser_parent_entry_row};
+use entry_row::{
+    TransferBrowserEntryRowPresentation, transfer_browser_entry_row,
+    transfer_browser_parent_entry_row,
+};
 use helpers::*;
 
 const NATIVE_EDITOR_MAX_BYTES: u64 = 512 * 1024;

@@ -290,16 +290,17 @@ pub(super) fn build_saved_connection_from_editor(
                     && editor.password_source == ConnectionEditorPasswordSource::Saved)
                     .then(|| editor.password_id.clone())
                     .flatten(),
-                password: (mode == "password"
-                    && editor.password_source == ConnectionEditorPasswordSource::Direct)
-                    .then(|| {
-                        if !password.is_empty() {
-                            Some(password)
-                        } else {
-                            existing
-                        }
-                    })
-                    .flatten(),
+                password: if mode == "password"
+                    && editor.password_source == ConnectionEditorPasswordSource::Direct
+                {
+                    if !password.is_empty() {
+                        Some(password)
+                    } else {
+                        existing
+                    }
+                } else {
+                    None
+                },
                 key_id: (mode == "key")
                     .then(|| {
                         editor

@@ -3,8 +3,8 @@ use nyaterm_core::{ConnectionStore, SavedCredential};
 
 use crate::features::{NyaTermApp, compact_id, none_if_blank};
 use crate::models::{
-    SecurityAuthTab, SecurityCredentialEditorField, SecurityCredentialEditorState,
-    SecurityDeleteConfirmState, SecurityUnlockAction,
+    SecurityAuthTab, SecurityCredentialEditorState, SecurityDeleteConfirmState,
+    SecurityUnlockAction,
 };
 
 impl NyaTermApp {
@@ -46,7 +46,6 @@ impl NyaTermApp {
                 password_prompt_regex: entry.password_prompt_regex.unwrap_or_default(),
                 enabled: entry.enabled,
                 has_password: entry.has_password,
-                focused_field: SecurityCredentialEditorField::Name,
                 error: None,
             }
         } else {
@@ -59,7 +58,6 @@ impl NyaTermApp {
                 password_prompt_regex: String::new(),
                 enabled: true,
                 has_password: false,
-                focused_field: SecurityCredentialEditorField::Name,
                 error: None,
             }
         };
@@ -156,11 +154,9 @@ impl NyaTermApp {
         match keystroke.key.as_str() {
             "escape" => {
                 self.close_security_credential_editor(cx);
-                return;
             }
             "enter" => {
                 self.save_security_credential_editor(window, cx);
-                return;
             }
             _ => {}
         }

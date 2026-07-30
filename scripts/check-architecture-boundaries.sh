@@ -1396,11 +1396,15 @@ check_no_matches \
   '(^|[,{[:space:]])(shortcut_matches)([},[:space:]]|$)' \
   crates/nyaterm-desktop/src/features/prelude.rs
 
-# Keep the terminal GPUI crate root's public surface explicit. These modules
-# are implementation details; callers use the named facade exports below.
+# Keep the terminal GPUI crate root's public surface explicit. Implementation
+# modules and upstream dependency crates are not part of its facade.
 check_no_matches \
-  "terminal-gpui must not re-export implementation modules with glob imports" \
-  '^pub[[:space:]]+use[[:space:]]+(images|keywords|paint)::\*;' \
+  "terminal-gpui must not import implementation modules with glob imports" \
+  '^(pub[[:space:]]+)?use[[:space:]]+(ansi|images|keywords|paint)::\*;' \
+  crates/nyaterm-terminal-gpui/src/lib.rs
+check_no_matches \
+  "terminal-gpui must not re-export upstream dependency crates" \
+  '^pub[[:space:]]+use[[:space:]]+(gpui|nyaterm_core|nyaterm_terminal)(::|\{)' \
   crates/nyaterm-terminal-gpui/src/lib.rs
 
 # Migration inventory/dashboard code and the local legacy source checkout have
@@ -1434,9 +1438,11 @@ check_no_matches 'terminal-gpui #[path] debt' '#\[path\s*=' \
   crates/nyaterm-terminal-gpui/src
 
 # Parent-module wildcard imports and the shared feature prelude are fully
-# cleared. Keep both debts at zero across the complete desktop crate.
+# cleared. Keep the debt at zero across both GPUI presentation crates.
 check_no_matches 'desktop use super::* debt' '^[[:space:]]*use super::\*;' \
   crates/nyaterm-desktop/src
+check_no_matches 'terminal-gpui use super::* debt' '^[[:space:]]*use super::\*;' \
+  crates/nyaterm-terminal-gpui/src
 if [[ -e crates/nyaterm-desktop/src/features/prelude.rs ]]; then
   fail 'features/prelude.rs must not be reintroduced'
 fi

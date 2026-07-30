@@ -1,4 +1,5 @@
-use super::*;
+use gpui::{KeyDownEvent, KeyUpEvent};
+use nyaterm_terminal::TerminalScreen;
 
 /// Terminal keyboard mode flags that affect encoding of plain navigation keys.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

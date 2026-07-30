@@ -1,8 +1,10 @@
 use gpui::{Context, Window};
 
-use crate::features::NyaTermApp;
 use crate::features::formatting::{short_id, ssh_multiplex_key};
+use crate::features::{NyaTermApp, SavedConnectionStartOptions};
 use crate::models::{SessionLaunchConfig, StartupCommandRequest};
+
+use super::session_runtime::MultiplexSshStartRequest;
 
 impl NyaTermApp {
     pub(in crate::features) fn duplicate_active_session(
@@ -51,12 +53,13 @@ impl NyaTermApp {
                     SessionLaunchConfig::Local(config),
                     metadata.source_connection_id.clone(),
                     metadata.ai_execution_profile,
-                    custom_name,
-                    custom_color,
-                    Some(source_session_id),
-                    None,
-                    None,
-                    startup_command,
+                    SavedConnectionStartOptions {
+                        custom_name,
+                        tab_color: custom_color,
+                        after_session_id: Some(source_session_id),
+                        startup_command,
+                        ..Default::default()
+                    },
                     cx,
                 );
             }
@@ -66,12 +69,13 @@ impl NyaTermApp {
                     SessionLaunchConfig::Telnet(config),
                     metadata.source_connection_id.clone(),
                     metadata.ai_execution_profile,
-                    custom_name,
-                    custom_color,
-                    Some(source_session_id),
-                    None,
-                    None,
-                    startup_command,
+                    SavedConnectionStartOptions {
+                        custom_name,
+                        tab_color: custom_color,
+                        after_session_id: Some(source_session_id),
+                        startup_command,
+                        ..Default::default()
+                    },
                     cx,
                 );
             }
@@ -81,27 +85,29 @@ impl NyaTermApp {
                     SessionLaunchConfig::Serial(config),
                     metadata.source_connection_id.clone(),
                     metadata.ai_execution_profile,
-                    custom_name,
-                    custom_color,
-                    Some(source_session_id),
-                    None,
-                    None,
-                    startup_command,
+                    SavedConnectionStartOptions {
+                        custom_name,
+                        tab_color: custom_color,
+                        after_session_id: Some(source_session_id),
+                        startup_command,
+                        ..Default::default()
+                    },
                     cx,
                 );
             }
             SessionLaunchConfig::Ssh(config) => {
                 self.begin_background_ssh_start(
                     format!("{} duplicate", config.name),
-                    config,
+                    *config,
                     metadata.source_connection_id.clone(),
                     metadata.ai_execution_profile,
-                    custom_name,
-                    custom_color,
-                    Some(source_session_id),
-                    None,
-                    None,
-                    startup_command,
+                    SavedConnectionStartOptions {
+                        custom_name,
+                        tab_color: custom_color,
+                        after_session_id: Some(source_session_id),
+                        startup_command,
+                        ..Default::default()
+                    },
                     cx,
                 );
             }
@@ -156,15 +162,20 @@ impl NyaTermApp {
             .map(str::to_string);
         let custom_color = self.session.tab_color(&source_session_id);
         self.begin_background_multiplex_ssh_start(
-            format!("{} multiplex", config.name),
-            config,
-            metadata.source_connection_id.clone(),
-            metadata.ai_execution_profile,
-            custom_name,
-            custom_color,
-            Some(source_session_id),
-            startup_command,
-            existing_multiplex,
+            MultiplexSshStartRequest {
+                connection_name: format!("{} multiplex", config.name),
+                config: *config,
+                source_connection_id: metadata.source_connection_id.clone(),
+                ai_execution_profile: metadata.ai_execution_profile,
+                options: SavedConnectionStartOptions {
+                    custom_name,
+                    tab_color: custom_color,
+                    after_session_id: Some(source_session_id),
+                    startup_command,
+                    ..Default::default()
+                },
+                existing_multiplex,
+            },
             cx,
         );
         self.shell.show_workspace();
@@ -234,13 +245,12 @@ impl NyaTermApp {
             return;
         }
         // Drop multiplex handle association for this session key if unused.
-        if let Some(multiplex_key) = update.multiplex_key {
-            if let Some(handle) = self
+        if let Some(multiplex_key) = update.multiplex_key
+            && let Some(handle) = self
                 .session
                 .take_multiplex_handle_if_no_other_live_reference(session_id, &multiplex_key)
-            {
-                super::disconnect_multiplex_handle(handle);
-            }
+        {
+            super::disconnect_multiplex_handle(handle);
         }
 
         let banner = "\r\n\x1b[31m[Session disconnected]\x1b[0m\r\n\x1b[33m[Press Enter to reconnect]\x1b[0m\r\n";
@@ -333,12 +343,13 @@ impl NyaTermApp {
                     SessionLaunchConfig::Local(config),
                     source_connection_id,
                     ai_execution_profile,
-                    custom_name,
-                    custom_color,
-                    None,
-                    Some(source_index),
-                    seed,
-                    None,
+                    SavedConnectionStartOptions {
+                        custom_name,
+                        tab_color: custom_color,
+                        insert_index: Some(source_index),
+                        seed_output: seed,
+                        ..Default::default()
+                    },
                     cx,
                 );
             }
@@ -348,12 +359,13 @@ impl NyaTermApp {
                     SessionLaunchConfig::Telnet(config),
                     source_connection_id,
                     ai_execution_profile,
-                    custom_name,
-                    custom_color,
-                    None,
-                    Some(source_index),
-                    seed,
-                    None,
+                    SavedConnectionStartOptions {
+                        custom_name,
+                        tab_color: custom_color,
+                        insert_index: Some(source_index),
+                        seed_output: seed,
+                        ..Default::default()
+                    },
                     cx,
                 );
             }
@@ -363,27 +375,29 @@ impl NyaTermApp {
                     SessionLaunchConfig::Serial(config),
                     source_connection_id,
                     ai_execution_profile,
-                    custom_name,
-                    custom_color,
-                    None,
-                    Some(source_index),
-                    seed,
-                    None,
+                    SavedConnectionStartOptions {
+                        custom_name,
+                        tab_color: custom_color,
+                        insert_index: Some(source_index),
+                        seed_output: seed,
+                        ..Default::default()
+                    },
                     cx,
                 );
             }
             SessionLaunchConfig::Ssh(config) => {
                 self.begin_background_ssh_start(
                     format!("{} reconnect", config.name),
-                    config,
+                    *config,
                     source_connection_id,
                     ai_execution_profile,
-                    custom_name,
-                    custom_color,
-                    None,
-                    Some(source_index),
-                    seed,
-                    None,
+                    SavedConnectionStartOptions {
+                        custom_name,
+                        tab_color: custom_color,
+                        insert_index: Some(source_index),
+                        seed_output: seed,
+                        ..Default::default()
+                    },
                     cx,
                 );
             }

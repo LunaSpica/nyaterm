@@ -2,6 +2,7 @@ use gpui::{Context, div, prelude::*};
 use nyaterm_transport::SessionKind;
 
 use super::super::terminal_action_prompt_text;
+use super::{CompactTabActionsMenuState, TabActionCapabilities};
 use crate::features::NyaTermApp;
 use crate::models::SessionLaunchConfig;
 
@@ -45,7 +46,6 @@ impl NyaTermApp {
             return div().into_any_element();
         };
 
-        let display_name = self.session.display_name_by_info(&session);
         let active_color = self.session.tab_color(&session_id);
         let can_copy_ssh = self.session.ssh_address(&session_id).is_some();
         let busy_action = self.session.busy_action(&session_id).map(str::to_string);
@@ -85,23 +85,24 @@ impl NyaTermApp {
 
         self.compact_tab_actions_menu(
             palette,
-            session_id,
-            &session,
-            &display_name,
-            active_color,
-            can_copy_ssh,
-            can_spawn_session,
-            can_multiplex,
-            can_reconnect,
-            can_disconnect,
-            can_use_ai,
-            can_session_info,
-            can_close_inactive,
-            can_close_right,
-            can_unsplit,
-            visible_for_ai,
-            buffer_for_ai,
-            sessions.len(),
+            CompactTabActionsMenuState {
+                session_id,
+                active_color,
+                capabilities: TabActionCapabilities {
+                    can_copy_ssh,
+                    can_spawn_session,
+                    can_multiplex,
+                    can_reconnect,
+                    can_disconnect,
+                    can_use_ai,
+                    can_session_info,
+                    can_close_inactive,
+                    can_close_right,
+                    can_unsplit,
+                },
+                visible_for_ai,
+                buffer_for_ai,
+            },
             cx,
         )
     }

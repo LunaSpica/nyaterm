@@ -365,17 +365,17 @@ impl NyaTermApp {
                 .then_with(|| left.3.cmp(&right.3))
         });
         if self.shell.session_tab_scroll_into_view_pending() {
-            if let Some(active_id) = self.session.active_id() {
-                if let Some(index) = sessions.iter().position(|session| session.id == active_id) {
-                    let pending_count = transient_tabs
-                        .iter()
-                        .filter(|(pending_index, _, _, _, _, _)| *pending_index <= index)
-                        .count();
-                    let child_index = index + pending_count;
-                    self.shell
-                        .session_tab_strip_scroll()
-                        .scroll_to_item(child_index);
-                }
+            if let Some(active_id) = self.session.active_id()
+                && let Some(index) = sessions.iter().position(|session| session.id == active_id)
+            {
+                let pending_count = transient_tabs
+                    .iter()
+                    .filter(|(pending_index, _, _, _, _, _)| *pending_index <= index)
+                    .count();
+                let child_index = index + pending_count;
+                self.shell
+                    .session_tab_strip_scroll()
+                    .scroll_to_item(child_index);
             }
             self.shell.consume_session_tab_scroll_into_view();
         }
@@ -389,7 +389,7 @@ impl NyaTermApp {
             // Tauri tab-strip-scroll: horizontal overflow instead of clipping tabs.
             .overflow_x_scroll()
             .overflow_y_hidden()
-            .track_scroll(&self.shell.session_tab_strip_scroll());
+            .track_scroll(self.shell.session_tab_strip_scroll());
 
         let mut transient_cursor = 0usize;
         for (tab_index, session) in sessions.into_iter().enumerate() {

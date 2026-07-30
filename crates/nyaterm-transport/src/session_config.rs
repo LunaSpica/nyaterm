@@ -1,0 +1,340 @@
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use crate::ssh_auth::format_keyboard_interactive_prompt;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LocalSessionConfig {
+    pub name: String,
+    pub shell_path: Option<String>,
+    pub shell_args: Vec<String>,
+    pub working_dir: Option<PathBuf>,
+    pub cols: u16,
+    pub rows: u16,
+    /// Total terminal pixel width (cols * cell_width). Zero means unknown.
+    pub pixel_width: u16,
+    /// Total terminal pixel height (rows * cell_height). Zero means unknown.
+    pub pixel_height: u16,
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum TelnetEnterMode {
+    Crlf,
+    #[default]
+    Cr,
+    Lf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TelnetSessionConfig {
+    pub name: String,
+    pub host: String,
+    pub port: u16,
+    pub raw_tcp: bool,
+    pub enter_mode: TelnetEnterMode,
+    pub force_character_at_a_time: bool,
+    pub send_naws: bool,
+    pub send_sga: bool,
+    pub cols: u16,
+    pub rows: u16,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SerialSessionConfig {
+    pub name: String,
+    pub port_name: String,
+    pub baud_rate: u32,
+    pub data_bits: u8,
+    pub parity: String,
+    pub stop_bits: String,
+    pub backspace_mode: String,
+}
+
+#[derive(Clone)]
+pub struct SshSessionConfig {
+    pub name: String,
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub password: Option<String>,
+    pub key_auth: Option<SshKeyAuthConfig>,
+    pub otp_id: Option<String>,
+    pub auto_fill_otp: bool,
+    pub proxy_jump: Option<Box<SshSessionConfig>>,
+    pub proxy: Option<SshProxyConfig>,
+    pub allow_none_auth: bool,
+    pub backspace_mode: String,
+    pub term: String,
+    pub x11_forwarding: bool,
+    pub x11_display: String,
+    pub deferred_pty: bool,
+    /// Seconds between SSH keepalive packets. Zero disables keepalive.
+    pub keep_alive_interval_secs: u32,
+    pub cols: u16,
+    pub rows: u16,
+    /// Total terminal pixel width (cols * cell_width). Zero means unknown.
+    pub pixel_width: u16,
+    /// Total terminal pixel height (rows * cell_height). Zero means unknown.
+    pub pixel_height: u16,
+    pub host_key_verifier: Option<Arc<dyn SshHostKeyVerifier>>,
+    pub credential_provider: Option<Arc<dyn SshCredentialProvider>>,
+    pub otp_provider: Option<Arc<dyn SshOtpProvider>>,
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub struct SshProxyConfig {
+    pub protocol: String,
+    pub host: String,
+    pub port: u16,
+    pub command: Option<String>,
+    pub username: Option<String>,
+    pub password: Option<String>,
+}
+
+impl std::fmt::Debug for SshProxyConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SshProxyConfig")
+            .field("protocol", &self.protocol)
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .field("command", &self.command)
+            .field("username", &self.username)
+            .field("password", &self.password.as_ref().map(|_| "<redacted>"))
+            .finish()
+    }
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub struct SshKeyAuthConfig {
+    pub key_data: String,
+    pub cert_data: Option<String>,
+    pub passphrase: Option<String>,
+}
+
+impl std::fmt::Debug for SshKeyAuthConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SshKeyAuthConfig")
+            .field("key_data", &"<redacted>")
+            .field("cert_data", &self.cert_data.as_ref().map(|_| "<redacted>"))
+            .field(
+                "passphrase",
+                &self.passphrase.as_ref().map(|_| "<redacted>"),
+            )
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for SshSessionConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SshSessionConfig")
+            .field("name", &self.name)
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .field("username", &self.username)
+            .field("password", &self.password.as_ref().map(|_| "<redacted>"))
+            .field("key_auth", &self.key_auth.as_ref().map(|_| "<redacted>"))
+            .field("otp_id", &self.otp_id)
+            .field("auto_fill_otp", &self.auto_fill_otp)
+            .field("proxy_jump", &self.proxy_jump.is_some())
+            .field("proxy", &self.proxy)
+            .field("allow_none_auth", &self.allow_none_auth)
+            .field("backspace_mode", &self.backspace_mode)
+            .field("term", &self.term)
+            .field("x11_forwarding", &self.x11_forwarding)
+            .field("x11_display", &self.x11_display)
+            .field("deferred_pty", &self.deferred_pty)
+            .field("keep_alive_interval_secs", &self.keep_alive_interval_secs)
+            .field("cols", &self.cols)
+            .field("rows", &self.rows)
+            .field("pixel_width", &self.pixel_width)
+            .field("pixel_height", &self.pixel_height)
+            .field("host_key_verifier", &self.host_key_verifier.is_some())
+            .field("credential_provider", &self.credential_provider.is_some())
+            .field("otp_provider", &self.otp_provider.is_some())
+            .finish()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SshHostKey {
+    pub host: String,
+    pub port: u16,
+    pub host_identifier: String,
+    pub key_type: String,
+    pub key_base64: String,
+    pub fingerprint: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SshHostKeyDecision {
+    Accept,
+    Reject(String),
+}
+
+pub trait SshHostKeyVerifier: Send + Sync {
+    fn verify(&self, host_key: &SshHostKey) -> Result<SshHostKeyDecision, String>;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SshCredentialPromptKind {
+    Password,
+    KeyPassphrase,
+    KeyboardInteractive,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SshCredentialPromptReason {
+    MissingPassword,
+    PasswordRejected,
+    KeyPassphraseRequired,
+    KeyboardInteractive,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SshCredentialPrompt {
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub connection_name: String,
+    pub kind: SshCredentialPromptKind,
+    pub reason: SshCredentialPromptReason,
+    pub attempt: u32,
+    pub prompt_text: Option<String>,
+    pub echo: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SshKeyboardInteractivePrompt {
+    pub prompt: String,
+    pub echo: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SshKeyboardInteractiveRequest {
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub connection_name: String,
+    pub name: String,
+    pub instructions: String,
+    pub round: u32,
+    pub prompts: Vec<SshKeyboardInteractivePrompt>,
+    pub otp_id: Option<String>,
+}
+
+pub trait SshCredentialProvider: Send + Sync {
+    fn request_secret(&self, prompt: &SshCredentialPrompt) -> Result<Option<String>, String>;
+
+    fn request_keyboard_interactive(
+        &self,
+        request: &SshKeyboardInteractiveRequest,
+    ) -> Result<Option<Vec<String>>, String> {
+        let prompt_count = request.prompts.len();
+        let mut responses = Vec::with_capacity(prompt_count);
+        for (index, prompt) in request.prompts.iter().enumerate() {
+            let response = self.request_secret(&SshCredentialPrompt {
+                host: request.host.clone(),
+                port: request.port,
+                username: request.username.clone(),
+                connection_name: request.connection_name.clone(),
+                kind: SshCredentialPromptKind::KeyboardInteractive,
+                reason: SshCredentialPromptReason::KeyboardInteractive,
+                attempt: request.round,
+                prompt_text: Some(format_keyboard_interactive_prompt(
+                    &request.name,
+                    &request.instructions,
+                    &prompt.prompt,
+                    index,
+                    prompt_count,
+                )),
+                echo: prompt.echo,
+            })?;
+            let Some(response) = response else {
+                return Ok(None);
+            };
+            responses.push(response);
+        }
+        Ok(Some(responses))
+    }
+}
+
+pub trait SshOtpProvider: Send + Sync {
+    fn request_otp_code(&self, otp_id: &str) -> Result<Option<String>, String>;
+}
+
+impl Default for SerialSessionConfig {
+    fn default() -> Self {
+        Self {
+            name: "Serial".to_string(),
+            port_name: String::new(),
+            baud_rate: 115_200,
+            data_bits: 8,
+            parity: "none".to_string(),
+            stop_bits: "1".to_string(),
+            backspace_mode: "ctrl_h".to_string(),
+        }
+    }
+}
+
+impl Default for SshSessionConfig {
+    fn default() -> Self {
+        Self {
+            name: "SSH".to_string(),
+            host: String::new(),
+            port: 22,
+            username: "root".to_string(),
+            password: None,
+            key_auth: None,
+            otp_id: None,
+            auto_fill_otp: false,
+            proxy_jump: None,
+            proxy: None,
+            allow_none_auth: false,
+            backspace_mode: "del".to_string(),
+            term: "xterm-256color".to_string(),
+            x11_forwarding: false,
+            x11_display: String::new(),
+            deferred_pty: false,
+            keep_alive_interval_secs: 30,
+            cols: 80,
+            rows: 24,
+            pixel_width: 0,
+            pixel_height: 0,
+            host_key_verifier: None,
+            credential_provider: None,
+            otp_provider: None,
+        }
+    }
+}
+
+impl Default for TelnetSessionConfig {
+    fn default() -> Self {
+        Self {
+            name: "Telnet".to_string(),
+            host: String::new(),
+            port: 23,
+            raw_tcp: false,
+            enter_mode: TelnetEnterMode::Cr,
+            force_character_at_a_time: false,
+            send_naws: true,
+            send_sga: true,
+            cols: 80,
+            rows: 24,
+        }
+    }
+}
+
+impl Default for LocalSessionConfig {
+    fn default() -> Self {
+        Self {
+            name: "Local Terminal".to_string(),
+            shell_path: None,
+            shell_args: Vec::new(),
+            working_dir: None,
+            cols: 80,
+            rows: 24,
+            pixel_width: 0,
+            pixel_height: 0,
+        }
+    }
+}

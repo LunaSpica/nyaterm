@@ -411,10 +411,7 @@ pub fn get_tracked_submission_command(state: &TerminalInputState) -> String {
 }
 
 fn normalize_line_content(value: &str) -> String {
-    value
-        .replace("\r\n", "")
-        .replace('\n', "")
-        .replace('\r', "")
+    value.replace("\r\n", "").replace(['\n', '\r'], "")
 }
 
 fn choose_terminal_line_command(previous_value: &str, line_content: &str) -> Option<String> {
@@ -428,9 +425,7 @@ fn choose_terminal_line_command(previous_value: &str, line_content: &str) -> Opt
         if command.is_empty() {
             return;
         }
-        let score = if !previous_command.is_empty() && command.starts_with(&previous_command) {
-            command.len() as u32
-        } else if previous_command.is_empty() {
+        let score = if previous_command.is_empty() || command.starts_with(&previous_command) {
             command.len() as u32
         } else {
             0
@@ -453,11 +448,11 @@ fn choose_terminal_line_command(previous_value: &str, line_content: &str) -> Opt
         let source = normalize_line_content(line_content);
         let source_cmd = sanitize_terminal_command(&source);
         let prefix_cmd = sanitize_terminal_command(prefix);
-        if !prefix_cmd.is_empty() {
-            if let Some(pos) = source_cmd.find(&prefix_cmd) {
-                let suffix = &source_cmd[pos..];
-                push_candidate(suffix);
-            }
+        if !prefix_cmd.is_empty()
+            && let Some(pos) = source_cmd.find(&prefix_cmd)
+        {
+            let suffix = &source_cmd[pos..];
+            push_candidate(suffix);
         }
     }
 

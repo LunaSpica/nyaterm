@@ -6,6 +6,7 @@ use gpui::{
 use nyaterm_terminal::TerminalSnapshot;
 
 use crate::features::NyaTermApp;
+use crate::features::terminal::terminal_runtime::TerminalMouseReportRequest;
 use crate::models::{TerminalCellPos, TerminalSelection};
 use crate::terminal::{
     TerminalTextCell, terminal_is_zero_width_mark, terminal_text_cell_slice, terminal_text_cells,
@@ -165,39 +166,42 @@ impl NyaTermApp {
         };
         let cell = terminal_cell_for_visual_geometry(event.position, &geometry);
         // Applications with mouse tracking (vim/less/tmux) consume left presses.
-        if let Some(session_id) = selection_session_id.as_deref() {
-            if self.maybe_send_mouse_report_for_session(
-                session_id,
-                0,
-                cell.col as u16,
-                cell.row as u16,
-                true,
-                false,
-                event.modifiers,
+        if let Some(session_id) = selection_session_id.as_deref()
+            && self.maybe_send_mouse_report_for_session(
+                TerminalMouseReportRequest {
+                    session_id,
+                    button: 0,
+                    col: cell.col as u16,
+                    row: cell.row as u16,
+                    press: true,
+                    motion: false,
+                    modifiers: event.modifiers,
+                },
                 cx,
-            ) {
-                self.clear_terminal_selection(cx);
-                return;
-            }
+            )
+        {
+            self.clear_terminal_selection(cx);
+            return;
         }
         let (rows, cols) = self.terminal_grid_size_for_session(selection_session_id.as_deref());
         // Shift+click extends the existing selection from its anchor (xterm-style).
-        if event.modifiers.shift && event.click_count <= 1 {
-            if let Some(selection) = self.terminal.selection.selection.as_mut() {
-                selection.head = cell;
-                if self.terminal.selection.session_id.is_none() {
-                    self.terminal.selection.session_id = selection_session_id;
-                }
-                self.terminal.selection.dragging = true;
-                // Defer status-bar shell notify until selection finishes.
-                self.notify_terminal_selection_owner_surface(cx);
-                return;
+        if event.modifiers.shift
+            && event.click_count <= 1
+            && let Some(selection) = self.terminal.selection.selection.as_mut()
+        {
+            selection.head = cell;
+            if self.terminal.selection.session_id.is_none() {
+                self.terminal.selection.session_id = selection_session_id;
             }
+            self.terminal.selection.dragging = true;
+            // Defer status-bar shell notify until selection finishes.
+            self.notify_terminal_selection_owner_surface(cx);
+            return;
         }
         if event.click_count >= 3 {
             self.terminal.selection.selection = Some(TerminalSelection::from_range(
                 TerminalCellPos::new(cell.row, 0),
-                TerminalCellPos::new(cell.row, cols.saturating_sub(1).max(0)),
+                TerminalCellPos::new(cell.row, cols.saturating_sub(1)),
                 geometry.display_offset,
                 geometry.viewport_anchor_row,
             ));
@@ -260,13 +264,15 @@ impl NyaTermApp {
                     cx,
                 )
                 && self.maybe_send_mouse_report_for_session(
-                    &session_id,
-                    button,
-                    cell.col as u16,
-                    cell.row as u16,
-                    true,
-                    true,
-                    event.modifiers,
+                    TerminalMouseReportRequest {
+                        session_id: &session_id,
+                        button,
+                        col: cell.col as u16,
+                        row: cell.row as u16,
+                        press: true,
+                        motion: true,
+                        modifiers: event.modifiers,
+                    },
                     cx,
                 )
             {
@@ -288,14 +294,14 @@ impl NyaTermApp {
             return;
         };
         let cell = terminal_cell_for_visual_geometry(event.position, &geometry);
-        if let Some(selection) = self.terminal.selection.selection.as_mut() {
-            if selection.head != cell {
-                selection.head = cell;
-                if self.terminal.selection.session_id.is_none() {
-                    self.terminal.selection.session_id = selection_session_id.map(str::to_string);
-                }
-                self.queue_terminal_selection_drag_visual_notify(cx);
+        if let Some(selection) = self.terminal.selection.selection.as_mut()
+            && selection.head != cell
+        {
+            selection.head = cell;
+            if self.terminal.selection.session_id.is_none() {
+                self.terminal.selection.session_id = selection_session_id.map(str::to_string);
             }
+            self.queue_terminal_selection_drag_visual_notify(cx);
         }
     }
 

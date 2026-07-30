@@ -413,10 +413,10 @@ fn parse_ini_sections(content: &str) -> HashMap<String, HashMap<String, String>>
         if line.starts_with('[') && line.ends_with(']') {
             current_section = line[1..line.len() - 1].to_string();
             sections.entry(current_section.clone()).or_default();
-        } else if let Some((key, value)) = line.split_once('=') {
-            if let Some(section) = sections.get_mut(&current_section) {
-                section.insert(key.trim().to_string(), value.trim().to_string());
-            }
+        } else if let Some((key, value)) = line.split_once('=')
+            && let Some(section) = sections.get_mut(&current_section)
+        {
+            section.insert(key.trim().to_string(), value.trim().to_string());
         }
     }
 
@@ -527,7 +527,7 @@ fn parse_windterm(path: &str) -> AppResult<Vec<ImportedSession>> {
 }
 
 fn parse_windterm_content(content: &str) -> AppResult<Vec<ImportedSession>> {
-    let entries: Vec<serde_json::Value> = serde_json::from_str(&content)
+    let entries: Vec<serde_json::Value> = serde_json::from_str(content)
         .map_err(|e| AppError::Config(format!("Invalid WindTerm JSON: {e}")))?;
 
     let mut sessions = Vec::new();
@@ -598,10 +598,11 @@ fn parse_windterm_content(content: &str) -> AppResult<Vec<ImportedSession>> {
 
 fn parse_windterm_target(target: &str) -> (String, String) {
     let target = target.trim();
-    if let Some((username, host)) = target.rsplit_once('@') {
-        if !username.is_empty() && !host.is_empty() {
-            return (host.to_string(), username.to_string());
-        }
+    if let Some((username, host)) = target.rsplit_once('@')
+        && !username.is_empty()
+        && !host.is_empty()
+    {
+        return (host.to_string(), username.to_string());
     }
     (target.to_string(), "root".to_string())
 }

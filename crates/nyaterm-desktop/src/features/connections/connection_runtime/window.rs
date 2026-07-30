@@ -111,7 +111,7 @@ impl NyaTermApp {
                 .update(cx, |_, window, _| window.activate_window())
                 .is_err()
             {
-                let _ = app.update(cx, |app, cx| {
+                app.update(cx, |app, cx| {
                     if app.connection_state.clear_editor_window_if_current(handle) {
                         cx.notify();
                     }
@@ -147,7 +147,7 @@ impl NyaTermApp {
 
 fn open_connection_editor_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut App) {
     if app.read(cx).connection_state.editor_has_window() {
-        let _ = app.update(cx, |app, cx| {
+        app.update(cx, |app, cx| {
             app.connection_state.clear_editor_window_pending();
             app.activate_connection_editor_window(cx);
             cx.notify();
@@ -155,7 +155,7 @@ fn open_connection_editor_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut 
         return;
     }
     if !app.read(cx).connection_state.editor_has_draft() {
-        let _ = app.update(cx, |app, cx| {
+        app.update(cx, |app, cx| {
             app.connection_state.clear_editor_window_pending();
             cx.notify();
         });
@@ -190,7 +190,7 @@ fn open_connection_editor_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut 
         },
     );
 
-    let _ = app.update(cx, |app, cx| match result {
+    app.update(cx, |app, cx| match result {
         Ok(handle) => {
             app.connection_state.attach_editor_window(handle);
             cx.notify();

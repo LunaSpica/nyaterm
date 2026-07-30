@@ -112,6 +112,12 @@ pub struct ZmodemDetector {
     pending_starts_at_line_start: bool,
 }
 
+impl Default for ZmodemDetector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ZmodemDetector {
     pub fn new() -> Self {
         Self {
@@ -765,15 +771,15 @@ impl ZmodemTransfer {
         while let Some(event) = sender.poll_event() {
             match event {
                 zmodem2::SenderEvent::FileComplete => {
-                    if let Some(sf) = current_file {
-                        if self.progress_throttle.should_emit(sf.sent, true) {
-                            actions.push(ZmodemAction::EmitEvent(ZmodemEvent::Progress {
-                                file_name: sf.name.clone(),
-                                bytes_transferred: sf.sent,
-                                total_size: sf.size,
-                                direction: ZmodemDirection::Upload,
-                            }));
-                        }
+                    if let Some(sf) = current_file
+                        && self.progress_throttle.should_emit(sf.sent, true)
+                    {
+                        actions.push(ZmodemAction::EmitEvent(ZmodemEvent::Progress {
+                            file_name: sf.name.clone(),
+                            bytes_transferred: sf.sent,
+                            total_size: sf.size,
+                            direction: ZmodemDirection::Upload,
+                        }));
                     }
                     self.file_count += 1;
                     *current_file = None;
@@ -786,15 +792,15 @@ impl ZmodemTransfer {
                             *file_index,
                             current_file,
                         ));
-                        if let Some(sf) = current_file {
-                            if self.progress_throttle.should_emit(0, true) {
-                                actions.push(ZmodemAction::EmitEvent(ZmodemEvent::Progress {
-                                    file_name: sf.name.clone(),
-                                    bytes_transferred: 0,
-                                    total_size: sf.size,
-                                    direction: ZmodemDirection::Upload,
-                                }));
-                            }
+                        if let Some(sf) = current_file
+                            && self.progress_throttle.should_emit(0, true)
+                        {
+                            actions.push(ZmodemAction::EmitEvent(ZmodemEvent::Progress {
+                                file_name: sf.name.clone(),
+                                bytes_transferred: 0,
+                                total_size: sf.size,
+                                direction: ZmodemDirection::Upload,
+                            }));
                         }
                     } else if let Err(_e) = sender.finish_session() {
                         zmodem_log!("finish_session error: {e}");
@@ -834,15 +840,15 @@ impl ZmodemTransfer {
 
         self.progress_throttle.reset();
         let mut actions = Self::start_file_for_sender(sender, files, *file_index, current_file);
-        if let Some(sf) = current_file {
-            if self.progress_throttle.should_emit(0, true) {
-                actions.push(ZmodemAction::EmitEvent(ZmodemEvent::Progress {
-                    file_name: sf.name.clone(),
-                    bytes_transferred: 0,
-                    total_size: sf.size,
-                    direction: ZmodemDirection::Upload,
-                }));
-            }
+        if let Some(sf) = current_file
+            && self.progress_throttle.should_emit(0, true)
+        {
+            actions.push(ZmodemAction::EmitEvent(ZmodemEvent::Progress {
+                file_name: sf.name.clone(),
+                bytes_transferred: 0,
+                total_size: sf.size,
+                direction: ZmodemDirection::Upload,
+            }));
         }
         actions
     }

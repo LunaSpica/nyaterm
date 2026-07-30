@@ -23,12 +23,6 @@ mod mutation;
 mod persistence;
 mod tree;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum SplitEdge {
-    Before,
-    After,
-}
-
 /// Edge drop zones for tab docking (Tauri SplitEdgeDirection).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TabDockEdge {
@@ -81,10 +75,10 @@ impl TabDockZone {
             (TabDockEdge::Bottom, height - local_y, v_thresh),
         ];
         edges.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
-        if let Some((edge, distance, threshold)) = edges.first().copied() {
-            if distance <= threshold {
-                return Self::Edge(edge);
-            }
+        if let Some((edge, distance, threshold)) = edges.first().copied()
+            && distance <= threshold
+        {
+            return Self::Edge(edge);
         }
         Self::Center
     }

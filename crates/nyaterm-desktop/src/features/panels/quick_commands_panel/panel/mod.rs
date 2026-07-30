@@ -11,6 +11,40 @@ use crate::widgets::small_button;
 mod rows;
 use rows::quick_command_tile_column_count;
 mod sidebar;
+
+#[derive(Clone, Copy)]
+struct QuickCommandToolbarContext {
+    palette: crate::theme::ThemePalette,
+    popover_bg: gpui::Rgba,
+}
+
+struct QuickCommandSortMenuConfig {
+    current: QuickCommandSortMode,
+    open: bool,
+    sort_label: &'static str,
+    created_label: &'static str,
+    name_label: &'static str,
+    usage_label: &'static str,
+}
+
+struct QuickCommandViewMenuConfig {
+    current: QuickCommandViewMode,
+    icon_path: &'static str,
+    open: bool,
+    view_label: &'static str,
+    list_label: &'static str,
+    compact_label: &'static str,
+    tile_label: &'static str,
+}
+
+struct QuickCommandAiPopoverConfig {
+    open: bool,
+    prompt: String,
+    prompt_input: AnyElement,
+    button_label: &'static str,
+    generate_label: &'static str,
+}
+
 impl NyaTermApp {
     pub(in crate::features) fn quick_commands_panel(
         &mut self,
@@ -39,6 +73,10 @@ impl NyaTermApp {
         );
         let palette = self.theme_palette();
         let popover_bg = self.shell_surface_color(palette.surface);
+        let toolbar_context = QuickCommandToolbarContext {
+            palette,
+            popover_bg,
+        };
         let input_bg = self.shell_surface_color(palette.bg);
         let search_draft = self.commands.quick_search_draft().to_string();
         let ai_prompt_draft = self.commands.quick_ai_prompt_draft().to_string();
@@ -267,26 +305,28 @@ impl NyaTermApp {
                     )
                     .child(quick_command_toolbar_divider(palette))
                     .child(quick_command_sort_menu_button(
-                        palette,
-                        popover_bg,
-                        self.commands.quick_sort_mode(),
-                        self.commands.quick_sort_menu_is_open(),
-                        self.tr("quickCommands.sort"),
-                        self.tr("quickCommands.sortByCreated"),
-                        self.tr("quickCommands.sortByName"),
-                        self.tr("quickCommands.sortByUseCount"),
+                        toolbar_context,
+                        QuickCommandSortMenuConfig {
+                            current: self.commands.quick_sort_mode(),
+                            open: self.commands.quick_sort_menu_is_open(),
+                            sort_label: self.tr("quickCommands.sort"),
+                            created_label: self.tr("quickCommands.sortByCreated"),
+                            name_label: self.tr("quickCommands.sortByName"),
+                            usage_label: self.tr("quickCommands.sortByUseCount"),
+                        },
                         cx,
                     ))
                     .child(quick_command_view_menu_button(
-                        palette,
-                        popover_bg,
-                        self.commands.quick_view_mode(),
-                        view_icon,
-                        self.commands.quick_view_menu_is_open(),
-                        self.tr("quickCommands.viewMode"),
-                        self.tr("quickCommands.listMode"),
-                        self.tr("quickCommands.compactListMode"),
-                        self.tr("quickCommands.tileMode"),
+                        toolbar_context,
+                        QuickCommandViewMenuConfig {
+                            current: self.commands.quick_view_mode(),
+                            icon_path: view_icon,
+                            open: self.commands.quick_view_menu_is_open(),
+                            view_label: self.tr("quickCommands.viewMode"),
+                            list_label: self.tr("quickCommands.listMode"),
+                            compact_label: self.tr("quickCommands.compactListMode"),
+                            tile_label: self.tr("quickCommands.tileMode"),
+                        },
                         cx,
                     ))
                     .child(quick_command_toolbar_divider(palette))
@@ -314,13 +354,14 @@ impl NyaTermApp {
                     ))
                     .child(quick_command_toolbar_divider(palette))
                     .child(quick_command_ai_popover_button(
-                        palette,
-                        popover_bg,
-                        self.commands.quick_ai_popover_is_open(),
-                        self.commands.quick_ai_prompt_draft().to_string(),
-                        ai_prompt_input,
-                        self.tr("ai.generateCommand"),
-                        self.tr("ai.generate"),
+                        toolbar_context,
+                        QuickCommandAiPopoverConfig {
+                            open: self.commands.quick_ai_popover_is_open(),
+                            prompt: self.commands.quick_ai_prompt_draft().to_string(),
+                            prompt_input: ai_prompt_input,
+                            button_label: self.tr("ai.generateCommand"),
+                            generate_label: self.tr("ai.generate"),
+                        },
                         cx,
                     )),
             )
@@ -355,16 +396,22 @@ impl NyaTermApp {
 }
 
 fn quick_command_sort_menu_button(
-    palette: crate::theme::ThemePalette,
-    popover_bg: gpui::Rgba,
-    current: QuickCommandSortMode,
-    open: bool,
-    sort_label: &'static str,
-    created_label: &'static str,
-    name_label: &'static str,
-    usage_label: &'static str,
+    context: QuickCommandToolbarContext,
+    config: QuickCommandSortMenuConfig,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+    let QuickCommandToolbarContext {
+        palette,
+        popover_bg,
+    } = context;
+    let QuickCommandSortMenuConfig {
+        current,
+        open,
+        sort_label,
+        created_label,
+        name_label,
+        usage_label,
+    } = config;
     div()
         .relative()
         .child(quick_command_toolbar_icon_button(
@@ -417,17 +464,23 @@ fn quick_command_sort_menu_button(
 }
 
 fn quick_command_view_menu_button(
-    palette: crate::theme::ThemePalette,
-    popover_bg: gpui::Rgba,
-    current: QuickCommandViewMode,
-    icon_path: &'static str,
-    open: bool,
-    view_label: &'static str,
-    list_label: &'static str,
-    compact_label: &'static str,
-    tile_label: &'static str,
+    context: QuickCommandToolbarContext,
+    config: QuickCommandViewMenuConfig,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+    let QuickCommandToolbarContext {
+        palette,
+        popover_bg,
+    } = context;
+    let QuickCommandViewMenuConfig {
+        current,
+        icon_path,
+        open,
+        view_label,
+        list_label,
+        compact_label,
+        tile_label,
+    } = config;
     div()
         .relative()
         .child(quick_command_toolbar_icon_button(
@@ -480,15 +533,21 @@ fn quick_command_view_menu_button(
 }
 
 fn quick_command_ai_popover_button(
-    palette: crate::theme::ThemePalette,
-    popover_bg: gpui::Rgba,
-    open: bool,
-    prompt: String,
-    prompt_input: AnyElement,
-    button_label: &'static str,
-    generate_label: &'static str,
+    context: QuickCommandToolbarContext,
+    config: QuickCommandAiPopoverConfig,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
+    let QuickCommandToolbarContext {
+        palette,
+        popover_bg,
+    } = context;
+    let QuickCommandAiPopoverConfig {
+        open,
+        prompt,
+        prompt_input,
+        button_label,
+        generate_label,
+    } = config;
     let can_generate = !prompt.trim().is_empty();
     div()
         .relative()

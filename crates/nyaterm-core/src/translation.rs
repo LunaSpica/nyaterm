@@ -90,7 +90,7 @@ pub fn google_translate_lang(lang: &str) -> &str {
     match lang.trim() {
         "zh-CN" | "zh_CN" | "zh" => "zh-CN",
         "zh-TW" | "zh_TW" => "zh-TW",
-        value if value.is_empty() => "zh-CN",
+        "" => "zh-CN",
         value => value,
     }
 }
@@ -99,7 +99,7 @@ pub fn microsoft_translate_lang(lang: &str) -> &str {
     match lang.trim() {
         "zh-CN" | "zh_CN" | "zh" => "zh-Hans",
         "zh-TW" | "zh_TW" => "zh-Hant",
-        value if value.is_empty() => "zh-Hans",
+        "" => "zh-Hans",
         value => value,
     }
 }
@@ -117,7 +117,7 @@ pub fn deepl_translate_lang(lang: &str) -> &str {
         "pt" => "PT-BR",
         "ru" => "RU",
         "it" => "IT",
-        value if value.is_empty() => "ZH-HANS",
+        "" => "ZH-HANS",
         value => value,
     }
 }
@@ -143,7 +143,7 @@ pub fn baidu_translate_lang(lang: &str) -> &str {
         "pt" => "pt",
         "ru" => "ru",
         "it" => "it",
-        value if value.is_empty() => "zh",
+        "" => "zh",
         value => value,
     }
 }
@@ -161,7 +161,7 @@ pub fn ali_translate_lang(lang: &str) -> &str {
         "pt" => "pt",
         "ru" => "ru",
         "it" => "it",
-        value if value.is_empty() => "zh",
+        "" => "zh",
         value => value,
     }
 }
@@ -179,7 +179,7 @@ pub fn youdao_translate_lang(lang: &str) -> &str {
         "pt" => "pt",
         "ru" => "ru",
         "it" => "it",
-        value if value.is_empty() => "zh-CHS",
+        "" => "zh-CHS",
         value => value,
     }
 }

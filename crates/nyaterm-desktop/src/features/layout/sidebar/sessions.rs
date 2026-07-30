@@ -60,10 +60,11 @@ impl NyaTermApp {
         let query = self.session.active_search_draft().trim().to_lowercase();
         // Built before the panel, which reads `self` throughout: creating the
         // box needs it mutably.
+        let search_draft = self.session.active_search_draft().to_string();
         let search_input = self
             .text_input_box(
                 "sessions.filter",
-                &self.session.active_search_draft().to_string(),
+                &search_draft,
                 TextInputSetup::placeholder(self.tr("activeSessions.searchPlaceholder")),
                 cx,
             )
@@ -163,10 +164,11 @@ impl NyaTermApp {
             .to_ascii_lowercase();
         // Built before the panel, which reads `self` throughout: creating the
         // box needs it mutably.
+        let search_draft = self.session.active_search_draft().to_string();
         let sessions_search_input = self
             .text_input_box(
                 "sessions.filter",
-                &self.session.active_search_draft().to_string(),
+                &search_draft,
                 TextInputSetup::placeholder("Search sessions"),
                 cx,
             )
@@ -358,11 +360,7 @@ impl NyaTermApp {
                 div()
                     .rounded_md()
                     .border_1()
-                    .border_color(if self.settings.store_status().ready {
-                        rgb(palette.hover)
-                    } else {
-                        rgb(palette.hover)
-                    })
+                    .border_color(rgb(palette.hover))
                     .bg(rgb(palette.input))
                     .p_3()
                     .child(
@@ -426,8 +424,6 @@ impl NyaTermApp {
         };
         let row_bg = if let Some(custom_color) = custom_color {
             rgba((custom_color << 8) | if is_active { 0x22 } else { 0x12 })
-        } else if is_active {
-            rgba(0x00000000)
         } else {
             rgba(0x00000000)
         };

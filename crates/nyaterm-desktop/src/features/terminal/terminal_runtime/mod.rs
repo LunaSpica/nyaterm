@@ -12,3 +12,4 @@ pub(in crate::features) use scroll::{
 };
 mod sessions;
 mod view_io;
+pub(in crate::features) use view_io::TerminalMouseReportRequest;

@@ -114,7 +114,7 @@ pub fn resolve_x11_display_spec(display: Option<&str>) -> X11DisplayTarget {
     let value = display
         .map(str::trim)
         .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| if cfg!(windows) { "localhost:0" } else { ":0" });
+        .unwrap_or(if cfg!(windows) { "localhost:0" } else { ":0" });
 
     #[cfg(unix)]
     if value.starts_with('/') {
@@ -315,10 +315,10 @@ fn parse_xauth_cookie(output: &str, display: &str) -> Option<Vec<u8>> {
         let Some(cookie) = decode_hex(parts[2]) else {
             continue;
         };
-        if let Some(n) = display_num {
-            if line.contains(&format!(":{n}")) {
-                return Some(cookie);
-            }
+        if let Some(n) = display_num
+            && line.contains(&format!(":{n}"))
+        {
+            return Some(cookie);
         }
         if fallback.is_none() {
             fallback = Some(cookie);
@@ -699,7 +699,7 @@ mod tests {
         let fake = [1_u8; 16];
         let real = [2_u8; 16];
 
-        for order in [b'l', b'B'] {
+        for order in *b"lB" {
             let mut packet = x11_setup_packet(order, MIT_MAGIC_COOKIE.as_bytes(), &fake);
             assert!(rewrite_x11_auth_setup_packet(
                 &mut packet,

@@ -3,8 +3,8 @@ use std::collections::{HashMap, HashSet};
 use gpui::prelude::*;
 use gpui::{Context, FontWeight, IntoElement, div, px, rgb, rgba, svg};
 
-use super::super::common::network_item_overflow_menu;
-use super::row::tunnel_network_row;
+use super::super::common::{NetworkItemMenuConfig, network_item_overflow_menu};
+use super::row::{TunnelNetworkRow, tunnel_network_row};
 use crate::features::{NyaTermApp, tunnel_name};
 use crate::models::NetworkTab;
 use crate::widgets::{small_button, status_pill};
@@ -132,21 +132,26 @@ pub(in crate::features::pages::tunnels) fn tunnel_section(
                         this.border_b_1().border_color(rgb(palette.border))
                     })
                     .child(tunnel_network_row(
-                        palette,
-                        app.shell_surface_color(palette.surface),
-                        &tunnel,
-                        connection_label,
-                        open_info,
-                        pending,
-                        app.tunnel_state.tunnel_groups().len(),
-                        menu_open,
-                        app.tr("common.more"),
-                        app.tr("common.edit"),
-                        app.tr("network.moveToGroup"),
-                        app.tr("common.delete"),
-                        app.tr("network.tunnelOpen"),
-                        app.tr("network.tunnelClosed"),
-                        mode_label,
+                        TunnelNetworkRow {
+                            tunnel: &tunnel,
+                            connection_label,
+                            open_info,
+                            pending,
+                            open_status_label: app.tr("network.tunnelOpen"),
+                            closed_status_label: app.tr("network.tunnelClosed"),
+                            mode_label,
+                            menu: NetworkItemMenuConfig {
+                                palette,
+                                background: app.shell_surface_color(palette.surface),
+                                id: format!("network-tunnel-actions-{}", tunnel.id),
+                                open: menu_open,
+                                more_label: app.tr("common.more"),
+                                edit_label: app.tr("common.edit"),
+                                move_label: app.tr("network.moveToGroup"),
+                                delete_label: app.tr("common.delete"),
+                                can_move: !app.tunnel_state.tunnel_groups().is_empty(),
+                            },
+                        },
                         cx.listener({
                             let id = tunnel.id.clone();
                             move |this, _, _, cx| {
@@ -272,15 +277,17 @@ pub(in crate::features::pages::tunnels) fn tunnel_section(
                         .connection_state
                         .network_item_menu_is_open(NetworkTab::Tunnels, &menu_id);
                     this.child(network_item_overflow_menu(
-                        palette,
-                        app.shell_surface_color(palette.surface),
-                        format!("tunnel-group-actions-{}", group.id),
-                        menu_open,
-                        app.tr("common.more"),
-                        app.tr("network.renameGroup"),
-                        app.tr("network.moveToGroup"),
-                        app.tr("network.deleteGroup"),
-                        false,
+                        NetworkItemMenuConfig {
+                            palette,
+                            background: app.shell_surface_color(palette.surface),
+                            id: format!("tunnel-group-actions-{}", group.id),
+                            open: menu_open,
+                            more_label: app.tr("common.more"),
+                            edit_label: app.tr("network.renameGroup"),
+                            move_label: app.tr("network.moveToGroup"),
+                            delete_label: app.tr("network.deleteGroup"),
+                            can_move: false,
+                        },
                         cx.listener({
                             let id = menu_id.clone();
                             move |this, _, _, cx| {

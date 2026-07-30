@@ -188,7 +188,7 @@ impl NyaTermApp {
                     .session
                     .metadata(&terminal_session_id)
                     .and_then(|metadata| match &metadata.launch_config {
-                        SessionLaunchConfig::Ssh(config) => Some(config.clone()),
+                        SessionLaunchConfig::Ssh(config) => Some(config.as_ref().clone()),
                         _ => None,
                     })
                     .or_else(|| {
@@ -197,7 +197,7 @@ impl NyaTermApp {
                             .flatten()
                     })
                     .ok_or_else(|| "Target SSH session is missing its exec config".to_string())?;
-                (AiAgentBackgroundTarget::Ssh(config), "SSH")
+                (AiAgentBackgroundTarget::Ssh(Box::new(config)), "SSH")
             }
             SessionKind::LocalPty => (
                 AiAgentBackgroundTarget::Local {
@@ -263,7 +263,7 @@ impl NyaTermApp {
                 Err("AI Agent background command cancelled".to_string())
             } else {
                 match target {
-                    AiAgentBackgroundTarget::Ssh(config) => SshProcessService::new(config)
+                    AiAgentBackgroundTarget::Ssh(config) => SshProcessService::new(*config)
                         .run_command(&command, timeout)
                         .map(|output| remote_command_observation(output, started))
                         .map_err(|error| error.to_string()),

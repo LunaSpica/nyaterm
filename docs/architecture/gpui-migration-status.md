@@ -10,29 +10,52 @@ Last updated from the working tree on 2026-07-30.
 | Metric | Current value | Notes |
 | --- | ---: | --- |
 | `NyaTermApp` fields | 20 | Counted from `features/app_state/mod.rs`; down from 585. The remaining fields are composition services and focused feature owners. |
-| `impl NyaTermApp` blocks | 237 | Spread across 232 files. A method-level forwarding audit, rather than the block count alone, is the current ownership check; the remaining blocks are view/render, GPUI, persistence, service or cross-feature adapters. |
+| `impl NyaTermApp` blocks | 238 | Spread across 233 files. The additional block is the focused `view_io/input.rs` module boundary and adds no adapter method; method bodies and call sites, rather than the block count alone, remain the ownership check. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
 | `use super::*` imports in desktop | 0 | Cleared in production and test modules; guarded crate-wide. |
+| `use super::*` imports in terminal-GPUI | 0 | Cleared in production and test modules. The crate root is no longer a shared import bucket. |
 | `features/prelude.rs` rough exported-token count | 0 | The transitional shared prelude is removed and guarded against reintroduction. |
+| `cargo check -p nyaterm-app` desktop warnings | 0 | Cleared. The current cleanup either wired complete capabilities or removed superseded state and adapters. |
+| Desktop clippy warnings | 0 | `cargo clippy --workspace --all-targets` succeeds with no project warnings, down from 333 in the current cleanup pass and without lint allowances. Cargo still reports the upstream `proc-macro-error2 v2.0.1` future-incompatibility notice. |
+| Other workspace clippy warnings | 0 | Core, terminal, terminal-GPUI, transport, UI, OTP, store and app targets are clean across libraries, binaries and tests. |
 | Entity Store structs | 3 | `WindowRuntime`, `StartupRestore`, `Overlay`. Each owns state the app does not. |
 | Snapshot structs | 0 | Cleared. No store is a projection of `NyaTermApp` any more. |
 | `replace_snapshot` methods | 0 | Cleared. |
 | Store snapshot publish calls | 0 | `publish.rs` and the publish throttle are gone. |
 
-Large files currently over 4,000 lines:
+No Rust source file currently exceeds 3,000 lines. The largest production file
+is the terminal desktop model at 2,647 lines, followed by terminal runtime
+`buffer.rs` at 2,593. The former 4,000-line files now have these boundaries:
 
-| File | Lines | Status |
-| --- | ---: | --- |
-| `crates/nyaterm-desktop/src/models/terminal.rs` | 4978 | Split candidate; coordinate with terminal render/runtime ownership. |
-| `crates/nyaterm-desktop/src/features/terminal/terminal_surface_entity.rs` | 4548 | Split candidate; avoid hot-path regressions. |
-| `crates/nyaterm-transport/src/lib.rs` | 4539 | Split by domain: SFTP, X11 forwarding, SSH tunnels and SSH authentication are out. What remains is the session manager, the four `TerminalTransport` impls and the SSH/serial/telnet session lifecycle. |
-| `crates/nyaterm-core/src/storage.rs` | 4089 | Split by domain: config backup, keyword highlights, command history, known hosts, AI history, the secret vault, portable snapshots, app settings and cloud sync are out. About 1,450 lines of that are code; the rest is the test module. Schema compatibility is public contract. |
+| Production file | Production lines | Test module lines | Notes |
+| --- | ---: | ---: | --- |
+| `crates/nyaterm-desktop/src/models/terminal.rs` | 2647 | 2270 | Frame-pipeline tests live in `models/terminal/tests.rs`; terminal cell and selection models remain in the production module. |
+| `crates/nyaterm-desktop/src/features/terminal/terminal_surface_entity.rs` | 2475 | 2283 | The 54 focused tests live in `terminal_surface_entity/tests.rs`; the paint hot path and private entity boundary are unchanged. |
+| `crates/nyaterm-transport/src/lib.rs` | 2547 | 990 | Crate-root session lifecycle tests live in `src/tests.rs` with explicit imports. Session configuration contracts, the bounded event queue, and SSH command/process execution live in focused modules; the crate root preserves their public facade. |
+| `crates/nyaterm-core/src/storage.rs` | 1470 | 2618 | Compatibility tests live in `storage/tests.rs` with explicit imports. The facade, redb schema, encryption and fallback readers remain unchanged. |
 
-`core/ai.rs` was on this list at 4,032 lines; it is now 1,554 after being split
+Other large modules now keep their focused tests behind the same normal
+child-module boundary:
+
+| Production file | Production lines | Test module lines | Notes |
+| --- | ---: | ---: | --- |
+| `crates/nyaterm-desktop/src/features/terminal/terminal_runtime/view_io.rs` | 1606 | 869 | The 41 snapshot, scrolling, input-latency and key-encoding tests live in `view_io/tests.rs`; the 1240-line `view_io/input.rs` module owns keyboard, mouse, focus, wire-write, recording and encoding input adapters. |
+| `crates/nyaterm-desktop/src/features/terminal/terminal_runtime/buffer.rs` | 2593 | 233 | The 10 frame-budget, search-apply, OSC52 and window-tab tests live in `buffer/tests.rs`; buffer application and surface notification logic remain together. |
+| `crates/nyaterm-desktop/src/features/connections/state.rs` | 2106 | 1596 | The 60 list, editor and network owner-transition tests live in `state/tests.rs`; the focused `editor_logic`, `list_logic` and `network_logic` modules are unchanged. |
+| `crates/nyaterm-desktop/src/features/transfers/state.rs` | 1546 | 799 | The 17 browser, queue, editor and external-sync owner tests live in `state/tests.rs`; the 634-line `state/browser.rs` and 568-line `state/editor.rs` modules own their focused transitions while `TransferFeatureState` remains authoritative. |
+| `crates/nyaterm-desktop/src/features/ai/state.rs` | 1788 | 669 | The 20 chat, settings, discovery, history and agent owner-transition tests live in `state/tests.rs`; the 967-line `state/settings.rs` module owns provider settings, model catalog, credential and custom-action transitions while `AiFeatureState` remains authoritative. |
+| `crates/nyaterm-desktop/src/features/session/state.rs` | 2333 | 897 | The 16 restore, prompt, dialog and start-lifecycle owner tests live in `state/tests.rs`. |
+| `crates/nyaterm-terminal/src/lib.rs` | 1966 | 1147 | The 75 terminal state-machine and snapshot tests live in `src/tests.rs` with explicit imports. |
+| `crates/nyaterm-terminal/src/graphics.rs` | 1597 | 1289 | The 35 ingress, Kitty, iTerm2 and Sixel tests live in `graphics/tests.rs`; parser and graphics-state behavior remain in the production module. |
+| `crates/nyaterm-core/src/cloud_sync.rs` | 1937 | 878 | The 19 remote, history, provider, conflict and encrypted snapshot tests live in `cloud_sync/tests.rs`; persistence and compatibility logic remain unchanged. |
+| `crates/nyaterm-terminal-gpui/src/element.rs` | 1648 | 1168 | The 41 layout, shaping, row-cache and decoration tests live in `element/layout_cache_tests.rs`; GPUI layout and paint implementation remain together. |
+| `crates/nyaterm-transport/src/trzsz.rs` | 1925 | 1214 | The 42 detector, protocol, download and upload engine tests live in `trzsz/tests.rs` with explicit imports. |
+
+`core/ai.rs` was on this list at 4,032 lines; it is now 1,547 after being split
 into `providers`, `agent`, `risk` and `settings`.
 
 Other files currently over 2,000 lines include terminal runtime/view modules,
-transport transfer protocol modules, and terminal GPUI painting modules. Treat
+transport transfer protocol modules, and focused desktop feature state. Treat
 these as staged extraction candidates, not as formatting-only refactor targets.
 
 ## Completed
@@ -1582,9 +1605,157 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   runtime, and send-command bar editor/state/controls. This is import plumbing
   only; text/hex selection, preview formatting, parsing, and command-unit
   construction behavior are unchanged.
-- `nyaterm-terminal-gpui` no longer publicly glob-re-exports its `images`,
-  `keywords`, and `paint` implementation modules. The existing named facade
-  exports remain public; sibling modules still use the helpers internally.
+- `nyaterm-terminal-gpui` no longer uses its crate root as a shared import
+  bucket. Production modules and nested tests name their GPUI, core, terminal,
+  type and sibling-helper dependencies explicitly, and the architecture guard
+  keeps `use super::*` at zero. The root no longer re-exports GPUI/core/terminal
+  dependency surfaces or imports implementation modules by glob; its terminal
+  painting, input and keyword APIs remain named exports. Desktop now imports
+  pure terminal cell helpers directly from `nyaterm-terminal`.
+- The unused terminal-GPUI `apply_cursor_style` approximation and its isolated
+  test are removed. Runtime cursor painting already uses the live terminal
+  element path, and the deleted helper had no production caller.
+- AI credential rows no longer retain the obsolete `credential_edit` marker or
+  its three-field enum. Real TextFields already own editing/focus, while
+  `credential_secret_drafts` and the existing commit/persist path remain the
+  authoritative save flow. Five related AI UI-local bindings and one stale
+  master-password placeholder binding were also removed; credential formats,
+  secret masking and persistence are unchanged.
+- Construction-time focus handles and focus enums that TextField now owns are
+  removed from terminal, transfer, network, AI and security state. The
+  remaining SSH-key focus enum still drives key/certificate picker routing.
+  Process nice-value editing now uses its localized placeholder, and activity
+  drag payloads carry only the tab identity consumed by the drop path.
+- Workspace split tests now exercise the production `dock_tab` API directly;
+  the obsolete `SplitEdge` adapter is gone. Terminal resize tests call the
+  authoritative size/insets geometry function, credential prompt-line parsing
+  is test-only, cursor visibility is asserted through real scroll behavior,
+  and the unused convenience selection constructor is removed.
+- Local settings now expose password-encrypted `.nya` export and import actions
+  backed by the existing portable snapshot implementation. Import still
+  rejects an unsaved settings draft or active/pending session, legacy
+  unencrypted `.nya` import remains available through the connection import
+  flow, and prompt admission no longer overwrites another active password
+  prompt. Encryption prefixes, snapshot serialization and fallback decryption
+  behavior are unchanged.
+- The terminal frame worker no longer carries the producerless
+  `RequestBufferText` command/event path. AI context continues to read the
+  existing per-session UI buffer, and event-pressure tests use the live Search
+  event as their deferred-work case. No terminal parser, snapshot or wire
+  protocol behavior changed.
+- A workspace clippy pass removed 127 structural diagnostics without adding
+  lint allowances: adjacent guards now use Rust 2024 let-chains and GPUI update
+  calls no longer bind unit results. Desktop lib warnings fell from 305 to 199;
+  core fell from 39 to 26, terminal from 12 to 10, and transport from 16 to 10.
+  The changes preserve condition evaluation order and error branches, including
+  credential fallback, legacy settings parsing, known-host rendering, graphics
+  storage, X11 cookie selection and transfer progress handling.
+- A second bounded clippy pass removed another 77 desktop-lib diagnostics
+  without adding lint allowances. Orphaned doc-comment spacing, needless tail
+  returns and borrows, same-type conversions, copy clones, simple iterator
+  predicates and integer clamp chains are now clean across all workspace
+  targets. Desktop lib warnings fell from 199 to 122 and its test target from
+  216 to 136 (122 duplicates); core fell from 26 to 22 and terminal from 10 to
+  8, while transport remains at 10 and terminal-GPUI at 2. Two floating-point
+  UI-width `manual_clamp` suggestions remain because replacing ordered
+  `min`/`max` with `clamp` would change NaN behavior.
+- A third expression and fixture pass reduced desktop lib warnings from 122 to
+  71 and its test target from 136 to 72 (71 duplicates). Core fell from 22 to
+  zero, terminal from 8 to 2, transport from 10 to 4, and bundled OTP from 4
+  to zero; terminal-GPUI remains at 2. Named OSC 52 clipboard callback types
+  replaced repeated dynamic-trait signatures, exact default enums use derived
+  defaults, test fixtures initialize fields atomically, and duplicated UI/
+  state branches were collapsed only after checking their evaluation order.
+  The remaining desktop-lib diagnostics have no rustfix suggestions: they are
+  parameter-object, large-enum, module-name or floating-point semantics design
+  decisions rather than expression cleanup.
+- A fourth ownership and parameter-object pass cleared the remaining workspace
+  diagnostics without lint allowances. Desktop fell from 71 warnings to zero;
+  terminal, transport and terminal-GPUI also reached zero, so
+  `cargo clippy --workspace --all-targets` is project-warning-free. Typed render
+  presentations now carry Docker, quick-command, tab-action, process, transfer,
+  settings and sync-history inputs; terminal frame, scroll, mouse-report and
+  suggestion geometry use dedicated requests. Connection cleanup now composes
+  focused owner transitions instead of borrowed field bags, and
+  `TerminalSurfaceFrameSnapshot` is the single frame-application contract.
+  Persistence formats, terminal parsing and wire protocols are unchanged.
+- The terminal surface entity's 2,283-line test module moved out of the
+  production implementation file into the normal
+  `terminal_surface_entity/tests.rs` child module. The 2,475-line entity keeps
+  its private implementation boundary, all 54 focused tests keep direct access
+  through Rust's child-module privacy, and no `#[path]`, shared prelude or
+  runtime behavior was introduced. This removes the file from the 4,000-line
+  debt list without touching the terminal paint hot path.
+- The other three 4,000-line files now use the same normal test-module
+  boundary. `models/terminal.rs` is 2,647 lines with its 86 frame/selection
+  tests still passing; `nyaterm-transport/src/lib.rs` is 3,571 lines with all
+  146 transport tests passing; and the compatibility-sensitive storage facade
+  is 1,470 lines with all 183 core tests passing. The extracted tests use
+  explicit imports rather than a shared wildcard prelude. No storage schema,
+  serialized field, encryption prefix, fallback reader, PTY/SSH/Telnet/Serial
+  behavior or terminal frame algorithm changed.
+- The next embedded-test pass moved 118 desktop tests out of three production
+  modules into normal child modules: 41 terminal view/input tests, 60
+  connection owner-transition tests and 17 transfer owner-transition tests.
+  `view_io.rs`, connection `state.rs` and transfer `state.rs` are now 2,828,
+  2,106 and 2,715 lines respectively. The extracted modules use explicit
+  imports, keep Rust child-module access to private helpers, and preserve all
+  736 desktop tests without changing runtime ownership or GPUI behavior.
+- `SessionEventQueue` moved from the transport crate root into a focused
+  243-line private module. Its bounded output, drop accounting, blocking wake
+  and budgeted drain behavior stay behind the same crate-root private facade,
+  so SessionManager, X11 forwarding and the existing queue tests require no
+  public API change. `nyaterm-transport/src/lib.rs` is now 3,339 lines.
+- A final embedded-test pass moved 153 tests out of AI state, session state,
+  the terminal crate root and the trzsz protocol module. The terminal and
+  trzsz tests also replaced their inherited `use super::*` imports with exact
+  symbol lists. All 736 desktop, 137 terminal and 147 transport tests still
+  pass; terminal parsing, snapshots, SSH/X11 events and trzsz wire behavior are
+  unchanged.
+- The graphics and cloud-sync embedded test modules now use normal child-module
+  boundaries too. Thirty-five graphics protocol tests moved to
+  `graphics/tests.rs`, reducing the production module from 2,888 to 1,597
+  lines. Nineteen cloud-sync compatibility and provider tests moved to
+  `cloud_sync/tests.rs`, reducing that production module from 2,807 to 1,937
+  lines. Both test modules use explicit imports; terminal protocol handling,
+  remote provider behavior, encrypted snapshots, conflict handling, history
+  compatibility and secret masking are unchanged.
+- The terminal-GPUI element's 41 layout, shaping, row-cache and decoration
+  tests moved from the middle of `element.rs` into the normal
+  `element/layout_cache_tests.rs` child module. The production file is down
+  from 2,820 to 1,648 lines, while the tests retain child-module access to its
+  private layout and paint helpers with the same explicit imports. GPUI element
+  layout, clipping, shaping, decoration and painting behavior are unchanged.
+- The terminal runtime buffer's 10 focused tests moved from the production
+  file tail into the normal `buffer/tests.rs` child module. `buffer.rs` is down
+  from 2,830 to 2,593 lines, while frame drain budgets, search apply routing,
+  surface/chrome notifications, OSC52 reply limits, local log escaping and
+  terminal-window tab visibility retain direct focused coverage. Runtime frame
+  application and terminal rendering behavior are unchanged.
+- Terminal runtime input coordination moved out of `view_io.rs` into the
+  focused 1,240-line `view_io/input.rs` module. It owns logical/key/raw input,
+  per-session key protocol encoding, mouse and alternate-scroll reports, focus
+  reports, wire-write recording, outgoing encoding synchronization, status
+  updates and slow-input diagnostics. `view_io.rs` is down from 2,828 to 1,606
+  lines and now concentrates on snapshots, retained scroll windows and surface
+  paint synchronization. The existing 41 tests retain direct coverage through
+  narrow test-only helper visibility; input, history, recording, IME, mouse,
+  scroll and rendering behavior are unchanged.
+- SSH command execution and remote process management moved together into a
+  499-line `remote_process.rs` module. It owns the command output model, SSH
+  exec channel collection, timeout runtime, local command adapter, process
+  listing script and parser, and signal policy. The crate root re-exports the
+  same public models, constants, service and helpers, while stats, Docker and
+  SFTP keep using the shared crate-private execution facade. This reduces
+  `nyaterm-transport/src/lib.rs` to 2,863 lines without changing SSH command or
+  process behavior, and leaves no Rust source file above 3,000 lines.
+- Local, Telnet, Serial and SSH session configuration contracts moved together
+  into the private 340-line `session_config.rs` module. The crate root
+  re-exports the same configuration, host-key and credential callback types,
+  preserving every public path while reducing `lib.rs` from 2,863 to 2,547
+  lines. `SshKeyAuthConfig` now has its own redacted `Debug` implementation and
+  a direct regression test, so private key, certificate and passphrase values
+  remain hidden even when the nested config is formatted independently.
 - `nyaterm-core/src/storage/config_backup.rs` now owns the config backup info
   type and schema-neutral file validation/copy/write helpers. `storage.rs`
   re-exports `ConfigBackupInfo` and keeps redb validation, table definitions,
@@ -1602,11 +1773,13 @@ these as staged extraction candidates, not as formatting-only refactor targets.
 - The method-ownership convergence pass now uses method bodies and call sites,
   not the number of `impl NyaTermApp` blocks, as its audit boundary. That
   stronger pass corrected an earlier over-broad completion claim and removed
-  thirty-two owner-local session, transfer and sync-input facades. The 237
+  thirty-two owner-local session, transfer and sync-input facades. The 238
   remaining blocks still contain render/view construction, GPUI focus/window/
   notification work, persistence and service execution, or cross-feature
   coordination, so the block count is an inventory rather than a reduction
-  target. The former feature-root constant bucket was also removed: terminal
+  target. The extra block since that audit is the `view_io/input.rs` production
+  module split; it moved existing methods without adding a facade. The former
+  feature-root constant bucket was also removed: terminal
   banner, AI agent timing, session policy, sync-group palette and tab
   presentation constants now live with their consumers. The architecture
   script enforces the exact twenty-field composition-root owner set and rejects
@@ -1732,10 +1905,11 @@ use the existing behavior.
   changes, or backup format changes.
 
 Run `scripts/check-architecture-boundaries.sh` before review. The script keeps
-historical baselines for the remaining governed rules, while desktop
-`#[path]`, `use super::*`, and the shared feature prelude are enforced
-crate-wide at zero. The GitHub Actions `Architecture Boundaries` workflow runs
-this script for pull requests and pushes to `main`.
+historical baselines for the remaining governed rules, while desktop and
+terminal-GPUI `#[path]`/`use super::*` debt, the desktop shared feature prelude,
+and the terminal-GPUI shared root import bucket are enforced at zero. The
+GitHub Actions `Architecture Boundaries` workflow runs this script for pull
+requests and pushes to `main`.
 
 ## Entity Ownership Migration
 
@@ -1757,33 +1931,19 @@ delete old fields in the same change that makes the Entity authoritative.
 
 ## Unwired Capabilities
 
-`nyaterm-desktop` went from 104 dead-code warnings to 18. The 152 items removed
-were the superseded migration render layer: the old `left_*_panel` /
+`nyaterm-desktop` went from 104 dead-code warnings to 0. The first reduction
+removed the superseded migration render layer: the old `left_*_panel` /
 `right_*_panel` tree that `panel_body`'s `*_view` dispatch replaced, the widget
-helpers only it called, and the handlers only those widgets invoked.
+helpers only it called, and the handlers only those widgets invoked. The final
+pass audited each remaining diagnostic against production call sites: complete
+encrypted-backup behavior was connected to settings, one process label was
+wired, and producerless adapters, transient focus state and test-only wrappers
+were removed or scoped to tests.
 
-The 18 that remain are deliberately kept, because they are not cruft. Each is a
-capability that exists and in most cases is tested, but that nothing in the
-product reaches. Deleting them would remove work and hide the gap; wiring them
-up or dropping the feature is a product decision, not cleanup.
-
-| Item | Evidence it is unfinished rather than dead |
-| --- | --- |
-| `TerminalWindowNode::split_tab_to_edge` + `SplitEdge` | Six tests in `models/tests_workspace.rs` cover splitting a tab to a named edge. No UI raises it. |
-| `terminal_resize_geometry_for_bounds` (free fn + method) | Three tests pin the geometry maths. Nothing calls either form. |
-| `credential_autofill_prompt_line_from_viewport` | Two tests cover prompt-line detection from a viewport. No caller. |
-| `TerminalSurface::set_cursor_blink_visible` | One test. Cursor blink is driven another way today. |
-| `apply_cursor_style` (`nyaterm-terminal-gpui`) | One test. Its only caller was the deleted `terminal_line_element`. |
-| `SnapshotPasswordPromptKind::{Export, Import, CloudPush, CloudPull}` | 35 live match arms still handle these prompts; nothing raises one since the prompt entry points went. |
-| `ConfigPathPromptKind::{Import, PortableExport}` | Same shape: the handling survives, the trigger does not. |
-| `AiInputField::{BaseUrl, ApiKey}`, `TranslateInputField::TargetLanguage` | Editable fields the settings UI no longer routes to. |
-| `SessionPaneState` payloads and its `Disconnected` variant | The pane state machine carries `request_id`, `name`, `kind`, `session_id` and `error` that no reader consumes. |
-| `ActivityBarDragPayload::{zone, index}` | A drag carries where it came from; the drop handler ignores it. |
-| `TerminalOutputRequest::RequestBufferText` | Buffer-text request variant with no producer. |
-
-Treat this table as the migration's real remaining to-do list. It is more
-useful than a dead-code count: a warning that stays at 18 and a warning that
-creeps back to 104 mean very different things, and only the second is rot.
+There is no warning-backed unwired-capability list now. Future capabilities
+must land with a production entry point, or remain outside production state
+until that product path exists. Treat any new desktop dead-code warning as a
+regression to classify, not as an accepted baseline.
 
 ## Migration-Only Exit List
 
@@ -1809,9 +1969,10 @@ a deliberately deferred architectural decision.
 
 1. Done. `#[path = "..."]` no longer appears in `nyaterm-desktop` or
    `nyaterm-terminal-gpui`, and a crate-wide guard keeps it that way.
-2. Done. Desktop production modules and nested tests contain no
-   `use super::*`; the crate-wide guard prevents the chain from returning. The
-   compiler-confirmed final pass also removed `features/prelude.rs`, so modules
+2. Done. Desktop and terminal-GPUI production modules and nested tests contain
+   no `use super::*`; crate-wide guards prevent the chain from returning. The
+   compiler-confirmed final pass also removed `features/prelude.rs`, and the
+   terminal-GPUI root no longer re-exports its dependency crates, so modules
    cannot regain the same implicit dependency surface through a shared import
    bucket.
 3. Done for the current convergence boundary. `NyaTermApp` is down from 585
@@ -2063,17 +2224,17 @@ a deliberately deferred architectural decision.
 4. Done. No store is a projection any more; the three that remain own real
    state. If a future domain wants Entity ownership, migrate it authoritatively
    rather than reintroducing a published read model.
-5. Done for the two monoliths that motivated it. `core/storage.rs` and
-   `transport/lib.rs` are split by domain rather than by individual type, which
-   is what made the difference: pulling out a few pure type modules in earlier
-   rounds barely moved the line count, whereas each domain module took its
-   constants, record types, helpers, tests and crate dependencies with it.
-   Table definitions, serialized records, encryption paths, backup formats,
-   legacy fallback behavior, and the SSH/SFTP/X11 protocol paths are
-   compatibility surface and stay unchanged. `models/terminal.rs` (4,978) and
-   `terminal_surface_entity.rs` (4,548) are the next files of this size, but
-   they are render hot paths and need a different approach than a domain cut.
-   `core/ai.rs` is done too, down from 4,032 to 1,554.
+5. Done for the original 4,000-line production files. `core/storage.rs` and
+   `transport/lib.rs` were split by domain rather than by individual type, so
+   constants, records, helpers, tests and dependencies moved together. The
+   terminal model and surface entity instead moved their focused tests into
+   normal child modules, preserving private access without disturbing their
+   frame and paint hot paths. Table definitions, serialized records,
+   encryption paths, backup formats, legacy fallback behavior, and the
+   SSH/SFTP/X11 protocol paths remain unchanged. No Rust source file now
+   exceeds 3,000 lines; further splits remain staged candidates only when a
+   cohesive ownership, rendering or protocol boundary is found.
+   `core/ai.rs` is done too, down from 4,032 to 1,547.
 6. Done. The final explicit-import pass removed `features/prelude.rs`; a
    crate-wide guard prevents a replacement shared feature prelude.
 7. Done. The migration capability/service models had no consumer outside the

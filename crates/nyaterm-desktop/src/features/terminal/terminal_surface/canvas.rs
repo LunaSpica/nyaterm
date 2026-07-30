@@ -9,6 +9,7 @@ use nyaterm_terminal::{TerminalScreen, TerminalSnapshot};
 
 use crate::features::NyaTermApp;
 use crate::features::formatting::format_terminal_line_timestamp_ms;
+use crate::features::terminal::terminal_runtime::TerminalMouseReportRequest;
 use crate::features::terminal::terminal_selection_runtime::{
     terminal_bounds_tracker, terminal_gutter_metrics, terminal_line_number_digits,
 };
@@ -20,9 +21,10 @@ use crate::terminal::{NyaTerminalElement, TerminalLineDecorations};
 use crate::widgets::small_button;
 
 use super::decorations::{
-    build_terminal_line_decorations, terminal_action_links_for_paint_snapshot,
-    terminal_action_links_have_ranges_for_snapshot, terminal_line_decorations_cache_key,
-    terminal_line_decorations_needed, terminal_snapshot_absolute_range,
+    TerminalDecorationSources, build_terminal_line_decorations,
+    terminal_action_links_for_paint_snapshot, terminal_action_links_have_ranges_for_snapshot,
+    terminal_line_decorations_cache_key, terminal_line_decorations_needed,
+    terminal_snapshot_absolute_range,
 };
 use super::helpers::{format_skipped_count, terminal_plain_text_input_event};
 
@@ -283,30 +285,22 @@ impl NyaTermApp {
             let line_decorations = if needs_line_decorations {
                 let include_action_links = action_links_enabled;
                 let include_hyperlinks = action_links_enabled;
-                let decoration_cache_key = terminal_line_decorations_cache_key(
-                    &snapshot,
-                    terminal_selection,
+                let decoration_sources = TerminalDecorationSources {
+                    selection: terminal_selection,
                     selection_viewport_anchor_row,
-                    &search_ranges_by_line,
-                    &active_search_ranges_by_line,
-                    &frame_action_links,
+                    search_ranges_by_line: &search_ranges_by_line,
+                    active_search_ranges_by_line: &active_search_ranges_by_line,
+                    frame_action_links: &frame_action_links,
                     include_action_links,
                     include_hyperlinks,
                     include_command_marks,
-                );
+                };
+                let decoration_cache_key =
+                    terminal_line_decorations_cache_key(&snapshot, &decoration_sources);
                 let mut build = || {
                     let action_link_started_at = Instant::now();
-                    let decorations = build_terminal_line_decorations(
-                        &snapshot,
-                        terminal_selection,
-                        selection_viewport_anchor_row,
-                        &search_ranges_by_line,
-                        &active_search_ranges_by_line,
-                        &frame_action_links,
-                        include_action_links,
-                        include_hyperlinks,
-                        include_command_marks,
-                    );
+                    let decorations =
+                        build_terminal_line_decorations(&snapshot, &decoration_sources);
                     action_link_duration += action_link_started_at.elapsed();
                     decorations
                 };
@@ -652,32 +646,32 @@ impl NyaTermApp {
                             return;
                         }
                         // Disconnected tab: Enter reconnects; other keys show status (Tauri).
-                        if let Some(session_id) = this.session.active_id_owned() {
-                            if this.session.is_disconnected(&session_id) {
-                                cx.stop_propagation();
-                                let keystroke = &event.keystroke;
-                                if !keystroke.modifiers.control
-                                    && !keystroke.modifiers.platform
-                                    && !keystroke.modifiers.alt
-                                    && keystroke.key.as_str() == "enter"
-                                {
-                                    this.reconnect_session(session_id, window, cx);
-                                } else if keystroke.key.as_str() == "d"
-                                    && keystroke.modifiers.control
-                                    && !keystroke.modifiers.platform
-                                    && !keystroke.modifiers.alt
-                                {
-                                    // Ctrl+D closes disconnected tab (Tauri onDisconnectedClose).
-                                    this.close_session(session_id, cx);
-                                } else {
-                                    if this.set_terminal_status_if_changed(
-                                        "session disconnected — press Enter to reconnect",
-                                    ) {
-                                        cx.notify();
-                                    }
+                        if let Some(session_id) = this.session.active_id_owned()
+                            && this.session.is_disconnected(&session_id)
+                        {
+                            cx.stop_propagation();
+                            let keystroke = &event.keystroke;
+                            if !keystroke.modifiers.control
+                                && !keystroke.modifiers.platform
+                                && !keystroke.modifiers.alt
+                                && keystroke.key.as_str() == "enter"
+                            {
+                                this.reconnect_session(session_id, window, cx);
+                            } else if keystroke.key.as_str() == "d"
+                                && keystroke.modifiers.control
+                                && !keystroke.modifiers.platform
+                                && !keystroke.modifiers.alt
+                            {
+                                // Ctrl+D closes disconnected tab (Tauri onDisconnectedClose).
+                                this.close_session(session_id, cx);
+                            } else {
+                                if this.set_terminal_status_if_changed(
+                                    "session disconnected — press Enter to reconnect",
+                                ) {
+                                    cx.notify();
                                 }
-                                return;
                             }
+                            return;
                         }
                         let keystroke = &event.keystroke;
                         let primary = keystroke.modifiers.control || keystroke.modifiers.platform;
@@ -877,20 +871,20 @@ impl NyaTermApp {
                                             Some(session_id.as_str()),
                                             event.position,
                                             cx,
+                                        ) && this.maybe_send_mouse_report_for_session(
+                                            TerminalMouseReportRequest {
+                                                session_id: &session_id,
+                                                button: 2,
+                                                col: cell.col as u16,
+                                                row: cell.row as u16,
+                                                press: true,
+                                                motion: false,
+                                                modifiers: event.modifiers,
+                                            },
+                                            cx,
                                         ) {
-                                            if this.maybe_send_mouse_report_for_session(
-                                                &session_id,
-                                                2,
-                                                cell.col as u16,
-                                                cell.row as u16,
-                                                true,
-                                                false,
-                                                event.modifiers,
-                                                cx,
-                                            ) {
-                                                cx.stop_propagation();
-                                                return;
-                                            }
+                                            cx.stop_propagation();
+                                            return;
                                         }
                                         if this.settings.summary().interaction_right_click_paste {
                                             this.paste_from_clipboard(window, cx);
@@ -915,20 +909,20 @@ impl NyaTermApp {
                                             Some(session_id.as_str()),
                                             event.position,
                                             cx,
+                                        ) && this.maybe_send_mouse_report_for_session(
+                                            TerminalMouseReportRequest {
+                                                session_id: &session_id,
+                                                button: 1,
+                                                col: cell.col as u16,
+                                                row: cell.row as u16,
+                                                press: true,
+                                                motion: false,
+                                                modifiers: event.modifiers,
+                                            },
+                                            cx,
                                         ) {
-                                            if this.maybe_send_mouse_report_for_session(
-                                                &session_id,
-                                                1,
-                                                cell.col as u16,
-                                                cell.row as u16,
-                                                true,
-                                                false,
-                                                event.modifiers,
-                                                cx,
-                                            ) {
-                                                cx.stop_propagation();
-                                                return;
-                                            }
+                                            cx.stop_propagation();
+                                            return;
                                         }
                                         this.paste_from_clipboard(window, cx);
                                         cx.stop_propagation();
@@ -952,11 +946,11 @@ impl NyaTermApp {
                                                 cx.stop_propagation();
                                                 return;
                                             }
-                                        } else if modifiers.control || modifiers.platform {
-                                            if this.try_activate_action_link_at_click(event, cx) {
-                                                cx.stop_propagation();
-                                                return;
-                                            }
+                                        } else if (modifiers.control || modifiers.platform)
+                                            && this.try_activate_action_link_at_click(event, cx)
+                                        {
+                                            cx.stop_propagation();
+                                            return;
                                         }
                                     }
                                     if this.terminal.selection.selection.is_none()
@@ -1340,8 +1334,8 @@ mod tests {
     use crate::models::{TerminalCellPos, TerminalFrameActionLinks, TerminalSelection};
 
     use super::super::decorations::{
-        terminal_line_decorations_cache_key, terminal_line_decorations_needed,
-        terminal_snapshot_absolute_range,
+        TerminalDecorationSources, terminal_line_decorations_cache_key,
+        terminal_line_decorations_needed, terminal_snapshot_absolute_range,
     };
     use super::{TerminalRenderProfile, terminal_render_pressure_active, terminal_render_profile};
 
@@ -1414,30 +1408,34 @@ mod tests {
         let active = HashMap::new();
         let without_selection = terminal_line_decorations_cache_key(
             &snapshot,
-            None,
-            0,
-            &search,
-            &active,
-            &[],
-            false,
-            false,
-            false,
+            &TerminalDecorationSources {
+                selection: None,
+                selection_viewport_anchor_row: 0,
+                search_ranges_by_line: &search,
+                active_search_ranges_by_line: &active,
+                frame_action_links: &[],
+                include_action_links: false,
+                include_hyperlinks: false,
+                include_command_marks: false,
+            },
         );
         let with_selection = terminal_line_decorations_cache_key(
             &snapshot,
-            Some(TerminalSelection::from_range(
-                TerminalCellPos::new(0, 1),
-                TerminalCellPos::new(0, 3),
-                0,
-                0,
-            )),
-            0,
-            &search,
-            &active,
-            &[],
-            false,
-            false,
-            false,
+            &TerminalDecorationSources {
+                selection: Some(TerminalSelection::from_range(
+                    TerminalCellPos::new(0, 1),
+                    TerminalCellPos::new(0, 3),
+                    0,
+                    0,
+                )),
+                selection_viewport_anchor_row: 0,
+                search_ranges_by_line: &search,
+                active_search_ranges_by_line: &active,
+                frame_action_links: &[],
+                include_action_links: false,
+                include_hyperlinks: false,
+                include_command_marks: false,
+            },
         );
 
         assert_ne!(without_selection, with_selection);
@@ -1459,26 +1457,30 @@ mod tests {
         };
         let first = terminal_line_decorations_cache_key(
             &snapshot,
-            None,
-            0,
-            &search,
-            &active,
-            std::slice::from_ref(&links),
-            true,
-            false,
-            false,
+            &TerminalDecorationSources {
+                selection: None,
+                selection_viewport_anchor_row: 0,
+                search_ranges_by_line: &search,
+                active_search_ranges_by_line: &active,
+                frame_action_links: std::slice::from_ref(&links),
+                include_action_links: true,
+                include_hyperlinks: false,
+                include_command_marks: false,
+            },
         );
         links.cell_ranges_by_line[0] = vec![(2, 5)];
         let second = terminal_line_decorations_cache_key(
             &snapshot,
-            None,
-            0,
-            &search,
-            &active,
-            std::slice::from_ref(&links),
-            true,
-            false,
-            false,
+            &TerminalDecorationSources {
+                selection: None,
+                selection_viewport_anchor_row: 0,
+                search_ranges_by_line: &search,
+                active_search_ranges_by_line: &active,
+                frame_action_links: std::slice::from_ref(&links),
+                include_action_links: true,
+                include_hyperlinks: false,
+                include_command_marks: false,
+            },
         );
 
         assert_ne!(first, second);
@@ -1491,25 +1493,29 @@ mod tests {
         let active = HashMap::new();
         let without_marks = terminal_line_decorations_cache_key(
             &snapshot,
-            None,
-            0,
-            &search,
-            &active,
-            &[],
-            false,
-            false,
-            false,
+            &TerminalDecorationSources {
+                selection: None,
+                selection_viewport_anchor_row: 0,
+                search_ranges_by_line: &search,
+                active_search_ranges_by_line: &active,
+                frame_action_links: &[],
+                include_action_links: false,
+                include_hyperlinks: false,
+                include_command_marks: false,
+            },
         );
         let with_marks = terminal_line_decorations_cache_key(
             &snapshot,
-            None,
-            0,
-            &search,
-            &active,
-            &[],
-            false,
-            false,
-            true,
+            &TerminalDecorationSources {
+                selection: None,
+                selection_viewport_anchor_row: 0,
+                search_ranges_by_line: &search,
+                active_search_ranges_by_line: &active,
+                frame_action_links: &[],
+                include_action_links: false,
+                include_hyperlinks: false,
+                include_command_marks: true,
+            },
         );
 
         assert_ne!(without_marks, with_marks);

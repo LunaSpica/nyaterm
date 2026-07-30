@@ -9,6 +9,18 @@ use crate::models::{
     NetworkDeleteConfirmState, NetworkGroupDeleteConfirmState, NetworkGroupEditorState, NetworkTab,
 };
 
+pub(super) struct NetworkItemMenuConfig {
+    pub(super) palette: crate::theme::ThemePalette,
+    pub(super) background: gpui::Rgba,
+    pub(super) id: String,
+    pub(super) open: bool,
+    pub(super) more_label: &'static str,
+    pub(super) edit_label: &'static str,
+    pub(super) move_label: &'static str,
+    pub(super) delete_label: &'static str,
+    pub(super) can_move: bool,
+}
+
 pub(super) fn network_tab_button(
     id: impl Into<String>,
     label: String,
@@ -49,21 +61,23 @@ pub(super) fn network_tab_button(
 }
 
 pub(super) fn network_item_overflow_menu(
-    palette: crate::theme::ThemePalette,
-    menu_background: gpui::Rgba,
-    id: impl Into<String>,
-    open: bool,
-    more_label: &'static str,
-    edit_label: &'static str,
-    move_label: &'static str,
-    delete_label: &'static str,
-    can_move: bool,
+    config: NetworkItemMenuConfig,
     on_toggle: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     on_edit: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     on_move: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     on_delete: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
-    let id = id.into();
+    let NetworkItemMenuConfig {
+        palette,
+        background: menu_background,
+        id,
+        open,
+        more_label,
+        edit_label,
+        move_label,
+        delete_label,
+        can_move,
+    } = config;
     div()
         .relative()
         .child(

@@ -6,7 +6,9 @@ use gpui::{
 use nyaterm_core::truncate_preview;
 use nyaterm_transport::{SftpFileEntry, SftpFileType};
 
-use crate::features::{NyaTermApp, TextInputSetup, dialog_action_button, format_file_size};
+use crate::features::{
+    NyaTermApp, TextInputSetup, bounded_dialog_width, dialog_action_button, format_file_size,
+};
 use crate::models::{TransferPermissionTarget, TransferPropertiesField, TransferPropertiesState};
 use crate::widgets::small_button;
 
@@ -79,7 +81,7 @@ impl NyaTermApp {
         let property_mode = parse_transfer_mode(&state.mode_value)
             .or(entry.permissions)
             .unwrap_or(0o644);
-        let dialog_width = (self.shell.viewport_size().0 - 32.).min(460.).max(280.);
+        let dialog_width = bounded_dialog_width(self.shell.viewport_size().0, 32., 280., 460.);
         let dialog_max_height = (self.shell.viewport_size().1 * 0.75).clamp(320., 720.);
         let owner_input = self
             .text_input_box(

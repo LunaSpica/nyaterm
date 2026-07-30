@@ -202,11 +202,7 @@ impl NyaTermApp {
                     .id(SharedString::from(format!("sync-session-{session_id}")))
                     .rounded_sm()
                     .border_1()
-                    .border_color(if in_group {
-                        rgb(palette.border)
-                    } else {
-                        rgb(palette.border)
-                    })
+                    .border_color(rgb(palette.border))
                     .bg(if in_group {
                         rgb(0x111827)
                     } else {

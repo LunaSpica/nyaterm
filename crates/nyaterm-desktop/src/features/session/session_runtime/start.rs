@@ -18,7 +18,7 @@ use crate::features::{
     CredentialPromptBroker, HostKeyPromptBroker, NativeOtpProvider, NyaTermApp,
     SavedConnectionStartOptions, SessionStartResult, SessionStartSuccess,
 };
-use crate::models::{SessionLaunchConfig, StartupCommandRequest};
+use crate::models::SessionLaunchConfig;
 
 #[derive(Clone)]
 pub(in crate::features) struct SshSessionConfigBuildContext {
@@ -46,12 +46,7 @@ impl NyaTermApp {
             SessionLaunchConfig::Local(config),
             None,
             AiExecutionProfile::Posix,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
+            SavedConnectionStartOptions::default(),
             cx,
         );
     }
@@ -119,12 +114,7 @@ impl NyaTermApp {
                     SessionLaunchConfig::Local(config),
                     Some(connection.id),
                     ai_execution_profile,
-                    options.custom_name,
-                    options.tab_color,
-                    options.after_session_id,
-                    options.insert_index,
-                    options.seed_output,
-                    options.startup_command,
+                    options,
                     cx,
                 );
             }
@@ -156,12 +146,7 @@ impl NyaTermApp {
                     SessionLaunchConfig::Telnet(config),
                     Some(connection.id),
                     ai_execution_profile,
-                    options.custom_name,
-                    options.tab_color,
-                    options.after_session_id,
-                    options.insert_index,
-                    options.seed_output,
-                    options.startup_command,
+                    options,
                     cx,
                 );
             }
@@ -172,12 +157,7 @@ impl NyaTermApp {
                 self.begin_background_saved_ssh_start(
                     connection,
                     ai_execution_profile,
-                    options.custom_name,
-                    options.tab_color,
-                    options.after_session_id,
-                    options.insert_index,
-                    options.seed_output,
-                    options.startup_command,
+                    options,
                     cx,
                 );
             }
@@ -204,12 +184,7 @@ impl NyaTermApp {
                     SessionLaunchConfig::Serial(config),
                     Some(connection.id),
                     ai_execution_profile,
-                    options.custom_name,
-                    options.tab_color,
-                    options.after_session_id,
-                    options.insert_index,
-                    options.seed_output,
-                    options.startup_command,
+                    options,
                     cx,
                 );
             }
@@ -220,14 +195,17 @@ impl NyaTermApp {
         &mut self,
         connection: SavedConnection,
         ai_execution_profile: AiExecutionProfile,
-        custom_name: Option<String>,
-        tab_color: Option<u32>,
-        after_session_id: Option<String>,
-        insert_index: Option<usize>,
-        seed_output: Option<String>,
-        startup_command: Option<StartupCommandRequest>,
+        options: SavedConnectionStartOptions,
         cx: &mut Context<Self>,
     ) {
+        let SavedConnectionStartOptions {
+            custom_name,
+            tab_color,
+            after_session_id,
+            insert_index,
+            seed_output,
+            startup_command,
+        } = options;
         let connection_name = connection.name.clone();
         let source_connection_id = Some(connection.id.clone());
         let geometry_session_hint = after_session_id
@@ -280,7 +258,7 @@ impl NyaTermApp {
                 Ok(SessionStartSuccess {
                     session_info,
                     multiplex_handle: None,
-                    launch_config: Some(SessionLaunchConfig::Ssh(config)),
+                    launch_config: Some(SessionLaunchConfig::Ssh(Box::new(config))),
                 })
             })();
             let worker_finished_at = Instant::now();

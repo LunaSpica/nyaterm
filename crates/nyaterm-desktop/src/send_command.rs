@@ -55,7 +55,7 @@ pub(crate) fn parse_send_command_hex(value: &str) -> Result<Vec<u8>, String> {
     if cleaned.is_empty() {
         return Ok(Vec::new());
     }
-    if cleaned.len() % 2 != 0 {
+    if !cleaned.len().is_multiple_of(2) {
         return Err("invalid hex input: odd number of digits".to_string());
     }
     if !cleaned.chars().all(|ch| ch.is_ascii_hexdigit()) {
@@ -91,7 +91,7 @@ pub(crate) fn format_send_command_hex_display(draft: &str) -> String {
                 if byte.len() == 2 {
                     byte_index += 1;
                     if i + 2 < cleaned.len() {
-                        if byte_index % 4 == 0 {
+                        if byte_index.is_multiple_of(4) {
                             formatted.push_str("  ");
                         } else {
                             formatted.push(' ');

@@ -48,11 +48,11 @@ impl NyaTermApp {
             self.paste_from_clipboard(window, cx);
             return true;
         }
-        if shortcut_matches(event, "terminal.pasteSelected", &keybindings) {
-            if let Some(text) = self.selected_terminal_text() {
-                self.paste_terminal_text(text, window, cx);
-                return true;
-            }
+        if shortcut_matches(event, "terminal.pasteSelected", &keybindings)
+            && let Some(text) = self.selected_terminal_text()
+        {
+            self.paste_terminal_text(text, window, cx);
+            return true;
         }
         if shortcut_matches(event, "terminal.find", &keybindings) {
             self.open_terminal_search(window, cx);

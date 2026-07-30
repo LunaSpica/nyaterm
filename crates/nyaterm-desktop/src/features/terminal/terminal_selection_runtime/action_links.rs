@@ -150,21 +150,21 @@ impl NyaTermApp {
             match_key: match_key.clone(),
         };
         // Already visible for this link: track position.
-        if let Some(current) = self.terminal.menus.action_link_tooltip.as_ref() {
-            if current.match_key == match_key {
-                return;
-            }
+        if let Some(current) = self.terminal.menus.action_link_tooltip.as_ref()
+            && current.match_key == match_key
+        {
+            return;
         }
         // Pending same link: update position only.
-        if let Some((key, started, _)) = self.terminal.menus.action_link_hover_pending.clone() {
-            if key == match_key {
-                let ready = started.elapsed() >= Duration::from_millis(250);
-                self.terminal.menus.action_link_hover_pending = Some((match_key, started, next));
-                if ready {
-                    self.poll_action_link_tooltip_delay(cx);
-                }
-                return;
+        if let Some((key, started, _)) = self.terminal.menus.action_link_hover_pending.clone()
+            && key == match_key
+        {
+            let ready = started.elapsed() >= Duration::from_millis(250);
+            self.terminal.menus.action_link_hover_pending = Some((match_key, started, next));
+            if ready {
+                self.poll_action_link_tooltip_delay(cx);
             }
+            return;
         }
         // New link under cursor: start 250ms delay (Tauri ActionLinkTooltip).
         let visible_changed = self.terminal.menus.action_link_tooltip.take().is_some();
@@ -209,9 +209,7 @@ impl NyaTermApp {
         let offset = self.terminal_display_offset_for_session(session_id);
         let snapshot = self.terminal_snapshot_for_session(session_id, offset);
         let frame_action_links = if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
-            let Some(view) = self.terminal.view.views.get(session_id) else {
-                return None;
-            };
+            let view = self.terminal.view.views.get(session_id)?;
             crate::features::terminal::terminal_surface::terminal_action_links_for_paint_snapshot(
                 Some(view),
                 offset,
@@ -345,7 +343,6 @@ impl NyaTermApp {
     }
 
     /// Ctrl/Cmd-click OSC 8 hyperlinks (uri from the terminal screen model).
-
     pub(in crate::features) fn try_activate_osc8_hyperlink_at_click(
         &mut self,
         event: &ClickEvent,
@@ -468,6 +465,25 @@ impl NyaTermApp {
     }
 }
 
+fn clear_action_link_tooltip_state(
+    tooltip: &mut Option<ActionLinkTooltipState>,
+    pending: &mut Option<(String, Instant, ActionLinkTooltipState)>,
+) -> bool {
+    let visible_changed = tooltip.take().is_some();
+    *pending = None;
+    visible_changed
+}
+
+fn terminal_bounds_contains(bounds: Bounds<Pixels>, position: Point<Pixels>) -> bool {
+    let min_x = f32::from(bounds.origin.x);
+    let min_y = f32::from(bounds.origin.y);
+    let max_x = min_x + f32::from(bounds.size.width);
+    let max_y = min_y + f32::from(bounds.size.height);
+    let x = f32::from(position.x);
+    let y = f32::from(position.y);
+    x >= min_x && x <= max_x && y >= min_y && y <= max_y
+}
+
 #[cfg(test)]
 mod tests {
     use std::time::{Duration, Instant};
@@ -556,23 +572,4 @@ mod tests {
         assert!(visible.is_none());
         assert!(pending.is_none());
     }
-}
-
-fn clear_action_link_tooltip_state(
-    tooltip: &mut Option<ActionLinkTooltipState>,
-    pending: &mut Option<(String, Instant, ActionLinkTooltipState)>,
-) -> bool {
-    let visible_changed = tooltip.take().is_some();
-    *pending = None;
-    visible_changed
-}
-
-fn terminal_bounds_contains(bounds: Bounds<Pixels>, position: Point<Pixels>) -> bool {
-    let min_x = f32::from(bounds.origin.x);
-    let min_y = f32::from(bounds.origin.y);
-    let max_x = min_x + f32::from(bounds.size.width);
-    let max_y = min_y + f32::from(bounds.size.height);
-    let x = f32::from(position.x);
-    let y = f32::from(position.y);
-    x >= min_x && x <= max_x && y >= min_y && y <= max_y
 }

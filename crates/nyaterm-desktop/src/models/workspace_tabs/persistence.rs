@@ -32,10 +32,10 @@ impl TerminalWindowNode {
                 let mut tab_indexes = Vec::new();
                 let mut seen = std::collections::HashSet::new();
                 for tab_id in tab_ids {
-                    if let Some(&index) = index_by_id.get(tab_id.as_str()) {
-                        if seen.insert(index) {
-                            tab_indexes.push(index);
-                        }
+                    if let Some(&index) = index_by_id.get(tab_id.as_str())
+                        && seen.insert(index)
+                    {
+                        tab_indexes.push(index);
                     }
                 }
                 if tab_indexes.is_empty() {

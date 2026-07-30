@@ -231,12 +231,11 @@ fn ai_agent_job_output(
         .ok_or_else(|| "Agent returned execute_command without a command".to_string())?;
     let assessment = assess_agent_command_risk(&parsed, command);
     let (decision, approval_note) = decide_agent_command_execution(settings, &assessment);
-    let explanation = parsed
-        .thought
-        .trim()
-        .is_empty()
-        .then(|| "Agent requested command execution".to_string())
-        .unwrap_or_else(|| parsed.thought.trim().to_string());
+    let explanation = if parsed.thought.trim().is_empty() {
+        "Agent requested command execution".to_string()
+    } else {
+        parsed.thought.trim().to_string()
+    };
     let card = AiCommandCard {
         id: format!("agent-{}", uuid()),
         title: "Agent Command".to_string(),

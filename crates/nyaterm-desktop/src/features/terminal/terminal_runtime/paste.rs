@@ -45,10 +45,10 @@ impl NyaTermApp {
         }
         let payload = normalize_paste_newlines(&text);
         // Tauri pasteText: replace smart input selection when present.
-        if let Some(selected) = self.smart_cursor_selected_input_range() {
-            if self.replace_smart_input_selection(selected, &payload, cx) {
-                return;
-            }
+        if let Some(selected) = self.smart_cursor_selected_input_range()
+            && self.replace_smart_input_selection(selected, &payload, cx)
+        {
+            return;
         }
         self.send_terminal_paste_input(&payload, cx);
     }
@@ -251,13 +251,13 @@ impl NyaTermApp {
                 }
             }
             "left" => {
-                if !keystroke.modifiers.shift {
-                    if let Some(anchor) = self.terminal.paste.anchor {
-                        let target = anchor.min(self.terminal.paste.cursor);
-                        self.terminal.paste.move_cursor(target, false);
-                        cx.notify();
-                        return;
-                    }
+                if !keystroke.modifiers.shift
+                    && let Some(anchor) = self.terminal.paste.anchor
+                {
+                    let target = anchor.min(self.terminal.paste.cursor);
+                    self.terminal.paste.move_cursor(target, false);
+                    cx.notify();
+                    return;
                 }
                 let target = self.terminal.paste.previous_char_boundary();
                 self.terminal
@@ -266,13 +266,13 @@ impl NyaTermApp {
                 cx.notify();
             }
             "right" => {
-                if !keystroke.modifiers.shift {
-                    if let Some(anchor) = self.terminal.paste.anchor {
-                        let target = anchor.max(self.terminal.paste.cursor);
-                        self.terminal.paste.move_cursor(target, false);
-                        cx.notify();
-                        return;
-                    }
+                if !keystroke.modifiers.shift
+                    && let Some(anchor) = self.terminal.paste.anchor
+                {
+                    let target = anchor.max(self.terminal.paste.cursor);
+                    self.terminal.paste.move_cursor(target, false);
+                    cx.notify();
+                    return;
                 }
                 let target = self.terminal.paste.next_char_boundary();
                 self.terminal
@@ -311,10 +311,9 @@ impl NyaTermApp {
                     .key_char
                     .as_deref()
                     .filter(|input| !input.is_empty())
+                    && self.terminal.paste.replace_selection(input)
                 {
-                    if self.terminal.paste.replace_selection(input) {
-                        cx.notify();
-                    }
+                    cx.notify();
                 }
             }
         }

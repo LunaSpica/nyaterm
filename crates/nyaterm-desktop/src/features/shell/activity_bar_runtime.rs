@@ -13,8 +13,6 @@ use crate::models::{
 #[derive(Clone, Debug)]
 pub(in crate::features) struct ActivityBarDragPayload {
     pub entry_id: String,
-    pub zone: ActivityBarZone,
-    pub index: usize,
     pub label: String,
     /// The dragged entry's own icon, so the preview reads as the thing being moved.
     pub icon_path: &'static str,

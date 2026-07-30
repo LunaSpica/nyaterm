@@ -3,8 +3,8 @@ use std::sync::Arc;
 
 use gpui::{Context, Window};
 use nyaterm_transport::{
-    SftpDuplicatePolicy, SftpDuplicateResolver, SftpService, SftpTransferControl,
-    SftpTransferOptions, SshSessionConfig,
+    SftpDuplicatePolicy, SftpDuplicateResolver, SftpPathTransferOptions, SftpService,
+    SftpTransferControl, SshSessionConfig,
 };
 
 use crate::features::NyaTermApp;
@@ -39,9 +39,7 @@ impl NyaTermApp {
             config,
             remote_path,
             local_path,
-            duplicate_policy,
-            duplicate_resolver,
-            transfer_options,
+            SftpPathTransferOptions::new(duplicate_policy, duplicate_resolver, transfer_options),
             cx,
         );
     }
@@ -52,9 +50,7 @@ impl NyaTermApp {
         config: SshSessionConfig,
         remote_path: String,
         local_path: PathBuf,
-        duplicate_policy: SftpDuplicatePolicy,
-        duplicate_resolver: Option<Arc<dyn SftpDuplicateResolver>>,
-        transfer_options: SftpTransferOptions,
+        path_options: SftpPathTransferOptions,
         cx: &mut Context<Self>,
     ) {
         let id = self.transfer.next_transfer_job_id("sftp-download");
@@ -80,13 +76,11 @@ impl NyaTermApp {
         std::thread::spawn(move || {
             let mut progress_sender = TransferProgressEventSender::new(id.clone(), progress_tx);
             let result = SftpService::new(config)
-                .download_path_with_progress_options_and_resolver_options(
+                .download_path_with_progress_and_path_options(
                     &remote_path,
                     local_path,
                     control,
-                    duplicate_policy,
-                    duplicate_resolver,
-                    transfer_options,
+                    path_options,
                     move |progress| {
                         progress_sender.send(progress);
                     },
@@ -107,9 +101,7 @@ impl NyaTermApp {
         config: SshSessionConfig,
         local_path: PathBuf,
         remote_path: String,
-        duplicate_policy: SftpDuplicatePolicy,
-        duplicate_resolver: Option<Arc<dyn SftpDuplicateResolver>>,
-        transfer_options: SftpTransferOptions,
+        path_options: SftpPathTransferOptions,
         cx: &mut Context<Self>,
     ) {
         let id = self.transfer.next_transfer_job_id("sftp-upload");
@@ -136,13 +128,11 @@ impl NyaTermApp {
             let mut progress_sender = TransferProgressEventSender::new(id.clone(), progress_tx);
             let service = SftpService::new(config);
             let result = service
-                .upload_path_with_progress_options_and_resolver_options(
+                .upload_path_with_progress_and_path_options(
                     local_path,
                     &remote_path,
                     control,
-                    duplicate_policy,
-                    duplicate_resolver,
-                    transfer_options,
+                    path_options,
                     move |progress| {
                         progress_sender.send(progress);
                     },
@@ -342,13 +332,15 @@ impl NyaTermApp {
                     let mut progress_sender =
                         TransferProgressEventSender::new(job_id.clone(), progress_tx);
                     let result = SftpService::new(config)
-                        .download_path_with_progress_options_and_resolver_options(
+                        .download_path_with_progress_and_path_options(
                             &remote_path,
                             local_path,
                             control,
-                            duplicate_policy,
-                            duplicate_resolver,
-                            transfer_options,
+                            SftpPathTransferOptions::new(
+                                duplicate_policy,
+                                duplicate_resolver,
+                                transfer_options,
+                            ),
                             move |progress| {
                                 progress_sender.send(progress);
                             },
@@ -391,13 +383,15 @@ impl NyaTermApp {
                         TransferProgressEventSender::new(job_id.clone(), progress_tx);
                     let service = SftpService::new(config);
                     let result = service
-                        .upload_path_with_progress_options_and_resolver_options(
+                        .upload_path_with_progress_and_path_options(
                             local_path,
                             &remote_path,
                             control,
-                            duplicate_policy,
-                            duplicate_resolver,
-                            transfer_options,
+                            SftpPathTransferOptions::new(
+                                duplicate_policy,
+                                duplicate_resolver,
+                                transfer_options,
+                            ),
                             move |progress| {
                                 progress_sender.send(progress);
                             },

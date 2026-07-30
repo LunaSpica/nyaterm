@@ -68,10 +68,11 @@ impl NyaTermApp {
             }
         }
         for (session_id, _) in self.session.metadata_entries() {
-            if seen.insert(session_id) && !self.is_secondary_pane_session(session_id) {
-                if let Some(session) = self.session.session_info(session_id) {
-                    ordered.push(session);
-                }
+            if seen.insert(session_id)
+                && !self.is_secondary_pane_session(session_id)
+                && let Some(session) = self.session.session_info(session_id)
+            {
+                ordered.push(session);
             }
         }
         ordered
@@ -79,15 +80,15 @@ impl NyaTermApp {
 
     /// Prefer the currently focused leaf when it belongs to `tab_root`, else the tab root.
     pub(in crate::features) fn active_pane_for_tab_root(&self, tab_root: &str) -> String {
-        if let Some(active) = self.session.active_id() {
-            if self.tab_root_for_session(active) == tab_root {
-                return active.to_string();
-            }
+        if let Some(active) = self.session.active_id()
+            && self.tab_root_for_session(active) == tab_root
+        {
+            return active.to_string();
         }
-        if let Some(root) = self.shell.workspace_pane_root(tab_root) {
-            if let Some(first) = root.session_ids().into_iter().next() {
-                return first;
-            }
+        if let Some(root) = self.shell.workspace_pane_root(tab_root)
+            && let Some(first) = root.session_ids().into_iter().next()
+        {
+            return first;
         }
         tab_root.to_string()
     }

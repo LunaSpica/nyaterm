@@ -5,23 +5,28 @@ use gpui::{
 };
 
 use crate::features::NyaTermApp;
-use crate::models::{ConnectionEditorField, ConnectionEditorMenu, ConnectionEditorState};
+use crate::models::{ConnectionEditorField, ConnectionEditorMenu};
 use crate::widgets::small_button;
 
 use super::super::super::list::{
-    ConnectionEditorChoice, ConnectionEditorFields, connection_editor_select, editor_field,
+    ConnectionEditorChoice, ConnectionEditorRenderContext, connection_editor_select, editor_field,
 };
 
+use super::ConnectionEditorSectionContext;
+
 pub(super) fn connection_editor_local_section(
-    palette: crate::theme::ThemePalette,
-    _editor: &ConnectionEditorState,
+    section: ConnectionEditorSectionContext<'_>,
     shell_label: &'static str,
     shell_options: Vec<ConnectionEditorChoice>,
-    open_menu: Option<ConnectionEditorMenu>,
-    language: &str,
-    fields: &ConnectionEditorFields,
     cx: &mut Context<NyaTermApp>,
 ) -> gpui::Div {
+    let ConnectionEditorSectionContext {
+        palette,
+        editor: _,
+        active_menu: open_menu,
+        language,
+        fields,
+    } = section;
     let tr = |key: &'static str| crate::i18n::text(language, key);
     div()
         .flex()
@@ -48,15 +53,17 @@ pub(super) fn connection_editor_local_section(
                                 .w(px(144.))
                                 .flex_none()
                                 .child(connection_editor_select(
-                                    palette,
+                                    ConnectionEditorRenderContext {
+                                        palette,
+                                        fields,
+                                        cx,
+                                    },
                                     "connection-editor-shell-preset",
                                     "",
                                     shell_label,
                                     ConnectionEditorMenu::Shell,
                                     open_menu == Some(ConnectionEditorMenu::Shell),
                                     shell_options,
-                                    fields,
-                                    cx,
                                 )),
                         )
                         .child(div().min_w_0().flex_1().child(editor_field(

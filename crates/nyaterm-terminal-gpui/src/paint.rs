@@ -1,4 +1,14 @@
-use super::*;
+use gpui::{
+    Bounds, Font, FontStyle, FontWeight, Hsla, PaintQuad, Pixels, StrikethroughStyle, fill, point,
+    px, rgb, size,
+};
+use nyaterm_terminal::{
+    terminal_cell_col_for_byte_index, terminal_char_cell_width, terminal_is_zero_width_mark,
+};
+
+use crate::ansi::ansi_to_highlight_spans_compiled;
+use crate::keywords::keyword_matches_compiled;
+use crate::types::{TerminalHighlightSpan, TerminalKeywordRange, TerminalPaintGeometry};
 
 pub(super) fn flush_bg(
     pending: Option<(u32, usize, usize)>,
@@ -32,15 +42,20 @@ pub(super) fn push_col_range_bg(
     start: usize,
     end: usize,
     color: u32,
-    bounds: Bounds<Pixels>,
-    cell_w: f32,
-    cell_h: f32,
+    geometry: TerminalPaintGeometry,
     out: &mut Vec<PaintQuad>,
 ) {
     if end <= start {
         return;
     }
-    flush_bg(Some((color, start, end)), row, bounds, cell_w, cell_h, out);
+    flush_bg(
+        Some((color, start, end)),
+        row,
+        geometry.bounds,
+        geometry.cell_width,
+        geometry.cell_height,
+        out,
+    );
 }
 
 pub(super) fn terminal_run_font(
@@ -519,50 +534,20 @@ pub(super) fn terminal_cell_text_at_col(line: &str, col: usize) -> String {
     " ".to_string()
 }
 
-/// Paint a caret at `cursor_col` (char index) using Tauri cursor styles.
-pub(super) fn apply_cursor_style(
-    spans: Vec<TerminalHighlightSpan>,
-    cursor_col: usize,
-    cursor_style: &str,
-    palette: nyaterm_ui::ThemePalette,
-) -> Vec<TerminalHighlightSpan> {
-    let mut flat = flatten_highlight_spans(spans);
-    // Ensure the cursor column exists even on a short/empty line.
-    while flat.len() <= cursor_col {
-        flat.push(FlatTerminalCell::blank());
-    }
-    if let Some(cell) = flat.get_mut(cursor_col) {
-        match cursor_style {
-            "underline" => {
-                // Approximate underline caret: keep glyph, tint with cursor color and dim cell bg.
-                if cell.color.is_none() {
-                    cell.color = Some(palette.terminal_cursor);
-                }
-                cell.bg = Some(palette.terminal_selection);
-                cell.keyword = false;
-            }
-            "bar" => {
-                // Approximate bar caret: thin visual via inverted narrow space marker.
-                cell.text = "|".to_string();
-                cell.color = Some(palette.terminal_cursor);
-                cell.bg = None;
-                cell.keyword = false;
-            }
-            _ => {
-                // Block cursor: invert with theme cursor color (Tauri xterm cursor).
-                cell.color = Some(palette.terminal_bg);
-                cell.bg = Some(palette.terminal_cursor);
-                cell.keyword = false;
-            }
-        }
-    }
-
-    compress_flat_cells(flat)
-}
-
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use nyaterm_terminal::{
+        terminal_byte_index_for_cell_col, terminal_cell_col_for_byte_index, terminal_cell_count,
+        terminal_is_zero_width_mark,
+    };
+
+    use super::{
+        apply_action_link_ranges, apply_selection_range, flatten_highlight_spans,
+        terminal_cell_text_at_col, terminal_highlight_spans_compiled,
+        terminal_highlight_spans_with_keyword_ranges, terminal_keyword_exclusion_ranges,
+    };
+    use crate::keywords::compile_keyword_rules;
+    use crate::types::{TerminalHighlightSpan, TerminalKeywordRange};
 
     fn plain_span(text: &str) -> TerminalHighlightSpan {
         TerminalHighlightSpan {
@@ -826,18 +811,6 @@ mod tests {
         assert_eq!(spans[0].bg, None);
         assert_eq!(spans[1].text, "x");
         assert_eq!(spans[1].bg, Some(palette.terminal_selection));
-    }
-
-    #[test]
-    fn cursor_columns_treat_combining_mark_as_same_cell() {
-        let palette = nyaterm_ui::theme_palette("github-dark");
-        let spans = apply_cursor_style(vec![plain_span("e\u{301}x")], 1, "block", palette);
-
-        assert_eq!(spans.len(), 2);
-        assert_eq!(spans[0].text, "e\u{301}");
-        assert_eq!(spans[0].bg, None);
-        assert_eq!(spans[1].text, "x");
-        assert_eq!(spans[1].bg, Some(palette.terminal_cursor));
     }
 
     #[test]

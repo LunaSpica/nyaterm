@@ -50,7 +50,7 @@ pub(in crate::features) fn terminal_bounds_tracker(
             let entity = entity.clone();
             let session_id = tracked_session_id.clone();
             cx.defer(move |cx| {
-                let _ = entity.update(cx, |this, cx| {
+                entity.update(cx, |this, cx| {
                     this.remember_terminal_surface_bounds_for_session_and_sync(
                         session_id.as_deref(),
                         bounds,
@@ -174,10 +174,10 @@ impl EntityInputHandler for NyaTermApp {
         }
         self.terminal.input.ime_marked_text.clear();
         if !text.is_empty() {
-            if let Some(selected) = self.smart_cursor_selected_input_range() {
-                if self.replace_smart_input_selection(selected, text, cx) {
-                    return;
-                }
+            if let Some(selected) = self.smart_cursor_selected_input_range()
+                && self.replace_smart_input_selection(selected, text, cx)
+            {
+                return;
             }
             let bytes = text.as_bytes().to_vec();
             let has_buffer_selection = self.terminal.selection.selection.is_some()

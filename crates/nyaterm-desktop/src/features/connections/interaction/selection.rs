@@ -5,7 +5,6 @@ use crate::features::NyaTermApp;
 
 impl NyaTermApp {
     /// Tauri connection selection: plain click replaces, Ctrl/Cmd toggles, Shift ranges.
-
     pub(in crate::features) fn select_connection(
         &mut self,
         connection_id: String,

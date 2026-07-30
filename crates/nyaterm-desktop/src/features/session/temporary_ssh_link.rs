@@ -5,7 +5,7 @@ use nyaterm_core::AiExecutionProfile;
 use nyaterm_transport::SshSessionConfig;
 
 use super::NativeHostKeyVerifier;
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, SavedConnectionStartOptions, TextInputSetup};
 use crate::temporary_ssh_link::{TemporarySshLinkConfig, parse_temporary_ssh_link};
 
 impl NyaTermApp {
@@ -79,12 +79,7 @@ impl NyaTermApp {
             config,
             None,
             AiExecutionProfile::Auto,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
+            SavedConnectionStartOptions::default(),
             cx,
         );
     }

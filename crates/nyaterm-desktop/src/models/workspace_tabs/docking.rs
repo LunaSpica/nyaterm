@@ -14,12 +14,12 @@ impl TerminalWindowNode {
             return false;
         }
         // Already immediately before target.
-        if let Some(ids) = self.leaf_tab_ids_for_tab(before_tab_id) {
-            if let Some(pos) = ids.iter().position(|id| id == before_tab_id) {
-                if pos > 0 && ids[pos - 1] == tab_id {
-                    return true;
-                }
-            }
+        if let Some(ids) = self.leaf_tab_ids_for_tab(before_tab_id)
+            && let Some(pos) = ids.iter().position(|id| id == before_tab_id)
+            && pos > 0
+            && ids[pos - 1] == tab_id
+        {
+            return true;
         }
         let Some(next) = self.remove_tab(tab_id) else {
             return false;
@@ -94,10 +94,11 @@ impl TerminalWindowNode {
         edge: TabDockEdge,
     ) -> bool {
         // If tab is already the sole occupant of the target leaf, nothing to do.
-        if let Some((leaf_id, count)) = self.leaf_tab_count_for(tab_id) {
-            if leaf_id == target_leaf_id && count == 1 {
-                return false;
-            }
+        if let Some((leaf_id, count)) = self.leaf_tab_count_for(tab_id)
+            && leaf_id == target_leaf_id
+            && count == 1
+        {
+            return false;
         }
         // Remove from current placement first.
         let Some(next) = self.remove_tab(tab_id) else {
