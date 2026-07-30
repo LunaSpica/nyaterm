@@ -197,12 +197,7 @@ impl Render for NyaInputState {
             state.update(cx, |state, cx| state.focus(window, cx));
         }
         self.focused = self.focus.is_focused(window) || component_focus.is_focused(window);
-        let input = Input::new(&state)
-            .small()
-            .appearance(false)
-            .bordered(false)
-            .focus_bordered(false)
-            .disabled(self.disabled);
+        let input = Input::new(&state).small().disabled(self.disabled);
         if self.multi_line {
             input.h_full()
         } else {
