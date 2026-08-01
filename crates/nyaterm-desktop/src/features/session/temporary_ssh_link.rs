@@ -27,8 +27,7 @@ impl NyaTermApp {
         }
         self.refresh_connection_serial_ports();
         self.session.dialogs.open_temporary_ssh_link();
-        self.forget_text_inputs("temporary-ssh.link");
-        self.forget_text_inputs("temporary-ssh.serial-");
+        self.forget_text_inputs("temporary-ssh.");
         self.shell.set_status("temporary link opened".to_string());
         self.open_form_dialog(
             (
@@ -47,8 +46,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn close_temporary_ssh_link_dialog(&mut self, cx: &mut Context<Self>) {
         self.session.dialogs.close_temporary_ssh_link();
-        self.forget_text_inputs("temporary-ssh.link");
-        self.forget_text_inputs("temporary-ssh.serial-");
+        self.forget_text_inputs("temporary-ssh.");
         self.shell
             .set_status("temporary link cancelled".to_string());
         cx.notify();
@@ -108,6 +106,9 @@ impl NyaTermApp {
         protocol: TemporaryLinkProtocol,
         cx: &mut Context<Self>,
     ) {
+        if self.session.dialogs.temporary_link_protocol() != protocol {
+            self.forget_text_inputs("temporary-ssh.link");
+        }
         if protocol == TemporaryLinkProtocol::Serial {
             self.refresh_connection_serial_ports();
         }
@@ -200,8 +201,7 @@ impl NyaTermApp {
 
     fn close_temporary_link_draft(&mut self) {
         self.session.dialogs.close_temporary_ssh_link();
-        self.forget_text_inputs("temporary-ssh.link");
-        self.forget_text_inputs("temporary-ssh.serial-");
+        self.forget_text_inputs("temporary-ssh.");
     }
 
     fn temporary_ssh_session_config(&self, parsed: TemporarySshLinkConfig) -> SshSessionConfig {

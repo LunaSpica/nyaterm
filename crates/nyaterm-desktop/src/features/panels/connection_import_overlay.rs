@@ -99,6 +99,62 @@ impl NyaTermApp {
                     ))
                     .child(connection_import_source_card(
                         palette,
+                        "connection-import-securecrt",
+                        "color/brand/securecrt.png",
+                        "SecureCRT",
+                        ".xml",
+                        cx.listener(|this, _, window, cx| {
+                            this.select_connection_import_source(
+                                ConnectionImportSource::SecureCrt,
+                                window,
+                                cx,
+                            );
+                        }),
+                    ))
+                    .child(connection_import_source_card(
+                        palette,
+                        "connection-import-finalshell",
+                        "color/brand/finalshell.png",
+                        "FinalShell",
+                        "conn directory",
+                        cx.listener(|this, _, window, cx| {
+                            this.select_connection_import_source(
+                                ConnectionImportSource::FinalShell,
+                                window,
+                                cx,
+                            );
+                        }),
+                    ))
+                    .child(connection_import_source_card(
+                        palette,
+                        "connection-import-termius",
+                        "color/brand/termius.png",
+                        "Termius",
+                        "local IndexedDB",
+                        cx.listener(|this, _, window, cx| {
+                            this.select_connection_import_source(
+                                ConnectionImportSource::Termius,
+                                window,
+                                cx,
+                            );
+                        }),
+                    ))
+                    .child(connection_import_source_card(
+                        palette,
+                        "connection-import-electerm",
+                        "color/brand/electerm.png",
+                        "Electerm",
+                        ".json",
+                        cx.listener(|this, _, window, cx| {
+                            this.select_connection_import_source(
+                                ConnectionImportSource::Electerm,
+                                window,
+                                cx,
+                            );
+                        }),
+                    ))
+                    .child(connection_import_source_card(
+                        palette,
                         "connection-import-json",
                         "icons/files.svg",
                         "JSON",

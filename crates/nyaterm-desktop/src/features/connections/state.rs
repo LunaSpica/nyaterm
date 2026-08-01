@@ -13,9 +13,10 @@ use crate::features::NyaTermApp;
 use crate::models::{
     ConnectionEditorAdvancedTab, ConnectionEditorField, ConnectionEditorPasswordSource,
     ConnectionEditorSelect, ConnectionEditorState, ConnectionEditorTelnetTab,
-    ConnectionGroupEditorState, ConnectionImportSource, ConnectionKindTab, ConnectionSortMode,
-    NetworkGroupEditorState, NetworkMovePickerState, NetworkProxyEditorField,
-    NetworkProxyEditorState, NetworkTab, NetworkTunnelEditorField, NetworkTunnelEditorState,
+    ConnectionGroupEditorMode, ConnectionGroupEditorState, ConnectionImportSource,
+    ConnectionKindTab, ConnectionSortMode, NetworkGroupEditorState, NetworkMovePickerState,
+    NetworkProxyEditorField, NetworkProxyEditorState, NetworkTab, NetworkTunnelEditorField,
+    NetworkTunnelEditorState,
 };
 use nyaterm_ui::{
     NyaInputEvent, NyaInputState, NyaNumberInputEvent, NyaNumberInputOptions, NyaNumberInputState,
@@ -155,6 +156,7 @@ impl ConnectionFeatureState {
                     app.sync_connection_keyboard_active(cx);
                     cx.notify();
                 }
+                NyaInputEvent::Blurred(_) => {}
             },
         );
         Self {
@@ -501,6 +503,7 @@ impl ConnectionFeatureState {
                         NyaInputEvent::Changed(text) | NyaInputEvent::Submitted(text) => {
                             app.apply_connection_editor_field_text(field, text.clone(), cx);
                         }
+                        NyaInputEvent::Blurred(_) => {}
                     },
                 );
             self.editor.fields.insert(field, entity);
@@ -722,18 +725,30 @@ impl ConnectionFeatureState {
         self.group_editor.field.clone()
     }
 
-    pub fn build_group_editor_field(&mut self, cx: &mut Context<NyaTermApp>) {
+    pub fn build_group_editor_field(
+        &mut self,
+        placeholder: SharedString,
+        cx: &mut Context<NyaTermApp>,
+    ) {
         let Some(draft) = self.group_editor.draft.as_ref() else {
-            self.group_editor.field = None;
-            self.group_editor.field_subscription = None;
+            self.clear_group_editor_field();
             return;
         };
-        let entity = cx.new(|cx| NyaInputState::new(cx, draft.name.clone()));
+        let entity =
+            cx.new(|cx| NyaInputState::new(cx, draft.name.clone()).placeholder(placeholder));
         let subscription =
             cx.subscribe(&entity, |app: &mut NyaTermApp, _, event, cx| match event {
-                NyaInputEvent::Changed(text) | NyaInputEvent::Submitted(text) => {
+                NyaInputEvent::Changed(text) => {
                     app.connection_state.set_group_editor_name(text.clone());
                     cx.notify();
+                }
+                NyaInputEvent::Submitted(text) => {
+                    app.connection_state.set_group_editor_name(text.clone());
+                    app.save_connection_group_editor(cx);
+                }
+                NyaInputEvent::Blurred(text) => {
+                    app.connection_state.set_group_editor_name(text.clone());
+                    app.finish_connection_group_editor_from_blur(cx);
                 }
             });
         self.group_editor.field = Some(entity);
@@ -756,8 +771,38 @@ impl ConnectionFeatureState {
         self.group_editor.active_draft()
     }
 
-    pub fn begin_group_editor(&mut self, draft: ConnectionGroupEditorState) {
-        self.group_editor.begin_edit(draft);
+    pub fn begin_create_group_editor(&mut self, parent_id: Option<String>) {
+        if let Some(parent_id) = parent_id.as_ref() {
+            self.expand_list_group(parent_id.clone());
+        }
+        self.group_editor.begin_edit(ConnectionGroupEditorState {
+            mode: ConnectionGroupEditorMode::Create,
+            id: None,
+            name: String::new(),
+            parent_id,
+            error: None,
+        });
+    }
+
+    pub fn begin_rename_group_editor(
+        &mut self,
+        id: String,
+        name: String,
+        parent_id: Option<String>,
+    ) {
+        self.group_editor.begin_edit(ConnectionGroupEditorState {
+            mode: ConnectionGroupEditorMode::Rename,
+            id: Some(id),
+            name,
+            parent_id,
+            error: None,
+        });
+    }
+
+    pub fn group_editor_is_renaming(&self, group_id: &str) -> bool {
+        self.group_editor.draft.as_ref().is_some_and(|draft| {
+            draft.mode == ConnectionGroupEditorMode::Rename && draft.id.as_deref() == Some(group_id)
+        })
     }
 
     pub fn set_group_editor_error(&mut self, error: String) -> bool {

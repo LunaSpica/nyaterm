@@ -33,6 +33,7 @@ anyhow = "1"
 async-http-proxy = { version = "1.2.5", features = ["runtime-tokio", "basic-auth"] }
 base64 = "0.22"
 bytes = "1.7"
+crypto_secretbox = "0.1"
 digest = "0.11.0-rc.5"
 dirs = "6"
 encoding_rs = "0.8"
@@ -43,6 +44,12 @@ gpui-component-assets = { path = "vendor/gpui-component/crates/assets" }
 gpui_platform = { path = "vendor/zed/crates/gpui_platform" }
 hex = "0.4"
 hmac = "0.13"
+keyring = { version = "3.6", features = [
+    "apple-native",
+    "windows-native",
+    "sync-secret-service",
+    "crypto-rust",
+] }
 log = "0.4.11"
 md5 = "0.8"
 nyaterm-core = { path = "crates/nyaterm-core" }
@@ -53,11 +60,13 @@ nyaterm-terminal-gpui = { path = "crates/nyaterm-terminal-gpui" }
 nyaterm-transport = { path = "crates/nyaterm-transport" }
 nyaterm-ui = { path = "crates/nyaterm-ui" }
 portable-pty = "0.9"
+quick-xml = "0.40"
 rand = { version = "0.10", features = ["thread_rng"] }
 redb = "4.1.0"
 regex = "1.11.1"
 russh = { path = "vendor/russh/russh", features = ["des", "dsa"] }
 russh-sftp = { path = "vendor/russh-sftp" }
+rusty-leveldb = "4.0"
 rust-embed = { version = "8.11", features = ["include-exclude", "debug-embed"] }
 serialport = { version = "4", default-features = false }
 serde = { version = "1", features = ["derive"] }
@@ -77,6 +86,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 usvg = { version = "0.45", default-features = false }
 uuid = { version = "1", features = ["v4", "serde"] }
 vte = "0.14"
+zeroize = "1"
 zmodem2 = { path = "vendor/zmodem2" }
 zed_reqwest = { package = "zed-reqwest", version = "0.12.15-zed", default-features = false, features = [
     "blocking",

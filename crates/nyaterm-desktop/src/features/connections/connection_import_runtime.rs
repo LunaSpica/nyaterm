@@ -1,6 +1,7 @@
 use gpui::{AppContext, Context, IntoElement, PathPromptOptions, SharedString, Window};
 use nyaterm_core::ConnectionStore;
 use nyaterm_ui::NyaDialogWindowExt as _;
+use zeroize::Zeroize as _;
 
 use crate::features::NyaTermApp;
 use crate::models::ConnectionImportSource;
@@ -8,7 +9,11 @@ use crate::models::ConnectionImportSource;
 enum ConnectionImportResult {
     Imported(usize),
     Cancelled,
-    Failed(String),
+    Failed {
+        source: ConnectionImportSource,
+        auto_termius: bool,
+        error: String,
+    },
     Closed,
 }
 
@@ -19,6 +24,10 @@ impl ConnectionImportSource {
             Self::Xshell => "Import Xshell .xts sessions",
             Self::MobaXterm => "Import MobaXterm .mxtsessions sessions",
             Self::WindTerm => "Import WindTerm .sessions file",
+            Self::SecureCrt => "Import SecureCRT .xml sessions",
+            Self::FinalShell => "Import FinalShell conn directory",
+            Self::Termius => "Import Termius IndexedDB directory",
+            Self::Electerm => "Import Electerm bookmarks JSON",
             Self::NyatermJson => "Import NyaTerm sessions JSON",
         }
     }
@@ -29,8 +38,16 @@ impl ConnectionImportSource {
             Self::Xshell => "selecting Xshell session import file",
             Self::MobaXterm => "selecting MobaXterm session import file",
             Self::WindTerm => "selecting WindTerm session import file",
+            Self::SecureCrt => "selecting SecureCRT session XML",
+            Self::FinalShell => "selecting FinalShell conn directory",
+            Self::Termius => "selecting Termius IndexedDB directory",
+            Self::Electerm => "selecting Electerm bookmarks JSON",
             Self::NyatermJson => "selecting NyaTerm session JSON",
         }
+    }
+
+    fn uses_directory_picker(self) -> bool {
+        matches!(self, Self::FinalShell | Self::Termius)
     }
 }
 
@@ -73,6 +90,10 @@ impl NyaTermApp {
             self.prompt_encrypted_portable_snapshot_import(window, cx);
             return;
         }
+        if source == ConnectionImportSource::Termius {
+            self.import_termius_sessions(None, true, cx);
+            return;
+        }
         self.prompt_connection_session_import(source, cx);
     }
 
@@ -89,8 +110,8 @@ impl NyaTermApp {
         }
 
         let receiver = cx.prompt_for_paths(PathPromptOptions {
-            files: true,
-            directories: false,
+            files: !source.uses_directory_picker(),
+            directories: source.uses_directory_picker(),
             multiple: false,
             prompt: Some(SharedString::from(source.prompt_label())),
         });
@@ -108,11 +129,23 @@ impl NyaTermApp {
                                 &config_dir,
                                 portable_key_path,
                             ) {
-                                Ok(store) => match nyaterm_core::import_sessions(&store, &path) {
+                                Ok(store) => match import_connection_source(
+                                    &store,
+                                    source,
+                                    Some(path.as_path()),
+                                ) {
                                     Ok(count) => ConnectionImportResult::Imported(count),
-                                    Err(error) => ConnectionImportResult::Failed(error.to_string()),
+                                    Err(error) => ConnectionImportResult::Failed {
+                                        source,
+                                        auto_termius: false,
+                                        error,
+                                    },
                                 },
-                                Err(error) => ConnectionImportResult::Failed(error.to_string()),
+                                Err(error) => ConnectionImportResult::Failed {
+                                    source,
+                                    auto_termius: false,
+                                    error: error.to_string(),
+                                },
                             }
                         })
                         .await
@@ -120,9 +153,71 @@ impl NyaTermApp {
                     None => ConnectionImportResult::Cancelled,
                 },
                 Ok(Ok(None)) => ConnectionImportResult::Cancelled,
-                Ok(Err(error)) => ConnectionImportResult::Failed(error.to_string()),
+                Ok(Err(error)) => ConnectionImportResult::Failed {
+                    source,
+                    auto_termius: false,
+                    error: error.to_string(),
+                },
                 Err(_) => ConnectionImportResult::Closed,
             };
+            let _ = this.update(cx, |this, cx| {
+                this.apply_connection_import_result(result, cx);
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
+    fn import_termius_sessions(
+        &mut self,
+        indexed_db_path: Option<std::path::PathBuf>,
+        auto_termius: bool,
+        cx: &mut Context<Self>,
+    ) {
+        if self.connection_state.import_path_prompt_active() {
+            self.shell
+                .set_status("connection import picker is already open".to_string());
+            cx.notify();
+            return;
+        }
+
+        let config_dir = self.runtime.config_dir().to_path_buf();
+        let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
+        self.connection_state
+            .begin_import_path_prompt(ConnectionImportSource::Termius);
+        self.shell.set_status(if auto_termius {
+            "importing Termius sessions".to_string()
+        } else {
+            "importing Termius sessions from selected directory".to_string()
+        });
+
+        cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_spawn(async move {
+                    match ConnectionStore::open_with_portable_key_path(
+                        &config_dir,
+                        portable_key_path,
+                    ) {
+                        Ok(store) => match import_connection_source(
+                            &store,
+                            ConnectionImportSource::Termius,
+                            indexed_db_path.as_deref(),
+                        ) {
+                            Ok(count) => ConnectionImportResult::Imported(count),
+                            Err(error) => ConnectionImportResult::Failed {
+                                source: ConnectionImportSource::Termius,
+                                auto_termius,
+                                error,
+                            },
+                        },
+                        Err(error) => ConnectionImportResult::Failed {
+                            source: ConnectionImportSource::Termius,
+                            auto_termius,
+                            error: error.to_string(),
+                        },
+                    }
+                })
+                .await;
             let _ = this.update(cx, |this, cx| {
                 this.apply_connection_import_result(result, cx);
             });
@@ -151,7 +246,20 @@ impl NyaTermApp {
                 self.shell
                     .set_status("connection import cancelled".to_string());
             }
-            ConnectionImportResult::Failed(error) => {
+            ConnectionImportResult::Failed {
+                source,
+                auto_termius,
+                error,
+            } => {
+                if source == ConnectionImportSource::Termius
+                    && auto_termius
+                    && error.contains("Termius IndexedDB directory was not found")
+                {
+                    self.shell
+                        .set_status("select Termius IndexedDB directory".to_string());
+                    self.prompt_connection_session_import(ConnectionImportSource::Termius, cx);
+                    return;
+                }
                 let message = self
                     .tr("savedConnections.importFailed")
                     .replace("{{error}}", &error);
@@ -164,5 +272,71 @@ impl NyaTermApp {
             }
         }
         cx.notify();
+    }
+}
+
+fn import_connection_source(
+    store: &ConnectionStore,
+    source: ConnectionImportSource,
+    path: Option<&std::path::Path>,
+) -> Result<usize, String> {
+    match source {
+        ConnectionImportSource::Termius => {
+            let mut local_key = load_termius_local_key_secret()?;
+            let result = nyaterm_core::import_termius_sessions(store, path, &local_key)
+                .map_err(|error| error.to_string());
+            local_key.zeroize();
+            result
+        }
+        _ => {
+            let path = path.ok_or_else(|| "connection import path was not selected".to_string())?;
+            nyaterm_core::import_sessions(store, path).map_err(|error| error.to_string())
+        }
+    }
+}
+
+fn load_termius_local_key_secret() -> Result<Vec<u8>, String> {
+    let mut errors = Vec::new();
+
+    #[cfg(target_os = "windows")]
+    {
+        match keyring::Entry::new_with_target("Termius/localKey", "Termius", "localKey")
+            .and_then(|entry| entry.get_secret())
+        {
+            Ok(secret) => return Ok(secret),
+            Err(error) => errors.push(format!(
+                "target=Termius/localKey service=Termius user=localKey: {error}"
+            )),
+        }
+    }
+
+    for (service, user) in [("Termius/localKey", "localKey"), ("Termius", "localKey")] {
+        match keyring::Entry::new(service, user).and_then(|entry| entry.get_secret()) {
+            Ok(secret) => return Ok(secret),
+            Err(error) => errors.push(format!("{service}/{user}: {error}")),
+        }
+    }
+
+    Err(format!(
+        "Cannot read Termius localKey from the system keychain. Tried {}",
+        errors.join(", ")
+    ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ConnectionImportSource;
+
+    #[test]
+    fn connection_import_sources_choose_expected_picker_kind() {
+        assert!(!ConnectionImportSource::Xshell.uses_directory_picker());
+        assert!(!ConnectionImportSource::SecureCrt.uses_directory_picker());
+        assert!(!ConnectionImportSource::Electerm.uses_directory_picker());
+        assert!(ConnectionImportSource::FinalShell.uses_directory_picker());
+        assert!(ConnectionImportSource::Termius.uses_directory_picker());
+        assert_eq!(
+            ConnectionImportSource::Termius.prompt_label(),
+            "Import Termius IndexedDB directory"
+        );
     }
 }

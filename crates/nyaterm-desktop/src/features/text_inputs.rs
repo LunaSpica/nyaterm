@@ -139,6 +139,7 @@ impl NyaTermApp {
                     NyaInputEvent::Changed(text) | NyaInputEvent::Submitted(text) => {
                         app.on_text_input_changed(subscription_id.clone(), text.clone(), cx);
                     }
+                    NyaInputEvent::Blurred(_) => {}
                 },
             );
         self.text_inputs.fields.insert(id.clone(), entity.clone());

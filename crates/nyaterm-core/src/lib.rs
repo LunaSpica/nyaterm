@@ -103,7 +103,7 @@ pub use portable_snapshot::{
     encode_encrypted_raw_portable_snapshot, encode_raw_portable_snapshot,
 };
 pub use runtime::{AppRuntime, RuntimeMode};
-pub use session_import::{SessionImportError, import_sessions};
+pub use session_import::{SessionImportError, import_sessions, import_termius_sessions};
 pub use storage::{ConfigBackupInfo, ConnectionStore, KnownHostCheck, StorageError};
 pub use terminal_file_drop::{
     format_local_terminal_drop_input, quote_local_path, terminal_drop_overlay_copy,

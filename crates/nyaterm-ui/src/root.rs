@@ -48,11 +48,11 @@ pub fn nya_root(
 #[cfg(test)]
 mod tests {
     use gpui::{
-        AppContext as _, Context, InteractiveElement as _, IntoElement, ParentElement as _,
-        Render, Styled as _, TestAppContext, VisualTestContext, Window, div,
+        AppContext as _, Context, InteractiveElement as _, IntoElement, ParentElement as _, Render,
+        Styled as _, TestAppContext, VisualTestContext, Window, div,
     };
 
-    use crate::{NyaDialogWindowExt as _, nya_root};
+    use crate::{NyaDialogFooter, NyaDialogWindowExt as _, nya_root};
 
     struct RootContentFixture;
 
@@ -96,5 +96,89 @@ mod tests {
         draw(cx);
 
         assert!(cx.debug_bounds("nya-dialog-content").is_some());
+    }
+
+    #[gpui::test]
+    fn nya_confirm_dialog_renders_footer_actions(cx: &mut TestAppContext) {
+        cx.update(gpui_component::init);
+
+        let (_, cx) = cx.add_window_view(|window, cx| {
+            let view = cx.new(|_| RootContentFixture);
+            nya_root(view, window, cx)
+        });
+        let cx: &mut VisualTestContext = cx;
+
+        cx.update(|window, cx| {
+            window.open_nya_dialog(cx, |dialog, _, _| {
+                dialog
+                    .title("Delete Item")
+                    .confirm(NyaDialogFooter::new("Cancel", "Delete"))
+                    .content(
+                        div()
+                            .debug_selector(|| "nya-confirm-dialog-content".to_string())
+                            .child("Delete this item?"),
+                    )
+            });
+        });
+        draw(cx);
+
+        assert!(cx.debug_bounds("nya-confirm-dialog-content").is_some());
+        assert!(cx.debug_bounds("nya-dialog-cancel-button").is_some());
+        assert!(cx.debug_bounds("nya-dialog-action-button").is_some());
+    }
+
+    #[gpui::test]
+    fn nya_danger_confirm_dialog_renders_footer_actions(cx: &mut TestAppContext) {
+        cx.update(gpui_component::init);
+
+        let (_, cx) = cx.add_window_view(|window, cx| {
+            let view = cx.new(|_| RootContentFixture);
+            nya_root(view, window, cx)
+        });
+        let cx: &mut VisualTestContext = cx;
+
+        cx.update(|window, cx| {
+            window.open_nya_dialog(cx, |dialog, _, _| {
+                dialog
+                    .title("Delete Folder")
+                    .confirm(NyaDialogFooter::new("Cancel", "Delete").danger())
+                    .content(
+                        div()
+                            .debug_selector(|| "nya-danger-dialog-content".to_string())
+                            .child("Delete this folder?"),
+                    )
+            });
+        });
+        draw(cx);
+
+        assert!(cx.debug_bounds("nya-danger-dialog-content").is_some());
+        assert!(cx.debug_bounds("nya-dialog-cancel-button").is_some());
+        assert!(cx.debug_bounds("nya-dialog-action-button").is_some());
+    }
+
+    #[gpui::test]
+    fn nya_alert_dialog_renders_action_footer(cx: &mut TestAppContext) {
+        cx.update(gpui_component::init);
+
+        let (_, cx) = cx.add_window_view(|window, cx| {
+            let view = cx.new(|_| RootContentFixture);
+            nya_root(view, window, cx)
+        });
+        let cx: &mut VisualTestContext = cx;
+
+        cx.update(|window, cx| {
+            window.open_nya_dialog(cx, |dialog, _, _| {
+                dialog.title("Notice").alert("OK").content(
+                    div()
+                        .debug_selector(|| "nya-alert-dialog-content".to_string())
+                        .child("Something happened."),
+                )
+            });
+        });
+        draw(cx);
+
+        assert!(cx.debug_bounds("nya-alert-dialog-content").is_some());
+        assert!(cx.debug_bounds("nya-dialog-action-button").is_some());
+        assert!(cx.debug_bounds("nya-dialog-cancel-button").is_none());
     }
 }

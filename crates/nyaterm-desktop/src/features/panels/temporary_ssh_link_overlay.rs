@@ -1,9 +1,8 @@
 use gpui::{
-    AnyElement, Context, IntoElement as _, ParentElement as _, SharedString, Styled as _, div,
-    prelude::{FluentBuilder as _, InteractiveElement as _, StatefulInteractiveElement as _},
-    px, rgb, rgba,
+    AnyElement, Context, IntoElement as _, ParentElement as _, Styled as _, div,
+    prelude::FluentBuilder as _, px, rgb,
 };
-use nyaterm_ui::NyaScrollArea;
+use nyaterm_ui::NyaSelectOption;
 
 use crate::features::{NyaTermApp, TextInputSetup};
 use crate::temporary_ssh_link::{
@@ -37,120 +36,82 @@ impl NyaTermApp {
                     .child(self.tr("temporarySsh.description")),
             )
             .child(
-                div().flex().items_center().gap_1().children([
-                    temporary_link_protocol_button(
-                        self,
-                        protocol,
-                        TemporaryLinkProtocol::Ssh,
-                        "temporarySsh.protocolSsh",
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .min_w_0()
+                    .child(div().w(px(128.)).child(self.form_select_control(
+                        "temporary-link-protocol",
+                        vec![
+                            NyaSelectOption::new("ssh", self.tr("temporarySsh.protocolSsh")),
+                            NyaSelectOption::new("telnet", self.tr("temporarySsh.protocolTelnet")),
+                            NyaSelectOption::new("serial", self.tr("temporarySsh.protocolSerial")),
+                        ],
+                        Some(protocol.as_str().to_string()),
+                        false,
                         cx,
-                    )
-                    .into_any_element(),
-                    temporary_link_protocol_button(
-                        self,
-                        protocol,
-                        TemporaryLinkProtocol::Telnet,
-                        "temporarySsh.protocolTelnet",
-                        cx,
-                    )
-                    .into_any_element(),
-                    temporary_link_protocol_button(
-                        self,
-                        protocol,
-                        TemporaryLinkProtocol::Serial,
-                        "temporarySsh.protocolSerial",
-                        cx,
-                    )
-                    .into_any_element(),
-                ]),
+                    )))
+                    .child(div().min_w_0().flex_1().child(match protocol {
+                        TemporaryLinkProtocol::Ssh | TemporaryLinkProtocol::Telnet => {
+                            let placeholder = match protocol {
+                                TemporaryLinkProtocol::Ssh => self.tr("temporarySsh.placeholder"),
+                                TemporaryLinkProtocol::Telnet => {
+                                    self.tr("temporarySsh.telnetPlaceholder")
+                                }
+                                TemporaryLinkProtocol::Serial => unreachable!(),
+                            };
+                            self.text_input_box(
+                                "temporary-ssh.link",
+                                &draft,
+                                TextInputSetup::placeholder(placeholder),
+                                cx,
+                            )
+                            .into_any_element()
+                        }
+                        TemporaryLinkProtocol::Serial => {
+                            let serial_ports = self
+                                .connection_state
+                                .serial_ports()
+                                .iter()
+                                .map(|port| NyaSelectOption::new(port.clone(), port.clone()))
+                                .collect::<Vec<_>>();
+                            if serial_ports.is_empty() {
+                                div()
+                                    .h(px(32.))
+                                    .w_full()
+                                    .rounded_sm()
+                                    .border_1()
+                                    .border_color(rgb(palette.border))
+                                    .px_2()
+                                    .flex()
+                                    .items_center()
+                                    .text_xs()
+                                    .text_color(rgb(palette.text_dimmed))
+                                    .child(self.tr("temporarySsh.noSerialPortsFound"))
+                                    .into_any_element()
+                            } else {
+                                self.form_select_control(
+                                    "temporary-link-serial-port",
+                                    serial_ports,
+                                    (!serial_port.is_empty()).then_some(serial_port.clone()),
+                                    false,
+                                    cx,
+                                )
+                                .into_any_element()
+                            }
+                        }
+                    })),
             )
-            .when(protocol != TemporaryLinkProtocol::Serial, |this| {
-                let placeholder = match protocol {
-                    TemporaryLinkProtocol::Ssh => self.tr("temporarySsh.placeholder"),
-                    TemporaryLinkProtocol::Telnet => self.tr("temporarySsh.telnetPlaceholder"),
-                    TemporaryLinkProtocol::Serial => self.tr("temporarySsh.placeholder"),
-                };
-                this.child(
-                    self.text_input_box(
-                        "temporary-ssh.link",
-                        &draft,
-                        TextInputSetup::placeholder(placeholder),
-                        cx,
-                    )
-                    .into_any_element(),
-                )
-            })
             .when(protocol == TemporaryLinkProtocol::Serial, |this| {
                 this.child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap_2()
-                        .child(
-                            self.text_input_box(
-                                "temporary-ssh.serial-port",
-                                &serial_port,
-                                TextInputSetup::placeholder(
-                                    self.tr("temporarySsh.serialPortPlaceholder"),
-                                ),
-                                cx,
-                            )
-                            .into_any_element(),
-                        )
-                        .child(
-                            self.text_input_box(
-                                "temporary-ssh.baud-rate",
-                                &serial_baud_rate,
-                                TextInputSetup::placeholder(
-                                    self.tr("temporarySsh.baudRatePlaceholder"),
-                                ),
-                                cx,
-                            )
-                            .into_any_element(),
-                        )
-                        .when(!self.connection_state.serial_ports().is_empty(), |this| {
-                            this.child(
-                                NyaScrollArea::new("temporary-serial-port-list")
-                                    .max_h(px(96.))
-                                    .child(div().flex().flex_col().gap_1().children(
-                                        self.connection_state.serial_ports().iter().cloned().map(
-                                            |port| {
-                                                let selected = port == serial_port;
-                                                let port_for_click = port.clone();
-                                                div()
-                                                    .id(SharedString::from(format!(
-                                                        "temporary-serial-port-{port}"
-                                                    )))
-                                                    .h(px(28.))
-                                                    .px_2()
-                                                    .rounded_sm()
-                                                    .flex()
-                                                    .items_center()
-                                                    .text_xs()
-                                                    .text_color(rgb(if selected {
-                                                        palette.primary
-                                                    } else {
-                                                        palette.text
-                                                    }))
-                                                    .bg(if selected {
-                                                        rgba((palette.primary << 8) | 0x18)
-                                                    } else {
-                                                        rgba(0x00000000)
-                                                    })
-                                                    .cursor_pointer()
-                                                    .hover(move |this| this.bg(rgb(palette.hover)))
-                                                    .on_click(cx.listener(move |this, _, _, cx| {
-                                                        this.apply_temporary_serial_port_name(
-                                                            port_for_click.clone(),
-                                                            cx,
-                                                        );
-                                                    }))
-                                                    .child(port)
-                                            },
-                                        ),
-                                    )),
-                            )
-                        }),
+                    self.text_input_box(
+                        "temporary-ssh.baud-rate",
+                        &serial_baud_rate,
+                        TextInputSetup::placeholder(self.tr("temporarySsh.baudRatePlaceholder")),
+                        cx,
+                    )
+                    .into_any_element(),
                 )
             })
             .when_some(error_key, |this, key| {
@@ -206,49 +167,4 @@ fn temporary_link_error_key(
                 }
             }
         })
-}
-
-fn temporary_link_protocol_button(
-    app: &NyaTermApp,
-    active: TemporaryLinkProtocol,
-    protocol: TemporaryLinkProtocol,
-    label_key: &'static str,
-    cx: &mut Context<NyaTermApp>,
-) -> impl gpui::IntoElement {
-    let palette = app.theme_palette();
-    let selected = active == protocol;
-    div()
-        .id(SharedString::from(format!(
-            "temporary-link-protocol-{}",
-            protocol.as_str()
-        )))
-        .h(px(28.))
-        .px_2()
-        .rounded_sm()
-        .border_1()
-        .border_color(rgb(if selected {
-            palette.primary
-        } else {
-            palette.border
-        }))
-        .bg(if selected {
-            rgba((palette.primary << 8) | 0x18)
-        } else {
-            rgba(0x00000000)
-        })
-        .flex()
-        .items_center()
-        .justify_center()
-        .text_xs()
-        .text_color(rgb(if selected {
-            palette.primary
-        } else {
-            palette.text_muted
-        }))
-        .cursor_pointer()
-        .hover(move |this| this.bg(rgb(palette.hover)))
-        .on_click(cx.listener(move |this, _, _, cx| {
-            this.set_temporary_link_protocol(protocol, cx);
-        }))
-        .child(app.tr(label_key))
 }

@@ -1,8 +1,8 @@
-use gpui::{Context, Window};
+use gpui::{Context, KeyDownEvent, Window};
 use nyaterm_core::{Group, uuid};
 
 use crate::features::NyaTermApp;
-use crate::models::ConnectionGroupEditorState;
+use crate::models::ConnectionGroupEditorMode;
 
 impl NyaTermApp {
     pub(in crate::features) fn open_connection_group_editor(
@@ -12,78 +12,87 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.connection_state.close_group_editor();
+        self.connection_state.clear_group_editor_field();
+        self.clear_connection_search_without_focus(cx);
+
         let editing = group_id.is_some();
-        let name = match group_id.as_deref() {
-            Some(id) => self
-                .connection_state
-                .groups()
-                .iter()
-                .find(|group| group.id == id)
-                .map(|group| group.name.clone()),
-            None => Some(String::new()),
-        };
-        let Some(name) = name else {
-            self.shell
-                .set_status("connection group is no longer available".to_string());
-            cx.notify();
-            return;
-        };
-        let parent_id = group_id
-            .as_deref()
-            .and_then(|id| {
-                self.connection_state
+        match group_id {
+            Some(id) => {
+                let Some(group) = self
+                    .connection_state
                     .groups()
                     .iter()
                     .find(|group| group.id == id)
-                    .and_then(|group| group.parent_id.clone())
-            })
-            .or(parent_id);
-
-        self.connection_state
-            .begin_group_editor(ConnectionGroupEditorState {
-                id: group_id,
-                name,
-                parent_id,
-                error: None,
-            });
-        self.connection_state.build_group_editor_field(cx);
-        self.shell
-            .set_status("connection group editor opened".to_string());
-        self.open_form_dialog(
-            (
-                if editing {
-                    self.tr("savedConnections.renameFolder").to_string()
-                } else {
-                    self.tr("savedConnections.newFolder").to_string()
-                },
-                384.,
-                self.tr("common.save").to_string(),
-                |app, _, cx| app.connection_group_editor_dialog_content(cx),
-                |app, _, cx| {
-                    app.save_connection_group_editor(cx);
-                    let saved = app.connection_state.active_group_editor_draft().is_none();
-                    if saved {
-                        app.connection_state.clear_group_editor_field();
-                    }
-                    saved
-                },
-                |app, cx| app.close_connection_group_editor(cx),
-            ),
-            window,
-            cx,
-        );
-        if let Some(field) = self.connection_state.group_editor_field() {
-            window.focus(&field.read(cx).focus_handle(), cx);
+                    .cloned()
+                else {
+                    self.shell
+                        .set_status("connection group is no longer available".to_string());
+                    cx.notify();
+                    return;
+                };
+                self.connection_state.begin_rename_group_editor(
+                    group.id,
+                    group.name,
+                    group.parent_id,
+                );
+            }
+            None => {
+                self.connection_state.begin_create_group_editor(parent_id);
+            }
         }
+        self.connection_state
+            .build_group_editor_field(self.tr("savedConnections.folderName").into(), cx);
+        if let Some(field) = self.connection_state.group_editor_field() {
+            let focus = field.read(cx).focus_handle();
+            window.focus(&focus, cx);
+            if editing {
+                field.update(cx, |field, cx| field.select_all(window, cx));
+            }
+        }
+        self.shell
+            .set_status("connection group inline editor opened".to_string());
         cx.notify();
     }
 
-    pub(in crate::features) fn close_connection_group_editor(&mut self, cx: &mut Context<Self>) {
+    pub(in crate::features) fn cancel_connection_group_editor(&mut self, cx: &mut Context<Self>) {
         self.connection_state.close_group_editor();
         self.connection_state.clear_group_editor_field();
         self.shell
-            .set_status("connection group editor closed".to_string());
+            .set_status("connection group editor cancelled".to_string());
         cx.notify();
+    }
+
+    pub(in crate::features) fn finish_connection_group_editor_from_blur(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(editor) = self.connection_state.active_group_editor_draft() else {
+            return;
+        };
+        if editor.mode == ConnectionGroupEditorMode::Create && editor.name.trim().is_empty() {
+            self.cancel_connection_group_editor(cx);
+            return;
+        }
+        self.save_connection_group_editor(cx);
+    }
+
+    pub(in crate::features) fn handle_connection_group_editor_key_down(
+        &mut self,
+        event: &KeyDownEvent,
+        cx: &mut Context<Self>,
+    ) {
+        if event.keystroke.modifiers.alt
+            || event.keystroke.modifiers.control
+            || event.keystroke.modifiers.platform
+            || event.keystroke.modifiers.function
+        {
+            return;
+        }
+        if event.keystroke.key.as_str() == "escape" {
+            cx.stop_propagation();
+            self.cancel_connection_group_editor(cx);
+        }
     }
 
     pub(in crate::features) fn save_connection_group_editor(&mut self, cx: &mut Context<Self>) {
@@ -98,29 +107,57 @@ impl NyaTermApp {
             return;
         }
 
-        let group = Group {
-            id: editor.id.clone().unwrap_or_else(uuid),
-            name,
-            parent_id: editor.parent_id.clone(),
-            sort_order: editor
-                .id
-                .as_deref()
-                .and_then(|id| {
-                    self.connection_state
-                        .groups()
-                        .iter()
-                        .find(|group| group.id == id)
-                        .map(|group| group.sort_order)
-                })
-                .unwrap_or(self.connection_state.groups().len() as i32),
-            created_at_ms: None,
-            updated_at_ms: None,
+        let group = match editor.mode {
+            ConnectionGroupEditorMode::Create => Group {
+                id: uuid(),
+                name,
+                parent_id: editor.parent_id.clone(),
+                sort_order: self.connection_state.groups().len() as i32,
+                created_at_ms: None,
+                updated_at_ms: None,
+            },
+            ConnectionGroupEditorMode::Rename => {
+                let Some(id) = editor.id.as_deref() else {
+                    self.connection_state.close_group_editor();
+                    self.connection_state.clear_group_editor_field();
+                    cx.notify();
+                    return;
+                };
+                let Some(mut group) = self
+                    .connection_state
+                    .groups()
+                    .iter()
+                    .find(|group| group.id == id)
+                    .cloned()
+                else {
+                    self.connection_state.close_group_editor();
+                    self.connection_state.clear_group_editor_field();
+                    self.shell
+                        .set_status("connection group is no longer available".to_string());
+                    cx.notify();
+                    return;
+                };
+                if group.name == name {
+                    self.connection_state.close_group_editor();
+                    self.connection_state.clear_group_editor_field();
+                    self.shell
+                        .set_status("connection group rename unchanged".to_string());
+                    cx.notify();
+                    return;
+                }
+                group.name = name;
+                group
+            }
         };
 
         match self.with_connection_store(|store| store.save_group(&group)) {
             Ok(()) => {
+                if let Some(parent_id) = group.parent_id.clone() {
+                    self.connection_state.expand_list_group(parent_id);
+                }
                 self.connection_state.expand_list_group(group.id.clone());
                 self.connection_state.close_group_editor();
+                self.connection_state.clear_group_editor_field();
                 self.refresh_store_from_runtime_and_sync_theme(cx);
                 self.shell
                     .set_status(format!("saved connection group {}", group.name));
@@ -130,5 +167,15 @@ impl NyaTermApp {
             }
         }
         cx.notify();
+    }
+
+    fn clear_connection_search_without_focus(&mut self, cx: &mut Context<Self>) {
+        if self.connection_state.list_search_is_empty() {
+            return;
+        }
+        let field = self.connection_state.list_search_field();
+        field.update(cx, |field, cx| field.set_content("", cx));
+        self.connection_state.set_list_search_text(String::new());
+        self.sync_connection_keyboard_active(cx);
     }
 }

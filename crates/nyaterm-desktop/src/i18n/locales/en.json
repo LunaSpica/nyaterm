@@ -1110,6 +1110,8 @@
     "delete": "Delete",
     "deleteConfirm": "Delete '{{name}}'? This can't be undone.",
     "deleteFailed": "Delete failed: {{error}}",
+    "deleteSelected": "Delete Selected",
+    "deleteSelectedConfirm": "Delete {{count}} selected connections? This can't be undone.",
     "deleteFolder": "Delete Folder",
     "deleteFolderConfirm": "Delete folder '{{name}}' and all contents?",
     "description": "Description",

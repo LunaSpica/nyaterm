@@ -1110,6 +1110,8 @@
     "delete": "删除",
     "deleteConfirm": "确定要删除「{{name}}」吗？此操作不可撤销。",
     "deleteFailed": "删除连接失败：{{error}}",
+    "deleteSelected": "删除所选",
+    "deleteSelectedConfirm": "确定要删除选中的 {{count}} 个连接吗？此操作不可撤销。",
     "deleteFolder": "删除文件夹",
     "deleteFolderConfirm": "确定要删除文件夹「{{name}}」及其所有内容吗？",
     "description": "描述",

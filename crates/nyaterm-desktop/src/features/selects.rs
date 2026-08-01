@@ -20,6 +20,7 @@ use crate::models::ConnectionEditorSelect;
 use crate::send_command::{
     SendCommandDataType, SendCommandLineEnding, SendCommandMode, SendCommandTarget,
 };
+use crate::temporary_ssh_link::TemporaryLinkProtocol;
 
 pub(in crate::features) const FOLLOW_UI_THEME_VALUE: &str = "__nya_follow_ui_theme__";
 pub(in crate::features) const NO_SELECTION_VALUE: &str = "__nya_no_selection__";
@@ -241,6 +242,17 @@ impl NyaTermApp {
                     _ => SendCommandLineEnding::Crlf,
                 };
                 self.set_send_command_line_ending(line_ending, cx);
+            }
+            "temporary-link-protocol" => {
+                let protocol = match value {
+                    "telnet" => TemporaryLinkProtocol::Telnet,
+                    "serial" => TemporaryLinkProtocol::Serial,
+                    _ => TemporaryLinkProtocol::Ssh,
+                };
+                self.set_temporary_link_protocol(protocol, cx);
+            }
+            "temporary-link-serial-port" => {
+                self.apply_temporary_serial_port_name(value.to_string(), cx);
             }
             "cloud-provider-select" => self.update_cloud_sync_provider(value, cx),
             "ai-smart-risk" => {

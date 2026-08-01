@@ -30,9 +30,9 @@ use crate::features::{
 use crate::models::{
     ConnectionEditorAdvancedTab, ConnectionEditorField, ConnectionEditorPasswordSource,
     ConnectionEditorSelect, ConnectionEditorState, ConnectionEditorTelnetTab,
-    ConnectionGroupEditorState, ConnectionKindTab, ConnectionSortMode, NetworkGroupEditorState,
-    NetworkMovePickerState, NetworkProxyEditorField, NetworkProxyEditorState, NetworkTab,
-    NetworkTunnelEditorField, NetworkTunnelEditorState,
+    ConnectionGroupEditorMode, ConnectionGroupEditorState, ConnectionKindTab, ConnectionSortMode,
+    NetworkGroupEditorState, NetworkMovePickerState, NetworkProxyEditorField,
+    NetworkProxyEditorState, NetworkTab, NetworkTunnelEditorField, NetworkTunnelEditorState,
 };
 use gpui::TestAppContext;
 use nyaterm_core::{AiExecutionProfile, ConnectionType, Group, SavedConnection};
@@ -930,6 +930,7 @@ fn apply_connection_editor_paths_update_field_and_clear_error() {
 #[test]
 fn set_connection_group_editor_error_updates_active_draft() {
     let mut draft = Some(ConnectionGroupEditorState {
+        mode: ConnectionGroupEditorMode::Create,
         id: None,
         name: String::new(),
         parent_id: None,

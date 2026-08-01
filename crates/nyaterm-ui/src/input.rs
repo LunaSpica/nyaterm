@@ -10,6 +10,7 @@ use gpui_component::input::{Input, InputEvent, InputState};
 pub enum NyaInputEvent {
     Changed(String),
     Submitted(String),
+    Blurred(String),
 }
 
 pub struct NyaInputState {
@@ -180,6 +181,7 @@ impl NyaInputState {
                 }
                 InputEvent::Blur => {
                     this.focused = false;
+                    cx.emit(NyaInputEvent::Blurred(input.read(cx).value().to_string()));
                     cx.notify();
                 }
             });

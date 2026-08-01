@@ -13,7 +13,10 @@ use crate::features::{
     NyaTermApp, ORDINARY_INPUT_SHELL_PADDING_X_PX, format_last_used_ms, ordinary_input_focus_ring,
     ordinary_input_shell_border_color,
 };
-use crate::models::{ConnectionEditorField, ConnectionEditorSelect, ConnectionSortMode};
+use crate::models::{
+    ConnectionEditorField, ConnectionEditorSelect, ConnectionGroupEditorMode,
+    ConnectionGroupEditorState, ConnectionSortMode,
+};
 use nyaterm_ui::{
     NYA_FORM_CONTROL_HEIGHT_PX, NyaInput, NyaInputState, NyaNumberInput, NyaNumberInputState,
     NyaSelect, NyaSelectState,
@@ -23,6 +26,10 @@ use nyaterm_ui::{
 pub(super) enum ConnectionListRow {
     Separator,
     GroupHeader(ConnectionSection),
+    InlineGroupEditor {
+        parent_id: Option<String>,
+        depth: usize,
+    },
     EmptyGroup {
         depth: usize,
     },
@@ -35,11 +42,15 @@ pub(super) enum ConnectionListRow {
 pub(super) fn flatten_connection_rows(
     sections: &[ConnectionSection],
     expanded_groups: &std::collections::HashSet<String>,
+    group_editor: Option<&ConnectionGroupEditorState>,
 ) -> Vec<ConnectionListRow> {
     let has_groups = sections.iter().any(|section| !section.is_root);
     let mut rows = Vec::new();
     let mut children_by_parent: HashMap<Option<String>, Vec<ConnectionSection>> = HashMap::new();
     let mut root_connections = Vec::new();
+    let create_parent_id = group_editor
+        .filter(|editor| editor.mode == ConnectionGroupEditorMode::Create)
+        .map(|editor| editor.parent_id.clone());
     for section in sections {
         if section.is_root {
             root_connections.extend(section.connections.clone());
@@ -52,9 +63,21 @@ pub(super) fn flatten_connection_rows(
     }
 
     for section in children_by_parent.get(&None).cloned().unwrap_or_default() {
-        append_connection_section_rows(section, &children_by_parent, expanded_groups, &mut rows);
+        append_connection_section_rows(
+            section,
+            &children_by_parent,
+            expanded_groups,
+            create_parent_id.as_ref(),
+            &mut rows,
+        );
     }
 
+    if create_parent_id.as_ref() == Some(&None) {
+        rows.push(ConnectionListRow::InlineGroupEditor {
+            parent_id: None,
+            depth: 0,
+        });
+    }
     if has_groups && !root_connections.is_empty() {
         rows.push(ConnectionListRow::Separator);
     }
@@ -71,6 +94,7 @@ fn append_connection_section_rows(
     section: ConnectionSection,
     children_by_parent: &HashMap<Option<String>, Vec<ConnectionSection>>,
     expanded_groups: &std::collections::HashSet<String>,
+    create_parent_id: Option<&Option<String>>,
     rows: &mut Vec<ConnectionListRow>,
 ) {
     let children = children_by_parent
@@ -87,10 +111,24 @@ fn append_connection_section_rows(
         return;
     }
 
-    for child in &children {
-        append_connection_section_rows(child.clone(), children_by_parent, expanded_groups, rows);
+    let create_child = create_parent_id == Some(&section.group_id);
+    if create_child {
+        rows.push(ConnectionListRow::InlineGroupEditor {
+            parent_id: section.group_id.clone(),
+            depth: section.depth + 1,
+        });
     }
-    if section.connections.is_empty() && children.is_empty() {
+
+    for child in &children {
+        append_connection_section_rows(
+            child.clone(),
+            children_by_parent,
+            expanded_groups,
+            create_parent_id,
+            rows,
+        );
+    }
+    if section.connections.is_empty() && children.is_empty() && !create_child {
         rows.push(ConnectionListRow::EmptyGroup {
             depth: section.depth + 1,
         });
@@ -426,6 +464,8 @@ mod tests {
 
     use nyaterm_core::{Group, SavedConnection};
 
+    use crate::models::{ConnectionGroupEditorMode, ConnectionGroupEditorState};
+
     use super::{ConnectionListRow, connection_sections, flatten_connection_rows};
 
     #[test]
@@ -448,7 +488,7 @@ mod tests {
         let expanded = ["parent".to_string(), "child".to_string()]
             .into_iter()
             .collect();
-        let rows = flatten_connection_rows(&sections, &expanded);
+        let rows = flatten_connection_rows(&sections, &expanded, None);
 
         let labels = rows
             .iter()
@@ -458,6 +498,9 @@ mod tests {
                 }
                 ConnectionListRow::Connection { connection, depth } => {
                     format!("conn:{}:{depth}", connection.id)
+                }
+                ConnectionListRow::InlineGroupEditor { depth, .. } => {
+                    format!("inline:{depth}")
                 }
                 ConnectionListRow::Separator => "separator".to_string(),
                 ConnectionListRow::EmptyGroup { depth } => format!("empty:{depth}"),
@@ -553,7 +596,7 @@ mod tests {
             "",
             crate::models::ConnectionSortMode::Default,
         );
-        let rows = flatten_connection_rows(&sections, &HashSet::new());
+        let rows = flatten_connection_rows(&sections, &HashSet::new(), None);
 
         assert_eq!(rows.len(), 3);
         assert!(matches!(
@@ -566,6 +609,67 @@ mod tests {
             Some(ConnectionListRow::Connection { connection, depth: 0 })
                 if connection.id == "root-conn"
         ));
+    }
+
+    #[test]
+    fn create_group_editor_inserts_root_inline_row_before_root_connections() {
+        let connections = vec![connection("root-conn", "Root Conn", None, 0)];
+        let sections = connection_sections(
+            &connections,
+            &[],
+            "",
+            crate::models::ConnectionSortMode::Default,
+        );
+        let editor = ConnectionGroupEditorState {
+            mode: ConnectionGroupEditorMode::Create,
+            id: None,
+            name: String::new(),
+            parent_id: None,
+            error: None,
+        };
+        let rows = flatten_connection_rows(&sections, &HashSet::new(), Some(&editor));
+
+        assert!(matches!(
+            rows.first(),
+            Some(ConnectionListRow::InlineGroupEditor {
+                parent_id: None,
+                depth: 0,
+            })
+        ));
+        assert!(matches!(
+            rows.get(1),
+            Some(ConnectionListRow::Connection { connection, depth: 0 })
+                if connection.id == "root-conn"
+        ));
+    }
+
+    #[test]
+    fn create_group_editor_inserts_child_inline_row_inside_expanded_parent() {
+        let groups = vec![group("parent", "Parent", None, 0)];
+        let sections =
+            connection_sections(&[], &groups, "", crate::models::ConnectionSortMode::Default);
+        let expanded = HashSet::from(["parent".to_string()]);
+        let editor = ConnectionGroupEditorState {
+            mode: ConnectionGroupEditorMode::Create,
+            id: None,
+            name: String::new(),
+            parent_id: Some("parent".to_string()),
+            error: None,
+        };
+        let rows = flatten_connection_rows(&sections, &expanded, Some(&editor));
+
+        assert!(matches!(
+            rows.first(),
+            Some(ConnectionListRow::GroupHeader(section)) if section.label == "Parent"
+        ));
+        assert!(matches!(
+            rows.get(1),
+            Some(ConnectionListRow::InlineGroupEditor {
+                parent_id: Some(parent_id),
+                depth: 1,
+            }) if parent_id == "parent"
+        ));
+        assert_eq!(rows.len(), 2);
     }
 
     fn group(id: &str, name: &str, parent_id: Option<&str>, sort_order: i32) -> Group {

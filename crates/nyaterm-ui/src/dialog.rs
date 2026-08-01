@@ -1,8 +1,11 @@
-use gpui::{App, ClickEvent, IntoElement, ParentElement as _, SharedString, Window, px};
+use gpui::{
+    App, ClickEvent, InteractiveElement as _, IntoElement, ParentElement as _, SharedString,
+    Window, px,
+};
 use gpui_component::{
     WindowExt as _,
-    button::ButtonVariant,
-    dialog::{Dialog, DialogButtonProps},
+    button::{Button, ButtonVariant, ButtonVariants as _},
+    dialog::{Dialog, DialogAction, DialogButtonProps, DialogClose, DialogFooter},
 };
 
 pub struct NyaDialog {
@@ -50,14 +53,22 @@ impl NyaDialog {
     }
 
     pub fn confirm(mut self, footer: NyaDialogFooter) -> Self {
-        self.inner = self.inner.button_props(footer.into_component());
+        self.inner = self
+            .inner
+            .button_props(footer.button_props())
+            .footer(footer.into_footer());
         self
     }
 
     pub fn alert(mut self, action_label: impl Into<SharedString>) -> Self {
+        let action_label = action_label.into();
         self.inner = self
             .inner
-            .button_props(DialogButtonProps::default().ok_text(action_label));
+            .button_props(DialogButtonProps::default().ok_text(action_label.clone()))
+            .footer(nya_dialog_action_footer(
+                action_label,
+                ButtonVariant::Primary,
+            ));
         self
     }
 
@@ -150,10 +161,10 @@ impl NyaDialogFooter {
         self
     }
 
-    fn into_component(self) -> DialogButtonProps {
+    fn button_props(&self) -> DialogButtonProps {
         DialogButtonProps::default()
-            .cancel_text(self.cancel_label)
-            .ok_text(self.action_label)
+            .cancel_text(self.cancel_label.clone())
+            .ok_text(self.action_label.clone())
             .show_cancel(true)
             .ok_variant(if self.danger {
                 ButtonVariant::Danger
@@ -161,6 +172,41 @@ impl NyaDialogFooter {
                 ButtonVariant::Primary
             })
     }
+
+    fn into_footer(self) -> DialogFooter {
+        let action_variant = if self.danger {
+            ButtonVariant::Danger
+        } else {
+            ButtonVariant::Primary
+        };
+
+        DialogFooter::new()
+            .child(
+                DialogClose::new().child(
+                    Button::new("nya-dialog-cancel")
+                        .outline()
+                        .label(self.cancel_label)
+                        .debug_selector(|| "nya-dialog-cancel-button".to_string()),
+                ),
+            )
+            .child(nya_dialog_action(self.action_label, action_variant))
+    }
+}
+
+fn nya_dialog_action_footer(
+    action_label: SharedString,
+    action_variant: ButtonVariant,
+) -> DialogFooter {
+    DialogFooter::new().child(nya_dialog_action(action_label, action_variant))
+}
+
+fn nya_dialog_action(action_label: SharedString, action_variant: ButtonVariant) -> DialogAction {
+    DialogAction::new().child(
+        Button::new("nya-dialog-action")
+            .label(action_label)
+            .with_variant(action_variant)
+            .debug_selector(|| "nya-dialog-action-button".to_string()),
+    )
 }
 
 pub trait NyaDialogWindowExt {

@@ -41,6 +41,7 @@ fn widest_connection_row(rows: &[ConnectionListRow]) -> Option<usize> {
                     .sum();
                 Some((index, *depth * 16 + name_width * 8))
             }
+            ConnectionListRow::InlineGroupEditor { depth, .. } => Some((index, *depth * 16 + 128)),
             _ => None,
         })
         .max_by_key(|(_, width)| *width)
@@ -76,13 +77,17 @@ impl NyaTermApp {
 
         // Keep the flattened model cheap to rebuild, then let GPUI instantiate only
         // the rows intersecting the scroll viewport.
-        let flat_rows =
-            flatten_connection_rows(&sections, self.connection_state.list_expanded_group_ids());
+        let flat_rows = flatten_connection_rows(
+            &sections,
+            self.connection_state.list_expanded_group_ids(),
+            self.connection_state.active_group_editor_draft().as_ref(),
+        );
         // A folder is worth showing even before anything is filed under it, so the
         // empty state waits until there are no folders either. Otherwise a freshly
         // created folder is swallowed by "no saved connections".
         let store_is_empty = self.connection_state.connections().is_empty()
-            && self.connection_state.groups().is_empty();
+            && self.connection_state.groups().is_empty()
+            && self.connection_state.active_group_editor_draft().is_none();
         let nothing_matched = flat_rows.is_empty();
         let palette = self.theme_palette();
 
@@ -178,6 +183,12 @@ impl NyaTermApp {
                                         .w_full()
                                         .child(this.connection_section(section, true, cx)),
                                 ),
+                                ConnectionListRow::InlineGroupEditor { parent_id, depth } => item
+                                    .child(div().w_full().child(
+                                        this.connection_inline_group_editor_row(
+                                            parent_id, depth, cx,
+                                        ),
+                                    )),
                                 ConnectionListRow::EmptyGroup { depth } => item.child(
                                     div()
                                         .w_full()

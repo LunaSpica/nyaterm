@@ -255,7 +255,14 @@ pub(crate) struct ConnectionEditorState {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ConnectionGroupEditorMode {
+    Create,
+    Rename,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ConnectionGroupEditorState {
+    pub(crate) mode: ConnectionGroupEditorMode,
     pub(crate) id: Option<String>,
     pub(crate) name: String,
     pub(crate) parent_id: Option<String>,

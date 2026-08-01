@@ -1,5 +1,6 @@
 //! Import sessions from Xshell (.xts), MobaXterm (.mxtsessions), WindTerm (.sessions),
-//! and NyaTerm JSON files.
+//! SecureCRT (.xml), FinalShell conn directories, NyaTerm JSON files, Electerm
+//! bookmarks, and Termius IndexedDB data.
 
 use crate::{
     AiExecutionProfile, ConnectionAuth, ConnectionStore, ConnectionType, Group, SavedConnection,
@@ -11,6 +12,11 @@ use std::io::Read;
 use std::path::Path;
 use thiserror::Error;
 
+mod electerm;
+mod finalshell;
+mod securecrt;
+mod termius;
+
 const SESSION_IMPORT_MAX_BYTES: u64 = 16 * 1024 * 1024;
 const XSHELL_ARCHIVE_MAX_BYTES: u64 = 64 * 1024 * 1024;
 const XSHELL_ENTRY_MAX_BYTES: u64 = 1024 * 1024;
@@ -20,6 +26,8 @@ const XSHELL_ENTRY_LIMIT: usize = 10_000;
 pub enum SessionImportError {
     #[error("{0}")]
     Config(String),
+    #[error("{0}")]
+    Crypto(String),
     #[error(transparent)]
     Storage(#[from] StorageError),
 }
@@ -35,6 +43,7 @@ struct ImportedSession {
     auth_type: String,
     /// Hierarchical group path segments, e.g. ["Production", "Web"].
     group_path: Option<Vec<String>>,
+    description: Option<String>,
 }
 
 #[derive(Debug)]
@@ -239,7 +248,7 @@ fn decode_bytes(raw: &[u8]) -> String {
     }
 }
 
-fn read_file_limited(path: &str, label: &str, max_bytes: u64) -> AppResult<Vec<u8>> {
+fn read_file_limited(path: impl AsRef<Path>, label: &str, max_bytes: u64) -> AppResult<Vec<u8>> {
     let file = std::fs::File::open(path)
         .map_err(|error| AppError::Config(format!("Cannot open {label}: {error}")))?;
     let size = file
@@ -266,7 +275,7 @@ fn read_file_limited(path: &str, label: &str, max_bytes: u64) -> AppResult<Vec<u
     Ok(raw)
 }
 
-fn read_text_file_limited(path: &str, label: &str) -> AppResult<String> {
+fn read_text_file_limited(path: impl AsRef<Path>, label: &str) -> AppResult<String> {
     let raw = read_file_limited(path, label, SESSION_IMPORT_MAX_BYTES)?;
     String::from_utf8(raw)
         .map_err(|error| AppError::Config(format!("{label} is not valid UTF-8: {error}")))
@@ -398,6 +407,7 @@ fn parse_xsh_content(content: &str, entry_path: &str) -> Option<ImportedSession>
         username,
         auth_type,
         group_path,
+        description: None,
     })
 }
 
@@ -516,6 +526,7 @@ fn parse_moba_entry(
         username,
         auth_type: "password".to_string(),
         group_path: group_path.clone(),
+        description: None,
     })
 }
 
@@ -590,6 +601,7 @@ fn parse_windterm_content(content: &str) -> AppResult<Vec<ImportedSession>> {
             username,
             auth_type: "password".to_string(),
             group_path,
+            description: None,
         });
     }
 
@@ -608,11 +620,6 @@ fn parse_windterm_target(target: &str) -> (String, String) {
 }
 
 // NyaTerm JSON (.json)
-
-fn parse_nyaterm_json(path: &str) -> AppResult<PreparedJsonImport> {
-    let content = read_text_file_limited(path, "NyaTerm JSON import file")?;
-    parse_nyaterm_json_content(&content)
-}
 
 fn parse_nyaterm_json_content(content: &str) -> AppResult<PreparedJsonImport> {
     let file: NyatermJsonImportFile = serde_json::from_str(content)
@@ -1148,7 +1155,7 @@ fn import_legacy_sessions(
                 x11_forwarding: false,
             },
             group_id,
-            description: None,
+            description: sess.description,
             sort_order: 0,
             icon: None,
             icon_auto_detect: None,
@@ -1241,6 +1248,13 @@ pub fn import_sessions(
     store: &ConnectionStore,
     file_path: &Path,
 ) -> Result<usize, SessionImportError> {
+    if file_path.is_dir() {
+        return Ok(import_legacy_sessions(
+            store,
+            finalshell::parse_finalshell(file_path)?,
+        )?);
+    }
+
     let path = file_path.to_string_lossy();
     let lower = path.to_ascii_lowercase();
     let count = if lower.ends_with(".xts") {
@@ -1249,16 +1263,29 @@ pub fn import_sessions(
         import_legacy_sessions(store, parse_mobaxterm(&path)?)?
     } else if lower.ends_with(".sessions") {
         import_legacy_sessions(store, parse_windterm(&path)?)?
+    } else if lower.ends_with(".xml") {
+        import_legacy_sessions(store, securecrt::parse_securecrt(file_path)?)?
     } else if lower.ends_with(".json") {
-        import_prepared_nyaterm_json(store, parse_nyaterm_json(&path)?)?
+        import_prepared_nyaterm_json(store, electerm::parse_json_import(file_path)?)?
     } else {
         return Err(AppError::Config(
-            "Unsupported file format. Please use .xts (Xshell), .mxtsessions (MobaXterm), .sessions (WindTerm), or .json (NyaTerm JSON)."
+            "Unsupported file format. Please use .xts (Xshell), .mxtsessions (MobaXterm), .sessions (WindTerm), .xml (SecureCRT), .json (NyaTerm JSON or Electerm bookmarks), or a FinalShell conn directory."
                 .to_string(),
         ));
     };
 
     Ok(count)
+}
+
+pub fn import_termius_sessions(
+    store: &ConnectionStore,
+    indexed_db_path: Option<&Path>,
+    local_key: &[u8],
+) -> Result<usize, SessionImportError> {
+    import_prepared_nyaterm_json(
+        store,
+        termius::parse_termius_indexed_db(indexed_db_path, local_key)?,
+    )
 }
 
 #[cfg(test)]
@@ -1683,5 +1710,159 @@ UserKey=C:\keys\deploy.key
 
         drop(store);
         std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn securecrt_import_persists_xml_sessions_with_groups() {
+        let dir = temp_import_dir("securecrt");
+        let import_path = dir.join("sessions.xml");
+        std::fs::write(
+            &import_path,
+            r#"
+<?xml version="1.0" encoding="UTF-8"?>
+<key name="Sessions">
+  <key name="Production">
+    <key name="Web">
+      <key name="Prod web">
+        <string name="Hostname">web.example.com</string>
+        <dword name="Port">2200</dword>
+        <string name="Username">deploy</string>
+        <string name="Protocol Name">SSH2</string>
+      </key>
+    </key>
+  </key>
+</key>
+"#,
+        )
+        .expect("write SecureCRT XML");
+        let store = ConnectionStore::open(&dir).expect("open store");
+
+        let count = import_sessions(&store, &import_path).expect("import SecureCRT");
+
+        assert_eq!(count, 1);
+        let sessions = store.load_sessions().expect("load sessions");
+        let connection = sessions
+            .connections
+            .iter()
+            .find(|connection| connection.name == "Prod web")
+            .expect("SecureCRT connection");
+        assert!(matches!(
+            &connection.config,
+            ConnectionType::Ssh { host, port, username, .. }
+                if host == "web.example.com" && *port == 2200 && username == "deploy"
+        ));
+        assert!(
+            sessions
+                .groups
+                .iter()
+                .any(|group| group.name == "Production")
+        );
+        assert!(sessions.groups.iter().any(|group| group.name == "Web"));
+        drop(store);
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn finalshell_import_accepts_conn_directory() {
+        let dir = temp_import_dir("finalshell");
+        let conn_dir = dir.join("conn");
+        let nested = conn_dir.join("prod");
+        std::fs::create_dir_all(&nested).expect("create FinalShell conn dir");
+        std::fs::write(
+            nested.join("folder.json"),
+            r#"{"id":"folder-prod","name":"Production","parent_id":"root","delete_time":0}"#,
+        )
+        .expect("write FinalShell folder");
+        std::fs::write(
+            nested.join("prod_connect_config.json"),
+            r#"{"name":"Prod shell","host":"prod.example.com","port":2222,"user_name":"ops","parent_id":"folder-prod","conection_type":100,"description":"primary","delete_time":0}"#,
+        )
+        .expect("write FinalShell connection");
+        let store = ConnectionStore::open(&dir).expect("open store");
+
+        let count = import_sessions(&store, &conn_dir).expect("import FinalShell");
+
+        assert_eq!(count, 1);
+        let sessions = store.load_sessions().expect("load sessions");
+        let connection = sessions
+            .connections
+            .iter()
+            .find(|connection| connection.name == "Prod shell")
+            .expect("FinalShell connection");
+        assert_eq!(connection.description.as_deref(), Some("primary"));
+        assert!(
+            sessions
+                .groups
+                .iter()
+                .any(|group| group.name == "Production")
+        );
+        drop(store);
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn electerm_json_imports_bookmarks_with_groups() {
+        let dir = temp_import_dir("electerm");
+        let import_path = dir.join("bookmarks.json");
+        std::fs::write(
+            &import_path,
+            r#"
+{
+  "bookmarkGroups": [
+    { "id": "root", "title": "Production", "bookmarkIds": ["web"], "bookmarkGroupIds": [] }
+  ],
+  "bookmarks": [
+    {
+      "id": "web",
+      "title": "Web",
+      "host": "web.example.com",
+      "username": "deploy",
+      "authType": "password",
+      "port": 2200,
+      "type": "ssh"
+    }
+  ]
+}
+"#,
+        )
+        .expect("write Electerm bookmarks");
+        let store = ConnectionStore::open(&dir).expect("open store");
+
+        let count = import_sessions(&store, &import_path).expect("import Electerm");
+
+        assert_eq!(count, 1);
+        let sessions = store.load_sessions().expect("load sessions");
+        let connection = sessions
+            .connections
+            .iter()
+            .find(|connection| connection.name == "Web")
+            .expect("Electerm connection");
+        assert!(matches!(
+            &connection.config,
+            ConnectionType::Ssh { host, port, username, .. }
+                if host == "web.example.com" && *port == 2200 && username == "deploy"
+        ));
+        assert_eq!(
+            connection.auth.as_ref().map(|auth| auth.mode.as_str()),
+            Some("password")
+        );
+        assert!(
+            sessions
+                .groups
+                .iter()
+                .any(|group| group.name == "Production")
+        );
+        drop(store);
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    fn temp_import_dir(label: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "nyaterm-session-import-{label}-{}-{}",
+            std::process::id(),
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&dir).expect("create import directory");
+        dir
     }
 }

@@ -1,19 +1,20 @@
 use std::sync::Arc;
 
 use gpui::{
-    AppContext as _, Context, FontWeight, IntoElement, MouseButton, Render, SharedString, Window,
-    div,
+    AnyElement, AppContext as _, Context, FontWeight, IntoElement, KeyDownEvent, MouseButton,
+    Render, SharedString, Window, div,
     prelude::{
         FluentBuilder, InteractiveElement, ParentElement, StatefulInteractiveElement, Styled,
     },
     px, relative, rgb, rgba, svg,
 };
 use nyaterm_core::SavedConnection;
-use nyaterm_ui::NyaContextMenu;
+use nyaterm_ui::{NyaContextMenu, NyaInput};
 
 use crate::features::{
     ConnectionDragKind, ConnectionDragPayload, ConnectionDragPreview, ConnectionDropPosition,
-    ConnectionDropTarget, NyaTermApp, connection_type_icon, resolve_connection_icon,
+    ConnectionDropTarget, NyaTermApp, ORDINARY_INPUT_SHELL_PADDING_X_PX, connection_type_icon,
+    ordinary_input_focus_ring, ordinary_input_shell_border_color, resolve_connection_icon,
 };
 
 use super::super::list::{
@@ -92,6 +93,17 @@ impl NyaTermApp {
         let group_label = section.label.clone();
         let empty_group_label = self.tr("savedConnections.emptyGroup");
         let count = section.total_count;
+        let editing_group = section
+            .group_id
+            .as_deref()
+            .is_some_and(|id| self.connection_state.group_editor_is_renaming(id));
+        let editor_error = editing_group
+            .then(|| {
+                self.connection_state
+                    .active_group_editor_draft()
+                    .and_then(|editor| editor.error)
+            })
+            .flatten();
         let mut body = div().flex().flex_col();
 
         if expanded && !header_only {
@@ -173,88 +185,102 @@ impl NyaTermApp {
                 cx.listener(|_, _, _, cx| cx.stop_propagation()),
             )
             .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
-            .when_some(section.group_id.clone(), |this, drag_group_id| {
-                let drop_group_id = drag_group_id.clone();
-                let label = section.label.clone();
-                this.cursor_move()
-                    .on_drag(
-                        ConnectionDragPayload {
-                            kind: ConnectionDragKind::Group,
-                            id: drag_group_id.clone(),
-                            label,
-                        },
-                        |payload, position, _, cx| {
-                            cx.new(|_| ConnectionDragPreview::new(payload.clone(), position))
-                        },
-                    )
-                    .on_drag_move(cx.listener({
-                        let target_id = drop_group_id.clone();
-                        move |this, event: &gpui::DragMoveEvent<ConnectionDragPayload>, _, cx| {
-                            let _ = event.drag(cx);
-                            let y = event.event.position.y;
-                            let bounds = event.bounds;
-                            let rel = if bounds.size.height > px(0.) {
-                                ((y - bounds.origin.y) / bounds.size.height).clamp(0., 1.)
-                            } else {
-                                0.5
-                            };
-                            let position = if rel < 0.25 {
-                                ConnectionDropPosition::Before
-                            } else if rel > 0.75 {
-                                ConnectionDropPosition::After
-                            } else {
-                                ConnectionDropPosition::Inside
-                            };
-                            let next = ConnectionDropTarget {
-                                id: Some(target_id.clone()),
+            .when_some(
+                (!editing_group)
+                    .then_some(section.group_id.clone())
+                    .flatten(),
+                |this, drag_group_id| {
+                    let drop_group_id = drag_group_id.clone();
+                    let label = section.label.clone();
+                    this.cursor_move()
+                        .on_drag(
+                            ConnectionDragPayload {
                                 kind: ConnectionDragKind::Group,
-                                position,
-                            };
-                            if this.connection_state.set_list_drop_target_if_changed(next) {
-                                cx.notify();
-                            }
-                        }
-                    }))
-                    .on_drop(
-                        cx.listener(move |this, payload: &ConnectionDragPayload, _, cx| {
-                            let position = this.connection_state.list_drop_position_for_target(
-                                &drop_group_id,
-                                ConnectionDropPosition::Inside,
-                            );
-                            this.connection_state.clear_list_drop_target();
-                            match payload.kind {
-                                ConnectionDragKind::Connection => {
-                                    this.move_connection_into_group(
-                                        payload.id.clone(),
-                                        Some(drop_group_id.clone()),
-                                        cx,
-                                    );
+                                id: drag_group_id.clone(),
+                                label,
+                            },
+                            |payload, position, _, cx| {
+                                cx.new(|_| ConnectionDragPreview::new(payload.clone(), position))
+                            },
+                        )
+                        .on_drag_move(cx.listener({
+                            let target_id = drop_group_id.clone();
+                            move |this,
+                                  event: &gpui::DragMoveEvent<ConnectionDragPayload>,
+                                  _,
+                                  cx| {
+                                let _ = event.drag(cx);
+                                let y = event.event.position.y;
+                                let bounds = event.bounds;
+                                let rel = if bounds.size.height > px(0.) {
+                                    ((y - bounds.origin.y) / bounds.size.height).clamp(0., 1.)
+                                } else {
+                                    0.5
+                                };
+                                let position = if rel < 0.25 {
+                                    ConnectionDropPosition::Before
+                                } else if rel > 0.75 {
+                                    ConnectionDropPosition::After
+                                } else {
+                                    ConnectionDropPosition::Inside
+                                };
+                                let next = ConnectionDropTarget {
+                                    id: Some(target_id.clone()),
+                                    kind: ConnectionDragKind::Group,
+                                    position,
+                                };
+                                if this.connection_state.set_list_drop_target_if_changed(next) {
+                                    cx.notify();
                                 }
-                                ConnectionDragKind::Group => match position {
-                                    ConnectionDropPosition::Inside => {
-                                        this.move_group_into_group(
+                            }
+                        }))
+                        .on_drop(cx.listener(
+                            move |this, payload: &ConnectionDragPayload, _, cx| {
+                                let position = this.connection_state.list_drop_position_for_target(
+                                    &drop_group_id,
+                                    ConnectionDropPosition::Inside,
+                                );
+                                this.connection_state.clear_list_drop_target();
+                                match payload.kind {
+                                    ConnectionDragKind::Connection => {
+                                        this.move_connection_into_group(
                                             payload.id.clone(),
                                             Some(drop_group_id.clone()),
                                             cx,
                                         );
                                     }
-                                    _ => {
-                                        this.move_group_before(
-                                            payload.id.clone(),
-                                            drop_group_id.clone(),
-                                            cx,
-                                        );
-                                    }
-                                },
-                            }
-                        }),
-                    )
-            })
+                                    ConnectionDragKind::Group => match position {
+                                        ConnectionDropPosition::Inside => {
+                                            this.move_group_into_group(
+                                                payload.id.clone(),
+                                                Some(drop_group_id.clone()),
+                                                cx,
+                                            );
+                                        }
+                                        _ => {
+                                            this.move_group_before(
+                                                payload.id.clone(),
+                                                drop_group_id.clone(),
+                                                cx,
+                                            );
+                                        }
+                                    },
+                                }
+                            },
+                        ))
+                },
+            )
             .on_click(cx.listener(move |this, _, _, cx| {
                 cx.stop_propagation();
+                if editing_group {
+                    return;
+                }
                 if let Some(group_id) = group_id.clone() {
                     this.toggle_connection_group_expanded(group_id, cx);
                 }
+            }))
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                this.handle_connection_group_editor_key_down(event, cx);
             }))
             // The name takes the slack so the count sits against the right
             // edge of the panel, where Tauri puts it.
@@ -275,7 +301,9 @@ impl NyaTermApp {
                 false,
                 16.,
             ))
-            .child(
+            .child(if editing_group {
+                self.connection_group_editor_input_box(cx)
+            } else {
                 div()
                     .min_w_0()
                     .flex_1()
@@ -285,17 +313,128 @@ impl NyaTermApp {
                     .overflow_hidden()
                     .whitespace_nowrap()
                     .text_ellipsis()
-                    .child(group_label.clone()),
-            )
+                    .child(group_label.clone())
+                    .into_any_element()
+            })
             .child(
                 div()
                     .flex_none()
                     .text_xs()
-                    .text_color(rgb(palette.text_dimmed))
-                    .child(count.to_string()),
+                    .text_color(rgb(if editor_error.is_some() {
+                        palette.danger
+                    } else {
+                        palette.text_dimmed
+                    }))
+                    .child(editor_error.unwrap_or_else(|| count.to_string())),
             );
         let group_header = NyaContextMenu::new(group_header, context_items);
         div().flex().flex_col().child(group_header).child(body)
+    }
+
+    pub(in crate::features) fn connection_inline_group_editor_row(
+        &mut self,
+        parent_id: Option<String>,
+        depth: usize,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let palette = self.theme_palette();
+        let editor_error = self
+            .connection_state
+            .active_group_editor_draft()
+            .and_then(|editor| editor.error);
+        div()
+            .id(SharedString::from(format!(
+                "connection-inline-group-editor-{}",
+                parent_id.unwrap_or_else(|| "root".to_string())
+            )))
+            .relative()
+            .h(px(28.))
+            .min_w(relative(1.))
+            .flex()
+            .items_center()
+            .gap(px(6.))
+            .px_2()
+            .pl(px(connection_tree_indent_px(depth)))
+            .rounded_sm()
+            .bg(rgb(palette.hover))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|_, _, _, cx| cx.stop_propagation()),
+            )
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                this.handle_connection_group_editor_key_down(event, cx);
+            }))
+            .child(
+                svg()
+                    .size(px(14.))
+                    .flex_none()
+                    .path("icons/fe/forward.svg")
+                    .text_color(rgb(palette.text_muted)),
+            )
+            .child(connection_type_icon(
+                palette,
+                resolve_connection_icon(Some("folder"), "SSH"),
+                false,
+                16.,
+            ))
+            .child(self.connection_group_editor_input_box(cx))
+            .when_some(editor_error, |this, error| {
+                this.child(
+                    div()
+                        .flex_none()
+                        .text_size(px(11.))
+                        .text_color(rgb(palette.danger))
+                        .child(error),
+                )
+            })
+    }
+
+    fn connection_group_editor_input_box(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        let palette = self.theme_palette();
+        let Some(field) = self.connection_state.group_editor_field() else {
+            return div().min_w_0().flex_1().into_any_element();
+        };
+        let handle = field.read(cx).focus_handle();
+        let focused = field.read(cx).has_focus();
+        let has_error = self
+            .connection_state
+            .active_group_editor_draft()
+            .is_some_and(|editor| editor.error.is_some());
+        div()
+            .h(px(24.))
+            .min_w_0()
+            .flex_1()
+            .px(px(ORDINARY_INPUT_SHELL_PADDING_X_PX))
+            .flex()
+            .items_center()
+            .rounded_sm()
+            .border_1()
+            .border_color(if has_error {
+                rgb(palette.danger)
+            } else {
+                ordinary_input_shell_border_color(palette, focused)
+            })
+            .when(focused, |this| {
+                this.shadow(ordinary_input_focus_ring(palette))
+            })
+            .bg(rgb(palette.input))
+            .cursor_text()
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |_, _, window, cx| {
+                    cx.stop_propagation();
+                    window.focus(&handle, cx);
+                }),
+            )
+            .child(
+                div()
+                    .min_w_0()
+                    .flex_1()
+                    .text_xs()
+                    .text_color(rgb(palette.text))
+                    .child(NyaInput::new(&field)),
+            )
+            .into_any_element()
     }
 
     pub(in crate::features) fn saved_connection_row(

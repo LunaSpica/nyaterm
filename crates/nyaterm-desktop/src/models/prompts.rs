@@ -460,6 +460,10 @@ pub(crate) enum ConnectionImportSource {
     Xshell,
     MobaXterm,
     WindTerm,
+    SecureCrt,
+    FinalShell,
+    Termius,
+    Electerm,
     NyatermJson,
 }
 

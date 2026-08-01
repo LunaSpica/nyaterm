@@ -1,7 +1,25 @@
 use gpui::{Context, KeyDownEvent, Window};
-use nyaterm_core::SessionsConfig;
+use nyaterm_core::{SavedConnection, SessionsConfig};
 
 use crate::features::NyaTermApp;
+
+#[derive(Debug, PartialEq)]
+enum SelectedConnectionsDeleteTarget {
+    None,
+    Single(String),
+    Multiple(Vec<SavedConnection>),
+}
+
+fn selected_connections_delete_target(
+    selected: Vec<SavedConnection>,
+) -> SelectedConnectionsDeleteTarget {
+    match selected.len() {
+        0 => SelectedConnectionsDeleteTarget::None,
+        1 => SelectedConnectionsDeleteTarget::Single(selected[0].id.clone()),
+        _ => SelectedConnectionsDeleteTarget::Multiple(selected),
+    }
+}
+
 impl NyaTermApp {
     pub(in crate::features) fn open_connections_clear_all_confirm(
         &mut self,
@@ -74,6 +92,32 @@ impl NyaTermApp {
                 true,
                 move |app, _, cx| {
                     app.confirm_connection_delete(connection_id.clone(), label.clone(), cx);
+                    true
+                },
+            ),
+            window,
+            cx,
+        );
+    }
+
+    fn open_selected_connections_delete_confirm(
+        &mut self,
+        selected: Vec<nyaterm_core::SavedConnection>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let count = selected.len();
+        self.shell
+            .set_status("confirm selected connections delete".to_string());
+        self.open_confirm_dialog(
+            (
+                self.tr("savedConnections.deleteSelected").to_string(),
+                self.tr("savedConnections.deleteSelectedConfirm")
+                    .replace("{{count}}", &count.to_string()),
+                self.tr("savedConnections.delete").to_string(),
+                true,
+                move |app, _, cx| {
+                    app.confirm_selected_connections_delete(selected.clone(), cx);
                     true
                 },
             ),
@@ -332,17 +376,26 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let selected = self.connection_state.selected_connections();
-        if selected.is_empty() {
-            self.shell
-                .set_status("select saved connections before deleting".to_string());
-            cx.notify();
-            return;
+        match selected_connections_delete_target(self.connection_state.selected_connections()) {
+            SelectedConnectionsDeleteTarget::None => {
+                self.shell
+                    .set_status("select saved connections before deleting".to_string());
+                cx.notify();
+            }
+            SelectedConnectionsDeleteTarget::Single(connection_id) => {
+                self.open_connection_delete_confirm(connection_id, window, cx);
+            }
+            SelectedConnectionsDeleteTarget::Multiple(selected) => {
+                self.open_selected_connections_delete_confirm(selected, window, cx);
+            }
         }
-        if selected.len() == 1 {
-            self.open_connection_delete_confirm(selected[0].id.clone(), window, cx);
-            return;
-        }
+    }
+
+    fn confirm_selected_connections_delete(
+        &mut self,
+        selected: Vec<nyaterm_core::SavedConnection>,
+        cx: &mut Context<Self>,
+    ) {
         match self.with_connection_store(|store| {
             for connection in &selected {
                 store.delete_connection(&connection.id)?;
@@ -373,5 +426,63 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.open_connection_editor(Some(connection_id), None, false, window, cx);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use nyaterm_core::{AiExecutionProfile, ConnectionType, SavedConnection};
+
+    use super::{SelectedConnectionsDeleteTarget, selected_connections_delete_target};
+
+    fn saved_connection(id: &str) -> SavedConnection {
+        SavedConnection {
+            id: id.to_string(),
+            name: id.to_string(),
+            config: ConnectionType::LocalTerminal {
+                shell_path: String::new(),
+                shell_args: String::new(),
+                working_dir: None,
+                ai_execution_profile: AiExecutionProfile::Auto,
+            },
+            group_id: None,
+            description: None,
+            sort_order: 0,
+            icon: None,
+            icon_auto_detect: None,
+            auth: None,
+            network: None,
+            post_login: None,
+            created_at_ms: None,
+            updated_at_ms: None,
+            last_used_at_ms: None,
+        }
+    }
+
+    #[test]
+    fn selected_connections_delete_target_requires_multi_delete_confirmation() {
+        assert_eq!(
+            selected_connections_delete_target(Vec::new()),
+            SelectedConnectionsDeleteTarget::None
+        );
+        assert_eq!(
+            selected_connections_delete_target(vec![saved_connection("one")]),
+            SelectedConnectionsDeleteTarget::Single("one".to_string())
+        );
+
+        let target = selected_connections_delete_target(vec![
+            saved_connection("one"),
+            saved_connection("two"),
+        ]);
+        let SelectedConnectionsDeleteTarget::Multiple(selected) = target else {
+            panic!("multi-selection must use the multi-delete confirmation path");
+        };
+        assert_eq!(
+            selected
+                .iter()
+                .map(|connection| connection.id.as_str())
+                .collect::<Vec<_>>(),
+            ["one", "two"]
+        );
     }
 }
