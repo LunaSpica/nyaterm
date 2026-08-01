@@ -137,9 +137,14 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn toggle_connection_icon_picker(&mut self, cx: &mut Context<Self>) {
-        self.connection_state.toggle_editor_icon_picker();
-        cx.notify();
+    pub(in crate::features) fn set_connection_icon_picker_open(
+        &mut self,
+        open: bool,
+        cx: &mut Context<Self>,
+    ) {
+        if self.connection_state.set_editor_icon_picker_open(open) {
+            cx.notify();
+        }
     }
 
     pub(in crate::features) fn toggle_connection_group_select(&mut self, cx: &mut Context<Self>) {

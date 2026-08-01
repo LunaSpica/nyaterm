@@ -563,7 +563,7 @@ fn connection_editor_group_select_is_mutually_exclusive_with_icon_picker() {
     let cx = TestAppContext::single();
     let mut owner = connection_editor_owner(&cx);
 
-    owner.toggle_icon_picker();
+    assert!(owner.set_icon_picker_open(true));
     assert!(owner.icon_picker_is_open());
     assert!(!owner.group_select_is_open());
 

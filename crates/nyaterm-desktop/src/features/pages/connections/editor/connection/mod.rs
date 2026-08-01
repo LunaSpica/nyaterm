@@ -14,7 +14,9 @@ use gpui::{
     px, rgb, rgba, svg,
 };
 use nyaterm_core::{ConnectionType, Group, SavedConnection, natural_compare, truncate_preview};
-use nyaterm_ui::{NyaInput, NyaScrollArea, NyaSelectOption, NyaSelectState, NyaTabItem, NyaTabs};
+use nyaterm_ui::{
+    NyaInput, NyaPopover, NyaScrollArea, NyaSelectOption, NyaSelectState, NyaTabItem, NyaTabs,
+};
 
 use self::local::connection_editor_local_section;
 use self::serial::connection_editor_serial_section;
@@ -552,8 +554,80 @@ impl NyaTermApp {
                     })),
             );
         }
+        let icon_picker_trigger = div()
+            .id("connection-editor-icon-trigger")
+            .size(px(32.))
+            .flex()
+            .items_center()
+            .justify_center()
+            .rounded_sm()
+            .border_1()
+            .border_color(if icon_picker_open {
+                rgb(palette.primary)
+            } else {
+                rgb(palette.border)
+            })
+            .bg(rgb(palette.input))
+            .cursor_pointer()
+            .hover(|this| this.bg(rgb(palette.hover)))
+            .child(themed_icon(palette, icon_def, false, 17.));
+        let icon_picker_content = div()
+            .occlude()
+            .w(px(232.))
+            .p_2()
+            .rounded_md()
+            .border_1()
+            .border_color(rgb(palette.border))
+            .bg(icon_picker_bg)
+            .shadow_lg()
+            .child(icon_grid)
+            // Only SSH reports a remote system, so the toggle would be
+            // inert on the other kinds.
+            .when(editor.kind == ConnectionKindTab::Ssh, |this| {
+                this.child(
+                    div()
+                        .id("connection-editor-icon-auto-detect")
+                        .mt_2()
+                        .pt_2()
+                        .border_t_1()
+                        .border_color(rgb(palette.border))
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .cursor_pointer()
+                        .child(
+                            div()
+                                .min_w_0()
+                                .flex()
+                                .flex_col()
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(rgb(palette.text))
+                                        .child(icon_auto_detect_label),
+                                )
+                                .child(
+                                    div()
+                                        .text_size(px(10.))
+                                        .text_color(rgb(palette.text_dimmed))
+                                        .child(icon_auto_detect_hint),
+                                ),
+                        )
+                        .child(crate::features::pages::settings::settings_switch(
+                            palette,
+                            "connection-editor-icon-auto-detect-switch",
+                            icon_auto_detect,
+                            cx.listener(move |this, _, _, cx| {
+                                this.set_connection_editor_icon_auto_detect(!icon_auto_detect, cx);
+                            }),
+                        ))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.set_connection_editor_icon_auto_detect(!icon_auto_detect, cx);
+                        })),
+                )
+            });
         let icon_picker = div()
-            .relative()
             .flex_none()
             .flex()
             .flex_col()
@@ -565,95 +639,17 @@ impl NyaTermApp {
                     .child(icon_label),
             )
             .child(
-                div()
-                    .id("connection-editor-icon-trigger")
-                    .size(px(32.))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .rounded_sm()
-                    .border_1()
-                    .border_color(if icon_picker_open {
-                        rgb(palette.primary)
-                    } else {
-                        rgb(palette.border)
-                    })
-                    .bg(rgb(palette.input))
-                    .cursor_pointer()
-                    .hover(|this| this.bg(rgb(palette.hover)))
-                    .child(themed_icon(palette, icon_def, false, 17.))
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.toggle_connection_icon_picker(cx);
-                    })),
-            )
-            .when(icon_picker_open, |this| {
-                this.child(
-                    div()
-                        .absolute()
-                        .left_0()
-                        .top(px(52.))
-                        .w(px(232.))
-                        .p_2()
-                        .rounded_md()
-                        .border_1()
-                        .border_color(rgb(palette.border))
-                        .bg(icon_picker_bg)
-                        .shadow_lg()
-                        .child(icon_grid)
-                        // Only SSH reports a remote system, so the toggle would be
-                        // inert on the other kinds.
-                        .when(editor.kind == ConnectionKindTab::Ssh, |this| {
-                            this.child(
-                                div()
-                                    .id("connection-editor-icon-auto-detect")
-                                    .mt_2()
-                                    .pt_2()
-                                    .border_t_1()
-                                    .border_color(rgb(palette.border))
-                                    .flex()
-                                    .items_center()
-                                    .justify_between()
-                                    .gap_2()
-                                    .cursor_pointer()
-                                    .child(
-                                        div()
-                                            .min_w_0()
-                                            .flex()
-                                            .flex_col()
-                                            .child(
-                                                div()
-                                                    .text_xs()
-                                                    .text_color(rgb(palette.text))
-                                                    .child(icon_auto_detect_label),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_size(px(10.))
-                                                    .text_color(rgb(palette.text_dimmed))
-                                                    .child(icon_auto_detect_hint),
-                                            ),
-                                    )
-                                    .child(crate::features::pages::settings::settings_switch(
-                                        palette,
-                                        "connection-editor-icon-auto-detect-switch",
-                                        icon_auto_detect,
-                                        cx.listener(move |this, _, _, cx| {
-                                            this.set_connection_editor_icon_auto_detect(
-                                                !icon_auto_detect,
-                                                cx,
-                                            );
-                                        }),
-                                    ))
-                                    .on_click(cx.listener(move |this, _, _, cx| {
-                                        this.set_connection_editor_icon_auto_detect(
-                                            !icon_auto_detect,
-                                            cx,
-                                        );
-                                    })),
-                            )
-                        }),
+                NyaPopover::new(
+                    "connection-editor-icon-popover",
+                    icon_picker_trigger,
+                    icon_picker_content,
                 )
-            });
+                .appearance(false)
+                .open(icon_picker_open)
+                .on_open_change(cx.listener(|this, open, _, cx| {
+                    this.set_connection_icon_picker_open(*open, cx);
+                })),
+            );
 
         let card = div()
             .id(SharedString::from("connection-editor-panel"))

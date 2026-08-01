@@ -5,6 +5,7 @@ mod dialog;
 mod input;
 mod menu;
 mod number_input;
+mod popover;
 mod root;
 mod selection;
 mod sizing;
@@ -21,6 +22,7 @@ pub use menu::{NyaContextMenu, NyaDropdownMenu, NyaMenuAnchor, NyaMenuItem};
 pub use number_input::{
     NyaNumberInput, NyaNumberInputEvent, NyaNumberInputOptions, NyaNumberInputState, NyaNumberStep,
 };
+pub use popover::NyaPopover;
 pub use root::{NyaRoot, NyaWindowHandle, nya_root};
 pub use selection::{
     NyaCheckbox, NyaRadioGroup, NyaSelect, NyaSelectEvent, NyaSelectOption, NyaSelectState,

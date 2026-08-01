@@ -612,8 +612,8 @@ impl ConnectionFeatureState {
         self.editor.close_icon_picker();
     }
 
-    pub fn toggle_editor_icon_picker(&mut self) {
-        self.editor.toggle_icon_picker();
+    pub fn set_editor_icon_picker_open(&mut self, open: bool) -> bool {
+        self.editor.set_icon_picker_open(open)
     }
 
     pub fn close_editor_group_select(&mut self) {
@@ -1255,11 +1255,16 @@ impl ConnectionEditorFeatureState {
         self.icon_picker_open = false;
     }
 
-    pub fn toggle_icon_picker(&mut self) {
-        let opening = !self.icon_picker_open;
+    pub fn set_icon_picker_open(&mut self, open: bool) -> bool {
+        if self.icon_picker_open == open {
+            return false;
+        }
         self.close_icon_picker();
-        self.close_group_select();
-        self.icon_picker_open = opening;
+        if open {
+            self.close_group_select();
+        }
+        self.icon_picker_open = open;
+        true
     }
 
     pub fn close_group_select(&mut self) {
