@@ -27,12 +27,12 @@ mod network_logic;
 
 use self::editor_logic::{
     advance_connection_editor_focus, apply_connection_editor_shell_path,
-    apply_connection_editor_text_key, apply_connection_editor_working_dir,
-    clear_connection_editor_runtime_state, commit_connection_editor_new_group,
-    connection_editor_inline_panel_draft, connection_editor_window_open_or_pending,
-    editor_field_seeds, insert_connection_editor_description_newline,
-    select_saved_connection_after_editor_save, set_connection_editor_advanced_tab,
-    set_connection_editor_error, set_connection_editor_field_text, set_connection_editor_icon,
+    apply_connection_editor_working_dir, clear_connection_editor_runtime_state,
+    commit_connection_editor_new_group, connection_editor_inline_panel_draft,
+    connection_editor_window_open_or_pending, editor_field_seeds,
+    insert_connection_editor_description_newline, select_saved_connection_after_editor_save,
+    set_connection_editor_advanced_tab, set_connection_editor_error,
+    set_connection_editor_field_text, set_connection_editor_icon,
     set_connection_editor_icon_auto_detect, set_connection_editor_kind,
     set_connection_editor_password_source, set_connection_editor_select_value,
     set_connection_editor_telnet_tab, set_connection_group_editor_error,
@@ -670,10 +670,6 @@ impl ConnectionFeatureState {
 
     pub fn insert_editor_description_newline(&mut self) -> bool {
         self.editor.insert_description_newline()
-    }
-
-    pub fn apply_editor_text_key(&mut self, key: &str, input: Option<&str>) -> bool {
-        self.editor.apply_text_key(key, input)
     }
 
     pub fn advance_editor_focus(&mut self) -> bool {
@@ -1359,10 +1355,6 @@ impl ConnectionEditorFeatureState {
 
     pub fn insert_description_newline(&mut self) -> bool {
         insert_connection_editor_description_newline(&mut self.draft)
-    }
-
-    pub fn apply_text_key(&mut self, key: &str, input: Option<&str>) -> bool {
-        apply_connection_editor_text_key(&mut self.draft, key, input)
     }
 
     pub fn advance_focus(&mut self) -> bool {

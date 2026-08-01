@@ -1,7 +1,10 @@
 use gpui::{Context, FontWeight, IntoElement, KeyDownEvent, div, prelude::*, px, rgb};
 use nyaterm_ui::NyaInput;
 
-use crate::features::{NyaTermApp, TextInputSetup, gpui_code_font_family};
+use crate::features::{
+    NyaTermApp, ORDINARY_INPUT_SHELL_PADDING_X_PX, TextInputSetup, gpui_code_font_family,
+    ordinary_input_focus_ring, ordinary_input_shell_border_color,
+};
 use crate::shortcuts::{
     SHORTCUT_CATEGORIES, SHORTCUT_REGISTRY, ShortcutCategory, ShortcutDefinition,
     ShortcutNativeStatus, format_hotkey_for_display, shortcut_keys_for,
@@ -25,6 +28,7 @@ impl NyaTermApp {
             cx,
         );
         let search_focus = search_field.read(cx).focus_handle();
+        let search_focused = search_field.read(cx).has_focus();
         let mut groups = div().flex().flex_col().gap_3();
         for category in SHORTCUT_CATEGORIES {
             groups = groups.child(self.shortcut_category_group(category, &search, cx));
@@ -54,10 +58,16 @@ impl NyaTermApp {
                             .min_w_0()
                             .flex_1()
                             .h(px(36.))
-                            .px_3()
+                            .px(px(ORDINARY_INPUT_SHELL_PADDING_X_PX))
                             .rounded_sm()
                             .border_1()
-                            .border_color(rgb(palette.border))
+                            .border_color(ordinary_input_shell_border_color(
+                                palette,
+                                search_focused,
+                            ))
+                            .when(search_focused, |this| {
+                                this.shadow(ordinary_input_focus_ring(palette))
+                            })
                             .bg(rgb(palette.input))
                             .flex()
                             .items_center()

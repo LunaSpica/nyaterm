@@ -7,7 +7,10 @@ use nyaterm_ui::NyaInput;
 
 use crate::features::formatting::group_ai_sessions_by_date;
 use crate::features::view_widgets::tab_menu_separator;
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{
+    NyaTermApp, ORDINARY_INPUT_SHELL_PADDING_X_PX, TextInputSetup, ordinary_input_focus_ring,
+    ordinary_input_shell_border_color,
+};
 use crate::widgets::svg_icon_button;
 
 impl NyaTermApp {
@@ -310,6 +313,7 @@ impl NyaTermApp {
             cx,
         );
         let search_focus = search_field.read(cx).focus_handle();
+        let search_focused = search_field.read(cx).has_focus();
         // Tauri AIAssistantPanel history card: search + Clear All + date-grouped sessions.
         let query = history_query.trim().to_ascii_lowercase();
         let filtered: Vec<_> = history_sessions
@@ -432,10 +436,16 @@ impl NyaTermApp {
                         div()
                             .id(SharedString::from("ai-history-search"))
                             .h(px(28.))
-                            .px_2()
+                            .px(px(ORDINARY_INPUT_SHELL_PADDING_X_PX))
                             .rounded_md()
                             .border_1()
-                            .border_color(rgb(palette.border))
+                            .border_color(ordinary_input_shell_border_color(
+                                palette,
+                                search_focused,
+                            ))
+                            .when(search_focused, |this| {
+                                this.shadow(ordinary_input_focus_ring(palette))
+                            })
                             .bg(rgb(palette.bg))
                             .flex()
                             .items_center()

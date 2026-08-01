@@ -29,8 +29,9 @@ use super::super::list::{
 };
 use crate::features::selects::{NO_SELECTION_VALUE, PENDING_CONNECTION_GROUP_VALUE};
 use crate::features::{
-    CONNECTION_ICON_OPTIONS, DEFAULT_CONNECTION_ICON, NyaTermApp, modal_dialog_shell,
-    resolve_connection_icon, themed_icon,
+    CONNECTION_ICON_OPTIONS, DEFAULT_CONNECTION_ICON, NyaTermApp,
+    ORDINARY_INPUT_SHELL_PADDING_X_PX, modal_dialog_shell, ordinary_input_focus_ring,
+    ordinary_input_shell_border_color, resolve_connection_icon, themed_icon,
 };
 use crate::models::{
     ConnectionEditorField, ConnectionEditorSelect, ConnectionEditorState, ConnectionKindTab,
@@ -71,13 +72,20 @@ impl NyaTermApp {
         let options = choices
             .iter()
             .map(|choice| {
-                NyaSelectOption::new(
+                let mut option = NyaSelectOption::new(
                     choice
                         .value
                         .clone()
                         .unwrap_or_else(|| NO_SELECTION_VALUE.to_string()),
                     choice.label.clone(),
-                )
+                );
+                if let Some(search_text) = choice.search_text.as_ref() {
+                    option = option.search_text(search_text.clone());
+                }
+                if let Some(subtitle) = choice.subtitle.as_ref() {
+                    option = option.subtitle(subtitle.clone());
+                }
+                option
             })
             .collect::<Vec<_>>();
         let selected_value = choices.iter().find(|choice| choice.selected).map(|choice| {
@@ -93,7 +101,13 @@ impl NyaTermApp {
             false,
             cx,
         );
-        select.update(cx, |select, cx| select.set_placeholder(placeholder, cx));
+        let searchable = connection_editor_select_is_searchable(select_key);
+        let search_placeholder = connection_editor_select_search_placeholder(self, select_key);
+        select.update(cx, |select, cx| {
+            select.set_placeholder(placeholder, cx);
+            select.set_searchable(searchable, cx);
+            select.set_search_placeholder(search_placeholder, cx);
+        });
         select
     }
 
@@ -231,44 +245,53 @@ impl NyaTermApp {
             ("key", self.tr("dialog.privateKey")),
         ]
         .into_iter()
-        .map(|(value, label)| ConnectionEditorChoice {
-            value: Some(value.to_string()),
-            label: label.to_string(),
-            selected: editor.auth_mode == value,
+        .map(|(value, label)| {
+            ConnectionEditorChoice::new(Some(value.to_string()), label, editor.auth_mode == value)
         })
         .collect::<Vec<_>>();
-        let mut key_options = vec![ConnectionEditorChoice {
-            value: None,
-            label: none_label.to_string(),
-            selected: editor.key_id.is_none(),
-        }];
-        key_options.extend(
-            self.security
-                .ssh_keys()
-                .iter()
-                .map(|key| ConnectionEditorChoice {
-                    value: Some(key.id.clone()),
-                    label: key.name.clone(),
-                    selected: editor.key_id.as_deref() == Some(key.id.as_str()),
-                }),
-        );
-        let mut password_options = vec![ConnectionEditorChoice {
-            value: None,
-            label: none_label.to_string(),
-            selected: editor.password_id.is_none(),
-        }];
-        password_options.extend(self.security.passwords().iter().map(|password| {
-            ConnectionEditorChoice {
-                value: Some(password.id.clone()),
-                label: password.name.clone(),
-                selected: editor.password_id.as_deref() == Some(password.id.as_str()),
+        let mut key_options = vec![ConnectionEditorChoice::new(
+            None,
+            none_label,
+            editor.key_id.is_none(),
+        )];
+        key_options.extend(self.security.ssh_keys().iter().map(|key| {
+            let search_text = [Some(key.name.as_str()), key.key_file_path.as_deref()]
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>()
+                .join(" ");
+            let subtitle = key
+                .key_file_path
+                .clone()
+                .or_else(|| key.cert_file_path.clone());
+            let mut choice = ConnectionEditorChoice::new(
+                Some(key.id.clone()),
+                key.name.clone(),
+                editor.key_id.as_deref() == Some(key.id.as_str()),
+            )
+            .search_text(search_text);
+            if let Some(subtitle) = subtitle {
+                choice = choice.subtitle(subtitle);
             }
+            choice
         }));
-        let mut otp_options = vec![ConnectionEditorChoice {
-            value: None,
-            label: self.tr("dialog.noOtp").to_string(),
-            selected: editor.otp_id.is_none(),
-        }];
+        let mut password_options = vec![ConnectionEditorChoice::new(
+            None,
+            none_label,
+            editor.password_id.is_none(),
+        )];
+        password_options.extend(self.security.passwords().iter().map(|password| {
+            ConnectionEditorChoice::new(
+                Some(password.id.clone()),
+                password.name.clone(),
+                editor.password_id.as_deref() == Some(password.id.as_str()),
+            )
+        }));
+        let mut otp_options = vec![ConnectionEditorChoice::new(
+            None,
+            self.tr("dialog.noOtp"),
+            editor.otp_id.is_none(),
+        )];
         otp_options.extend(self.security.otp_entries().iter().map(|entry| {
             let label = if entry.issuer.is_empty() {
                 entry.username.clone()
@@ -277,29 +300,81 @@ impl NyaTermApp {
             } else {
                 format!("{} ({})", entry.issuer, entry.username)
             };
-            ConnectionEditorChoice {
-                value: Some(entry.id.clone()),
+            let subtitle = [
+                entry.otp_type.to_ascii_uppercase(),
+                entry.algorithm.clone(),
+                entry.digits.to_string(),
+            ]
+            .into_iter()
+            .filter(|part| !part.is_empty())
+            .collect::<Vec<_>>()
+            .join(" · ");
+            let search_text = [
+                entry.issuer.as_str(),
+                entry.username.as_str(),
+                entry.otp_type.as_str(),
+                entry.algorithm.as_str(),
+            ]
+            .into_iter()
+            .filter(|part| !part.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ");
+            ConnectionEditorChoice::new(
+                Some(entry.id.clone()),
                 label,
-                selected: editor.otp_id.as_deref() == Some(entry.id.as_str()),
-            }
+                editor.otp_id.as_deref() == Some(entry.id.as_str()),
+            )
+            .search_text(search_text)
+            .subtitle(subtitle)
         }));
-        let mut proxy_options = vec![ConnectionEditorChoice {
-            value: None,
-            label: self.tr("dialog.noProxy").to_string(),
-            selected: editor.proxy_id.is_none(),
-        }];
+        let mut proxy_options = vec![ConnectionEditorChoice::new(
+            None,
+            self.tr("dialog.noProxy"),
+            editor.proxy_id.is_none(),
+        )];
         proxy_options.extend(self.tunnel_state.proxies().iter().map(|proxy| {
-            ConnectionEditorChoice {
-                value: Some(proxy.id.clone()),
-                label: proxy.name.clone(),
-                selected: editor.proxy_id.as_deref() == Some(proxy.id.as_str()),
-            }
+            let protocol = proxy.protocol.to_ascii_uppercase();
+            let subtitle = if proxy.protocol == "proxycommand" {
+                [protocol.as_str(), proxy.command.as_deref().unwrap_or("")]
+                    .into_iter()
+                    .filter(|part| !part.is_empty())
+                    .collect::<Vec<_>>()
+                    .join(" · ")
+            } else {
+                [
+                    format!("{} {}:{}", protocol, proxy.host, proxy.port),
+                    proxy.username.clone().unwrap_or_default(),
+                ]
+                .into_iter()
+                .filter(|part| !part.is_empty())
+                .collect::<Vec<_>>()
+                .join(" · ")
+            };
+            let search_text = [
+                proxy.name.clone(),
+                proxy.protocol.clone(),
+                proxy.host.clone(),
+                proxy.port.to_string(),
+                proxy.username.clone().unwrap_or_default(),
+                proxy.command.clone().unwrap_or_default(),
+            ]
+            .into_iter()
+            .filter(|part| !part.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ");
+            ConnectionEditorChoice::new(
+                Some(proxy.id.clone()),
+                proxy.name.clone(),
+                editor.proxy_id.as_deref() == Some(proxy.id.as_str()),
+            )
+            .search_text(search_text)
+            .subtitle(subtitle)
         }));
-        let mut jump_options = vec![ConnectionEditorChoice {
-            value: None,
-            label: self.tr("dialog.noProxyJump").to_string(),
-            selected: editor.proxy_jump_id.is_none(),
-        }];
+        let mut jump_options = vec![ConnectionEditorChoice::new(
+            None,
+            self.tr("dialog.noProxyJump"),
+            editor.proxy_jump_id.is_none(),
+        )];
         jump_options.extend(
             self.connection_state
                 .connections()
@@ -313,10 +388,46 @@ impl NyaTermApp {
                         connection,
                     )
                 })
-                .map(|connection| ConnectionEditorChoice {
-                    value: Some(connection.id.clone()),
-                    label: connection.name.clone(),
-                    selected: editor.proxy_jump_id.as_deref() == Some(connection.id.as_str()),
+                .map(|connection| {
+                    let (host, port, username) = match &connection.config {
+                        ConnectionType::Ssh {
+                            host,
+                            port,
+                            username,
+                            ..
+                        } => (host.as_str(), *port, username.as_str()),
+                        _ => ("", 22, ""),
+                    };
+                    let group_path = connection
+                        .group_id
+                        .as_deref()
+                        .and_then(|id| {
+                            connection_group_path_label(self.connection_state.groups(), id)
+                        })
+                        .unwrap_or_default();
+                    let host_port = format!("{host}:{port}");
+                    let subtitle = [group_path.as_str(), host_port.as_str(), username]
+                        .into_iter()
+                        .filter(|part| !part.is_empty())
+                        .collect::<Vec<_>>()
+                        .join(" · ");
+                    let search_text = [
+                        connection.name.as_str(),
+                        host,
+                        username,
+                        group_path.as_str(),
+                    ]
+                    .into_iter()
+                    .filter(|part| !part.is_empty())
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                    ConnectionEditorChoice::new(
+                        Some(connection.id.clone()),
+                        connection.name.clone(),
+                        editor.proxy_jump_id.as_deref() == Some(connection.id.as_str()),
+                    )
+                    .search_text(search_text)
+                    .subtitle(subtitle)
                 }),
         );
         let backspace_options = [
@@ -324,13 +435,17 @@ impl NyaTermApp {
             ("ctrl-h", self.tr("dialog.backspaceCtrlH")),
         ]
         .into_iter()
-        .map(|(value, label)| ConnectionEditorChoice {
-            value: Some(value.to_string()),
-            label: label.to_string(),
-            selected: match value {
-                "ctrl-h" => matches!(editor.backspace_mode.as_str(), "ctrl-h" | "bs" | "ctrl_h"),
-                _ => !matches!(editor.backspace_mode.as_str(), "ctrl-h" | "bs" | "ctrl_h"),
-            },
+        .map(|(value, label)| {
+            ConnectionEditorChoice::new(
+                Some(value.to_string()),
+                label,
+                match value {
+                    "ctrl-h" => {
+                        matches!(editor.backspace_mode.as_str(), "ctrl-h" | "bs" | "ctrl_h")
+                    }
+                    _ => !matches!(editor.backspace_mode.as_str(), "ctrl-h" | "bs" | "ctrl_h"),
+                },
+            )
         })
         .collect::<Vec<_>>();
         let telnet_enter_options = [
@@ -339,10 +454,12 @@ impl NyaTermApp {
             ("lf", "LF (\\n)"),
         ]
         .into_iter()
-        .map(|(value, label)| ConnectionEditorChoice {
-            value: Some(value.to_string()),
-            label: label.to_string(),
-            selected: editor.telnet_enter_mode == value,
+        .map(|(value, label)| {
+            ConnectionEditorChoice::new(
+                Some(value.to_string()),
+                label,
+                editor.telnet_enter_mode == value,
+            )
         })
         .collect::<Vec<_>>();
         let mut serial_port_options = Vec::new();
@@ -352,35 +469,39 @@ impl NyaTermApp {
                 .serial_ports()
                 .contains(&editor.serial_port)
         {
-            serial_port_options.push(ConnectionEditorChoice {
-                value: Some(editor.serial_port.clone()),
-                label: editor.serial_port.clone(),
-                selected: true,
-            });
+            serial_port_options.push(ConnectionEditorChoice::new(
+                Some(editor.serial_port.clone()),
+                editor.serial_port.clone(),
+                true,
+            ));
         }
         serial_port_options.extend(self.connection_state.serial_ports().iter().map(|port| {
-            ConnectionEditorChoice {
-                value: Some(port.clone()),
-                label: port.clone(),
-                selected: editor.serial_port == *port,
-            }
+            ConnectionEditorChoice::new(
+                Some(port.clone()),
+                port.clone(),
+                editor.serial_port == *port,
+            )
         }));
         let baud_options = [
             "9600", "19200", "38400", "57600", "115200", "230400", "460800", "921600",
         ]
         .into_iter()
-        .map(|value| ConnectionEditorChoice {
-            value: Some(value.to_string()),
-            label: value.to_string(),
-            selected: editor.baud_rate == value,
+        .map(|value| {
+            ConnectionEditorChoice::new(
+                Some(value.to_string()),
+                value.to_string(),
+                editor.baud_rate == value,
+            )
         })
         .collect::<Vec<_>>();
         let data_bits_options = ["5", "6", "7", "8"]
             .into_iter()
-            .map(|value| ConnectionEditorChoice {
-                value: Some(value.to_string()),
-                label: value.to_string(),
-                selected: editor.data_bits == value,
+            .map(|value| {
+                ConnectionEditorChoice::new(
+                    Some(value.to_string()),
+                    value.to_string(),
+                    editor.data_bits == value,
+                )
             })
             .collect::<Vec<_>>();
         let parity_options = [
@@ -391,18 +512,18 @@ impl NyaTermApp {
             ("space", self.tr("dialog.paritySpace")),
         ]
         .into_iter()
-        .map(|(value, label)| ConnectionEditorChoice {
-            value: Some(value.to_string()),
-            label: label.to_string(),
-            selected: editor.parity == value,
+        .map(|(value, label)| {
+            ConnectionEditorChoice::new(Some(value.to_string()), label, editor.parity == value)
         })
         .collect::<Vec<_>>();
         let stop_bits_options = ["1", "1.5", "2"]
             .into_iter()
-            .map(|value| ConnectionEditorChoice {
-                value: Some(value.to_string()),
-                label: value.to_string(),
-                selected: editor.stop_bits == value,
+            .map(|value| {
+                ConnectionEditorChoice::new(
+                    Some(value.to_string()),
+                    value.to_string(),
+                    editor.stop_bits == value,
+                )
             })
             .collect::<Vec<_>>();
         let shell_label = match editor.shell_path.as_str() {
@@ -421,10 +542,8 @@ impl NyaTermApp {
             ("wt.exe", self.tr("dialog.shellWindowsTerminal")),
         ]
         .into_iter()
-        .map(|(value, label)| ConnectionEditorChoice {
-            value: Some(value.to_string()),
-            label: label.to_string(),
-            selected: editor.shell_path == value,
+        .map(|(value, label)| {
+            ConnectionEditorChoice::new(Some(value.to_string()), label, editor.shell_path == value)
         })
         .collect::<Vec<_>>();
         let mut selects = HashMap::new();
@@ -658,14 +777,17 @@ impl NyaTermApp {
             .when(!native_window, |this| this.max_h(px(640.)))
             .flex()
             .flex_col()
-            .overflow_hidden()
             // No blanket focus grab here: it existed to keep the old label-div
             // inputs "focused", and would now steal focus back from whichever
             // field the pointer just landed on, since click follows mouse-down.
             .track_focus(&editor_focus)
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
-                cx.stop_propagation();
-                this.handle_connection_editor_key_down(event, window, cx);
+                if this.connection_editor_select_is_focused(window, cx) {
+                    return;
+                }
+                if this.handle_connection_editor_key_down(event, window, cx) {
+                    cx.stop_propagation();
+                }
             }))
             .when(!native_window, |this| {
                 this.child(
@@ -716,6 +838,11 @@ impl NyaTermApp {
                     .flex_1()
                     .min_h_0()
                     .overflow_y_scroll()
+                    .on_scroll_wheel(cx.listener(|this, _: &gpui::ScrollWheelEvent, window, cx| {
+                        if this.connection_editor_select_menu_is_focused(window, cx) {
+                            cx.stop_propagation();
+                        }
+                    }))
                     .p_4()
                     .flex()
                     .flex_col()
@@ -864,6 +991,43 @@ impl NyaTermApp {
     }
 }
 
+impl NyaTermApp {
+    fn connection_editor_select_is_focused(&self, window: &gpui::Window, cx: &gpui::App) -> bool {
+        connection_editor_select_keys()
+            .into_iter()
+            .any(|select| self.select_is_focused(connection_editor_select_id(select), window, cx))
+    }
+
+    fn connection_editor_select_menu_is_focused(
+        &self,
+        window: &gpui::Window,
+        cx: &gpui::App,
+    ) -> bool {
+        connection_editor_select_keys().into_iter().any(|select| {
+            self.select_menu_is_focused(connection_editor_select_id(select), window, cx)
+        })
+    }
+}
+
+fn connection_editor_select_keys() -> [ConnectionEditorSelect; 14] {
+    [
+        ConnectionEditorSelect::Group,
+        ConnectionEditorSelect::SavedPassword,
+        ConnectionEditorSelect::SshKey,
+        ConnectionEditorSelect::Otp,
+        ConnectionEditorSelect::Proxy,
+        ConnectionEditorSelect::ProxyJump,
+        ConnectionEditorSelect::Backspace,
+        ConnectionEditorSelect::TelnetEnterMode,
+        ConnectionEditorSelect::Shell,
+        ConnectionEditorSelect::SerialPort,
+        ConnectionEditorSelect::BaudRate,
+        ConnectionEditorSelect::DataBits,
+        ConnectionEditorSelect::Parity,
+        ConnectionEditorSelect::StopBits,
+    ]
+}
+
 fn connection_editor_select_id(select: ConnectionEditorSelect) -> &'static str {
     match select {
         ConnectionEditorSelect::Authentication => {
@@ -883,6 +1047,31 @@ fn connection_editor_select_id(select: ConnectionEditorSelect) -> &'static str {
         ConnectionEditorSelect::DataBits => "connection-editor-data-bits",
         ConnectionEditorSelect::Parity => "connection-editor-parity",
         ConnectionEditorSelect::StopBits => "connection-editor-stop-bits",
+    }
+}
+
+fn connection_editor_select_is_searchable(select: ConnectionEditorSelect) -> bool {
+    matches!(
+        select,
+        ConnectionEditorSelect::SavedPassword
+            | ConnectionEditorSelect::SshKey
+            | ConnectionEditorSelect::Otp
+            | ConnectionEditorSelect::Proxy
+            | ConnectionEditorSelect::ProxyJump
+    )
+}
+
+fn connection_editor_select_search_placeholder(
+    app: &NyaTermApp,
+    select: ConnectionEditorSelect,
+) -> Option<String> {
+    match select {
+        ConnectionEditorSelect::SavedPassword => Some(app.tr("dialog.selectPassword").to_string()),
+        ConnectionEditorSelect::SshKey => Some(app.tr("dialog.privateKey").to_string()),
+        ConnectionEditorSelect::Otp => Some(app.tr("dialog.searchOtpEntries").to_string()),
+        ConnectionEditorSelect::Proxy => Some(app.tr("network.searchProxies").to_string()),
+        ConnectionEditorSelect::ProxyJump => Some(app.tr("network.searchConnections").to_string()),
+        _ => None,
     }
 }
 
@@ -939,6 +1128,7 @@ fn connection_editor_group_control(
     } = args;
     let new_group_entity = fields.get(&ConnectionEditorField::NewGroupName);
     let new_group_field = new_group_entity.cloned();
+    let new_group_focused = new_group_entity.is_some_and(|field| field.read(cx).has_focus());
     let can_add = new_group_entity.is_some_and(|field| !field.read(cx).value(cx).trim().is_empty());
     let popup_position = trigger_bounds.map(connection_editor_group_popup_position);
     let popup_width = trigger_bounds.map(|bounds| bounds.size.width.max(px(192.)));
@@ -1072,12 +1262,22 @@ fn connection_editor_group_control(
                                                         .h(px(32.))
                                                         .min_w_0()
                                                         .flex_1()
-                                                        .px_2()
+                                                        .px(px(ORDINARY_INPUT_SHELL_PADDING_X_PX))
                                                         .flex()
                                                         .items_center()
                                                         .rounded_sm()
                                                         .border_1()
-                                                        .border_color(rgb(palette.border))
+                                                        .border_color(
+                                                            ordinary_input_shell_border_color(
+                                                                palette,
+                                                                new_group_focused,
+                                                            ),
+                                                        )
+                                                        .when(new_group_focused, |this| {
+                                                            this.shadow(
+                                                                ordinary_input_focus_ring(palette),
+                                                            )
+                                                        })
                                                         .bg(rgb(palette.input))
                                                         .children(new_group_field.map(|field| {
                                                             div()
@@ -1370,13 +1570,12 @@ fn connection_description_field(
                 .overflow_hidden()
                 .rounded_sm()
                 .border_1()
-                .border_color(if focused {
-                    rgb(palette.primary)
-                } else {
-                    rgb(palette.border)
+                .border_color(ordinary_input_shell_border_color(palette, focused))
+                .when(focused, |this| {
+                    this.shadow(ordinary_input_focus_ring(palette))
                 })
                 .bg(rgb(palette.input))
-                .px_3()
+                .px(px(ORDINARY_INPUT_SHELL_PADDING_X_PX))
                 .py_2()
                 .cursor_text()
                 .when_some(handle, |this, handle| {

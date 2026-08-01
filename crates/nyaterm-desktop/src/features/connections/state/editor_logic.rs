@@ -328,40 +328,6 @@ pub(super) fn insert_connection_editor_description_newline(
     true
 }
 
-pub(super) fn apply_connection_editor_text_key(
-    draft: &mut Option<ConnectionEditorState>,
-    key: &str,
-    input: Option<&str>,
-) -> bool {
-    let Some(editor) = draft.as_mut() else {
-        return false;
-    };
-    match key {
-        "backspace" => {
-            connection_editor_field_mut(editor).pop();
-            editor.error = None;
-            true
-        }
-        _ => {
-            let Some(input) = input.filter(|input| !input.is_empty()) else {
-                return false;
-            };
-            let field = editor.focused_field;
-            let target = connection_editor_field_mut(editor);
-            match field {
-                ConnectionEditorField::Port
-                | ConnectionEditorField::BaudRate
-                | ConnectionEditorField::PostLoginDelay => {
-                    target.extend(input.chars().filter(|character| character.is_ascii_digit()));
-                }
-                _ => target.push_str(input),
-            }
-            editor.error = None;
-            true
-        }
-    }
-}
-
 pub(super) fn advance_connection_editor_focus(draft: &mut Option<ConnectionEditorState>) -> bool {
     let Some(editor) = draft.as_mut() else {
         return false;
@@ -386,25 +352,6 @@ fn clear_connection_editor_password_secret(editor: &mut ConnectionEditorState) {
     editor.password_id = None;
     editor.password.clear();
     editor.existing_password = None;
-}
-
-fn connection_editor_field_mut(editor: &mut ConnectionEditorState) -> &mut String {
-    match editor.focused_field {
-        ConnectionEditorField::Name => &mut editor.name,
-        ConnectionEditorField::NewGroupName => &mut editor.new_group_name,
-        ConnectionEditorField::Description => &mut editor.description,
-        ConnectionEditorField::Host => &mut editor.host,
-        ConnectionEditorField::Port => &mut editor.port,
-        ConnectionEditorField::Username => &mut editor.username,
-        ConnectionEditorField::Password => &mut editor.password,
-        ConnectionEditorField::ShellPath => &mut editor.shell_path,
-        ConnectionEditorField::ShellArgs => &mut editor.shell_args,
-        ConnectionEditorField::WorkingDir => &mut editor.working_dir,
-        ConnectionEditorField::SerialPort => &mut editor.serial_port,
-        ConnectionEditorField::BaudRate => &mut editor.baud_rate,
-        ConnectionEditorField::PostLoginCommand => &mut editor.post_login_command,
-        ConnectionEditorField::PostLoginDelay => &mut editor.post_login_delay_ms,
-    }
 }
 
 pub(super) fn set_connection_editor_error(

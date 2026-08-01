@@ -7,7 +7,10 @@ use nyaterm_transport::SessionInfo;
 use nyaterm_ui::NyaInput;
 
 use crate::features::formatting::{session_kind_label, short_id};
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{
+    NyaTermApp, ORDINARY_INPUT_SHELL_PADDING_X_PX, TextInputSetup, ordinary_input_focus_ring,
+    ordinary_input_shell_border_color,
+};
 use crate::models::RecordingPathPromptKind;
 
 impl NyaTermApp {
@@ -58,6 +61,7 @@ impl NyaTermApp {
             cx,
         );
         let search_focus = search_field.read(cx).focus_handle();
+        let search_focused = search_field.read(cx).has_focus();
 
         let mut session_rows = div().flex().flex_col().gap_1().p_2();
         let mut visible_count = 0usize;
@@ -288,8 +292,16 @@ impl NyaTermApp {
                                 .id(SharedString::from("recording-session-search"))
                                 .h(px(28.))
                                 .rounded_md()
+                                .border_1()
+                                .border_color(ordinary_input_shell_border_color(
+                                    palette,
+                                    search_focused,
+                                ))
+                                .when(search_focused, |this| {
+                                    this.shadow(ordinary_input_focus_ring(palette))
+                                })
                                 .bg(self.shell_surface_color(palette.hover))
-                                .px_2()
+                                .px(px(ORDINARY_INPUT_SHELL_PADDING_X_PX))
                                 .flex()
                                 .items_center()
                                 .gap_1()

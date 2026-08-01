@@ -8,7 +8,10 @@ use nyaterm_ui::NyaInput;
 
 use crate::features::formatting::session_kind_label;
 use crate::features::view_widgets::dialog_action_button;
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{
+    NyaTermApp, ORDINARY_INPUT_SHELL_PADDING_X_PX, TextInputSetup, ordinary_input_focus_ring,
+    ordinary_input_shell_border_color,
+};
 use crate::widgets::{small_button, status_pill};
 
 impl NyaTermApp {
@@ -23,18 +26,20 @@ impl NyaTermApp {
         let groups_width = (dialog_width * 0.23).clamp(160., 208.);
         let selected_group = self.sync_input.selected_group().cloned();
         let selected_group_id = selected_group.as_ref().map(|group| group.id.clone());
-        let (group_name_input, group_name_focus) = if let Some(group) = selected_group.as_ref() {
-            let field = self.text_input(
-                format!("sync.group-name.{}", group.id),
-                &group.name,
-                TextInputSetup::default(),
-                cx,
-            );
-            let focus = field.read(cx).focus_handle();
-            (Some(field), Some(focus))
-        } else {
-            (None, None)
-        };
+        let (group_name_input, group_name_focus, group_name_focused) =
+            if let Some(group) = selected_group.as_ref() {
+                let field = self.text_input(
+                    format!("sync.group-name.{}", group.id),
+                    &group.name,
+                    TextInputSetup::default(),
+                    cx,
+                );
+                let focus = field.read(cx).focus_handle();
+                let focused = field.read(cx).has_focus();
+                (Some(field), Some(focus), focused)
+            } else {
+                (None, None, false)
+            };
         let search_draft = self.sync_input.search_draft().to_string();
         let search_input = self.text_input(
             "sync.groups.search",
@@ -43,6 +48,7 @@ impl NyaTermApp {
             cx,
         );
         let search_focus = search_input.read(cx).focus_handle();
+        let search_focused = search_input.read(cx).has_focus();
         let pending_delete_name = self
             .sync_input
             .pending_delete_group()
@@ -475,12 +481,22 @@ impl NyaTermApp {
                                                     .h(px(34.))
                                                     .flex_1()
                                                     .min_w_0()
-                                                    .px_2()
+                                                    .px(px(ORDINARY_INPUT_SHELL_PADDING_X_PX))
                                                     .flex()
                                                     .items_center()
                                                     .rounded_sm()
                                                     .border_1()
-                                                    .border_color(rgb(palette.border))
+                                                    .border_color(
+                                                        ordinary_input_shell_border_color(
+                                                            palette,
+                                                            group_name_focused,
+                                                        ),
+                                                    )
+                                                    .when(group_name_focused, |this| {
+                                                        this.shadow(ordinary_input_focus_ring(
+                                                            palette,
+                                                        ))
+                                                    })
                                                     .bg(rgb(palette.input))
                                                     .text_sm()
                                                     .text_color(rgb(palette.text))
@@ -488,7 +504,9 @@ impl NyaTermApp {
                                                     .when_some(
                                                         group_name_focus,
                                                         |this, focus| {
-                                                            this.on_click(move |_, window, cx| { window.focus(&focus, cx); })
+                                                            this.on_click(move |_, window, cx| {
+                                                                window.focus(&focus, cx);
+                                                            })
                                                         },
                                                     )
                                                     .children(group_name_input),
@@ -520,17 +538,33 @@ impl NyaTermApp {
                                                             .flex_1()
                                                             .min_w(px(140.))
                                                             .h(px(30.))
-                                                            .px_2()
+                                                            .px(px(
+                                                                ORDINARY_INPUT_SHELL_PADDING_X_PX,
+                                                            ))
                                                             .flex()
                                                             .items_center()
                                                             .rounded_sm()
                                                             .border_1()
-                                                            .border_color(rgb(palette.border))
+                                                            .border_color(
+                                                                ordinary_input_shell_border_color(
+                                                                    palette,
+                                                                    search_focused,
+                                                                ),
+                                                            )
+                                                            .when(search_focused, |this| {
+                                                                this.shadow(
+                                                                    ordinary_input_focus_ring(
+                                                                        palette,
+                                                                    ),
+                                                                )
+                                                            })
                                                             .bg(rgb(palette.input))
                                                             .text_xs()
                                                             .text_color(rgb(palette.text))
                                                             .cursor_text()
-                                                            .on_click(move |_, window, cx| { window.focus(&search_focus, cx); })
+                                                            .on_click(move |_, window, cx| {
+                                                                window.focus(&search_focus, cx);
+                                                            })
                                                             .child(NyaInput::new(&search_input)),
                                                     ),
                                             )

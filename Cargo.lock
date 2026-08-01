@@ -4729,6 +4729,7 @@ dependencies = [
  "anyhow",
  "gpui",
  "gpui-component",
+ "gpui-component-assets",
  "gpui_platform",
  "nyaterm-core",
  "nyaterm-desktop",

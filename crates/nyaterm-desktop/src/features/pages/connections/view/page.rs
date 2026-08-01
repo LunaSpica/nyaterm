@@ -6,9 +6,12 @@ use gpui::{
     },
     px, rgb, svg, uniform_list,
 };
-use nyaterm_ui::{NyaContextMenu, NyaDropdownMenu};
+use nyaterm_ui::{NyaContextMenu, NyaDropdownMenu, NyaInput};
 
-use crate::features::{ConnectionDragKind, ConnectionDragPayload, NyaTermApp};
+use crate::features::{
+    ConnectionDragKind, ConnectionDragPayload, NyaTermApp, ORDINARY_INPUT_SHELL_PADDING_X_PX,
+    ordinary_input_focus_ring, ordinary_input_shell_border_color,
+};
 use crate::models::ConnectionSortMode;
 
 use super::super::list::{
@@ -276,13 +279,12 @@ impl NyaTermApp {
                     .border_1()
                     // Tauri gives the focused field a primary ring; without it the
                     // box looked identical whether or not it had focus.
-                    .border_color(rgb(if search_focused {
-                        palette.primary
-                    } else {
-                        palette.border
-                    }))
+                    .border_color(ordinary_input_shell_border_color(palette, search_focused))
+                    .when(search_focused, |this| {
+                        this.shadow(ordinary_input_focus_ring(palette))
+                    })
                     .bg(rgb(palette.hover))
-                    .px_2()
+                    .px(px(ORDINARY_INPUT_SHELL_PADDING_X_PX))
                     .flex()
                     .items_center()
                     .gap_2()
@@ -309,7 +311,7 @@ impl NyaTermApp {
                             .min_w_0()
                             .flex_1()
                             .text_size(px(12.))
-                            .child(search_field.clone()),
+                            .child(NyaInput::new(&search_field)),
                     )
                     .when(!search_empty, |this| {
                         this.child(
@@ -363,7 +365,7 @@ impl NyaTermApp {
             .child(icon_action_button(
                 palette,
                 "connections-new-group",
-                "icons/conn/folder.svg",
+                "icons/fe/new-folder.svg",
                 self.tr("savedConnections.newFolder"),
                 cx.listener(|this, _, window, cx| {
                     this.open_connection_group_editor(None, None, window, cx);

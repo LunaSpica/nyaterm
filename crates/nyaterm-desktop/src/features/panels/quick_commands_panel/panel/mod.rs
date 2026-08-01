@@ -4,7 +4,10 @@ use gpui::{
 };
 
 use super::super::{filtered_quick_commands, quick_command_category_options};
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{
+    NyaTermApp, ORDINARY_INPUT_SHELL_PADDING_X_PX, TextInputSetup, ordinary_input_focus_ring,
+    ordinary_input_shell_border_color,
+};
 use crate::models::{QuickCommandSortMode, QuickCommandViewMode};
 use crate::widgets::small_button;
 use nyaterm_ui::{NyaDropdownMenu, NyaInput, NyaMenuItem, NyaTooltip};
@@ -86,6 +89,7 @@ impl NyaTermApp {
             cx,
         );
         let search_focus = search_field.read(cx).focus_handle();
+        let search_focused = search_field.read(cx).has_focus();
         let ai_prompt_input = self
             .text_input_box(
                 "quick-command.ai-prompt",
@@ -257,9 +261,15 @@ impl NyaTermApp {
                             .w(px(144.))
                             .rounded_md()
                             .border_1()
-                            .border_color(rgb(palette.border))
+                            .border_color(ordinary_input_shell_border_color(
+                                palette,
+                                search_focused,
+                            ))
+                            .when(search_focused, |this| {
+                                this.shadow(ordinary_input_focus_ring(palette))
+                            })
                             .bg(input_bg)
-                            .px_2()
+                            .px(px(ORDINARY_INPUT_SHELL_PADDING_X_PX))
                             .flex()
                             .items_center()
                             .gap_1()

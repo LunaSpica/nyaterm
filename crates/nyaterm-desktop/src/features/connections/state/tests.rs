@@ -2,14 +2,13 @@ use std::collections::{HashMap, HashSet};
 
 use super::{
     ConnectionEditorFeatureState, apply_connection_editor_shell_path,
-    apply_connection_editor_text_key, apply_connection_editor_working_dir,
-    clear_connection_editor_runtime_state, clear_connection_list_runtime_state,
-    clear_network_proxy_editor, clear_network_tunnel_editor, clear_selected_connection_ids,
-    commit_connection_editor_new_group, connection_drop_position_for_target,
-    connection_editor_inline_panel_draft, connection_editor_window_open_or_pending,
-    cycle_connection_sort_mode, insert_connection_editor_description_newline,
-    remove_connection_list_references, remove_group_list_references,
-    remove_network_group_references, remove_network_item_references,
+    apply_connection_editor_working_dir, clear_connection_editor_runtime_state,
+    clear_connection_list_runtime_state, clear_network_proxy_editor, clear_network_tunnel_editor,
+    clear_selected_connection_ids, commit_connection_editor_new_group,
+    connection_drop_position_for_target, connection_editor_inline_panel_draft,
+    connection_editor_window_open_or_pending, cycle_connection_sort_mode,
+    insert_connection_editor_description_newline, remove_connection_list_references,
+    remove_group_list_references, remove_network_group_references, remove_network_item_references,
     retain_loaded_connection_references, retain_loaded_group_list_references,
     saved_connections_in_group_tree_for_list_state, select_connection_ids,
     select_saved_connection_after_editor_save, selected_connections_for_list_state,
@@ -869,46 +868,6 @@ fn toggle_connection_editor_advanced_closed_resets_hidden_focus() {
     let editor = draft.expect("editor remains open");
     assert!(!editor.advanced_open);
     assert_eq!(editor.focused_field, ConnectionEditorField::Name);
-    assert_eq!(editor.error, None);
-}
-
-#[test]
-fn connection_editor_text_key_filters_numeric_fields_and_clears_error() {
-    let mut draft = Some(ConnectionEditorState {
-        focused_field: ConnectionEditorField::Port,
-        port: String::new(),
-        error: Some("stale validation".to_string()),
-        ..connection_editor_state_with_secret_draft()
-    });
-
-    assert!(apply_connection_editor_text_key(
-        &mut draft,
-        "7",
-        Some("7x8")
-    ));
-
-    let editor = draft.expect("editor remains open");
-    assert_eq!(editor.port, "78");
-    assert_eq!(editor.error, None);
-}
-
-#[test]
-fn connection_editor_text_key_backspace_updates_focused_field() {
-    let mut draft = Some(ConnectionEditorState {
-        focused_field: ConnectionEditorField::Name,
-        name: "prod".to_string(),
-        error: Some("stale validation".to_string()),
-        ..connection_editor_state_with_secret_draft()
-    });
-
-    assert!(apply_connection_editor_text_key(
-        &mut draft,
-        "backspace",
-        None
-    ));
-
-    let editor = draft.expect("editor remains open");
-    assert_eq!(editor.name, "pro");
     assert_eq!(editor.error, None);
 }
 

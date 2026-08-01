@@ -43,7 +43,7 @@ fn ssh_advanced_content(
         .rounded_md()
         .border_1()
         .border_color(rgb(palette.border))
-        .bg(rgba((palette.accent << 8) | 0x18))
+        .bg(rgb(palette.bg))
         .p_3()
         .flex()
         .flex_col()

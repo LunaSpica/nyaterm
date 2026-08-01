@@ -92,7 +92,10 @@ pub(in crate::features) use terminal::{
     TerminalFeatureFocus, TerminalFeatureState, full_shell_paint_count,
     terminal_surface_paint_count,
 };
-pub(in crate::features) use text_inputs::{TextInputRegistry, TextInputSetup, secret_input_setup};
+pub(in crate::features) use text_inputs::{
+    ORDINARY_INPUT_SHELL_PADDING_X_PX, TextInputRegistry, TextInputSetup,
+    ordinary_input_focus_ring, ordinary_input_shell_border_color, secret_input_setup,
+};
 pub(in crate::features) use transfers::{
     TransferEditorCloseAfterSave, TransferEditorCloseOutcome, TransferEditorDiscardOutcome,
     TransferFeatureFocus, TransferFeatureState, duplicate_decision_label, duplicate_policy_label,

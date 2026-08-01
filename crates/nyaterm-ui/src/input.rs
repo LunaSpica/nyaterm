@@ -166,15 +166,23 @@ impl NyaInputState {
             }
             input
         });
-        let subscription = cx.subscribe(&state, |_, input, event: &InputEvent, cx| match event {
-            InputEvent::Change => {
-                cx.emit(NyaInputEvent::Changed(input.read(cx).value().to_string()))
-            }
-            InputEvent::PressEnter { .. } => {
-                cx.emit(NyaInputEvent::Submitted(input.read(cx).value().to_string()))
-            }
-            InputEvent::Focus | InputEvent::Blur => {}
-        });
+        let subscription =
+            cx.subscribe(&state, |this, input, event: &InputEvent, cx| match event {
+                InputEvent::Change => {
+                    cx.emit(NyaInputEvent::Changed(input.read(cx).value().to_string()))
+                }
+                InputEvent::PressEnter { .. } => {
+                    cx.emit(NyaInputEvent::Submitted(input.read(cx).value().to_string()))
+                }
+                InputEvent::Focus => {
+                    this.focused = true;
+                    cx.notify();
+                }
+                InputEvent::Blur => {
+                    this.focused = false;
+                    cx.notify();
+                }
+            });
         self.subscription = Some(subscription);
         self.state = Some(state.clone());
         state
@@ -242,7 +250,8 @@ impl NyaInput {
 
 impl RenderOnce for NyaInput {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let (state, disabled, multi_line, focused) = self.state.update(cx, |state, cx| {
+        let input_state = self.state.clone();
+        let (state, disabled, multi_line, focused) = input_state.update(cx, |state, cx| {
             (
                 state.ensure_component(window, cx),
                 state.disabled,
@@ -253,8 +262,13 @@ impl RenderOnce for NyaInput {
         if focused {
             state.update(cx, |state, cx| state.focus(window, cx));
         }
+        input_state.update(cx, |input_state, cx| {
+            let component_focus = state.read(cx).focus_handle(cx);
+            input_state.focused =
+                input_state.focus.is_focused(window) || component_focus.is_focused(window);
+        });
         let input = Input::new(&state)
-            .small()
+            .xsmall()
             .appearance(false)
             .bordered(false)
             .focus_bordered(false)

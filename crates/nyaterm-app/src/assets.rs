@@ -31,12 +31,23 @@ pub struct NyaTermAssets;
 
 impl AssetSource for NyaTermAssets {
     fn load(&self, path: &str) -> Result<Option<Cow<'static, [u8]>>> {
-        Ok(EmbeddedAssets::get(path.trim_start_matches('/')).map(|file| file.data))
+        let path = path.trim_start_matches('/');
+        if let Some(file) = EmbeddedAssets::get(path) {
+            return Ok(Some(file.data));
+        }
+
+        // gpui-component's built-in controls address their bundled icons by
+        // names like `icons/search.svg`. Keep NyaTerm assets authoritative, then
+        // fall back to the component asset pack for paths we do not ship.
+        match gpui_component_assets::Assets.load(path) {
+            Ok(asset) => Ok(asset),
+            Err(_) => Ok(None),
+        }
     }
 
     fn list(&self, path: &str) -> Result<Vec<SharedString>> {
         let prefix = path.trim_start_matches('/').trim_end_matches('/');
-        Ok(EmbeddedAssets::iter()
+        let mut entries = EmbeddedAssets::iter()
             .filter(|entry| {
                 prefix.is_empty()
                     || entry
@@ -44,7 +55,15 @@ impl AssetSource for NyaTermAssets {
                         .is_some_and(|rest| rest.starts_with('/'))
             })
             .map(|entry| SharedString::from(entry.into_owned()))
-            .collect())
+            .collect::<Vec<_>>();
+        if let Ok(component_entries) = gpui_component_assets::Assets.list(prefix) {
+            for entry in component_entries {
+                if !entries.contains(&entry) {
+                    entries.push(entry);
+                }
+            }
+        }
+        Ok(entries)
     }
 }
 

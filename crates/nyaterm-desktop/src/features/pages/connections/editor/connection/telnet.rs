@@ -3,7 +3,7 @@ use gpui::{
     prelude::{
         FluentBuilder, InteractiveElement, ParentElement, StatefulInteractiveElement, Styled,
     },
-    px, rgb, rgba, svg,
+    px, rgb, svg,
 };
 
 use crate::features::{ConnectionEditorToggle, NyaTermApp};
@@ -163,7 +163,7 @@ pub(super) fn connection_editor_telnet_section(
                                 .rounded_md()
                                 .border_1()
                                 .border_color(rgb(palette.border))
-                                .bg(rgba((palette.accent << 8) | 0x18))
+                                .bg(rgb(palette.bg))
                                 .p_3()
                                 .flex()
                                 .flex_col()
@@ -211,7 +211,7 @@ pub(super) fn connection_editor_telnet_section(
                                 .rounded_md()
                                 .border_1()
                                 .border_color(rgb(palette.border))
-                                .bg(rgba((palette.accent << 8) | 0x18))
+                                .bg(rgb(palette.bg))
                                 .p_3()
                                 .flex()
                                 .flex_col()

@@ -352,11 +352,11 @@ impl NyaTermApp {
         event: &KeyDownEvent,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) {
+    ) -> bool {
         self.mark_user_activity();
         let keystroke = &event.keystroke;
         if keystroke.modifiers.alt || keystroke.modifiers.function {
-            return;
+            return false;
         }
 
         match keystroke.key.as_str() {
@@ -364,15 +364,15 @@ impl NyaTermApp {
                 if self.connection_state.editor_icon_picker_is_open() {
                     self.connection_state.close_editor_icon_picker();
                     cx.notify();
-                    return;
+                    return true;
                 }
                 if self.connection_state.editor_group_select_is_open() {
                     self.connection_state.close_editor_group_select();
                     cx.notify();
-                    return;
+                    return true;
                 }
                 self.close_connection_editor(cx);
-                return;
+                return true;
             }
             "enter" => {
                 if !keystroke.modifiers.platform
@@ -381,33 +381,24 @@ impl NyaTermApp {
                 {
                     self.connection_state.insert_editor_description_newline();
                     cx.notify();
-                    return;
+                    return true;
                 }
                 if self.connection_state.editor_new_group_field_is_focused(cx) {
                     self.commit_connection_editor_new_group(cx);
-                    return;
+                    return true;
                 }
                 self.save_connection_editor(window, cx);
-                return;
+                return true;
             }
             "tab" if !keystroke.modifiers.platform && !keystroke.modifiers.control => {
                 self.connection_state.advance_editor_focus();
                 cx.notify();
-                return;
+                return true;
             }
             _ => {}
         }
 
-        if keystroke.modifiers.platform || keystroke.modifiers.control {
-            return;
-        }
-
-        if self
-            .connection_state
-            .apply_editor_text_key(keystroke.key.as_str(), keystroke.key_char.as_deref())
-        {
-            cx.notify();
-        }
+        false
     }
 
     pub(in crate::features) fn save_connection_editor(

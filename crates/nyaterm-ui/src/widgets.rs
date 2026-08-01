@@ -1,10 +1,10 @@
 use crate::button::{NyaButton, NyaButtonVariant, NyaIconButton};
 use crate::theme::ThemePalette;
 use gpui::{
-    AnyElement, App, ClickEvent, FontWeight, Hsla, IntoElement, Pixels, RenderOnce, SharedString,
-    Window, div, prelude::*, px, rgb,
+    AnyElement, App, ClickEvent, FontWeight, Hsla, IntoElement, Pixels, RenderOnce, ScrollHandle,
+    SharedString, Window, div, prelude::*, px, rgb,
 };
-use gpui_component::scroll::ScrollableElement as _;
+use gpui_component::scroll::{Scrollbar, ScrollbarShow};
 
 fn platform_code_font_family() -> &'static str {
     if cfg!(target_os = "windows") {
@@ -42,17 +42,52 @@ impl NyaScrollArea {
 }
 
 impl RenderOnce for NyaScrollArea {
-    fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
-        let mut area = div()
-            .id(self.id)
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let id = self.id;
+        let scroll_id = SharedString::from(format!("{}/scroll", id.as_ref()));
+        let viewport_id = SharedString::from(format!("{}/viewport", id.as_ref()));
+        let scrollbar_layer_id = SharedString::from(format!("{}/scrollbar-layer", id.as_ref()));
+        let scrollbar_id = SharedString::from(format!("{}/scrollbar", id.as_ref()));
+        let scrollbar_layer_selector = scrollbar_layer_id.to_string();
+        let scroll_handle = window
+            .use_keyed_state(scroll_id, cx, |_, _| ScrollHandle::default())
+            .read(cx)
+            .clone();
+        let mut viewport = div()
+            .id(viewport_id)
+            .w_full()
             .flex()
             .flex_col()
             .children(self.children)
-            .overflow_y_scrollbar();
+            .overflow_y_scroll()
+            .scrollbar_width(px(6.))
+            .track_scroll(&scroll_handle);
         if let Some(max_height) = self.max_height {
-            area = area.max_h(max_height);
+            viewport = viewport.max_h(max_height);
         }
-        area
+
+        div()
+            .id(id.clone())
+            .w_full()
+            .relative()
+            .flex()
+            .flex_col()
+            .child(viewport)
+            .child(
+                div()
+                    .id(scrollbar_layer_id)
+                    .absolute()
+                    .top_0()
+                    .left_0()
+                    .right_0()
+                    .bottom_0()
+                    .debug_selector(move || scrollbar_layer_selector.clone())
+                    .child(
+                        Scrollbar::vertical(&scroll_handle)
+                            .id(scrollbar_id)
+                            .scrollbar_show(ScrollbarShow::Always),
+                    ),
+            )
     }
 }
 
@@ -194,4 +229,79 @@ pub fn svg_icon_button(
     NyaIconButton::new(id.into(), icon_path)
         .icon_size(px(icon_size))
         .on_click(on_click)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::NyaScrollArea;
+    use gpui::{
+        Context, Render, ScrollDelta, ScrollWheelEvent, TestAppContext, VisualTestContext, Window,
+        div, point, prelude::*, px,
+    };
+
+    struct MaxHeightScrollAreaFixture;
+
+    impl Render for MaxHeightScrollAreaFixture {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            div()
+                .w(px(120.))
+                .child(
+                    NyaScrollArea::new("max-height-scroll-area")
+                        .max_h(px(60.))
+                        .child(row("first-scroll-row"))
+                        .child(row("middle-scroll-row"))
+                        .child(row("last-scroll-row")),
+                )
+                .child(
+                    div()
+                        .h(px(10.))
+                        .flex_shrink_0()
+                        .debug_selector(|| "scroll-footer".to_string()),
+                )
+        }
+    }
+
+    fn row(selector: &'static str) -> impl IntoElement {
+        div()
+            .h(px(30.))
+            .flex_shrink_0()
+            .debug_selector(move || selector.to_string())
+    }
+
+    fn draw(cx: &mut VisualTestContext) {
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            _ = window.draw(cx);
+        });
+    }
+
+    fn scroll(cx: &mut VisualTestContext, dy: f32) {
+        cx.simulate_event(ScrollWheelEvent {
+            position: point(px(10.), px(10.)),
+            delta: ScrollDelta::Pixels(point(px(0.), px(dy))),
+            ..Default::default()
+        });
+        draw(cx);
+    }
+
+    #[gpui::test]
+    fn max_height_scroll_area_handles_wheel_events(cx: &mut TestAppContext) {
+        cx.update(gpui_component::init);
+        let (_, cx) = cx.add_window_view(|_, _| MaxHeightScrollAreaFixture);
+        let cx: &mut VisualTestContext = cx;
+        draw(cx);
+
+        let footer = cx.debug_bounds("scroll-footer").unwrap();
+        assert_eq!(footer.top(), px(60.));
+        assert!(
+            cx.debug_bounds("max-height-scroll-area/scrollbar-layer")
+                .is_some()
+        );
+
+        let initial_last_y = cx.debug_bounds("last-scroll-row").unwrap().origin.y;
+        scroll(cx, -30.);
+
+        let scrolled_last_y = cx.debug_bounds("last-scroll-row").unwrap().origin.y;
+        assert!(scrolled_last_y < initial_last_y);
+    }
 }

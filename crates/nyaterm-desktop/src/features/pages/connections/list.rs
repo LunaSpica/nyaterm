@@ -9,7 +9,10 @@ use gpui::{
 };
 use nyaterm_core::{Group, ProxyConfig, SavedConnection, natural_compare, truncate_preview};
 
-use crate::features::{NyaTermApp, format_last_used_ms};
+use crate::features::{
+    NyaTermApp, ORDINARY_INPUT_SHELL_PADDING_X_PX, format_last_used_ms, ordinary_input_focus_ring,
+    ordinary_input_shell_border_color,
+};
 use crate::models::{ConnectionEditorField, ConnectionEditorSelect, ConnectionSortMode};
 use nyaterm_ui::{
     NYA_FORM_CONTROL_HEIGHT_PX, NyaInput, NyaInputState, NyaNumberInput, NyaNumberInputState,
@@ -300,7 +303,31 @@ pub(super) fn connection_tree_indent_px(depth: usize) -> f32 {
 pub(super) struct ConnectionEditorChoice {
     pub value: Option<String>,
     pub label: String,
+    pub search_text: Option<String>,
+    pub subtitle: Option<String>,
     pub selected: bool,
+}
+
+impl ConnectionEditorChoice {
+    pub(super) fn new(value: Option<String>, label: impl Into<String>, selected: bool) -> Self {
+        Self {
+            value,
+            label: label.into(),
+            search_text: None,
+            subtitle: None,
+            selected,
+        }
+    }
+
+    pub(super) fn search_text(mut self, search_text: impl Into<String>) -> Self {
+        self.search_text = Some(search_text.into());
+        self
+    }
+
+    pub(super) fn subtitle(mut self, subtitle: impl Into<String>) -> Self {
+        self.subtitle = Some(subtitle.into());
+        self
+    }
 }
 
 pub(super) struct ConnectionEditorRenderContext<'a, 'cx> {
@@ -730,16 +757,15 @@ pub(super) fn editor_field_box(
         .h(px(EDITOR_CONTROL_HEIGHT_PX))
         .id("connection-list-search-input-shell")
         .min_w_0()
-        .px_2()
+        .px(px(ORDINARY_INPUT_SHELL_PADDING_X_PX))
         .flex()
         .items_center()
         .rounded_sm()
         .border_1()
-        .border_color(rgb(if focused {
-            palette.primary
-        } else {
-            palette.border
-        }))
+        .border_color(ordinary_input_shell_border_color(palette, focused))
+        .when(focused, |this| {
+            this.shadow(ordinary_input_focus_ring(palette))
+        })
         .bg(rgb(palette.input))
         .cursor_text()
         .when_some(handle, |row, handle| {

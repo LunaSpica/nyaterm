@@ -14,9 +14,9 @@
 use std::collections::HashMap;
 
 use gpui::{
-    AppContext, Context, Entity, InteractiveElement as _, IntoElement, ParentElement as _,
-    SharedString, StatefulInteractiveElement as _, Styled as _, Subscription, div,
-    prelude::FluentBuilder as _, px, rgb,
+    AppContext, BoxShadow, Context, Entity, InteractiveElement as _, IntoElement,
+    ParentElement as _, Rgba, SharedString, StatefulInteractiveElement as _, Styled as _,
+    Subscription, div, prelude::FluentBuilder as _, px, rgb,
 };
 use nyaterm_ui::{
     NYA_FORM_CONTROL_HEIGHT_PX, NyaInput, NyaInputEvent, NyaInputState, NyaNumberInput,
@@ -24,6 +24,28 @@ use nyaterm_ui::{
 };
 
 use super::NyaTermApp;
+
+pub(in crate::features) const ORDINARY_INPUT_SHELL_PADDING_X_PX: f32 = 4.;
+
+pub(in crate::features) fn ordinary_input_shell_border_color(
+    palette: crate::theme::ThemePalette,
+    focused: bool,
+) -> Rgba {
+    rgb(if focused {
+        palette.focus_ring
+    } else {
+        palette.border
+    })
+}
+
+pub(in crate::features) fn ordinary_input_focus_ring(
+    palette: crate::theme::ThemePalette,
+) -> Vec<BoxShadow> {
+    vec![
+        BoxShadow::new(px(0.), px(0.), rgb(palette.focus_ring).alpha(0.32).into())
+            .spread_radius(px(2.)),
+    ]
+}
 
 /// How a field should behave, for the one call that creates it.
 ///
@@ -153,15 +175,14 @@ impl NyaTermApp {
                 |this| this.h(px(NYA_FORM_CONTROL_HEIGHT_PX)).items_center(),
             )
             .min_w_0()
-            .px_2()
+            .px(px(ORDINARY_INPUT_SHELL_PADDING_X_PX))
             .flex()
             .rounded_sm()
             .border_1()
-            .border_color(rgb(if focused {
-                palette.primary
-            } else {
-                palette.border
-            }))
+            .border_color(ordinary_input_shell_border_color(palette, focused))
+            .when(focused, |this| {
+                this.shadow(ordinary_input_focus_ring(palette))
+            })
             .bg(rgb(palette.input))
             .cursor_text()
             .on_click(move |_, window, cx| {

@@ -1,7 +1,10 @@
 use gpui::{Context, IntoElement, KeyDownEvent, div, prelude::*, px, rgb};
 use nyaterm_ui::NyaInput;
 
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{
+    NyaTermApp, ORDINARY_INPUT_SHELL_PADDING_X_PX, TextInputSetup, ordinary_input_focus_ring,
+    ordinary_input_shell_border_color,
+};
 use crate::theme::ThemePalette;
 use crate::widgets::small_button;
 
@@ -25,6 +28,7 @@ impl NyaTermApp {
             cx,
         );
         let search_focus = search_field.read(cx).focus_handle();
+        let search_focused = search_field.read(cx).has_focus();
         let has_enabled_custom_credential = self
             .ai
             .settings_config()
@@ -79,10 +83,16 @@ impl NyaTermApp {
                                     .h(px(34.))
                                     .min_w_0()
                                     .flex_1()
-                                    .px_3()
+                                    .px(px(ORDINARY_INPUT_SHELL_PADDING_X_PX))
                                     .rounded_sm()
                                     .border_1()
-                                    .border_color(rgb(palette.border))
+                                    .border_color(ordinary_input_shell_border_color(
+                                        palette,
+                                        search_focused,
+                                    ))
+                                    .when(search_focused, |this| {
+                                        this.shadow(ordinary_input_focus_ring(palette))
+                                    })
                                     .bg(rgb(palette.input))
                                     .flex()
                                     .items_center()

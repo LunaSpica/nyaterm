@@ -7,8 +7,8 @@
 use std::collections::HashMap;
 
 use gpui::{
-    AppContext, Context, Entity, InteractiveElement as _, IntoElement, ParentElement as _,
-    SharedString, Styled as _, Subscription, div, px,
+    App, AppContext, Context, Entity, InteractiveElement as _, IntoElement, ParentElement as _,
+    SharedString, Styled as _, Subscription, Window, div, px,
 };
 use nyaterm_core::RiskLevel;
 use nyaterm_ui::{
@@ -72,6 +72,30 @@ impl NyaTermApp {
             select.set_disabled(disabled, cx);
         });
         select
+    }
+
+    pub(in crate::features) fn select_is_focused(
+        &self,
+        id: &str,
+        window: &Window,
+        cx: &App,
+    ) -> bool {
+        self.selects
+            .fields
+            .get(id)
+            .is_some_and(|select| select.read(cx).is_focused(window, cx))
+    }
+
+    pub(in crate::features) fn select_menu_is_focused(
+        &self,
+        id: &str,
+        window: &Window,
+        cx: &App,
+    ) -> bool {
+        self.selects
+            .fields
+            .get(id)
+            .is_some_and(|select| select.read(cx).is_menu_focused(window, cx))
     }
 
     pub(in crate::features) fn select_control<I>(
