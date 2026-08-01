@@ -262,7 +262,6 @@ struct TerminalKeywordByteCell {
     row: usize,
     start_col: usize,
     end_col: usize,
-    allow_keyword: bool,
 }
 
 fn terminal_keyword_wrapped_group_bounds(
@@ -340,7 +339,6 @@ fn terminal_keyword_ranges_for_wrapped_group(
                 row,
                 start_col,
                 end_col,
-                allow_keyword: cell.hyperlink.is_none(),
             }));
         }
     }
@@ -353,9 +351,6 @@ fn terminal_keyword_ranges_for_wrapped_group(
             continue;
         }
         for cell in &byte_cells[start..end] {
-            if !cell.allow_keyword {
-                continue;
-            }
             let row_idx = cell.row.saturating_sub(rows.start);
             if let Some(ranges) = row_ranges.get_mut(row_idx) {
                 if let Some(previous) = ranges.last_mut()
@@ -381,35 +376,107 @@ pub(super) fn keyword_matches_compiled(
     line: &str,
     compiled: &[(regex::Regex, u32)],
 ) -> Vec<(usize, usize, u32)> {
+    let mut pending = compiled
+        .iter()
+        .enumerate()
+        .map(|(priority, (regex, color))| {
+            find_next_non_empty_match(regex, line, 0).map(|(start, end)| PendingKeywordMatch {
+                start,
+                end,
+                color: *color,
+                priority,
+            })
+        })
+        .collect::<Vec<_>>();
     let mut matches = Vec::new();
     let mut cursor = 0;
-    while cursor < line.len() {
-        let mut best: Option<(usize, usize, u32)> = None;
-        for (regex, color) in compiled {
-            if let Some(found) = regex.find_at(line, cursor) {
-                let start = found.start();
-                let end = found.end();
-                if end <= start {
-                    continue;
-                }
-                let replace = best
-                    .map(|(best_start, best_end, _)| {
-                        start < best_start || (start == best_start && end > best_end)
-                    })
-                    .unwrap_or(true);
-                if replace {
-                    best = Some((start, end, *color));
-                }
+
+    loop {
+        for (priority, ((regex, color), candidate)) in
+            compiled.iter().zip(pending.iter_mut()).enumerate()
+        {
+            if candidate.is_some_and(|candidate| candidate.start < cursor) {
+                *candidate = find_next_non_empty_match(regex, line, cursor).map(|(start, end)| {
+                    PendingKeywordMatch {
+                        start,
+                        end,
+                        color: *color,
+                        priority,
+                    }
+                });
             }
         }
 
-        let Some((start, end, color)) = best else {
+        let Some(best) = pending
+            .iter()
+            .flatten()
+            .copied()
+            .reduce(|current, candidate| {
+                if keyword_match_is_better(candidate, current) {
+                    candidate
+                } else {
+                    current
+                }
+            })
+        else {
             break;
         };
-        matches.push((start, end, color));
-        cursor = end;
+
+        debug_assert!(best.start >= cursor);
+        debug_assert!(best.end > best.start);
+        matches.push((best.start, best.end, best.color));
+        cursor = best.end;
+        if cursor >= line.len() {
+            break;
+        }
     }
+
     matches
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct PendingKeywordMatch {
+    start: usize,
+    end: usize,
+    color: u32,
+    priority: usize,
+}
+
+fn keyword_match_is_better(candidate: PendingKeywordMatch, current: PendingKeywordMatch) -> bool {
+    candidate.start < current.start
+        || (candidate.start == current.start && candidate.end > current.end)
+        || (candidate.start == current.start
+            && candidate.end == current.end
+            && candidate.priority < current.priority)
+}
+
+fn find_next_non_empty_match(
+    regex: &regex::Regex,
+    line: &str,
+    start: usize,
+) -> Option<(usize, usize)> {
+    let mut cursor = start;
+    while cursor < line.len() {
+        let found = regex.find_at(line, cursor)?;
+        let start = found.start();
+        let end = found.end();
+        if end > start {
+            return Some((start, end));
+        }
+        cursor = next_char_boundary(line, start)?;
+    }
+    None
+}
+
+fn next_char_boundary(line: &str, start: usize) -> Option<usize> {
+    if start >= line.len() {
+        return None;
+    }
+    line[start..]
+        .char_indices()
+        .nth(1)
+        .map(|(offset, _)| start + offset)
+        .or(Some(line.len()))
 }
 
 pub fn compile_terminal_keyword_highlighter(
@@ -462,41 +529,23 @@ pub(super) fn keyword_highlight_spans_compiled(
         }];
     }
 
+    let matches = keyword_matches_compiled(line, compiled);
+    if matches.is_empty() {
+        return vec![TerminalHighlightSpan {
+            text: line.to_string(),
+            color: None,
+            bg: None,
+            keyword: false,
+            underline: false,
+            strikeout: false,
+            bold: false,
+            italic: false,
+        }];
+    }
+
     let mut spans = Vec::new();
     let mut cursor = 0;
-    while cursor < line.len() {
-        let mut best: Option<(usize, usize, u32)> = None;
-        for (regex, color) in compiled {
-            if let Some(found) = regex.find_at(line, cursor) {
-                let start = found.start();
-                let end = found.end();
-                if end <= start {
-                    continue;
-                }
-                let replace = best
-                    .map(|(best_start, best_end, _)| {
-                        start < best_start || (start == best_start && end > best_end)
-                    })
-                    .unwrap_or(true);
-                if replace {
-                    best = Some((start, end, *color));
-                }
-            }
-        }
-
-        let Some((start, end, color)) = best else {
-            spans.push(TerminalHighlightSpan {
-                text: line[cursor..].to_string(),
-                color: None,
-                bg: None,
-                keyword: false,
-                underline: false,
-                strikeout: false,
-                bold: false,
-                italic: false,
-            });
-            break;
-        };
+    for (start, end, color) in matches {
         if start > cursor {
             spans.push(TerminalHighlightSpan {
                 text: line[cursor..start].to_string(),
@@ -522,9 +571,9 @@ pub(super) fn keyword_highlight_spans_compiled(
         cursor = end;
     }
 
-    if spans.is_empty() {
+    if cursor < line.len() {
         spans.push(TerminalHighlightSpan {
-            text: " ".to_string(),
+            text: line[cursor..].to_string(),
             color: None,
             bg: None,
             keyword: false,
@@ -689,8 +738,9 @@ mod tests {
 
     use super::{
         TerminalKeywordHighlightLookup, compile_terminal_keyword_highlighter,
-        keyword_highlight_spans_compiled, precompute_terminal_keyword_highlights,
-        precompute_terminal_keyword_highlights_for_rows, terminal_buffer_matches,
+        keyword_highlight_spans_compiled, keyword_matches_compiled,
+        precompute_terminal_keyword_highlights, precompute_terminal_keyword_highlights_for_rows,
+        terminal_buffer_matches,
     };
     use crate::element::TerminalSearchFlags;
     use crate::types::TerminalKeywordRange;
@@ -790,6 +840,41 @@ mod tests {
         shifted
     }
 
+    fn keyword_matches_reference(
+        line: &str,
+        compiled: &[(regex::Regex, u32)],
+    ) -> Vec<(usize, usize, u32)> {
+        let mut matches = Vec::new();
+        let mut cursor = 0;
+        while cursor < line.len() {
+            let mut best: Option<(usize, usize, u32)> = None;
+            for (regex, color) in compiled {
+                if let Some(found) = regex.find_at(line, cursor) {
+                    let start = found.start();
+                    let end = found.end();
+                    if end <= start {
+                        continue;
+                    }
+                    let replace = best
+                        .map(|(best_start, best_end, _)| {
+                            start < best_start || (start == best_start && end > best_end)
+                        })
+                        .unwrap_or(true);
+                    if replace {
+                        best = Some((start, end, *color));
+                    }
+                }
+            }
+
+            let Some((start, end, color)) = best else {
+                break;
+            };
+            matches.push((start, end, color));
+            cursor = end;
+        }
+        matches
+    }
+
     #[test]
     fn keyword_highlights_keep_earliest_longest_and_rule_priority() {
         let compiled = vec![
@@ -797,6 +882,11 @@ mod tests {
             (regex::Regex::new("ERROR").unwrap(), 2),
             (regex::Regex::new("ERROR").unwrap(), 3),
         ];
+
+        assert_eq!(
+            keyword_matches_compiled("x ERROR ERR", &compiled),
+            vec![(2, 7, 2), (8, 11, 1)]
+        );
 
         let spans = keyword_highlight_spans_compiled("x ERROR ERR", &compiled);
 
@@ -809,6 +899,134 @@ mod tests {
         );
         assert_eq!(spans[1].color, Some(2));
         assert_eq!(spans[3].color, Some(1));
+    }
+
+    #[test]
+    fn keyword_matches_return_contiguous_matches_for_one_rule() {
+        let compiled = vec![(regex::Regex::new("ERROR").unwrap(), 0xff2244)];
+
+        assert_eq!(
+            keyword_matches_compiled("ERROR ERROR ERROR", &compiled),
+            vec![(0, 5, 0xff2244), (6, 11, 0xff2244), (12, 17, 0xff2244)]
+        );
+    }
+
+    #[test]
+    fn keyword_matches_choose_longest_match_at_same_start() {
+        let compiled = vec![
+            (regex::Regex::new("ERR").unwrap(), 1),
+            (regex::Regex::new("ERROR").unwrap(), 2),
+        ];
+
+        assert_eq!(
+            keyword_matches_compiled("ERROR", &compiled),
+            vec![(0, 5, 2)]
+        );
+    }
+
+    #[test]
+    fn keyword_matches_keep_first_rule_for_identical_range() {
+        let compiled = vec![
+            (regex::Regex::new("ERROR").unwrap(), 1),
+            (regex::Regex::new("ERROR").unwrap(), 2),
+        ];
+
+        assert_eq!(
+            keyword_matches_compiled("ERROR", &compiled),
+            vec![(0, 5, 1)]
+        );
+    }
+
+    #[test]
+    fn keyword_matches_refresh_overlapped_candidate_after_cursor_moves() {
+        let compiled = vec![
+            (regex::Regex::new("XXa12").unwrap(), 1),
+            (regex::Regex::new("a.*?b").unwrap(), 2),
+        ];
+
+        assert_eq!(
+            keyword_matches_compiled("XXa12a3b", &compiled),
+            vec![(0, 5, 1), (5, 8, 2)]
+        );
+    }
+
+    #[test]
+    fn keyword_matches_preserve_unicode_byte_boundaries() {
+        let line = "前ERROR后";
+        let compiled = vec![(regex::Regex::new("ERROR").unwrap(), 0xff2244)];
+        let matches = keyword_matches_compiled(line, &compiled);
+
+        assert_eq!(matches, vec![(3, 8, 0xff2244)]);
+        for (start, end, _) in matches {
+            assert_eq!(&line[start..end], "ERROR");
+        }
+    }
+
+    #[test]
+    fn keyword_matches_skip_zero_length_rules_without_losing_later_matches() {
+        let compiled = vec![
+            (regex::Regex::new("^").unwrap(), 1),
+            (regex::Regex::new(r"\b").unwrap(), 2),
+            (regex::Regex::new("a*").unwrap(), 3),
+            (regex::Regex::new("ERROR").unwrap(), 4),
+        ];
+
+        assert_eq!(
+            keyword_matches_compiled("b ERROR", &compiled),
+            vec![(2, 7, 4)]
+        );
+    }
+
+    #[test]
+    fn keyword_highlight_spans_follow_compiled_matches() {
+        let line = "pre ERROR mid WARN end";
+        let compiled = vec![
+            (regex::Regex::new("ERROR").unwrap(), 0xff2244),
+            (regex::Regex::new("WARN").unwrap(), 0xffcc00),
+        ];
+        let matches = keyword_matches_compiled(line, &compiled);
+        let spans = keyword_highlight_spans_compiled(line, &compiled);
+
+        assert_eq!(matches, vec![(4, 9, 0xff2244), (14, 18, 0xffcc00)]);
+        assert_eq!(
+            spans
+                .iter()
+                .map(|span| (span.text.as_str(), span.color, span.keyword))
+                .collect::<Vec<_>>(),
+            vec![
+                ("pre ", None, false),
+                ("ERROR", Some(0xff2244), true),
+                (" mid ", None, false),
+                ("WARN", Some(0xffcc00), true),
+                (" end", None, false),
+            ]
+        );
+    }
+
+    #[test]
+    fn keyword_matches_match_reference_for_non_empty_regexes() {
+        let cases = vec![
+            ("plain text", vec![("ERROR", 1)]),
+            ("ERROR ERROR", vec![("ERROR", 1)]),
+            ("abc ERROR xyz WARN", vec![("WARN", 1), ("ERROR", 2)]),
+            ("ERROR", vec![("ERR", 1), ("ERROR", 2)]),
+            ("ERROR", vec![("ERROR", 1), ("ERROR", 2)]),
+            ("abcdef", vec![("abcde", 1), ("cdef", 2), ("def", 3)]),
+            ("界ERROR后 WARN", vec![("ERROR", 1), ("WARN", 2)]),
+        ];
+
+        for (line, patterns) in cases {
+            let compiled = patterns
+                .into_iter()
+                .map(|(pattern, color)| (regex::Regex::new(pattern).unwrap(), color))
+                .collect::<Vec<_>>();
+
+            assert_eq!(
+                keyword_matches_compiled(line, &compiled),
+                keyword_matches_reference(line, &compiled),
+                "line: {line}"
+            );
+        }
     }
 
     #[test]
@@ -868,7 +1086,7 @@ mod tests {
     }
 
     #[test]
-    fn precomputed_keyword_snapshot_skips_hyperlinked_cells() {
+    fn precomputed_keyword_snapshot_highlights_hyperlinked_cells() {
         let mut snapshot = TerminalScreen::default().snapshot();
         set_snapshot_row(&mut snapshot, 0, "ERROR ERROR", 7);
         set_snapshot_row_hyperlink(&mut snapshot, 0, 6, 11, "https://example.com");
@@ -891,16 +1109,23 @@ mod tests {
 
         assert_eq!(
             ranges.as_slice(),
-            &[TerminalKeywordRange {
-                start_col: 0,
-                end_col: 5,
-                color: 0xff2244,
-            }]
+            &[
+                TerminalKeywordRange {
+                    start_col: 0,
+                    end_col: 5,
+                    color: 0xff2244,
+                },
+                TerminalKeywordRange {
+                    start_col: 6,
+                    end_col: 11,
+                    color: 0xff2244,
+                }
+            ]
         );
     }
 
     #[test]
-    fn precomputed_keyword_snapshot_keeps_motd_version_but_skips_hyperlink_url() {
+    fn precomputed_keyword_snapshot_keeps_motd_version_and_hyperlink_url() {
         let mut snapshot = TerminalScreen::default().snapshot();
         let line = "Ubuntu 24.04.4 https://help.ubuntu.com";
         set_snapshot_row(&mut snapshot, 0, line, 7);
@@ -924,11 +1149,18 @@ mod tests {
 
         assert_eq!(
             ranges.as_slice(),
-            &[TerminalKeywordRange {
-                start_col: "Ubuntu ".len(),
-                end_col: "Ubuntu 24.04.4".len(),
-                color: 0xff9e64,
-            }]
+            &[
+                TerminalKeywordRange {
+                    start_col: "Ubuntu ".len(),
+                    end_col: "Ubuntu 24.04.4".len(),
+                    color: 0xff9e64,
+                },
+                TerminalKeywordRange {
+                    start_col: "Ubuntu 24.04.4 ".len(),
+                    end_col: line.len(),
+                    color: 0x8be9fd,
+                }
+            ]
         );
     }
 

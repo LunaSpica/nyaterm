@@ -724,7 +724,7 @@ fn row_layout_key_ignores_dynamic_link_underlines() {
 }
 
 #[test]
-fn row_layout_key_tracks_link_ranges_when_keyword_rules_can_paint() {
+fn row_layout_key_ignores_link_ranges_when_keyword_rules_can_paint() {
     let mut snapshot = TerminalScreen::default().snapshot();
     edit_snapshot_row(&mut snapshot, 0, |row| {
         row.text = "https://help.ubuntu.com".to_string();
@@ -765,7 +765,7 @@ fn row_layout_key_tracks_link_ranges_when_keyword_rules_can_paint() {
     let linked_paint_key = linked.paint_style_key(rules_key);
     let linked_empty_key = linked.paint_style_key(0);
 
-    assert_ne!(
+    assert_eq!(
         base.row_layout_cache_keys(0, base_paint_key, base_empty_key)
             .0,
         linked

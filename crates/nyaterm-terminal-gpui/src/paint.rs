@@ -261,33 +261,12 @@ pub(super) fn terminal_highlight_spans_with_keyword_ranges(
     compress_flat_cells(flat.into_iter().map(|cell| cell.cell).collect())
 }
 
-pub(super) fn terminal_hyperlink_keyword_exclusion_ranges(
-    row: Option<&nyaterm_terminal::TerminalSnapshotRow>,
-) -> Vec<(usize, usize)> {
-    row.map(|row| {
-        row.hyperlinks
-            .iter()
-            .filter_map(|span| {
-                let start = span.start_col;
-                let end = span.end_col.saturating_add(1);
-                (end > start).then_some((start, end))
-            })
-            .collect()
-    })
-    .unwrap_or_default()
-}
-
 pub(super) fn terminal_keyword_exclusion_ranges(
-    row: Option<&nyaterm_terminal::TerminalSnapshotRow>,
-    link_ranges: &[(usize, usize)],
+    _row: Option<&nyaterm_terminal::TerminalSnapshotRow>,
+    _link_ranges: &[(usize, usize)],
 ) -> Vec<(usize, usize)> {
-    let mut ranges = terminal_hyperlink_keyword_exclusion_ranges(row);
-    ranges.extend(
-        link_ranges
-            .iter()
-            .filter_map(|&(start, end)| (end > start).then_some((start, end))),
-    );
-    ranges
+    // Link underlines are independent decorations, so links do not need to suppress keyword color.
+    Vec::new()
 }
 
 fn apply_keyword_exclusion_ranges(
@@ -622,7 +601,7 @@ mod tests {
     }
 
     #[test]
-    fn keyword_ranges_skip_hyperlink_exclusion_ranges() {
+    fn keyword_ranges_respect_explicit_exclusion_ranges() {
         let palette = nyaterm_ui::theme_palette("github-dark");
         let spans = terminal_highlight_spans_with_keyword_ranges(
             "ERROR ERROR",
@@ -652,7 +631,7 @@ mod tests {
     }
 
     #[test]
-    fn compiled_keyword_highlights_skip_hyperlink_exclusion_ranges() {
+    fn compiled_keyword_highlights_respect_explicit_exclusion_ranges() {
         let palette = nyaterm_ui::theme_palette("github-dark");
         let compiled = vec![(regex::Regex::new("ERROR").unwrap(), 0xff2244)];
         let spans = terminal_highlight_spans_compiled(
@@ -675,7 +654,7 @@ mod tests {
     }
 
     #[test]
-    fn action_link_range_skips_keyword_but_keeps_underline() {
+    fn action_link_range_keeps_keyword_and_underline() {
         let palette = nyaterm_ui::theme_palette("github-dark");
         let compiled = vec![(regex::Regex::new("ERROR").unwrap(), 0xff2244)];
         let link_ranges = [(6, 11)];
@@ -698,17 +677,13 @@ mod tests {
         assert!(flat[0..5].iter().all(|cell| !cell.underline));
         assert!(!flat[5].keyword);
         assert!(!flat[5].underline);
-        assert!(flat[6..11].iter().all(|cell| !cell.keyword));
+        assert!(flat[6..11].iter().all(|cell| cell.keyword));
         assert!(flat[6..11].iter().all(|cell| cell.underline));
-        assert!(
-            flat[6..11]
-                .iter()
-                .all(|cell| cell.color == Some(palette.accent))
-        );
+        assert!(flat[6..11].iter().all(|cell| cell.color == Some(0xff2244)));
     }
 
     #[test]
-    fn motd_action_link_urls_skip_keyword_but_version_stays_highlighted() {
+    fn motd_action_link_urls_keep_keyword_and_underline() {
         let palette = nyaterm_ui::theme_palette("github-dark");
         let line = "Welcome to Ubuntu 24.04.4 LTS\n * Documentation: https://help.ubuntu.com\n * Management: https://landscape.canonical.com\n * Support: https://ubuntu.com/pro";
         let rules = nyaterm_core::get_builtin_keyword_rules(true);
@@ -749,12 +724,18 @@ mod tests {
         for (idx, url) in urls.iter().enumerate() {
             let (start, end) = link_ranges[idx];
             assert!(
-                flat[start..end].iter().all(|cell| !cell.keyword),
-                "url should not contain keyword spans: {url}"
+                flat[start..end].iter().all(|cell| cell.keyword),
+                "url should keep keyword spans: {url}"
             );
             assert!(
                 flat[start..end].iter().all(|cell| cell.underline),
                 "url should stay underlined: {url}"
+            );
+            assert!(
+                flat[start..end]
+                    .iter()
+                    .all(|cell| cell.color == Some(0x8be9fd)),
+                "url should keep URL keyword color: {url}"
             );
         }
     }
