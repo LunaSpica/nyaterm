@@ -30,7 +30,6 @@ pub(in crate::features) struct SendCommandFeatureFocus {
 struct SendCommandComposerState {
     draft: String,
     focus: FocusHandle,
-    control_focus: Option<SendCommandControlFocus>,
     hex_scroll_x: f32,
     hex_scroll_y: f32,
 }
@@ -60,7 +59,6 @@ struct SendCommandProgressState {
 #[derive(Debug, Clone, PartialEq)]
 pub(in crate::features) struct SendCommandPresentationState {
     pub draft: String,
-    pub control_focus: Option<SendCommandControlFocus>,
     pub hex_scroll_x: f32,
     pub hex_scroll_y: f32,
     pub data_type: SendCommandDataType,
@@ -97,7 +95,6 @@ impl SendCommandFeatureState {
             composer: SendCommandComposerState {
                 draft: String::new(),
                 focus: focus.editor,
-                control_focus: None,
                 hex_scroll_x: 0.,
                 hex_scroll_y: 0.,
             },
@@ -125,7 +122,6 @@ impl SendCommandFeatureState {
     pub(in crate::features) fn presentation(&self) -> SendCommandPresentationState {
         SendCommandPresentationState {
             draft: self.composer.draft.clone(),
-            control_focus: self.composer.control_focus,
             hex_scroll_x: self.composer.hex_scroll_x,
             hex_scroll_y: self.composer.hex_scroll_y,
             data_type: self.options.data_type,
@@ -154,45 +150,6 @@ impl SendCommandFeatureState {
         &self.options.target
     }
 
-    pub(in crate::features) fn begin_control_edit(
-        &mut self,
-        control: SendCommandControlFocus,
-    ) -> Option<String> {
-        if self.progress.sending {
-            return None;
-        }
-        self.composer.control_focus = Some(control);
-        Some(match control {
-            SendCommandControlFocus::Count => self.sync_count_input(),
-            SendCommandControlFocus::Interval => self.sync_interval_input(),
-        })
-    }
-
-    pub(in crate::features) fn control_focus(&self) -> Option<SendCommandControlFocus> {
-        self.composer.control_focus
-    }
-
-    pub(in crate::features) fn finish_control_edit(
-        &mut self,
-    ) -> Option<(SendCommandControlFocus, String)> {
-        let control = self.composer.control_focus?;
-        match control {
-            SendCommandControlFocus::Count => self.options.apply_count_input(false),
-            SendCommandControlFocus::Interval => self.options.apply_interval_input(false),
-        }
-        self.composer.control_focus = None;
-        let value = match control {
-            SendCommandControlFocus::Count => self.sync_count_input(),
-            SendCommandControlFocus::Interval => self.sync_interval_input(),
-        };
-        Some((control, value))
-    }
-
-    pub(in crate::features) fn cancel_control_edit(&mut self) -> (String, String) {
-        self.composer.control_focus = None;
-        (self.sync_count_input(), self.sync_interval_input())
-    }
-
     pub(in crate::features) fn apply_control_input(
         &mut self,
         control: SendCommandControlFocus,
@@ -201,7 +158,6 @@ impl SendCommandFeatureState {
         if self.progress.sending {
             return false;
         }
-        self.composer.control_focus = Some(control);
         match control {
             SendCommandControlFocus::Count => {
                 self.options.count_input = value;
@@ -325,20 +281,6 @@ impl SendCommandFeatureState {
         }
         self.options.target = target;
         true
-    }
-
-    pub(in crate::features) fn adjust_count(&mut self, delta: i32) -> Option<String> {
-        if self.progress.sending {
-            return None;
-        }
-        // Tauri: decrement from 1 -> infinity; increment from infinity -> 1.
-        self.options.count = match (self.options.count, delta) {
-            (None, d) if d < 0 => None,
-            (None, _) => Some(1),
-            (Some(1), d) if d < 0 => None,
-            (Some(n), d) => Some((n as i32 + d).clamp(1, 9999) as u32),
-        };
-        Some(self.sync_count_input())
     }
 
     pub(in crate::features) fn reset_default_interval(&mut self) -> String {
@@ -552,25 +494,21 @@ mod tests {
         let cx = TestAppContext::single();
         let mut state = send_command_state(&cx);
 
-        assert_eq!(state.adjust_count(-1), Some("∞".to_string()));
+        assert!(state.apply_control_input(SendCommandControlFocus::Count, "∞".to_string()));
         assert_eq!(
-            state.begin_control_edit(SendCommandControlFocus::Count),
-            Some("∞".to_string())
+            state.synced_control_input(SendCommandControlFocus::Count),
+            "∞"
         );
         assert!(state.apply_control_input(SendCommandControlFocus::Count, "25".to_string()));
         assert_eq!(
-            state.finish_control_edit(),
-            Some((SendCommandControlFocus::Count, "25".to_string()))
+            state.synced_control_input(SendCommandControlFocus::Count),
+            "25"
         );
 
-        assert_eq!(
-            state.begin_control_edit(SendCommandControlFocus::Interval),
-            Some("1.00".to_string())
-        );
         assert!(state.apply_control_input(SendCommandControlFocus::Interval, "999".to_string()));
         assert_eq!(
-            state.finish_control_edit(),
-            Some((SendCommandControlFocus::Interval, "60.00".to_string()))
+            state.synced_control_input(SendCommandControlFocus::Interval),
+            "60.00"
         );
     }
 

@@ -40,18 +40,6 @@ impl NyaTermApp {
         }
     }
 
-    pub(in crate::features) fn adjust_terminal_scrollback_lines(
-        &mut self,
-        delta: i32,
-        cx: &mut Context<Self>,
-    ) {
-        self.settings.adjust_terminal_scrollback_lines(delta);
-        if !self.shell.has_settings_draft() {
-            self.enforce_terminal_scrollback_limit();
-        }
-        self.save_terminal_settings(cx);
-    }
-
     pub(in crate::features) fn set_terminal_scrollback_lines(
         &mut self,
         value: u32,
@@ -61,15 +49,6 @@ impl NyaTermApp {
         if !self.shell.has_settings_draft() {
             self.enforce_terminal_scrollback_limit();
         }
-        self.save_terminal_settings(cx);
-    }
-
-    pub(in crate::features) fn adjust_terminal_keep_alive_interval(
-        &mut self,
-        delta: i32,
-        cx: &mut Context<Self>,
-    ) {
-        self.settings.adjust_terminal_keep_alive_interval(delta);
         self.save_terminal_settings(cx);
     }
 
@@ -123,15 +102,6 @@ impl NyaTermApp {
         self.save_terminal_settings(cx);
     }
 
-    pub(in crate::features) fn adjust_remote_stats_interval(
-        &mut self,
-        delta: i32,
-        cx: &mut Context<Self>,
-    ) {
-        self.settings.adjust_remote_stats_interval(delta);
-        self.save_terminal_settings(cx);
-    }
-
     pub(in crate::features) fn set_remote_stats_interval(
         &mut self,
         value: u32,
@@ -146,15 +116,6 @@ impl NyaTermApp {
         self.save_terminal_settings(cx);
     }
 
-    pub(in crate::features) fn adjust_process_manager_interval(
-        &mut self,
-        delta: i32,
-        cx: &mut Context<Self>,
-    ) {
-        self.settings.adjust_process_manager_interval(delta);
-        self.save_terminal_settings(cx);
-    }
-
     pub(in crate::features) fn set_process_manager_interval(
         &mut self,
         value: u32,
@@ -166,15 +127,6 @@ impl NyaTermApp {
 
     pub(in crate::features) fn toggle_docker_manager_panel(&mut self, cx: &mut Context<Self>) {
         self.settings.toggle_docker_manager_panel();
-        self.save_terminal_settings(cx);
-    }
-
-    pub(in crate::features) fn adjust_docker_manager_interval(
-        &mut self,
-        delta: i32,
-        cx: &mut Context<Self>,
-    ) {
-        self.settings.adjust_docker_manager_interval(delta);
         self.save_terminal_settings(cx);
     }
 

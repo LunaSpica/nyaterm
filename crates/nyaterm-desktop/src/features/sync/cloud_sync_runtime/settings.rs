@@ -65,21 +65,6 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn adjust_cloud_sync_debounce(
-        &mut self,
-        delta: i64,
-        cx: &mut Context<Self>,
-    ) {
-        if !self.cloud_sync_form_enabled()
-            || !self.cloud_sync.settings().enabled
-            || !self.cloud_sync.settings().auto_push_on_change
-        {
-            return;
-        }
-        self.cloud_sync.adjust_debounce(delta);
-        cx.notify();
-    }
-
     pub(in crate::features) fn set_cloud_sync_debounce(
         &mut self,
         value: u64,

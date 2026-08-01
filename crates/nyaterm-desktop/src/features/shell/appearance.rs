@@ -452,12 +452,6 @@ impl NyaTermApp {
         }
     }
 
-    pub(in crate::features) fn adjust_ui_font_size(&mut self, delta: i16, cx: &mut Context<Self>) {
-        let next = (self.settings.summary().ui_font_size as i16 + delta).clamp(12, 24) as u16;
-        self.settings.set_ui_font_size(next);
-        self.save_appearance_settings(cx);
-    }
-
     pub(in crate::features) fn set_ui_font_size_from_input(
         &mut self,
         size: u16,

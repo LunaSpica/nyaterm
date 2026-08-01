@@ -259,34 +259,14 @@ impl SettingsFeatureState {
         self.summary.interaction_command_suggestions_enabled
     }
 
-    pub(in crate::features) fn adjust_command_suggestion_min_chars(&mut self, delta: i32) {
-        let max_chars = self.summary.interaction_command_suggestion_max_chars;
-        self.summary.interaction_command_suggestion_min_chars =
-            (self.summary.interaction_command_suggestion_min_chars as i32 + delta)
-                .clamp(1, max_chars as i32) as u32;
-    }
-
     pub(in crate::features) fn set_command_suggestion_min_chars(&mut self, value: u32) {
         let max_chars = self.summary.interaction_command_suggestion_max_chars;
         self.summary.interaction_command_suggestion_min_chars = value.clamp(1, max_chars);
     }
 
-    pub(in crate::features) fn adjust_command_suggestion_max_chars(&mut self, delta: i32) {
-        let min_chars = self.summary.interaction_command_suggestion_min_chars;
-        self.summary.interaction_command_suggestion_max_chars =
-            (self.summary.interaction_command_suggestion_max_chars as i32 + delta)
-                .clamp(min_chars as i32, 500) as u32;
-    }
-
     pub(in crate::features) fn set_command_suggestion_max_chars(&mut self, value: u32) {
         let min_chars = self.summary.interaction_command_suggestion_min_chars;
         self.summary.interaction_command_suggestion_max_chars = value.clamp(min_chars, 500);
-    }
-
-    pub(in crate::features) fn adjust_duplicate_session_command_delay(&mut self, delta_ms: i32) {
-        self.summary.interaction_duplicate_session_command_delay_ms =
-            (self.summary.interaction_duplicate_session_command_delay_ms as i32 + delta_ms)
-                .clamp(0, 60_000) as u32;
     }
 
     pub(in crate::features) fn set_duplicate_session_command_delay(&mut self, value_ms: u32) {
@@ -314,11 +294,6 @@ impl SettingsFeatureState {
         self.summary.enable_screen_lock = !self.summary.enable_screen_lock;
     }
 
-    pub(in crate::features) fn adjust_idle_lock_minutes(&mut self, delta: i32) {
-        self.summary.idle_lock_minutes =
-            (self.summary.idle_lock_minutes as i32 + delta).clamp(0, 1440) as u32;
-    }
-
     pub(in crate::features) fn set_idle_lock_minutes(&mut self, value: u32) {
         self.summary.idle_lock_minutes = value.clamp(0, 1440);
     }
@@ -336,18 +311,8 @@ impl SettingsFeatureState {
         self.summary.terminal_low_latency_mode
     }
 
-    pub(in crate::features) fn adjust_terminal_scrollback_lines(&mut self, delta: i32) {
-        self.summary.terminal_scrollback_lines =
-            (self.summary.terminal_scrollback_lines as i32 + delta).clamp(100, 100_000) as u32;
-    }
-
     pub(in crate::features) fn set_terminal_scrollback_lines(&mut self, value: u32) {
         self.summary.terminal_scrollback_lines = value.clamp(100, 100_000);
-    }
-
-    pub(in crate::features) fn adjust_terminal_keep_alive_interval(&mut self, delta: i32) {
-        self.summary.terminal_keep_alive_interval =
-            (self.summary.terminal_keep_alive_interval as i32 + delta).clamp(0, 600) as u32;
     }
 
     pub(in crate::features) fn set_terminal_keep_alive_interval(&mut self, value: u32) {
@@ -385,11 +350,6 @@ impl SettingsFeatureState {
         self.summary.ui_show_remote_stats = !self.summary.ui_show_remote_stats;
     }
 
-    pub(in crate::features) fn adjust_remote_stats_interval(&mut self, delta: i32) {
-        self.summary.ui_remote_stats_interval =
-            (self.summary.ui_remote_stats_interval as i32 + delta).clamp(1, 60) as u32;
-    }
-
     pub(in crate::features) fn set_remote_stats_interval(&mut self, value: u32) {
         self.summary.ui_remote_stats_interval = value.clamp(1, 60);
     }
@@ -398,22 +358,12 @@ impl SettingsFeatureState {
         self.summary.ui_show_process_manager = !self.summary.ui_show_process_manager;
     }
 
-    pub(in crate::features) fn adjust_process_manager_interval(&mut self, delta: i32) {
-        self.summary.ui_process_manager_interval =
-            (self.summary.ui_process_manager_interval as i32 + delta).clamp(3, 120) as u32;
-    }
-
     pub(in crate::features) fn set_process_manager_interval(&mut self, value: u32) {
         self.summary.ui_process_manager_interval = value.clamp(3, 120);
     }
 
     pub(in crate::features) fn toggle_docker_manager_panel(&mut self) {
         self.summary.ui_show_docker_manager = !self.summary.ui_show_docker_manager;
-    }
-
-    pub(in crate::features) fn adjust_docker_manager_interval(&mut self, delta: i32) {
-        self.summary.ui_docker_manager_interval =
-            (self.summary.ui_docker_manager_interval as i32 + delta).clamp(3, 120) as u32;
     }
 
     pub(in crate::features) fn set_docker_manager_interval(&mut self, value: u32) {
@@ -451,16 +401,6 @@ impl SettingsFeatureState {
         self.summary.recording_include_timestamps = !self.summary.recording_include_timestamps;
     }
 
-    pub(in crate::features) fn adjust_recording_memory_limit(&mut self, delta_mib: i64) {
-        let current_mib = (self.summary.recording_memory_limit_bytes / (1024 * 1024)).max(1);
-        let next_mib = if delta_mib.is_negative() {
-            current_mib.saturating_sub(delta_mib.unsigned_abs()).max(1)
-        } else {
-            current_mib.saturating_add(delta_mib as u64).min(512)
-        };
-        self.summary.recording_memory_limit_bytes = next_mib * 1024 * 1024;
-    }
-
     pub(in crate::features) fn set_recording_memory_limit_mib(&mut self, value_mib: u64) {
         self.summary.recording_memory_limit_bytes = value_mib.clamp(1, 512) * 1024 * 1024;
     }
@@ -486,40 +426,16 @@ impl SettingsFeatureState {
             !self.summary.transfer_resume_broken_transfer;
     }
 
-    pub(in crate::features) fn adjust_transfer_download_threads(&mut self, delta: i32) {
-        self.summary.transfer_download_threads =
-            adjust_u32_setting(self.summary.transfer_download_threads, delta, 1, 10);
-    }
-
     pub(in crate::features) fn set_transfer_download_threads(&mut self, value: u32) {
         self.summary.transfer_download_threads = value.clamp(1, 10);
-    }
-
-    pub(in crate::features) fn adjust_transfer_upload_threads(&mut self, delta: i32) {
-        self.summary.transfer_upload_threads =
-            adjust_u32_setting(self.summary.transfer_upload_threads, delta, 1, 10);
     }
 
     pub(in crate::features) fn set_transfer_upload_threads(&mut self, value: u32) {
         self.summary.transfer_upload_threads = value.clamp(1, 10);
     }
 
-    pub(in crate::features) fn adjust_transfer_max_retries(&mut self, delta: i32) {
-        self.summary.transfer_max_retries =
-            adjust_u32_setting(self.summary.transfer_max_retries, delta, 0, 10);
-    }
-
     pub(in crate::features) fn set_transfer_max_retries(&mut self, value: u32) {
         self.summary.transfer_max_retries = value.clamp(0, 10);
-    }
-
-    pub(in crate::features) fn adjust_transfer_buffer_size(&mut self, delta: i32) {
-        self.summary.transfer_buffer_size = adjust_u32_setting(
-            self.summary.transfer_buffer_size,
-            delta.saturating_mul(8),
-            8,
-            256,
-        );
     }
 
     pub(in crate::features) fn set_transfer_buffer_size(&mut self, value: u32) {
@@ -1256,15 +1172,6 @@ fn adjusted_index_after_remove(value: Option<usize>, removed: usize) -> Option<u
     }
 }
 
-fn adjust_u32_setting(current: u32, delta: i32, min: u32, max: u32) -> u32 {
-    let next = if delta.is_negative() {
-        current.saturating_sub(delta.unsigned_abs())
-    } else {
-        current.saturating_add(delta as u32)
-    };
-    next.clamp(min, max)
-}
-
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
@@ -1320,16 +1227,16 @@ mod tests {
         assert!(state.set_diagnostics_retention_days(99));
         assert_eq!(state.summary().diagnostics_retention_days, 7);
 
-        state.adjust_command_suggestion_min_chars(50);
+        state.set_command_suggestion_min_chars(50);
         assert_eq!(state.summary().interaction_command_suggestion_min_chars, 10);
-        state.adjust_command_suggestion_max_chars(-50);
+        state.set_command_suggestion_max_chars(1);
         assert_eq!(state.summary().interaction_command_suggestion_max_chars, 10);
-        state.adjust_duplicate_session_command_delay(-500);
+        state.set_duplicate_session_command_delay(75_000);
         assert_eq!(
             state
                 .summary()
                 .interaction_duplicate_session_command_delay_ms,
-            0
+            60_000
         );
 
         let restore_layout = state.summary().startup_restore_window_layout;
@@ -1350,15 +1257,15 @@ mod tests {
         state.summary.ui_process_manager_interval = 3;
         state.summary.ui_docker_manager_interval = 120;
 
-        state.adjust_terminal_scrollback_lines(-1000);
-        state.adjust_terminal_keep_alive_interval(-10);
-        state.adjust_remote_stats_interval(-5);
-        state.adjust_process_manager_interval(-5);
-        state.adjust_docker_manager_interval(5);
+        state.set_terminal_scrollback_lines(0);
+        state.set_terminal_keep_alive_interval(700);
+        state.set_remote_stats_interval(0);
+        state.set_process_manager_interval(0);
+        state.set_docker_manager_interval(200);
 
         let summary = state.summary();
         assert_eq!(summary.terminal_scrollback_lines, 100);
-        assert_eq!(summary.terminal_keep_alive_interval, 0);
+        assert_eq!(summary.terminal_keep_alive_interval, 600);
         assert_eq!(summary.ui_remote_stats_interval, 1);
         assert_eq!(summary.ui_process_manager_interval, 3);
         assert_eq!(summary.ui_docker_manager_interval, 120);
@@ -1378,22 +1285,22 @@ mod tests {
         state.summary.transfer_max_retries = 0;
         state.summary.transfer_buffer_size = 8;
 
-        state.adjust_recording_memory_limit(-1);
+        state.set_recording_memory_limit_mib(0);
         assert_eq!(state.summary().recording_memory_limit_bytes, 1024 * 1024);
-        state.adjust_recording_memory_limit(1_000);
+        state.set_recording_memory_limit_mib(1_000);
         assert_eq!(
             state.summary().recording_memory_limit_bytes,
             512 * 1024 * 1024
         );
 
-        state.adjust_transfer_download_threads(-1);
-        state.adjust_transfer_upload_threads(1);
-        state.adjust_transfer_max_retries(-1);
-        state.adjust_transfer_buffer_size(-1);
+        state.set_transfer_download_threads(0);
+        state.set_transfer_upload_threads(11);
+        state.set_transfer_max_retries(11);
+        state.set_transfer_buffer_size(0);
         let summary = state.summary();
         assert_eq!(summary.transfer_download_threads, 1);
         assert_eq!(summary.transfer_upload_threads, 10);
-        assert_eq!(summary.transfer_max_retries, 0);
+        assert_eq!(summary.transfer_max_retries, 10);
         assert_eq!(summary.transfer_buffer_size, 8);
 
         state.set_transfer_duplicate_strategy("rename".to_string());

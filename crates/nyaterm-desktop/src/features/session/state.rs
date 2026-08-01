@@ -1726,11 +1726,6 @@ impl SessionDialogState {
         Some((action, request))
     }
 
-    pub(in crate::features) fn adjust_startup_command_delay(&mut self, delta_ms: i64) {
-        let next = (self.startup_command_delay_ms as i64 + delta_ms).clamp(0, 60_000);
-        self.startup_command_delay_ms = next as u64;
-    }
-
     pub(in crate::features) fn set_startup_command_delay(&mut self, delay_ms: u64) {
         self.startup_command_delay_ms = delay_ms.min(60_000);
     }

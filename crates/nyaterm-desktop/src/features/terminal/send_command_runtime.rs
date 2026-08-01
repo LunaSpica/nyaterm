@@ -4,95 +4,16 @@ use std::sync::{
 };
 use std::time::Duration;
 
-use gpui::{Context, KeyDownEvent, Window};
+use gpui::{Context, KeyDownEvent};
 use nyaterm_transport::SessionKind;
 
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::NyaTermApp;
 use crate::send_command::{
     SendCommandControlFocus, SendCommandDataType, SendCommandLineEnding, SendCommandMode,
     SendCommandTarget,
 };
 
 impl NyaTermApp {
-    fn commit_send_command_control_input(&mut self, cx: &mut Context<Self>) {
-        if let Some((control, value)) = self.send_command.finish_control_edit() {
-            let id = match control {
-                SendCommandControlFocus::Count => "send-command.count",
-                SendCommandControlFocus::Interval => "send-command.interval",
-            };
-            self.reset_text_input(id, &value, cx);
-        }
-    }
-
-    pub(in crate::features) fn focus_send_command_control(
-        &mut self,
-        control: SendCommandControlFocus,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(value) = self.send_command.begin_control_edit(control) else {
-            return;
-        };
-        let id = match control {
-            SendCommandControlFocus::Count => "send-command.count",
-            SendCommandControlFocus::Interval => "send-command.interval",
-        };
-        self.reset_text_input(id, &value, cx);
-        let input = self.text_input(id, &value, TextInputSetup::default(), cx);
-        window.focus(&input.read(cx).focus_handle(), cx);
-        cx.notify();
-    }
-
-    pub(in crate::features) fn blur_send_command_control(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.commit_send_command_control_input(cx);
-        window.focus(self.send_command.editor_focus(), cx);
-        cx.notify();
-    }
-
-    pub(in crate::features) fn handle_send_command_control_key_down(
-        &mut self,
-        event: &KeyDownEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.mark_user_activity();
-        let Some(control) = self.send_command.control_focus() else {
-            return;
-        };
-        let keystroke = &event.keystroke;
-        if keystroke.modifiers.alt || keystroke.modifiers.function {
-            return;
-        }
-
-        match keystroke.key.as_str() {
-            "enter" => {
-                self.blur_send_command_control(window, cx);
-            }
-            "tab" => match control {
-                SendCommandControlFocus::Count => {
-                    self.commit_send_command_control_input(cx);
-                    self.focus_send_command_control(SendCommandControlFocus::Interval, window, cx);
-                }
-                SendCommandControlFocus::Interval => {
-                    self.commit_send_command_control_input(cx);
-                    self.focus_send_command_control(SendCommandControlFocus::Count, window, cx);
-                }
-            },
-            "escape" => {
-                let (count, interval) = self.send_command.cancel_control_edit();
-                self.reset_text_input("send-command.count", &count, cx);
-                self.reset_text_input("send-command.interval", &interval, cx);
-                window.focus(self.send_command.editor_focus(), cx);
-                cx.notify();
-            }
-            _ => {}
-        }
-    }
-
     pub(in crate::features) fn apply_send_command_control_input(
         &mut self,
         control_id: &str,
@@ -501,18 +422,6 @@ impl NyaTermApp {
         self.session
             .session_info(active_id)
             .map(|session| session.kind)
-    }
-
-    pub(in crate::features) fn adjust_send_command_count(
-        &mut self,
-        delta: i32,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(value) = self.send_command.adjust_count(delta) else {
-            return;
-        };
-        self.reset_text_input("send-command.count", &value, cx);
-        cx.notify();
     }
 
     pub(in crate::features) fn set_send_command_data_type(

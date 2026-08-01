@@ -19,7 +19,6 @@ pub(in crate::features::pages::remote) struct ProcessDetailLabels {
     pub rss: &'static str,
     pub elapsed: &'static str,
     pub copy_command: &'static str,
-    pub nice_value: &'static str,
     pub apply_nice: &'static str,
 }
 

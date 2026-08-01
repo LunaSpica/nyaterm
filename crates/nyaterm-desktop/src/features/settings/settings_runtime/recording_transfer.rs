@@ -53,15 +53,6 @@ impl NyaTermApp {
         self.save_recording_settings(cx);
     }
 
-    pub(in crate::features) fn adjust_recording_memory_limit(
-        &mut self,
-        delta_mib: i64,
-        cx: &mut Context<Self>,
-    ) {
-        self.settings.adjust_recording_memory_limit(delta_mib);
-        self.save_recording_settings(cx);
-    }
-
     pub(in crate::features) fn set_recording_memory_limit(
         &mut self,
         value_mib: u64,
@@ -143,15 +134,6 @@ impl NyaTermApp {
         self.save_transfer_settings("transfer resume preference saved", cx);
     }
 
-    pub(in crate::features) fn adjust_transfer_download_threads(
-        &mut self,
-        delta: i32,
-        cx: &mut Context<Self>,
-    ) {
-        self.settings.adjust_transfer_download_threads(delta);
-        self.save_transfer_settings("transfer download concurrency saved", cx);
-    }
-
     pub(in crate::features) fn set_transfer_download_threads(
         &mut self,
         value: u32,
@@ -159,15 +141,6 @@ impl NyaTermApp {
     ) {
         self.settings.set_transfer_download_threads(value);
         self.save_transfer_settings("transfer download concurrency saved", cx);
-    }
-
-    pub(in crate::features) fn adjust_transfer_upload_threads(
-        &mut self,
-        delta: i32,
-        cx: &mut Context<Self>,
-    ) {
-        self.settings.adjust_transfer_upload_threads(delta);
-        self.save_transfer_settings("transfer upload concurrency saved", cx);
     }
 
     pub(in crate::features) fn set_transfer_upload_threads(
@@ -179,15 +152,6 @@ impl NyaTermApp {
         self.save_transfer_settings("transfer upload concurrency saved", cx);
     }
 
-    pub(in crate::features) fn adjust_transfer_max_retries(
-        &mut self,
-        delta: i32,
-        cx: &mut Context<Self>,
-    ) {
-        self.settings.adjust_transfer_max_retries(delta);
-        self.save_transfer_settings("transfer retry setting saved", cx);
-    }
-
     pub(in crate::features) fn set_transfer_max_retries(
         &mut self,
         value: u32,
@@ -195,15 +159,6 @@ impl NyaTermApp {
     ) {
         self.settings.set_transfer_max_retries(value);
         self.save_transfer_settings("transfer retry setting saved", cx);
-    }
-
-    pub(in crate::features) fn adjust_transfer_buffer_size(
-        &mut self,
-        delta: i32,
-        cx: &mut Context<Self>,
-    ) {
-        self.settings.adjust_transfer_buffer_size(delta);
-        self.save_transfer_settings("transfer buffer setting saved", cx);
     }
 
     pub(in crate::features) fn set_transfer_buffer_size(

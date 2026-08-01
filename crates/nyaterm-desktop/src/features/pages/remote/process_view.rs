@@ -71,7 +71,6 @@ impl NyaTermApp {
             rss: "RSS",
             elapsed: self.tr("processManager.elapsed"),
             copy_command: self.tr("processManager.copyCommand"),
-            nice_value: self.tr("processManager.niceValue"),
             apply_nice: self.tr("processManager.applyNice"),
         };
         let normalized_query = process_state.search_draft.trim().to_ascii_lowercase();
