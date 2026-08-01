@@ -4724,7 +4724,7 @@ dependencies = [
 
 [[package]]
 name = "nyaterm-app"
-version = "1.1.12"
+version = "2.0.0"
 dependencies = [
  "anyhow",
  "gpui",
@@ -4743,7 +4743,7 @@ dependencies = [
 
 [[package]]
 name = "nyaterm-core"
-version = "1.1.12"
+version = "2.0.0"
 dependencies = [
  "aes-gcm",
  "base64 0.22.1",
@@ -4767,7 +4767,7 @@ dependencies = [
 
 [[package]]
 name = "nyaterm-desktop"
-version = "1.1.12"
+version = "2.0.0"
 dependencies = [
  "anyhow",
  "dirs",
@@ -4800,14 +4800,14 @@ version = "0.1.0"
 
 [[package]]
 name = "nyaterm-store"
-version = "1.1.12"
+version = "2.0.0"
 dependencies = [
  "nyaterm-core",
 ]
 
 [[package]]
 name = "nyaterm-terminal"
-version = "1.1.12"
+version = "2.0.0"
 dependencies = [
  "alacritty_terminal",
  "encoding_rs",
@@ -4818,7 +4818,7 @@ dependencies = [
 
 [[package]]
 name = "nyaterm-terminal-gpui"
-version = "1.1.12"
+version = "2.0.0"
 dependencies = [
  "gpui",
  "image",
@@ -4832,7 +4832,7 @@ dependencies = [
 
 [[package]]
 name = "nyaterm-transport"
-version = "1.1.12"
+version = "2.0.0"
 dependencies = [
  "anyhow",
  "async-http-proxy",
@@ -4856,7 +4856,7 @@ dependencies = [
 
 [[package]]
 name = "nyaterm-ui"
-version = "1.1.12"
+version = "2.0.0"
 dependencies = [
  "gpui",
  "gpui-component",
