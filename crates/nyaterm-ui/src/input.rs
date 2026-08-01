@@ -149,9 +149,9 @@ impl NyaInputState {
             .pending_value
             .take()
             .unwrap_or_else(|| self.seed.clone());
-        let placeholder = self.placeholder.clone();
         let masked = self.masked;
         let multi_line = self.multi_line;
+        let placeholder = component_placeholder(self.placeholder.clone(), multi_line);
         let rows = self.rows;
         let state = cx.new(|cx| {
             let mut input = InputState::new(window, cx)
@@ -179,6 +179,27 @@ impl NyaInputState {
         self.state = Some(state.clone());
         state
     }
+}
+
+fn component_placeholder(placeholder: SharedString, multi_line: bool) -> SharedString {
+    if !multi_line || (!placeholder.contains('\r') && !placeholder.contains('\n')) {
+        return placeholder;
+    }
+
+    let mut normalized = String::with_capacity(placeholder.len());
+    let mut in_line_break = false;
+    for ch in placeholder.chars() {
+        if matches!(ch, '\r' | '\n') {
+            if !in_line_break {
+                normalized.push(' ');
+                in_line_break = true;
+            }
+        } else {
+            normalized.push(ch);
+            in_line_break = false;
+        }
+    }
+    SharedString::from(normalized)
 }
 
 impl EventEmitter<NyaInputEvent> for NyaInputState {}
@@ -248,7 +269,7 @@ pub type NyaTextArea = NyaInput;
 mod tests {
     use gpui::{AppContext as _, TestAppContext};
 
-    use super::NyaInputState;
+    use super::{NyaInputState, component_placeholder};
 
     #[test]
     fn value_tracks_seed_reset_and_clear_before_component_renders() {
@@ -262,5 +283,39 @@ mod tests {
 
         field.update(&mut cx, |field, cx| field.clear(cx));
         assert_eq!(cx.read_entity(&field, |field, cx| field.value(cx)), "");
+    }
+
+    #[test]
+    fn multiline_placeholder_collapses_line_breaks() {
+        let placeholder = component_placeholder("first\nsecond".into(), true);
+
+        assert_eq!(placeholder.as_ref(), "first second");
+    }
+
+    #[test]
+    fn multiline_placeholder_collapses_crlf_and_blank_lines() {
+        let placeholder = component_placeholder("first\r\n\r\nsecond\n\nthird".into(), true);
+
+        assert_eq!(placeholder.as_ref(), "first second third");
+        assert!(!placeholder.contains('\r'));
+        assert!(!placeholder.contains('\n'));
+    }
+
+    #[test]
+    fn single_line_placeholder_is_preserved() {
+        let placeholder = component_placeholder("first\nsecond".into(), false);
+
+        assert_eq!(placeholder.as_ref(), "first\nsecond");
+    }
+
+    #[test]
+    fn multiline_placeholder_preserves_multibyte_text() {
+        let placeholder =
+            component_placeholder("例如：ls -la\n使用 {{变量名}} 注入动态参数。".into(), true);
+
+        assert_eq!(
+            placeholder.as_ref(),
+            "例如：ls -la 使用 {{变量名}} 注入动态参数。"
+        );
     }
 }

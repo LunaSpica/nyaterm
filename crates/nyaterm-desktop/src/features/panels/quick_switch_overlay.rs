@@ -1,6 +1,6 @@
 use gpui::{
-    Context, FontWeight, IntoElement, KeyDownEvent, MouseButton, SharedString, div, prelude::*, px,
-    rgb, rgba, svg,
+    Context, FontWeight, IntoElement, KeyDownEvent, SharedString, StatefulInteractiveElement as _,
+    div, prelude::*, px, rgb, rgba, svg,
 };
 use nyaterm_core::truncate_preview;
 use nyaterm_ui::NyaInput;
@@ -160,7 +160,7 @@ impl NyaTermApp {
             .pt(px(viewport_h * 0.18))
             .on_click(cx.listener(|this, _, window, cx| {
                 this.close_quick_switch(cx);
-                window.focus(this.terminal.input_focus());
+                window.focus(this.terminal.input_focus(), cx);
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 cx.stop_propagation();
@@ -181,6 +181,7 @@ impl NyaTermApp {
                     .on_click(|_, _, cx| cx.stop_propagation())
                     .child(
                         div()
+                            .id("quick-switch-query-input-shell")
                             .relative()
                             .h(px(44.))
                             .flex()
@@ -191,8 +192,8 @@ impl NyaTermApp {
                             .border_color(rgb(palette.border))
                             .bg(rgba(0x00000000))
                             .cursor_text()
-                            .on_mouse_down(MouseButton::Left, move |_, window, _| {
-                                window.focus(&query_focus);
+                            .on_click(move |_, window, cx| {
+                                window.focus(&query_focus, cx);
                             })
                             .child(
                                 svg()

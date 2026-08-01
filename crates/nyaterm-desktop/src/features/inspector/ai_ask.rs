@@ -601,6 +601,7 @@ impl NyaTermApp {
                                                             );
                                                             window.focus(
                                                                 &field.read(cx).focus_handle(),
+                                                                cx,
                                                             );
                                                         }
                                                         cx.notify();

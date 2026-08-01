@@ -101,7 +101,7 @@ impl NyaTermApp {
                 TextInputSetup::placeholder(self.tr("ai.placeholder")),
                 cx,
             );
-            window.focus(&input.read(cx).focus_handle());
+            window.focus(&input.read(cx).focus_handle(), cx);
         }
         cx.notify();
     }
@@ -134,7 +134,7 @@ impl NyaTermApp {
             .set_chat_response_preview("Quick command generation ready");
         self.ai.set_panel_status("quick command AI assist");
         self.ensure_panel_open(NavItem::AiAssistant);
-        window.focus(self.ai.chat_focus());
+        window.focus(self.ai.chat_focus(), cx);
         cx.notify();
     }
 

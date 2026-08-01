@@ -3,6 +3,7 @@ use gpui::{
     rgba,
 };
 use nyaterm_transport::{PROCESS_LIST_UNSUPPORTED_ERROR, RemoteProcess};
+use nyaterm_ui::NyaNumberInputOptions;
 
 use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::RemoteProcessSortKey;
@@ -142,10 +143,10 @@ impl NyaTermApp {
         // Built before the rows, which borrow `self`: the nice box is a real
         // input and creating one needs the app mutably.
         let mut nice_input = selected_process.as_ref().map(|process| {
-            self.text_input_box(
+            self.number_input_box(
                 format!("remote.process.{}.nice", process.pid),
                 &process_state.nice_draft.clone(),
-                TextInputSetup::placeholder(detail_labels.nice_value),
+                NyaNumberInputOptions::default().range(-20.0, 19.0),
                 cx,
             )
             .into_any_element()

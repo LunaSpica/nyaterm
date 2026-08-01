@@ -1,7 +1,7 @@
 use gpui::{Context, FontWeight, IntoElement, SharedString, div, prelude::*, px, rgb};
+use nyaterm_ui::NyaNumberInputOptions;
 
 use crate::features::{NyaTermApp, TextInputSetup};
-use crate::widgets::small_button;
 use nyaterm_ui::NyaTooltip;
 
 use super::{
@@ -138,42 +138,15 @@ impl NyaTermApp {
                             palette,
                             idle_lock_label,
                             Some(SharedString::from(idle_lock_desc)),
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap_1()
-                                .child(small_button(
-                                    palette,
-                                    "settings-idle-lock-minus",
-                                    "-",
-                                    cx.listener(|this, _, _, cx| {
-                                        this.adjust_idle_lock_minutes(-1, cx);
-                                    }),
-                                ))
-                                .child(
-                                    div()
-                                        .min_w(px(42.))
-                                        .text_center()
-                                        .font_family(crate::features::gpui_code_font_family())
-                                        .text_size(px(12.))
-                                        .font_weight(FontWeight(600.))
-                                        .text_color(rgb(palette.text))
-                                        .child(idle_minutes.to_string()),
-                                )
-                                .child(small_button(
-                                    palette,
-                                    "settings-idle-lock-plus",
-                                    "+",
-                                    cx.listener(|this, _, _, cx| {
-                                        this.adjust_idle_lock_minutes(1, cx);
-                                    }),
-                                ))
-                                .child(
-                                    div()
-                                        .text_size(px(11.))
-                                        .text_color(rgb(palette.text_muted))
-                                        .child(minutes_label),
-                                ),
+                            self.number_input_box(
+                                "settings.number.idle-lock-minutes",
+                                idle_minutes.to_string().as_str(),
+                                NyaNumberInputOptions::default()
+                                    .range(0.0, 1440.0)
+                                    .step(1.0)
+                                    .suffix(minutes_label),
+                                cx,
+                            ),
                         ))
                     }),
             ))

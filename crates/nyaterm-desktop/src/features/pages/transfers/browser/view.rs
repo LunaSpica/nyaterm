@@ -164,8 +164,8 @@ impl NyaTermApp {
                 .flex()
                 .items_center()
                 .cursor_text()
-                .on_mouse_down(MouseButton::Left, move |_, window, _| {
-                    window.focus(&focus);
+                .on_click(move |_, window, cx| {
+                    window.focus(&focus, cx);
                 })
                 .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                     if event.keystroke.key == "escape" {

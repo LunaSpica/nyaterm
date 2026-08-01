@@ -1,4 +1,4 @@
-use gpui::{Context, IntoElement, KeyDownEvent, MouseButton, div, prelude::*, px, rgb};
+use gpui::{Context, IntoElement, KeyDownEvent, div, prelude::*, px, rgb};
 use nyaterm_ui::NyaInput;
 
 use crate::features::{NyaTermApp, TextInputSetup};
@@ -90,8 +90,8 @@ impl NyaTermApp {
                                     .text_size(px(12.))
                                     .text_color(rgb(palette.text))
                                     .cursor_text()
-                                    .on_mouse_down(MouseButton::Left, move |_, window, _| {
-                                        window.focus(&search_focus);
+                                    .on_click(move |_, window, cx| {
+                                        window.focus(&search_focus, cx);
                                     })
                                     .on_key_down(cx.listener(
                                         |this, event: &KeyDownEvent, _, cx| {

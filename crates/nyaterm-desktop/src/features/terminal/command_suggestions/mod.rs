@@ -2,8 +2,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use gpui::{
-    Bounds, Context, FontWeight, IntoElement, KeyDownEvent, Pixels, SharedString, Timer, div,
-    prelude::*, px, rgb, rgba, svg,
+    Bounds, Context, FontWeight, IntoElement, KeyDownEvent, Pixels, SharedString, div, prelude::*,
+    px, rgb, rgba, svg,
 };
 use nyaterm_core::{
     CommandHistoryEntry, ConnectionStore, QuickCommand, TerminalInputState,
@@ -415,7 +415,7 @@ impl NyaTermApp {
         let request_id = self.terminal.assist.command_suggestion_search_gen;
         self.terminal.assist.command_suggestion_refresh_task =
             Some(cx.spawn(async move |this, cx| {
-                Timer::after(delay).await;
+                cx.background_executor().timer(delay).await;
                 let request = this.update(cx, |this, cx| {
                     if this.terminal.assist.command_suggestion_search_gen != request_id {
                         return None;

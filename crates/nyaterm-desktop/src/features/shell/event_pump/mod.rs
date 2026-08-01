@@ -1,7 +1,7 @@
 use std::time::{Duration, Instant};
 
 use futures::StreamExt;
-use gpui::{Context, Timer, Window};
+use gpui::{Context, Window};
 
 use crate::features::shell::event_pump::helpers::{
     PENDING_SESSION_STATUS_INTERVAL, PENDING_SESSION_STILL_CONNECTING_AFTER,
@@ -25,7 +25,7 @@ mod session_events;
 
 use crate::features::terminal::terminal_runtime::TERMINAL_INPUT_LATENCY_WINDOW;
 
-// These intervals produce wake deadlines at 4ms, 12ms, and 24ms. `Timer::after`
+// These intervals produce wake deadlines at 4ms, 12ms, and 24ms. The timer
 // calls below are sequential, so storing the absolute deadlines here would
 // accidentally move the final echo poll out to 40ms.
 const TERMINAL_INPUT_WAKE_INTERVALS: [Duration; 3] = [
@@ -116,7 +116,7 @@ impl NyaTermApp {
         cx.spawn(async move |this, cx| {
             loop {
                 for delay in TERMINAL_INPUT_WAKE_INTERVALS {
-                    Timer::after(delay).await;
+                    cx.background_executor().timer(delay).await;
                     let _ = this.update(cx, |this, cx| {
                         this.drain_terminal_input_wake(cx);
                     });
@@ -177,7 +177,9 @@ impl NyaTermApp {
         }
         self.shell.runtime.terminal_input_idle_notify_armed = true;
         cx.spawn(async move |this, cx| {
-            Timer::after(TERMINAL_INPUT_LATENCY_WINDOW).await;
+            cx.background_executor()
+                .timer(TERMINAL_INPUT_LATENCY_WINDOW)
+                .await;
             let _ = this.update(cx, |this, cx| {
                 this.flush_terminal_input_idle_notify(cx);
             });
@@ -193,7 +195,7 @@ impl NyaTermApp {
             TERMINAL_INPUT_LATENCY_WINDOW,
         ) {
             cx.spawn(async move |this, cx| {
-                Timer::after(delay).await;
+                cx.background_executor().timer(delay).await;
                 let _ = this.update(cx, |this, cx| {
                     this.flush_terminal_input_idle_notify(cx);
                 });
@@ -268,9 +270,9 @@ impl NyaTermApp {
         ));
         if self.settings.summary().has_master_password {
             let field = self.text_input("lock-screen.password", "", TextInputSetup::masked(), cx);
-            window.focus(&field.read(cx).focus_handle());
+            window.focus(&field.read(cx).focus_handle(), cx);
         } else {
-            window.focus(self.security.screen_lock_focus());
+            window.focus(self.security.screen_lock_focus(), cx);
         }
         true
     }

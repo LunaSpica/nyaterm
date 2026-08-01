@@ -1528,6 +1528,7 @@ impl Element for NyaTerminalElement {
             for image in prepaint.images_under.drain(..) {
                 let _ = window.paint_image(
                     image.bounds,
+                    image.bounds,
                     gpui::Corners::default(),
                     image.image,
                     0,
@@ -1544,15 +1545,21 @@ impl Element for NyaTerminalElement {
                 window.paint_quad(quad);
             }
             for row in prepaint.rows.drain(..) {
-                let _ = row
-                    .line
-                    .paint(point(bounds.left(), row.y), px(cell_height), window, cx);
+                let _ = row.line.paint(
+                    point(bounds.left(), row.y),
+                    px(cell_height),
+                    gpui::TextAlign::Left,
+                    None,
+                    window,
+                    cx,
+                );
             }
             for quad in prepaint.underlines.drain(..) {
                 window.paint_quad(quad);
             }
             for image in prepaint.images_above.drain(..) {
                 let _ = window.paint_image(
+                    image.bounds,
                     image.bounds,
                     gpui::Corners::default(),
                     image.image,
@@ -1567,9 +1574,14 @@ impl Element for NyaTerminalElement {
                 window.paint_quad(cursor);
             }
             if let Some(cursor_glyph) = prepaint.cursor_glyph.take() {
-                let _ = cursor_glyph
-                    .line
-                    .paint(cursor_glyph.origin, px(cell_height), window, cx);
+                let _ = cursor_glyph.line.paint(
+                    cursor_glyph.origin,
+                    px(cell_height),
+                    gpui::TextAlign::Left,
+                    None,
+                    window,
+                    cx,
+                );
             }
         });
         let elapsed = started_at.elapsed();

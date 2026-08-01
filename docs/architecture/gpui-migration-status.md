@@ -64,11 +64,11 @@ these as staged extraction candidates, not as formatting-only refactor targets.
 ## Completed
 
 - `gpui-component` infrastructure and ordinary-control migration are in place.
-  The workspace pins
-  `gpui-component = "=0.5.1"`, and dependency verification on 2026-07-30 shows
-  a single compatible `gpui v0.2.2`. `nyaterm-ui` owns the component wrappers,
-  theme bridge, and `NyaRoot`/`NyaWindowHandle` host aliases; desktop feature
-  modules must continue importing NyaTerm wrapper types rather than
+  The workspace uses vendored `gpui-component` `0.5.2` and vendored Zed GPUI at
+  `vendor/zed`; dependency verification on 2026-08-01 shows a single active
+  `gpui v0.2.2` from `vendor/zed/crates/gpui`. `nyaterm-ui` owns the component
+  wrappers, theme bridge, and `NyaRoot`/`NyaWindowHandle` host aliases; desktop
+  feature modules must continue importing NyaTerm wrapper types rather than
   `gpui_component` directly. The main window plus settings, connection editor,
   quick-command editor, remote editor, and external-sync child windows now open
   with `NyaRoot` as the first view layer while preserving typed window

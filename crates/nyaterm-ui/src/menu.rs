@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
 use gpui::{
-    App, ClickEvent, Corner, IntoElement, ParentElement, Pixels, RenderOnce, SharedString, Styled,
-    Window, div, prelude::FluentBuilder as _,
+    Anchor, App, ClickEvent, InteractiveElement, IntoElement, ParentElement, Pixels, RenderOnce,
+    SharedString, Styled, Window, div, prelude::FluentBuilder as _,
 };
 use gpui_component::button::{Button, ButtonVariants as _};
 use gpui_component::menu::{ContextMenuExt as _, DropdownMenu as _, PopupMenu, PopupMenuItem};
@@ -20,12 +20,12 @@ pub enum NyaMenuAnchor {
 }
 
 impl NyaMenuAnchor {
-    fn component_corner(self) -> Corner {
+    fn component_anchor(self) -> Anchor {
         match self {
-            Self::TopLeft => Corner::TopLeft,
-            Self::TopRight => Corner::TopRight,
-            Self::BottomLeft => Corner::BottomLeft,
-            Self::BottomRight => Corner::BottomRight,
+            Self::TopLeft => Anchor::TopLeft,
+            Self::TopRight => Anchor::TopRight,
+            Self::BottomLeft => Anchor::BottomLeft,
+            Self::BottomRight => Anchor::BottomRight,
         }
     }
 }
@@ -327,7 +327,7 @@ impl RenderOnce for NyaDropdownMenu {
         let max_height = self.max_height;
         let scrollable = self.scrollable;
         trigger.disabled(self.disabled).dropdown_menu_with_anchor(
-            self.anchor.component_corner(),
+            self.anchor.component_anchor(),
             move |menu, window, cx| {
                 let menu = menu
                     .when_some(min_width, |menu, width| menu.min_w(width))
@@ -345,7 +345,7 @@ impl RenderOnce for NyaDropdownMenu {
 #[derive(IntoElement)]
 pub struct NyaContextMenu<E>
 where
-    E: ParentElement + Styled + IntoElement + 'static,
+    E: InteractiveElement + ParentElement + Styled + IntoElement + 'static,
 {
     element: E,
     items: Vec<NyaMenuItem>,
@@ -354,7 +354,7 @@ where
 
 impl<E> NyaContextMenu<E>
 where
-    E: ParentElement + Styled + IntoElement + 'static,
+    E: InteractiveElement + ParentElement + Styled + IntoElement + 'static,
 {
     pub fn new(element: E, items: impl IntoIterator<Item = NyaMenuItem>) -> Self {
         Self {
@@ -372,7 +372,7 @@ where
 
 impl<E> RenderOnce for NyaContextMenu<E>
 where
-    E: ParentElement + Styled + IntoElement + 'static,
+    E: InteractiveElement + ParentElement + Styled + IntoElement + 'static,
 {
     fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
         if !self.enabled {

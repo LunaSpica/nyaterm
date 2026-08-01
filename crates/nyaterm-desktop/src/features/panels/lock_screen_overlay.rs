@@ -1,6 +1,6 @@
 use gpui::{
-    Context, FontWeight, IntoElement, KeyDownEvent, MouseButton, SharedString, Window,
-    WindowControlArea, div, prelude::*, px, rgb, rgba, svg,
+    Context, FontWeight, IntoElement, KeyDownEvent, SharedString, Window, WindowControlArea, div,
+    prelude::*, px, rgb, rgba, svg,
 };
 use nyaterm_ui::NyaInput;
 
@@ -52,7 +52,7 @@ impl NyaTermApp {
             .bg(rgba(0x000000d9))
             .text_color(rgb(0xffffff))
             .track_focus(self.security.screen_lock_focus())
-            .on_click(move |_, window, _| window.focus(&overlay_focus))
+            .on_click(move |_, window, cx| window.focus(&overlay_focus, cx))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
                 cx.stop_propagation();
                 this.handle_lock_key_down(event, cx);
@@ -198,12 +198,9 @@ impl NyaTermApp {
                                                 .text_sm()
                                                 .text_color(rgb(palette.text))
                                                 .cursor_text()
-                                                .on_mouse_down(
-                                                    MouseButton::Left,
-                                                    move |_, window, _| {
-                                                        window.focus(&password_focus);
-                                                    },
-                                                )
+                                                .on_click(move |_, window, cx| {
+                                                    window.focus(&password_focus, cx);
+                                                })
                                                 .child(
                                                     div()
                                                         .min_w_0()

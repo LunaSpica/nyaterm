@@ -1,5 +1,6 @@
 use gpui::{FontWeight, IntoElement, SharedString, div, prelude::*, px, rgb, svg};
 use nyaterm_transport::SessionKind;
+use nyaterm_ui::NyaNumberInputOptions;
 
 use crate::features::NyaTermApp;
 
@@ -16,6 +17,29 @@ pub(super) fn security_editor_field(
     cx: &mut gpui::Context<NyaTermApp>,
 ) -> gpui::AnyElement {
     app.text_input_field(format!("security.editor.{id}"), label, &value, setup, cx)
+        .into_any_element()
+}
+
+pub(super) fn security_number_editor_field(
+    app: &mut NyaTermApp,
+    id: &'static str,
+    label: &'static str,
+    value: String,
+    setup: NyaNumberInputOptions,
+    cx: &mut gpui::Context<NyaTermApp>,
+) -> gpui::AnyElement {
+    let palette = app.theme_palette();
+    div()
+        .flex()
+        .flex_col()
+        .gap_1()
+        .child(
+            div()
+                .text_xs()
+                .text_color(rgb(palette.text_muted))
+                .child(label),
+        )
+        .child(app.number_input_box(format!("security.editor.{id}"), &value, setup, cx))
         .into_any_element()
 }
 

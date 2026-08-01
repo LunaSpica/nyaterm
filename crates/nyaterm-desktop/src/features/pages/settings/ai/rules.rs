@@ -1,11 +1,11 @@
 use gpui::{
-    AnyElement, App, ClickEvent, Context, FontWeight, IntoElement, KeyDownEvent, SharedString,
-    Window, div, prelude::*, px, rgb,
+    AnyElement, Context, FontWeight, IntoElement, KeyDownEvent, SharedString, div, prelude::*, px,
+    rgb,
 };
+use nyaterm_ui::NyaNumberInputOptions;
 
 use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::{AiActionEditorField, AiActionListKind};
-use crate::theme::ThemePalette;
 use crate::widgets::small_button;
 
 use super::super::{settings_form_row, settings_form_section, settings_switch};
@@ -43,15 +43,11 @@ impl NyaTermApp {
                     palette,
                     format!("{} (MB)", self.tr("ai.maxAiFileSize")),
                     Some(SharedString::from(self.tr("ai.maxAiFileSizeDesc"))),
-                    ai_rules_number_stepper(
-                        palette,
-                        file_size_mb,
-                        cx.listener(|this, _, _, cx| {
-                            this.adjust_ai_file_size_mb(-1, cx);
-                        }),
-                        cx.listener(|this, _, _, cx| {
-                            this.adjust_ai_file_size_mb(1, cx);
-                        }),
+                    self.number_input_box(
+                        "ai.number.file-size-mb",
+                        file_size_mb.to_string().as_str(),
+                        NyaNumberInputOptions::default().range(1.0, 256.0).step(1.0),
+                        cx,
                     ),
                 ),
             ))
@@ -234,27 +230,4 @@ impl NyaTermApp {
         )
         .into_any_element()
     }
-}
-
-fn ai_rules_number_stepper(
-    palette: ThemePalette,
-    value: u64,
-    on_minus: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    on_plus: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    div()
-        .flex()
-        .items_center()
-        .gap_1()
-        .child(small_button(palette, "ai-file-size-minus", "-", on_minus))
-        .child(
-            div()
-                .min_w(px(56.))
-                .text_center()
-                .font_family(crate::features::gpui_code_font_family())
-                .text_size(px(11.))
-                .text_color(rgb(palette.text))
-                .child(value.to_string()),
-        )
-        .child(small_button(palette, "ai-file-size-plus", "+", on_plus))
 }

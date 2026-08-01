@@ -1,6 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
-use gpui::{App, AppContext as _, Context, Entity, FocusHandle, SharedString, Subscription};
+use gpui::{
+    App, AppContext as _, Bounds, Context, Entity, FocusHandle, Pixels, SharedString, Subscription,
+};
 use nyaterm_core::{AppSettingsSummary, ConnectionType, Group, SavedConnection};
 use nyaterm_ui::NyaWindowHandle;
 
@@ -15,7 +17,9 @@ use crate::models::{
     NetworkGroupEditorState, NetworkMovePickerState, NetworkProxyEditorField,
     NetworkProxyEditorState, NetworkTab, NetworkTunnelEditorField, NetworkTunnelEditorState,
 };
-use nyaterm_ui::{NyaInputEvent, NyaInputState};
+use nyaterm_ui::{
+    NyaInputEvent, NyaInputState, NyaNumberInputEvent, NyaNumberInputOptions, NyaNumberInputState,
+};
 
 mod editor_logic;
 mod list_logic;
@@ -104,11 +108,15 @@ struct ConnectionEditorFeatureState {
     /// subscriptions. Keeping them out of `ConnectionEditorState` keeps that
     /// model a plain value the runtime can clone.
     fields: HashMap<ConnectionEditorField, Entity<NyaInputState>>,
+    number_fields: HashMap<ConnectionEditorField, Entity<NyaNumberInputState>>,
     field_subscriptions: Vec<Subscription>,
+    number_field_subscriptions: Vec<Subscription>,
     window: Option<NyaWindowHandle>,
     window_open_pending: bool,
     focus: FocusHandle,
     icon_picker_open: bool,
+    group_select_open: bool,
+    group_select_trigger_bounds: Option<Bounds<Pixels>>,
 }
 
 struct ConnectionGroupEditorFeatureState {
@@ -175,11 +183,15 @@ impl ConnectionFeatureState {
             editor: ConnectionEditorFeatureState {
                 draft: None,
                 fields: HashMap::new(),
+                number_fields: HashMap::new(),
                 field_subscriptions: Vec::new(),
+                number_field_subscriptions: Vec::new(),
                 window: None,
                 window_open_pending: false,
                 focus: focus.editor,
                 icon_picker_open: false,
+                group_select_open: false,
+                group_select_trigger_bounds: None,
             },
             group_editor: ConnectionGroupEditorFeatureState {
                 draft: None,
@@ -435,17 +447,43 @@ impl ConnectionFeatureState {
         &self.editor.fields
     }
 
+    pub fn editor_number_fields(
+        &self,
+    ) -> &HashMap<ConnectionEditorField, Entity<NyaNumberInputState>> {
+        &self.editor.number_fields
+    }
+
     /// Build a field per input and wire each back into the draft.
     ///
     /// Called when the editor opens, so the entities live exactly as long as the
     /// draft they mirror and never leak between edits.
     pub fn build_editor_fields(&mut self, cx: &mut Context<NyaTermApp>) {
         self.editor.fields.clear();
+        self.editor.number_fields.clear();
         self.editor.field_subscriptions.clear();
+        self.editor.number_field_subscriptions.clear();
         let Some(draft) = self.editor.draft.as_ref() else {
             return;
         };
         for (field, value, masked, placeholder) in editor_field_seeds(draft) {
+            if let Some(options) = connection_editor_number_options(field) {
+                let entity = cx.new(|cx| {
+                    NyaNumberInputState::new(cx, value, options).placeholder(placeholder)
+                });
+                let subscription = cx.subscribe(
+                    &entity,
+                    move |app: &mut NyaTermApp, _, event, cx| match event {
+                        NyaNumberInputEvent::Changed(text)
+                        | NyaNumberInputEvent::Submitted(text) => {
+                            app.apply_connection_editor_field_text(field, text.clone(), cx);
+                        }
+                        NyaNumberInputEvent::Stepped(_) => {}
+                    },
+                );
+                self.editor.number_fields.insert(field, entity);
+                self.editor.number_field_subscriptions.push(subscription);
+                continue;
+            }
             let entity = cx.new(|cx| {
                 let input = NyaInputState::new(cx, value)
                     .masked(masked)
@@ -479,6 +517,9 @@ impl ConnectionFeatureState {
         if let Some(entity) = self.editor.fields.get(&field) {
             entity.update(cx, |entity, cx| entity.set_content(text, cx));
         }
+        if let Some(entity) = self.editor.number_fields.get(&field) {
+            entity.update(cx, |entity, cx| entity.set_content(text, cx));
+        }
     }
 
     /// Push every draft value back into its field.
@@ -493,6 +534,9 @@ impl ConnectionFeatureState {
         };
         for (field, value, _, _) in editor_field_seeds(draft) {
             if let Some(entity) = self.editor.fields.get(&field) {
+                entity.update(cx, |entity, cx| entity.set_content(&value, cx));
+            }
+            if let Some(entity) = self.editor.number_fields.get(&field) {
                 entity.update(cx, |entity, cx| entity.set_content(&value, cx));
             }
         }
@@ -514,6 +558,14 @@ impl ConnectionFeatureState {
 
     pub fn editor_icon_picker_is_open(&self) -> bool {
         self.editor.icon_picker_is_open()
+    }
+
+    pub fn editor_group_select_is_open(&self) -> bool {
+        self.editor.group_select_is_open()
+    }
+
+    pub fn editor_group_select_trigger_bounds(&self) -> Option<Bounds<Pixels>> {
+        self.editor.group_select_trigger_bounds()
     }
 
     pub fn editor_description_is_focused(&self) -> bool {
@@ -562,6 +614,18 @@ impl ConnectionFeatureState {
 
     pub fn toggle_editor_icon_picker(&mut self) {
         self.editor.toggle_icon_picker();
+    }
+
+    pub fn close_editor_group_select(&mut self) {
+        self.editor.close_group_select();
+    }
+
+    pub fn set_editor_group_select_trigger_bounds(&mut self, bounds: Bounds<Pixels>) -> bool {
+        self.editor.set_group_select_trigger_bounds(bounds)
+    }
+
+    pub fn toggle_editor_group_select(&mut self) {
+        self.editor.toggle_group_select();
     }
 
     pub fn set_editor_icon(&mut self, icon: Option<&str>) -> bool {
@@ -864,9 +928,11 @@ impl ConnectionFeatureState {
         clear_connection_editor_runtime_state(
             &mut self.editor.draft,
             &mut self.editor.icon_picker_open,
+            &mut self.editor.group_select_open,
             &mut self.editor.window,
             &mut self.editor.window_open_pending,
         );
+        self.editor.group_select_trigger_bounds = None;
         select_saved_connection_after_editor_save(
             &mut self.list.selected_ids,
             &mut self.list.last_selected_id,
@@ -1114,6 +1180,8 @@ impl ConnectionImportState {
 impl ConnectionEditorFeatureState {
     pub fn begin_edit(&mut self, draft: ConnectionEditorState) {
         self.icon_picker_open = false;
+        self.group_select_open = false;
+        self.group_select_trigger_bounds = None;
         self.draft = Some(draft);
     }
 
@@ -1127,6 +1195,14 @@ impl ConnectionEditorFeatureState {
 
     pub fn icon_picker_is_open(&self) -> bool {
         self.icon_picker_open
+    }
+
+    pub fn group_select_is_open(&self) -> bool {
+        self.group_select_open
+    }
+
+    pub fn group_select_trigger_bounds(&self) -> Option<Bounds<Pixels>> {
+        self.group_select_trigger_bounds
     }
 
     pub fn description_is_focused(&self) -> bool {
@@ -1182,7 +1258,27 @@ impl ConnectionEditorFeatureState {
     pub fn toggle_icon_picker(&mut self) {
         let opening = !self.icon_picker_open;
         self.close_icon_picker();
+        self.close_group_select();
         self.icon_picker_open = opening;
+    }
+
+    pub fn close_group_select(&mut self) {
+        self.group_select_open = false;
+    }
+
+    pub fn set_group_select_trigger_bounds(&mut self, bounds: Bounds<Pixels>) -> bool {
+        if self.group_select_trigger_bounds == Some(bounds) {
+            return false;
+        }
+        self.group_select_trigger_bounds = Some(bounds);
+        true
+    }
+
+    pub fn toggle_group_select(&mut self) {
+        let opening = !self.group_select_open;
+        self.close_icon_picker();
+        self.close_group_select();
+        self.group_select_open = opening;
     }
 
     pub fn set_icon(&mut self, icon: Option<&str>) -> bool {
@@ -1202,6 +1298,9 @@ impl ConnectionEditorFeatureState {
         let changed = set_connection_editor_select_value(&mut self.draft, select, value);
         if changed {
             self.close_icon_picker();
+            if select == ConnectionEditorSelect::Group {
+                self.close_group_select();
+            }
         }
         changed
     }
@@ -1232,6 +1331,7 @@ impl ConnectionEditorFeatureState {
 
     pub fn set_kind(&mut self, kind: ConnectionKindTab) -> bool {
         self.close_icon_picker();
+        self.close_group_select();
         set_connection_editor_kind(&mut self.draft, kind)
     }
 
@@ -1239,6 +1339,7 @@ impl ConnectionEditorFeatureState {
         let changed = commit_connection_editor_new_group(&mut self.draft, required_message);
         if changed {
             self.close_icon_picker();
+            self.close_group_select();
         }
         changed
     }
@@ -1279,9 +1380,11 @@ impl ConnectionEditorFeatureState {
         clear_connection_editor_runtime_state(
             &mut self.draft,
             &mut self.icon_picker_open,
+            &mut self.group_select_open,
             &mut self.window,
             &mut self.window_open_pending,
         );
+        self.group_select_trigger_bounds = None;
     }
 
     pub fn clear_window_if_current(&mut self, window: NyaWindowHandle) -> bool {
@@ -1326,6 +1429,27 @@ impl ConnectionGroupEditorFeatureState {
 
     pub fn close(&mut self) {
         self.draft = None;
+    }
+}
+
+fn connection_editor_number_options(field: ConnectionEditorField) -> Option<NyaNumberInputOptions> {
+    match field {
+        ConnectionEditorField::Port => Some(
+            NyaNumberInputOptions::default()
+                .range(1.0, 65_535.0)
+                .step(1.0),
+        ),
+        ConnectionEditorField::PostLoginDelay => Some(
+            NyaNumberInputOptions::default()
+                .range(0.0, 60_000.0)
+                .step(1.0),
+        ),
+        ConnectionEditorField::BaudRate => Some(
+            NyaNumberInputOptions::default()
+                .range(50.0, 4_000_000.0)
+                .step(1.0),
+        ),
+        _ => None,
     }
 }
 

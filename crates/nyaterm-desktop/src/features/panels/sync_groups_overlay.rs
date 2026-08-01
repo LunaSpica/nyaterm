@@ -1,8 +1,7 @@
 use std::collections::HashSet;
 
 use gpui::{
-    Context, FontWeight, IntoElement, KeyDownEvent, MouseButton, SharedString, div, prelude::*, px,
-    rgb, rgba,
+    Context, FontWeight, IntoElement, KeyDownEvent, SharedString, div, prelude::*, px, rgb, rgba,
 };
 use nyaterm_core::truncate_preview;
 use nyaterm_ui::NyaInput;
@@ -335,7 +334,7 @@ impl NyaTermApp {
             .justify_center()
             .track_focus(self.sync_input.focus())
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(this.sync_input.focus());
+                window.focus(this.sync_input.focus(), cx);
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
@@ -489,12 +488,7 @@ impl NyaTermApp {
                                                     .when_some(
                                                         group_name_focus,
                                                         |this, focus| {
-                                                            this.on_mouse_down(
-                                                                MouseButton::Left,
-                                                                move |_, window, _| {
-                                                                    window.focus(&focus);
-                                                                },
-                                                            )
+                                                            this.on_click(move |_, window, cx| { window.focus(&focus, cx); })
                                                         },
                                                     )
                                                     .children(group_name_input),
@@ -536,12 +530,7 @@ impl NyaTermApp {
                                                             .text_xs()
                                                             .text_color(rgb(palette.text))
                                                             .cursor_text()
-                                                            .on_mouse_down(
-                                                                MouseButton::Left,
-                                                                move |_, window, _| {
-                                                                    window.focus(&search_focus);
-                                                                },
-                                                            )
+                                                            .on_click(move |_, window, cx| { window.focus(&search_focus, cx); })
                                                             .child(NyaInput::new(&search_input)),
                                                     ),
                                             )

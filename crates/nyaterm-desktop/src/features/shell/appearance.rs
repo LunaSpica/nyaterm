@@ -282,6 +282,19 @@ impl NyaTermApp {
         self.save_appearance_settings(cx);
     }
 
+    pub(in crate::features) fn set_terminal_font_size_from_input(
+        &mut self,
+        size: u16,
+        cx: &mut Context<Self>,
+    ) {
+        let next = (size as i16).clamp(TERMINAL_FONT_SIZE_MIN, TERMINAL_FONT_SIZE_MAX) as u16;
+        if !self.settings.set_terminal_font_size(next) {
+            return;
+        }
+        self.invalidate_terminal_cell_metrics(cx);
+        self.save_appearance_settings(cx);
+    }
+
     pub(in crate::features) fn reset_terminal_font_size(&mut self, cx: &mut Context<Self>) {
         let default_size = AppSettingsSummary::default().terminal_font_size;
         if !self.settings.set_terminal_font_size(default_size) {
@@ -442,6 +455,15 @@ impl NyaTermApp {
     pub(in crate::features) fn adjust_ui_font_size(&mut self, delta: i16, cx: &mut Context<Self>) {
         let next = (self.settings.summary().ui_font_size as i16 + delta).clamp(12, 24) as u16;
         self.settings.set_ui_font_size(next);
+        self.save_appearance_settings(cx);
+    }
+
+    pub(in crate::features) fn set_ui_font_size_from_input(
+        &mut self,
+        size: u16,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.set_ui_font_size(size.clamp(12, 24));
         self.save_appearance_settings(cx);
     }
 

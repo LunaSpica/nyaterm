@@ -109,7 +109,7 @@ impl NyaTermApp {
             .bg(self.shell_transparent_color(palette.surface))
             .track_focus(self.transfer.queue_focus())
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(this.transfer.queue_focus());
+                window.focus(this.transfer.queue_focus(), cx);
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {

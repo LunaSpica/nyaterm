@@ -266,6 +266,11 @@ impl SettingsFeatureState {
                 .clamp(1, max_chars as i32) as u32;
     }
 
+    pub(in crate::features) fn set_command_suggestion_min_chars(&mut self, value: u32) {
+        let max_chars = self.summary.interaction_command_suggestion_max_chars;
+        self.summary.interaction_command_suggestion_min_chars = value.clamp(1, max_chars);
+    }
+
     pub(in crate::features) fn adjust_command_suggestion_max_chars(&mut self, delta: i32) {
         let min_chars = self.summary.interaction_command_suggestion_min_chars;
         self.summary.interaction_command_suggestion_max_chars =
@@ -273,10 +278,19 @@ impl SettingsFeatureState {
                 .clamp(min_chars as i32, 500) as u32;
     }
 
+    pub(in crate::features) fn set_command_suggestion_max_chars(&mut self, value: u32) {
+        let min_chars = self.summary.interaction_command_suggestion_min_chars;
+        self.summary.interaction_command_suggestion_max_chars = value.clamp(min_chars, 500);
+    }
+
     pub(in crate::features) fn adjust_duplicate_session_command_delay(&mut self, delta_ms: i32) {
         self.summary.interaction_duplicate_session_command_delay_ms =
             (self.summary.interaction_duplicate_session_command_delay_ms as i32 + delta_ms)
                 .clamp(0, 60_000) as u32;
+    }
+
+    pub(in crate::features) fn set_duplicate_session_command_delay(&mut self, value_ms: u32) {
+        self.summary.interaction_duplicate_session_command_delay_ms = value_ms.clamp(0, 60_000);
     }
 
     pub(in crate::features) fn toggle_alt_as_meta(&mut self) {
@@ -305,6 +319,10 @@ impl SettingsFeatureState {
             (self.summary.idle_lock_minutes as i32 + delta).clamp(0, 1440) as u32;
     }
 
+    pub(in crate::features) fn set_idle_lock_minutes(&mut self, value: u32) {
+        self.summary.idle_lock_minutes = value.clamp(0, 1440);
+    }
+
     pub(in crate::features) fn set_terminal_x11_display(&mut self, text: String) {
         self.summary.x11_display = text;
     }
@@ -323,9 +341,17 @@ impl SettingsFeatureState {
             (self.summary.terminal_scrollback_lines as i32 + delta).clamp(100, 100_000) as u32;
     }
 
+    pub(in crate::features) fn set_terminal_scrollback_lines(&mut self, value: u32) {
+        self.summary.terminal_scrollback_lines = value.clamp(100, 100_000);
+    }
+
     pub(in crate::features) fn adjust_terminal_keep_alive_interval(&mut self, delta: i32) {
         self.summary.terminal_keep_alive_interval =
             (self.summary.terminal_keep_alive_interval as i32 + delta).clamp(0, 600) as u32;
+    }
+
+    pub(in crate::features) fn set_terminal_keep_alive_interval(&mut self, value: u32) {
+        self.summary.terminal_keep_alive_interval = value.clamp(0, 600);
     }
 
     pub(in crate::features) fn toggle_terminal_workspace_padding(&mut self) {
@@ -364,6 +390,10 @@ impl SettingsFeatureState {
             (self.summary.ui_remote_stats_interval as i32 + delta).clamp(1, 60) as u32;
     }
 
+    pub(in crate::features) fn set_remote_stats_interval(&mut self, value: u32) {
+        self.summary.ui_remote_stats_interval = value.clamp(1, 60);
+    }
+
     pub(in crate::features) fn toggle_process_manager_panel(&mut self) {
         self.summary.ui_show_process_manager = !self.summary.ui_show_process_manager;
     }
@@ -373,6 +403,10 @@ impl SettingsFeatureState {
             (self.summary.ui_process_manager_interval as i32 + delta).clamp(3, 120) as u32;
     }
 
+    pub(in crate::features) fn set_process_manager_interval(&mut self, value: u32) {
+        self.summary.ui_process_manager_interval = value.clamp(3, 120);
+    }
+
     pub(in crate::features) fn toggle_docker_manager_panel(&mut self) {
         self.summary.ui_show_docker_manager = !self.summary.ui_show_docker_manager;
     }
@@ -380,6 +414,10 @@ impl SettingsFeatureState {
     pub(in crate::features) fn adjust_docker_manager_interval(&mut self, delta: i32) {
         self.summary.ui_docker_manager_interval =
             (self.summary.ui_docker_manager_interval as i32 + delta).clamp(3, 120) as u32;
+    }
+
+    pub(in crate::features) fn set_docker_manager_interval(&mut self, value: u32) {
+        self.summary.ui_docker_manager_interval = value.clamp(3, 120);
     }
 
     pub(in crate::features) fn toggle_terminal_action_links(&mut self) {
@@ -423,6 +461,10 @@ impl SettingsFeatureState {
         self.summary.recording_memory_limit_bytes = next_mib * 1024 * 1024;
     }
 
+    pub(in crate::features) fn set_recording_memory_limit_mib(&mut self, value_mib: u64) {
+        self.summary.recording_memory_limit_bytes = value_mib.clamp(1, 512) * 1024 * 1024;
+    }
+
     pub(in crate::features) fn set_transfer_duplicate_strategy(&mut self, strategy: String) {
         self.summary.transfer_duplicate_strategy = strategy;
     }
@@ -449,14 +491,26 @@ impl SettingsFeatureState {
             adjust_u32_setting(self.summary.transfer_download_threads, delta, 1, 10);
     }
 
+    pub(in crate::features) fn set_transfer_download_threads(&mut self, value: u32) {
+        self.summary.transfer_download_threads = value.clamp(1, 10);
+    }
+
     pub(in crate::features) fn adjust_transfer_upload_threads(&mut self, delta: i32) {
         self.summary.transfer_upload_threads =
             adjust_u32_setting(self.summary.transfer_upload_threads, delta, 1, 10);
     }
 
+    pub(in crate::features) fn set_transfer_upload_threads(&mut self, value: u32) {
+        self.summary.transfer_upload_threads = value.clamp(1, 10);
+    }
+
     pub(in crate::features) fn adjust_transfer_max_retries(&mut self, delta: i32) {
         self.summary.transfer_max_retries =
             adjust_u32_setting(self.summary.transfer_max_retries, delta, 0, 10);
+    }
+
+    pub(in crate::features) fn set_transfer_max_retries(&mut self, value: u32) {
+        self.summary.transfer_max_retries = value.clamp(0, 10);
     }
 
     pub(in crate::features) fn adjust_transfer_buffer_size(&mut self, delta: i32) {
@@ -466,6 +520,10 @@ impl SettingsFeatureState {
             8,
             256,
         );
+    }
+
+    pub(in crate::features) fn set_transfer_buffer_size(&mut self, value: u32) {
+        self.summary.transfer_buffer_size = value.clamp(8, 256);
     }
 
     pub(in crate::features) fn set_transfer_file_permissions(&mut self, permissions: &str) {

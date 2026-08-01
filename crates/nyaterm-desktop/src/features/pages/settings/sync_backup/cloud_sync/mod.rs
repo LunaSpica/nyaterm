@@ -3,7 +3,7 @@ use gpui::{
     prelude::*, px, rgb, rgba,
 };
 use nyaterm_core::CloudSyncSettings;
-use nyaterm_ui::NyaSelectOption;
+use nyaterm_ui::{NyaNumberInputOptions, NyaSelectOption};
 
 use crate::features::{
     NyaTermApp, compact_id, configured_cloud_sync_provider, dialog_action_button,
@@ -511,16 +511,18 @@ impl NyaTermApp {
                         Some(SharedString::from(
                             self.tr("settings.syncDebounceSecondsDesc"),
                         )),
-                        cloud_sync_number_stepper(
-                            palette,
-                            self.cloud_sync.settings().sync_debounce_seconds,
-                            debounce_enabled,
-                            cx.listener(|this, _, _, cx| {
-                                this.adjust_cloud_sync_debounce(-1, cx);
-                            }),
-                            cx.listener(|this, _, _, cx| {
-                                this.adjust_cloud_sync_debounce(1, cx);
-                            }),
+                        self.number_input_box(
+                            "cloud-sync.number.debounce",
+                            self.cloud_sync
+                                .settings()
+                                .sync_debounce_seconds
+                                .to_string()
+                                .as_str(),
+                            NyaNumberInputOptions::default()
+                                .range(1.0, 3_600.0)
+                                .step(1.0)
+                                .disabled(!debounce_enabled),
+                            cx,
                         ),
                     )),
             ))
@@ -815,71 +817,6 @@ fn cloud_sync_action_button(
         .text_color(rgb(palette.text))
         .text_xs()
         .opacity(if enabled { 1.0 } else { 0.45 })
-        .when(enabled, |this| {
-            this.cursor_pointer()
-                .hover(move |this| this.bg(rgb(hover)))
-                .on_click(on_click)
-        })
-        .child(label)
-}
-
-fn cloud_sync_number_stepper(
-    palette: ThemePalette,
-    value: u64,
-    enabled: bool,
-    on_minus: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    on_plus: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    div()
-        .flex()
-        .items_center()
-        .gap_1()
-        .opacity(if enabled { 1.0 } else { 0.45 })
-        .child(cloud_sync_step_button(
-            palette,
-            "cloud-debounce-minus",
-            "-",
-            enabled,
-            on_minus,
-        ))
-        .child(
-            div()
-                .min_w(px(56.))
-                .text_center()
-                .font_family(crate::features::gpui_code_font_family())
-                .text_size(px(11.))
-                .text_color(rgb(palette.text))
-                .child(value.to_string()),
-        )
-        .child(cloud_sync_step_button(
-            palette,
-            "cloud-debounce-plus",
-            "+",
-            enabled,
-            on_plus,
-        ))
-}
-
-fn cloud_sync_step_button(
-    palette: ThemePalette,
-    id: &'static str,
-    label: &'static str,
-    enabled: bool,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let hover = palette.hover;
-    div()
-        .id(id)
-        .size(px(28.))
-        .rounded_sm()
-        .border_1()
-        .border_color(rgb(palette.border))
-        .bg(rgb(palette.input))
-        .flex()
-        .items_center()
-        .justify_center()
-        .text_size(px(12.))
-        .text_color(rgb(palette.text_muted))
         .when(enabled, |this| {
             this.cursor_pointer()
                 .hover(move |this| this.bg(rgb(hover)))

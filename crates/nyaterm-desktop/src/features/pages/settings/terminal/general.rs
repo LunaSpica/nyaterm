@@ -2,10 +2,10 @@ use gpui::{
     App, ClickEvent, Context, FontWeight, IntoElement, SharedString, Window, div, prelude::*, px,
     rgb,
 };
+use nyaterm_ui::NyaNumberInputOptions;
 
 use crate::features::{NyaTermApp, TextInputSetup};
 use crate::theme::ThemePalette;
-use crate::widgets::small_button;
 
 use super::super::{
     settings_form_row, settings_form_section, settings_switch, settings_switch_with_enabled,
@@ -43,20 +43,17 @@ impl NyaTermApp {
                         palette,
                         self.tr("settings.scrollbackLines"),
                         Some(SharedString::from(self.tr("settings.scrollbackLinesDesc"))),
-                        terminal_number_stepper(
-                            palette,
-                            "terminal-scrollback-minus",
-                            "terminal-scrollback-plus",
+                        self.number_input_box(
+                            "settings.number.terminal-scrollback-lines",
                             self.settings
                                 .summary()
                                 .terminal_scrollback_lines
-                                .to_string(),
-                            cx.listener(|this, _, _, cx| {
-                                this.adjust_terminal_scrollback_lines(-100, cx);
-                            }),
-                            cx.listener(|this, _, _, cx| {
-                                this.adjust_terminal_scrollback_lines(100, cx);
-                            }),
+                                .to_string()
+                                .as_str(),
+                            NyaNumberInputOptions::default()
+                                .range(100.0, 100_000.0)
+                                .step(100.0),
+                            cx,
                         ),
                     ))
                     .child(settings_form_row(
@@ -65,20 +62,15 @@ impl NyaTermApp {
                         Some(SharedString::from(
                             self.tr("settings.keepAliveIntervalDesc"),
                         )),
-                        terminal_number_stepper(
-                            palette,
-                            "terminal-keepalive-minus",
-                            "terminal-keepalive-plus",
+                        self.number_input_box(
+                            "settings.number.terminal-keep-alive-interval",
                             self.settings
                                 .summary()
                                 .terminal_keep_alive_interval
-                                .to_string(),
-                            cx.listener(|this, _, _, cx| {
-                                this.adjust_terminal_keep_alive_interval(-5, cx);
-                            }),
-                            cx.listener(|this, _, _, cx| {
-                                this.adjust_terminal_keep_alive_interval(5, cx);
-                            }),
+                                .to_string()
+                                .as_str(),
+                            NyaNumberInputOptions::default().range(0.0, 600.0).step(5.0),
+                            cx,
                         ),
                     ))
                     .child(
@@ -229,17 +221,15 @@ impl NyaTermApp {
                             Some(SharedString::from(
                                 self.tr("settings.remoteStatsIntervalDesc"),
                             )),
-                            terminal_number_stepper(
-                                palette,
-                                "terminal-remote-stats-interval-minus",
-                                "terminal-remote-stats-interval-plus",
-                                self.settings.summary().ui_remote_stats_interval.to_string(),
-                                cx.listener(|this, _, _, cx| {
-                                    this.adjust_remote_stats_interval(-1, cx);
-                                }),
-                                cx.listener(|this, _, _, cx| {
-                                    this.adjust_remote_stats_interval(1, cx);
-                                }),
+                            self.number_input_box(
+                                "settings.number.remote-stats-interval",
+                                self.settings
+                                    .summary()
+                                    .ui_remote_stats_interval
+                                    .to_string()
+                                    .as_str(),
+                                NyaNumberInputOptions::default().range(1.0, 60.0).step(1.0),
+                                cx,
                             ),
                         ))
                     })
@@ -265,20 +255,15 @@ impl NyaTermApp {
                             Some(SharedString::from(
                                 self.tr("settings.processManagerIntervalDesc"),
                             )),
-                            terminal_number_stepper(
-                                palette,
-                                "terminal-process-interval-minus",
-                                "terminal-process-interval-plus",
+                            self.number_input_box(
+                                "settings.number.process-manager-interval",
                                 self.settings
                                     .summary()
                                     .ui_process_manager_interval
-                                    .to_string(),
-                                cx.listener(|this, _, _, cx| {
-                                    this.adjust_process_manager_interval(-1, cx);
-                                }),
-                                cx.listener(|this, _, _, cx| {
-                                    this.adjust_process_manager_interval(1, cx);
-                                }),
+                                    .to_string()
+                                    .as_str(),
+                                NyaNumberInputOptions::default().range(3.0, 120.0).step(1.0),
+                                cx,
                             ),
                         ))
                     })
@@ -304,20 +289,15 @@ impl NyaTermApp {
                             Some(SharedString::from(
                                 self.tr("settings.dockerManagerIntervalDesc"),
                             )),
-                            terminal_number_stepper(
-                                palette,
-                                "terminal-docker-interval-minus",
-                                "terminal-docker-interval-plus",
+                            self.number_input_box(
+                                "settings.number.docker-manager-interval",
                                 self.settings
                                     .summary()
                                     .ui_docker_manager_interval
-                                    .to_string(),
-                                cx.listener(|this, _, _, cx| {
-                                    this.adjust_docker_manager_interval(-1, cx);
-                                }),
-                                cx.listener(|this, _, _, cx| {
-                                    this.adjust_docker_manager_interval(1, cx);
-                                }),
+                                    .to_string()
+                                    .as_str(),
+                                NyaNumberInputOptions::default().range(3.0, 120.0).step(1.0),
+                                cx,
                             ),
                         ))
                     }),
@@ -413,31 +393,6 @@ impl NyaTermApp {
             ))
             .child(self.keyword_highlights_settings_section(cx))
     }
-}
-
-fn terminal_number_stepper(
-    palette: ThemePalette,
-    minus_id: &'static str,
-    plus_id: &'static str,
-    value: String,
-    on_minus: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    on_plus: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    div()
-        .flex()
-        .items_center()
-        .gap_1()
-        .child(small_button(palette, minus_id, "-", on_minus))
-        .child(
-            div()
-                .min_w(px(56.))
-                .text_center()
-                .font_family(crate::features::gpui_code_font_family())
-                .text_size(px(11.))
-                .text_color(rgb(palette.text))
-                .child(value),
-        )
-        .child(small_button(palette, plus_id, "+", on_plus))
 }
 
 fn terminal_settings_field_meta(

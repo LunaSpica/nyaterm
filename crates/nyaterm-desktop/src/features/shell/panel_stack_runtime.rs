@@ -458,7 +458,7 @@ impl NyaTermApp {
                 };
                 stack = stack.child(
                     div()
-                        .flex_shrink()
+                        .flex_shrink(1.)
                         .flex_basis(relative(basis))
                         .min_h(px(48.))
                         .flex()
@@ -654,7 +654,7 @@ impl NyaTermApp {
                                         TextInputSetup::placeholder("Search history..."),
                                         cx,
                                     );
-                                    window.focus(&field.read(cx).focus_handle());
+                                    window.focus(&field.read(cx).focus_handle(), cx);
                                 } else {
                                     this.forget_text_inputs("ai.history-search");
                                 }

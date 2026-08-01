@@ -73,7 +73,7 @@ impl NyaTermApp {
             cx,
         );
         if let Some(field) = self.connection_state.group_editor_field() {
-            window.focus(&field.read(cx).focus_handle());
+            window.focus(&field.read(cx).focus_handle(), cx);
         }
         cx.notify();
     }

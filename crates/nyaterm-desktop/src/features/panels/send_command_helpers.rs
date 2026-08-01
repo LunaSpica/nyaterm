@@ -1,4 +1,4 @@
-use gpui::{IntoElement, SharedString, div, prelude::*, px, rgb};
+use gpui::{IntoElement, div, prelude::*, px, rgb};
 
 pub(super) fn send_command_control_group(
     palette: crate::theme::ThemePalette,
@@ -35,35 +35,4 @@ pub(super) fn send_command_control_group(
                 .border_color(rgb(palette.border))
                 .child(content),
         )
-}
-
-pub(super) fn send_command_stepper_button(
-    palette: crate::theme::ThemePalette,
-    id: impl Into<String>,
-    label: &'static str,
-    disabled: bool,
-    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
-) -> impl IntoElement {
-    div()
-        .id(SharedString::from(id.into()))
-        .size(px(28.))
-        .flex()
-        .items_center()
-        .justify_center()
-        .text_size(px(12.))
-        .text_color(rgb(if disabled {
-            palette.text_dimmed
-        } else {
-            palette.text_muted
-        }))
-        .opacity(if disabled { 0.55 } else { 1.0 })
-        .when(!disabled, |this| this.cursor_pointer())
-        .when(!disabled, |this| {
-            this.hover(|this| {
-                this.bg(rgb(palette.surface_elevated))
-                    .text_color(rgb(palette.text))
-            })
-        })
-        .child(label)
-        .when(!disabled, |this| this.on_click(on_click))
 }

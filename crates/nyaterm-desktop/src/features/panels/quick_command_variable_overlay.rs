@@ -109,7 +109,7 @@ impl NyaTermApp {
                     .cursor_pointer()
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.focus_quick_command_variable(index, cx);
-                        window.focus(this.commands.quick_variable_focus());
+                        window.focus(this.commands.quick_variable_focus(), cx);
                     }))
                     .child(
                         div()
@@ -134,7 +134,7 @@ impl NyaTermApp {
             .justify_center()
             .track_focus(self.commands.quick_variable_focus())
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(this.commands.quick_variable_focus());
+                window.focus(this.commands.quick_variable_focus(), cx);
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {

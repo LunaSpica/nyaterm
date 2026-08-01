@@ -53,7 +53,7 @@ impl NyaTermApp {
         };
         self.security
             .open_password_editor(editor, "password editor opened".to_string());
-        window.focus(self.security.password_editor_focus());
+        window.focus(self.security.password_editor_focus(), cx);
         cx.notify();
     }
 

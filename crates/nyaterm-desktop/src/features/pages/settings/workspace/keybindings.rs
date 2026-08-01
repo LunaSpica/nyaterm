@@ -1,4 +1,4 @@
-use gpui::{Context, FontWeight, IntoElement, KeyDownEvent, MouseButton, div, prelude::*, px, rgb};
+use gpui::{Context, FontWeight, IntoElement, KeyDownEvent, div, prelude::*, px, rgb};
 use nyaterm_ui::NyaInput;
 
 use crate::features::{NyaTermApp, TextInputSetup, gpui_code_font_family};
@@ -37,7 +37,7 @@ impl NyaTermApp {
             .gap_3()
             .track_focus(self.settings.keybinding_focus())
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(this.settings.keybinding_focus());
+                window.focus(this.settings.keybinding_focus(), cx);
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
@@ -64,8 +64,8 @@ impl NyaTermApp {
                             .text_size(px(12.))
                             .text_color(rgb(palette.text))
                             .cursor_text()
-                            .on_mouse_down(MouseButton::Left, move |_, window, _| {
-                                window.focus(&search_focus);
+                            .on_click(move |_, window, cx| {
+                                window.focus(&search_focus, cx);
                             })
                             .on_click(|_, _, cx| cx.stop_propagation())
                             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {

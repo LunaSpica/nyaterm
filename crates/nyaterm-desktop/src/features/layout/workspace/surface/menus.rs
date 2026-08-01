@@ -193,7 +193,7 @@ impl NyaTermApp {
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.close_open_tabs_menu(cx);
                             this.select_session(session_id.clone(), cx);
-                            window.focus(this.terminal.input_focus());
+                            window.focus(this.terminal.input_focus(), cx);
                         }))
                         .child(
                             div()

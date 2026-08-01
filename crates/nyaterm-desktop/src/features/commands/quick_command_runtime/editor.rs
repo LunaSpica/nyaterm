@@ -14,7 +14,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.commands.focus_quick_editor_field(field) {
-            window.focus(self.commands.quick_editor_focus());
+            window.focus(self.commands.quick_editor_focus(), cx);
             cx.notify();
         }
     }

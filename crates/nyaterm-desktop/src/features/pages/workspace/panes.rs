@@ -170,7 +170,7 @@ impl NyaTermApp {
                     .cursor_pointer()
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.activate_workspace_pane(focus_id.clone(), cx);
-                        window.focus(this.terminal.input_focus());
+                        window.focus(this.terminal.input_focus(), cx);
                         cx.notify();
                     }));
                 if show_chrome {

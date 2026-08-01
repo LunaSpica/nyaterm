@@ -1,6 +1,6 @@
 use gpui::{
     ClipboardItem, Context, IntoElement, KeyDownEvent, MouseButton, MouseDownEvent, SharedString,
-    Window, div, prelude::*, px, rgb, svg,
+    StatefulInteractiveElement as _, Window, div, prelude::*, px, rgb, svg,
 };
 use nyaterm_core::truncate_preview;
 use nyaterm_transport::{SftpFileEntry, SftpFileType};
@@ -49,6 +49,7 @@ impl NyaTermApp {
             );
             let focus = field.read(cx).focus_handle();
             div()
+                .id("transfer-path-bar-input-shell")
                 .h(px(20.))
                 .min_w_0()
                 .flex_1()
@@ -58,8 +59,8 @@ impl NyaTermApp {
                 .rounded_sm()
                 .bg(rgb(palette.input))
                 .cursor_text()
-                .on_mouse_down(MouseButton::Left, move |_, window, _| {
-                    window.focus(&focus);
+                .on_click(move |_, window, cx| {
+                    window.focus(&focus, cx);
                 })
                 .child(
                     div()
@@ -471,7 +472,7 @@ impl NyaTermApp {
             TextInputSetup::placeholder(self.tr("fileExplorer.editPath")),
             cx,
         );
-        window.focus(&field.read(cx).focus_handle());
+        window.focus(&field.read(cx).focus_handle(), cx);
         field.update(cx, |field, cx| field.select_all(window, cx));
         cx.notify();
     }

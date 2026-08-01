@@ -56,7 +56,7 @@ impl Render for ConnectionEditorWindow {
                 .get(&ConnectionEditorField::Name)
                 .cloned();
             if let Some(field) = field {
-                window.focus(&field.read(cx).focus_handle());
+                window.focus(&field.read(cx).focus_handle(), cx);
                 field.update(cx, |field, cx| field.select_all(window, cx));
             }
         }
@@ -186,7 +186,7 @@ fn open_connection_editor_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut 
                 true
             });
             let editor_focus = view_app.read(cx).connection_state.editor_focus_handle();
-            window.focus(&editor_focus);
+            window.focus(&editor_focus, cx);
             let view = cx.new(|cx| ConnectionEditorWindow::new(view_app, cx));
             cx.new(|cx| nya_root(view, window, cx))
         },

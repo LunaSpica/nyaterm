@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use gpui::{Context, Entity, Timer, Window};
+use gpui::{Context, Entity, Window};
 
 use crate::features::NyaTermApp;
 
@@ -25,10 +25,8 @@ impl WindowRuntimeStore {
                 let mut skipped_updates = 0u64;
                 let mut last_skip_log_at = Instant::now();
                 loop {
-                    let delay = app
-                        .read_with(cx, |app, _| app.window_runtime_tick_delay())
-                        .unwrap_or_else(|_| Duration::from_millis(50));
-                    Timer::after(delay).await;
+                    let delay = app.read_with(cx, |app, _| app.window_runtime_tick_delay());
+                    cx.background_executor().timer(delay).await;
                     let keep_running = cx
                         .update(|window, cx| {
                             let now = Instant::now();

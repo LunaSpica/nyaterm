@@ -53,7 +53,7 @@ impl NyaTermApp {
             cx,
         );
         self.shell.set_status("quick switch opened".to_string());
-        window.focus(&field.read(cx).focus_handle());
+        window.focus(&field.read(cx).focus_handle(), cx);
         cx.notify();
     }
 

@@ -63,7 +63,7 @@ impl NyaTermApp {
             true,
             cx.listener(|this, _, window, cx| {
                 this.add_search_engine(cx);
-                window.focus(this.settings.search_engine_focus());
+                window.focus(this.settings.search_engine_focus(), cx);
             }),
         )
         .into_any_element();

@@ -35,8 +35,10 @@ icons/files.svg	md:outlined/folder.svg
 icons/history.svg	md:filled/history.svg
 icons/import.svg	md:filled/file_download.svg
 icons/lock.svg	md:filled/lock.svg
+icons/minus.svg	md:filled/remove.svg
 icons/network.svg	md:filled/lan.svg
 icons/pin.svg	md:filled/push_pin.svg
+icons/plus.svg	md:filled/add.svg
 icons/processes.svg	md:filled/list_alt.svg
 icons/quote.svg	md:filled/format_quote.svg
 icons/record.svg	md:filled/fiber_manual_record.svg

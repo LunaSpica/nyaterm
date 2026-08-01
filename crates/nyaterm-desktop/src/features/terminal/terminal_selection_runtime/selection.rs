@@ -1,8 +1,6 @@
 use std::time::Duration;
 
-use gpui::{
-    ClipboardItem, Context, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Timer,
-};
+use gpui::{ClipboardItem, Context, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent};
 use nyaterm_terminal::TerminalSnapshot;
 
 use crate::features::NyaTermApp;
@@ -392,7 +390,9 @@ impl NyaTermApp {
             return;
         }
         cx.spawn(async move |this, cx| {
-            Timer::after(TERMINAL_SELECTION_DRAG_NOTIFY_DELAY).await;
+            cx.background_executor()
+                .timer(TERMINAL_SELECTION_DRAG_NOTIFY_DELAY)
+                .await;
             let _ = this.update(cx, |this, cx| {
                 this.flush_terminal_selection_drag_visual_notify(cx);
             });

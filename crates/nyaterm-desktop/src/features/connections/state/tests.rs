@@ -1,14 +1,15 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use super::{
-    apply_connection_editor_shell_path, apply_connection_editor_text_key,
-    apply_connection_editor_working_dir, clear_connection_editor_runtime_state,
-    clear_connection_list_runtime_state, clear_network_proxy_editor, clear_network_tunnel_editor,
-    clear_selected_connection_ids, commit_connection_editor_new_group,
-    connection_drop_position_for_target, connection_editor_inline_panel_draft,
-    connection_editor_window_open_or_pending, cycle_connection_sort_mode,
-    insert_connection_editor_description_newline, remove_connection_list_references,
-    remove_group_list_references, remove_network_group_references, remove_network_item_references,
+    ConnectionEditorFeatureState, apply_connection_editor_shell_path,
+    apply_connection_editor_text_key, apply_connection_editor_working_dir,
+    clear_connection_editor_runtime_state, clear_connection_list_runtime_state,
+    clear_network_proxy_editor, clear_network_tunnel_editor, clear_selected_connection_ids,
+    commit_connection_editor_new_group, connection_drop_position_for_target,
+    connection_editor_inline_panel_draft, connection_editor_window_open_or_pending,
+    cycle_connection_sort_mode, insert_connection_editor_description_newline,
+    remove_connection_list_references, remove_group_list_references,
+    remove_network_group_references, remove_network_item_references,
     retain_loaded_connection_references, retain_loaded_group_list_references,
     saved_connections_in_group_tree_for_list_state, select_connection_ids,
     select_saved_connection_after_editor_save, selected_connections_for_list_state,
@@ -34,6 +35,7 @@ use crate::models::{
     NetworkMovePickerState, NetworkProxyEditorField, NetworkProxyEditorState, NetworkTab,
     NetworkTunnelEditorField, NetworkTunnelEditorState,
 };
+use gpui::TestAppContext;
 use nyaterm_core::{AiExecutionProfile, ConnectionType, Group, SavedConnection};
 
 #[test]
@@ -463,18 +465,21 @@ fn retain_loaded_connection_list_references_prunes_stale_refresh_state() {
 fn clear_connection_editor_runtime_state_clears_secret_draft_and_icon_picker() {
     let mut draft = Some(connection_editor_state_with_secret_draft());
     let mut icon_picker_open = true;
+    let mut group_select_open = true;
     let mut window = None;
     let mut window_open_pending = true;
 
     clear_connection_editor_runtime_state(
         &mut draft,
         &mut icon_picker_open,
+        &mut group_select_open,
         &mut window,
         &mut window_open_pending,
     );
 
     assert_eq!(draft, None);
     assert!(!icon_picker_open);
+    assert!(!group_select_open);
     assert_eq!(window, None);
     assert!(!window_open_pending);
 }
@@ -483,6 +488,7 @@ fn clear_connection_editor_runtime_state_clears_secret_draft_and_icon_picker() {
 fn finish_connection_editor_save_state_clears_editor_and_selects_saved_connection() {
     let mut draft = Some(connection_editor_state_with_secret_draft());
     let mut icon_picker_open = true;
+    let mut group_select_open = true;
     let mut window = None;
     let mut window_open_pending = true;
     let mut selected_ids = HashSet::from(["old".to_string()]);
@@ -492,6 +498,7 @@ fn finish_connection_editor_save_state_clears_editor_and_selects_saved_connectio
     clear_connection_editor_runtime_state(
         &mut draft,
         &mut icon_picker_open,
+        &mut group_select_open,
         &mut window,
         &mut window_open_pending,
     );
@@ -505,6 +512,7 @@ fn finish_connection_editor_save_state_clears_editor_and_selects_saved_connectio
 
     assert_eq!(draft, None);
     assert!(!icon_picker_open);
+    assert!(!group_select_open);
     assert_eq!(window, None);
     assert!(!window_open_pending);
     assert_eq!(selected_ids, HashSet::from(["conn-b".to_string()]));
@@ -529,6 +537,72 @@ fn connection_editor_inline_panel_draft_requires_draft_without_window() {
     assert!(connection_editor_window_open_or_pending(true, false));
     assert!(connection_editor_window_open_or_pending(false, true));
     assert!(!connection_editor_window_open_or_pending(false, false));
+}
+
+fn connection_editor_owner(cx: &TestAppContext) -> ConnectionEditorFeatureState {
+    let focus = cx.update(|cx| cx.focus_handle());
+    let mut owner = ConnectionEditorFeatureState {
+        draft: None,
+        fields: HashMap::new(),
+        number_fields: HashMap::new(),
+        field_subscriptions: Vec::new(),
+        number_field_subscriptions: Vec::new(),
+        window: None,
+        window_open_pending: false,
+        focus,
+        icon_picker_open: false,
+        group_select_open: false,
+        group_select_trigger_bounds: None,
+    };
+    owner.begin_edit(connection_editor_state_with_secret_draft());
+    owner
+}
+
+#[test]
+fn connection_editor_group_select_is_mutually_exclusive_with_icon_picker() {
+    let cx = TestAppContext::single();
+    let mut owner = connection_editor_owner(&cx);
+
+    owner.toggle_icon_picker();
+    assert!(owner.icon_picker_is_open());
+    assert!(!owner.group_select_is_open());
+
+    owner.toggle_group_select();
+    assert!(!owner.icon_picker_is_open());
+    assert!(owner.group_select_is_open());
+}
+
+#[test]
+fn connection_editor_group_selection_closes_select_and_clears_pending_group() {
+    let cx = TestAppContext::single();
+    let mut owner = connection_editor_owner(&cx);
+    owner.toggle_group_select();
+    owner.draft.as_mut().expect("draft").pending_group_name = Some("pending".to_string());
+    owner.draft.as_mut().expect("draft").pending_group_parent_id = Some("parent".to_string());
+
+    assert!(owner.set_select_value(ConnectionEditorSelect::Group, Some("group-a".to_string())));
+
+    let editor = owner.draft.as_ref().expect("draft remains open");
+    assert!(!owner.group_select_is_open());
+    assert_eq!(editor.group_id.as_deref(), Some("group-a"));
+    assert_eq!(editor.pending_group_name, None);
+    assert_eq!(editor.pending_group_parent_id, None);
+}
+
+#[test]
+fn connection_editor_new_group_commit_closes_select_and_keeps_pending_parent() {
+    let cx = TestAppContext::single();
+    let mut owner = connection_editor_owner(&cx);
+    owner.toggle_group_select();
+    owner.draft.as_mut().expect("draft").group_id = Some("parent".to_string());
+    owner.draft.as_mut().expect("draft").new_group_name = "  staging  ".to_string();
+
+    assert!(owner.commit_new_group("Group name is required".to_string()));
+
+    let editor = owner.draft.as_ref().expect("draft remains open");
+    assert!(!owner.group_select_is_open());
+    assert_eq!(editor.pending_group_name.as_deref(), Some("staging"));
+    assert_eq!(editor.pending_group_parent_id.as_deref(), Some("parent"));
 }
 
 #[test]

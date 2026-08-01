@@ -290,7 +290,7 @@ impl NyaTermApp {
                         this.set_ai_prompt_draft(format!("{prompt}\n\n{body}"), cx);
                         this.ai
                             .set_panel_status(format!("AI action loaded: {status_name}"));
-                        window.focus(this.ai.chat_focus());
+                        window.focus(this.ai.chat_focus(), cx);
                         cx.notify();
                     }))
             })

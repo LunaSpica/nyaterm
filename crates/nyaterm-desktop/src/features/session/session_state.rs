@@ -329,7 +329,7 @@ impl NyaTermApp {
         }
         self.session.dialogs.open_tab_actions(session_id, anchor);
         self.shell.set_status("tab actions opened".to_string());
-        window.focus(self.session.dialogs.tab_actions_focus());
+        window.focus(self.session.dialogs.tab_actions_focus(), cx);
         cx.notify();
     }
 
@@ -390,7 +390,7 @@ impl NyaTermApp {
             self.active_session_info_line()
                 .unwrap_or_else(|| "session info opened".to_string()),
         );
-        window.focus(self.session.dialogs.session_info_focus());
+        window.focus(self.session.dialogs.session_info_focus(), cx);
         cx.notify();
     }
 

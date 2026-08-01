@@ -50,7 +50,7 @@ impl NyaTermApp {
         };
         self.security
             .open_key_editor(editor, "SSH key editor opened".to_string());
-        window.focus(self.security.key_editor_focus());
+        window.focus(self.security.key_editor_focus(), cx);
         cx.notify();
     }
 
@@ -70,7 +70,7 @@ impl NyaTermApp {
             editor.focused_field = field;
             editor.error = None;
         }
-        window.focus(self.security.key_editor_focus());
+        window.focus(self.security.key_editor_focus(), cx);
         cx.notify();
     }
 

@@ -14,11 +14,14 @@
 use std::collections::HashMap;
 
 use gpui::{
-    AppContext, Context, Entity, InteractiveElement as _, IntoElement, MouseButton,
-    ParentElement as _, SharedString, Styled as _, Subscription, div, prelude::FluentBuilder as _,
-    px, rgb,
+    AppContext, Context, Entity, InteractiveElement as _, IntoElement, ParentElement as _,
+    SharedString, StatefulInteractiveElement as _, Styled as _, Subscription, div,
+    prelude::FluentBuilder as _, px, rgb,
 };
-use nyaterm_ui::{NyaInput, NyaInputEvent, NyaInputState};
+use nyaterm_ui::{
+    NYA_FORM_CONTROL_HEIGHT_PX, NyaInput, NyaInputEvent, NyaInputState, NyaNumberInput,
+    NyaNumberInputEvent, NyaNumberInputOptions, NyaNumberInputState,
+};
 
 use super::NyaTermApp;
 
@@ -72,8 +75,10 @@ pub(in crate::features) fn secret_input_setup(secret: bool) -> TextInputSetup {
 #[derive(Default)]
 pub(in crate::features) struct TextInputRegistry {
     fields: HashMap<SharedString, Entity<NyaInputState>>,
+    number_fields: HashMap<SharedString, Entity<NyaNumberInputState>>,
     /// Kept alive alongside its field, so edits keep arriving.
     subscriptions: HashMap<SharedString, Subscription>,
+    number_subscriptions: HashMap<SharedString, Subscription>,
 }
 
 impl NyaTermApp {
@@ -145,7 +150,7 @@ impl NyaTermApp {
             .when_else(
                 multi_line,
                 |this| this.h(px(88.)).py_2(),
-                |this| this.h(px(30.)).items_center(),
+                |this| this.h(px(NYA_FORM_CONTROL_HEIGHT_PX)).items_center(),
             )
             .min_w_0()
             .px_2()
@@ -159,8 +164,8 @@ impl NyaTermApp {
             }))
             .bg(rgb(palette.input))
             .cursor_text()
-            .on_mouse_down(MouseButton::Left, move |_, window, _| {
-                window.focus(&handle);
+            .on_click(move |_, window, cx| {
+                window.focus(&handle, cx);
             })
             .child(
                 div()
@@ -203,6 +208,65 @@ impl NyaTermApp {
             .child(input)
     }
 
+    pub(in crate::features) fn number_input(
+        &mut self,
+        id: impl Into<SharedString>,
+        seed: &str,
+        setup: NyaNumberInputOptions,
+        cx: &mut Context<Self>,
+    ) -> Entity<NyaNumberInputState> {
+        let id = id.into();
+        if let Some(field) = self.text_inputs.number_fields.get(&id) {
+            return field.clone();
+        }
+
+        let entity = cx.new(|cx| NyaNumberInputState::new(cx, seed.to_string(), setup));
+        let subscription_id = id.clone();
+        let subscription =
+            cx.subscribe(
+                &entity,
+                move |app: &mut NyaTermApp, _, event, cx| match event {
+                    NyaNumberInputEvent::Changed(text) | NyaNumberInputEvent::Submitted(text) => {
+                        app.on_text_input_changed(subscription_id.clone(), text.clone(), cx);
+                    }
+                    NyaNumberInputEvent::Stepped(_) => {}
+                },
+            );
+        self.text_inputs
+            .number_fields
+            .insert(id.clone(), entity.clone());
+        self.text_inputs
+            .number_subscriptions
+            .insert(id, subscription);
+        entity
+    }
+
+    pub(in crate::features) fn number_input_box<I: Into<SharedString>>(
+        &mut self,
+        id: I,
+        seed: &str,
+        setup: NyaNumberInputOptions,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement + use<I> {
+        let id = id.into();
+        let palette = self.theme_palette();
+        let field = self.number_input(id.clone(), seed, setup, cx);
+        div()
+            .id(id)
+            .h(px(NYA_FORM_CONTROL_HEIGHT_PX))
+            .min_w_0()
+            .flex()
+            .items_center()
+            .child(
+                div()
+                    .min_w_0()
+                    .flex_1()
+                    .text_xs()
+                    .text_color(rgb(palette.text))
+                    .child(NyaNumberInput::new(&field)),
+            )
+    }
+
     /// Push a value the runtime changed back into its input.
     pub(in crate::features) fn reset_text_input(
         &mut self,
@@ -211,6 +275,20 @@ impl NyaTermApp {
         cx: &mut impl AppContext,
     ) {
         if let Some(field) = self.text_inputs.fields.get(id) {
+            field.update(cx, |field, cx| field.set_content(text, cx));
+        }
+        if let Some(field) = self.text_inputs.number_fields.get(id) {
+            field.update(cx, |field, cx| field.set_content(text, cx));
+        }
+    }
+
+    pub(in crate::features) fn reset_number_input(
+        &mut self,
+        id: &str,
+        text: &str,
+        cx: &mut impl AppContext,
+    ) {
+        if let Some(field) = self.text_inputs.number_fields.get(id) {
             field.update(cx, |field, cx| field.set_content(text, cx));
         }
     }
@@ -222,7 +300,17 @@ impl NyaTermApp {
     /// ignored rather than panicking — a field can outlive one frame of the
     /// panel that made it.
     fn on_text_input_changed(&mut self, id: SharedString, text: String, cx: &mut Context<Self>) {
-        if let Some(rest) = id.strip_prefix("settings.search-engine.") {
+        if let Some(rest) = id.strip_prefix("settings.number.") {
+            self.apply_settings_number_input(rest, &text, cx);
+        } else if let Some(rest) = id.strip_prefix("ai.number.") {
+            self.apply_ai_number_input(rest, &text, cx);
+        } else if let Some(rest) = id.strip_prefix("cloud-sync.number.") {
+            self.apply_cloud_sync_number_input(rest, &text, cx);
+        } else if let Some(rest) = id.strip_prefix("appearance.number.") {
+            self.apply_appearance_number_input(rest, &text, cx);
+        } else if let Some(rest) = id.strip_prefix("session.number.") {
+            self.apply_session_number_input(rest, &text, cx);
+        } else if let Some(rest) = id.strip_prefix("settings.search-engine.") {
             self.apply_search_engine_input(rest, text, cx);
         } else if let Some(field) = id.strip_prefix("network.tunnel-editor.") {
             self.apply_network_tunnel_editor_input(field, text, cx);
@@ -355,6 +443,75 @@ impl NyaTermApp {
         }
     }
 
+    fn apply_settings_number_input(&mut self, id: &str, text: &str, cx: &mut Context<Self>) {
+        let Some(value) = parse_u32_input(text) else {
+            return;
+        };
+        match id {
+            "command-suggestion-min-chars" => self.set_command_suggestion_min_chars(value, cx),
+            "command-suggestion-max-chars" => self.set_command_suggestion_max_chars(value, cx),
+            "duplicate-session-command-delay" => {
+                self.set_duplicate_session_command_delay(value, cx)
+            }
+            "idle-lock-minutes" => self.set_idle_lock_minutes(value, cx),
+            "terminal-scrollback-lines" => self.set_terminal_scrollback_lines(value, cx),
+            "terminal-keep-alive-interval" => self.set_terminal_keep_alive_interval(value, cx),
+            "remote-stats-interval" => self.set_remote_stats_interval(value, cx),
+            "process-manager-interval" => self.set_process_manager_interval(value, cx),
+            "docker-manager-interval" => self.set_docker_manager_interval(value, cx),
+            "recording-memory-limit" => self.set_recording_memory_limit(value as u64, cx),
+            "transfer-download-threads" => self.set_transfer_download_threads(value, cx),
+            "transfer-upload-threads" => self.set_transfer_upload_threads(value, cx),
+            "transfer-max-retries" => self.set_transfer_max_retries(value, cx),
+            "transfer-buffer-size" => self.set_transfer_buffer_size(value, cx),
+            _ => {}
+        }
+    }
+
+    fn apply_ai_number_input(&mut self, id: &str, text: &str, cx: &mut Context<Self>) {
+        let Some(value) = parse_u64_input(text) else {
+            return;
+        };
+        match id {
+            "context-line-limit" => self.set_ai_context_line_limit(value as u32, cx),
+            "timeout-ms" => self.set_ai_timeout_ms(value, cx),
+            "agent-steps" => self.set_ai_agent_steps(value as u16, cx),
+            "agent-step-timeout-ms" => self.set_ai_agent_step_timeout_ms(value, cx),
+            "terminal-output-lines" => self.set_ai_terminal_output_lines(value as u16, cx),
+            "file-size-mb" => self.set_ai_file_size_mb(value, cx),
+            _ => {}
+        }
+    }
+
+    fn apply_cloud_sync_number_input(&mut self, id: &str, text: &str, cx: &mut Context<Self>) {
+        let Some(value) = parse_u64_input(text) else {
+            return;
+        };
+        if id == "debounce" {
+            self.set_cloud_sync_debounce(value, cx);
+        }
+    }
+
+    fn apply_appearance_number_input(&mut self, id: &str, text: &str, cx: &mut Context<Self>) {
+        let Some(value) = parse_u16_input(text) else {
+            return;
+        };
+        match id {
+            "terminal-font-size" => self.set_terminal_font_size_from_input(value, cx),
+            "ui-font-size" => self.set_ui_font_size_from_input(value, cx),
+            _ => {}
+        }
+    }
+
+    fn apply_session_number_input(&mut self, id: &str, text: &str, cx: &mut Context<Self>) {
+        let Some(value) = parse_u64_input(text) else {
+            return;
+        };
+        if id == "startup-delay" {
+            self.set_startup_command_delay(value, cx);
+        }
+    }
+
     /// Drop every input whose id starts with `prefix`.
     ///
     /// Called when the thing being edited closes, so reopening it seeds fresh
@@ -366,5 +523,23 @@ impl NyaTermApp {
         self.text_inputs
             .subscriptions
             .retain(|id, _| !id.starts_with(prefix));
+        self.text_inputs
+            .number_fields
+            .retain(|id, _| !id.starts_with(prefix));
+        self.text_inputs
+            .number_subscriptions
+            .retain(|id, _| !id.starts_with(prefix));
     }
+}
+
+fn parse_u16_input(text: &str) -> Option<u16> {
+    text.trim().parse::<u16>().ok()
+}
+
+fn parse_u32_input(text: &str) -> Option<u32> {
+    text.trim().parse::<u32>().ok()
+}
+
+fn parse_u64_input(text: &str) -> Option<u64> {
+    text.trim().parse::<u64>().ok()
 }

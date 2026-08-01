@@ -5,7 +5,7 @@ use super::super::tunnel::tunnel_editor_selector;
 use super::helpers::proxy_protocol_label;
 use crate::features::{NO_SELECTION_VALUE, NyaTermApp, TextInputSetup};
 use crate::models::{NetworkProxyEditorField, NetworkProxyEditorState};
-use nyaterm_ui::NyaSelectOption;
+use nyaterm_ui::{NyaNumberInputOptions, NyaSelectOption};
 
 pub(in crate::features::pages::tunnels) fn network_proxy_editor_content(
     palette: crate::theme::ThemePalette,
@@ -184,6 +184,28 @@ pub(in crate::features::pages::tunnels) fn proxy_editor_input(
     setup: TextInputSetup,
     cx: &mut Context<NyaTermApp>,
 ) -> gpui::AnyElement {
+    if field == NetworkProxyEditorField::Port {
+        let palette = app.theme_palette();
+        return div()
+            .min_w_0()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(rgb(palette.text_muted))
+                    .child(caption),
+            )
+            .child(app.number_input_box(
+                format!("network.proxy-editor.{}", proxy_editor_field_key(field)),
+                &value,
+                NyaNumberInputOptions::default().range(1.0, 65535.0),
+                cx,
+            ))
+            .into_any_element();
+    }
+
     app.text_input_field(
         format!("network.proxy-editor.{}", proxy_editor_field_key(field)),
         caption,

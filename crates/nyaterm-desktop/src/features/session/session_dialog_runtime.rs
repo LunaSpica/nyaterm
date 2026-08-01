@@ -154,6 +154,15 @@ impl NyaTermApp {
         cx.notify();
     }
 
+    pub(in crate::features) fn set_startup_command_delay(
+        &mut self,
+        delay_ms: u64,
+        cx: &mut Context<Self>,
+    ) {
+        self.session.dialogs.set_startup_command_delay(delay_ms);
+        cx.notify();
+    }
+
     pub(in crate::features) fn submit_startup_command_dialog(
         &mut self,
         window: &mut Window,

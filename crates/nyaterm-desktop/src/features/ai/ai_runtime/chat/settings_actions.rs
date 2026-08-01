@@ -57,7 +57,7 @@ impl NyaTermApp {
         let input_id = Self::ai_action_text_input_id(kind, &action_id, field);
         let input = self.text_input(input_id, &value, setup, cx);
         self.ai.focus_settings_action(kind, action_id, field);
-        window.focus(&input.read(cx).focus_handle());
+        window.focus(&input.read(cx).focus_handle(), cx);
         cx.notify();
     }
 
@@ -93,7 +93,7 @@ impl NyaTermApp {
             TextInputSetup::placeholder(self.tr("ai.actionName")),
             cx,
         );
-        window.focus(&input.read(cx).focus_handle());
+        window.focus(&input.read(cx).focus_handle(), cx);
         self.persist_ai_settings_now(cx);
     }
 
@@ -124,7 +124,7 @@ impl NyaTermApp {
         match event.keystroke.key.as_str() {
             "escape" => {
                 let focus = self.ai.cancel_settings_action_edit();
-                window.focus(&focus);
+                window.focus(&focus, cx);
                 cx.notify();
             }
             "tab" => {

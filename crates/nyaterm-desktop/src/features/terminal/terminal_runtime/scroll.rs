@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use gpui::{Context, KeyDownEvent, Timer};
+use gpui::{Context, KeyDownEvent};
 use nyaterm_core::{
     TerminalInputState, TerminalResizeGeometry,
     terminal_resize_geometry_for_size_with_insets_and_scale, terminal_snapped_cell_height,
@@ -665,7 +665,9 @@ impl NyaTermApp {
 
     fn schedule_terminal_scroll_position_notify(&mut self, cx: &mut Context<Self>) {
         cx.spawn(async move |this, cx| {
-            Timer::after(TERMINAL_SCROLL_POSITION_NOTIFY_DELAY).await;
+            cx.background_executor()
+                .timer(TERMINAL_SCROLL_POSITION_NOTIFY_DELAY)
+                .await;
             let _ = this.update(cx, |this, cx| {
                 let (session_ids, snapshot_only_session_ids) =
                     this.shell.drain_terminal_scroll_position();
@@ -759,7 +761,9 @@ impl NyaTermApp {
             return;
         }
         cx.spawn(async move |this, cx| {
-            Timer::after(TERMINAL_USER_SCROLL_ACTIVE_WINDOW).await;
+            cx.background_executor()
+                .timer(TERMINAL_USER_SCROLL_ACTIVE_WINDOW)
+                .await;
             let _ = this.update(cx, |this, cx| {
                 this.flush_terminal_user_scroll_idle_notify(cx);
             });
@@ -775,7 +779,7 @@ impl NyaTermApp {
             TERMINAL_USER_SCROLL_ACTIVE_WINDOW,
         ) {
             cx.spawn(async move |this, cx| {
-                Timer::after(delay).await;
+                cx.background_executor().timer(delay).await;
                 let _ = this.update(cx, |this, cx| {
                     this.flush_terminal_user_scroll_idle_notify(cx);
                 });
@@ -1262,7 +1266,9 @@ impl NyaTermApp {
             return;
         }
         cx.spawn(async move |this, cx| {
-            Timer::after(TERMINAL_SCROLLBAR_DRAG_NOTIFY_DELAY).await;
+            cx.background_executor()
+                .timer(TERMINAL_SCROLLBAR_DRAG_NOTIFY_DELAY)
+                .await;
             let _ = this.update(cx, |this, cx| {
                 this.flush_terminal_scrollbar_drag_visual_notify(cx);
             });

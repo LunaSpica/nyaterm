@@ -117,12 +117,12 @@ impl NyaTermApp {
                 .cloned()
             {
                 Some(field) => {
-                    window.focus(&field.read(cx).focus_handle());
+                    window.focus(&field.read(cx).focus_handle(), cx);
                     field.update(cx, |field, cx| field.select_all(window, cx));
                 }
                 None => {
                     let editor_focus = self.connection_state.editor_focus_handle();
-                    window.focus(&editor_focus);
+                    window.focus(&editor_focus, cx);
                 }
             }
         }
@@ -140,6 +140,29 @@ impl NyaTermApp {
     pub(in crate::features) fn toggle_connection_icon_picker(&mut self, cx: &mut Context<Self>) {
         self.connection_state.toggle_editor_icon_picker();
         cx.notify();
+    }
+
+    pub(in crate::features) fn toggle_connection_group_select(&mut self, cx: &mut Context<Self>) {
+        self.connection_state.toggle_editor_group_select();
+        cx.notify();
+    }
+
+    pub(in crate::features) fn close_connection_group_select(&mut self, cx: &mut Context<Self>) {
+        self.connection_state.close_editor_group_select();
+        cx.notify();
+    }
+
+    pub(in crate::features) fn set_connection_group_select_trigger_bounds(
+        &mut self,
+        bounds: gpui::Bounds<gpui::Pixels>,
+        cx: &mut Context<Self>,
+    ) {
+        if self
+            .connection_state
+            .set_editor_group_select_trigger_bounds(bounds)
+        {
+            cx.notify();
+        }
     }
 
     pub(in crate::features) fn set_connection_editor_icon(
@@ -319,24 +342,6 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    /// Step a numeric field by one, for the spinner buttons beside it.
-    pub(in crate::features) fn step_connection_editor_number(
-        &mut self,
-        field: ConnectionEditorField,
-        delta: i64,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(entity) = self.connection_state.editor_fields().get(&field).cloned() else {
-            return;
-        };
-        let (min, max) = connection_editor_number_bounds(field);
-        let next = stepped_number(&entity.read(cx).value(cx), delta, min, max);
-        let next = next.to_string();
-        self.connection_state.reset_editor_field(field, &next, cx);
-        self.connection_state.set_editor_field_text(field, next);
-        cx.notify();
-    }
-
     pub(in crate::features) fn handle_connection_editor_key_down(
         &mut self,
         event: &KeyDownEvent,
@@ -353,6 +358,11 @@ impl NyaTermApp {
             "escape" => {
                 if self.connection_state.editor_icon_picker_is_open() {
                     self.connection_state.close_editor_icon_picker();
+                    cx.notify();
+                    return;
+                }
+                if self.connection_state.editor_group_select_is_open() {
+                    self.connection_state.close_editor_group_select();
                     cx.notify();
                     return;
                 }
@@ -439,56 +449,5 @@ impl NyaTermApp {
             }
             Err(error) => self.set_connection_editor_error(error, cx),
         }
-    }
-}
-
-/// The range a spinner may step a field through.
-///
-/// A port is 1..=65535 the way every other tool writes it; the post-login delay
-/// is a wait in milliseconds, capped where waiting stops being plausible.
-fn connection_editor_number_bounds(field: ConnectionEditorField) -> (i64, i64) {
-    match field {
-        ConnectionEditorField::Port => (1, 65535),
-        ConnectionEditorField::PostLoginDelay => (0, 60_000),
-        ConnectionEditorField::BaudRate => (50, 4_000_000),
-        _ => (0, i64::MAX),
-    }
-}
-
-/// Step `text` by `delta`, clamped, treating anything unparseable as the bound
-/// the step is heading away from — a spinner on an empty box should still move.
-fn stepped_number(text: &str, delta: i64, min: i64, max: i64) -> i64 {
-    let current =
-        text.trim()
-            .parse::<i64>()
-            .unwrap_or(if delta > 0 { min - delta } else { max - delta });
-    current.saturating_add(delta).clamp(min, max)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{connection_editor_number_bounds, stepped_number};
-    use crate::models::ConnectionEditorField;
-
-    #[test]
-    fn stepped_number_clamps_to_its_bounds() {
-        assert_eq!(stepped_number("22", 1, 1, 65535), 23);
-        assert_eq!(stepped_number("65535", 1, 1, 65535), 65535);
-        assert_eq!(stepped_number("1", -1, 1, 65535), 1);
-    }
-
-    #[test]
-    fn stepped_number_starts_from_a_bound_when_the_box_is_empty() {
-        assert_eq!(stepped_number("", 1, 1, 65535), 1);
-        assert_eq!(stepped_number("  ", -1, 1, 65535), 65535);
-        assert_eq!(stepped_number("not a port", 1, 1, 65535), 1);
-    }
-
-    #[test]
-    fn port_steps_within_the_usual_range() {
-        assert_eq!(
-            connection_editor_number_bounds(ConnectionEditorField::Port),
-            (1, 65535)
-        );
     }
 }

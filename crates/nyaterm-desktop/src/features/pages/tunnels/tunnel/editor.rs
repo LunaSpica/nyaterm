@@ -4,7 +4,7 @@ use gpui::{App, ClickEvent, Context, FontWeight, IntoElement, Window, div, px, r
 use crate::features::{NO_SELECTION_VALUE, NyaTermApp, TextInputSetup};
 use crate::models::{NetworkTunnelEditorField, NetworkTunnelEditorState};
 use nyaterm_core::ConnectionType;
-use nyaterm_ui::NyaSelectOption;
+use nyaterm_ui::{NyaNumberInputOptions, NyaSelectOption};
 
 pub(in crate::features::pages::tunnels) fn network_tunnel_editor_content(
     palette: crate::theme::ThemePalette,
@@ -235,6 +235,31 @@ pub(in crate::features::pages::tunnels) fn tunnel_editor_input(
     setup: TextInputSetup,
     cx: &mut Context<NyaTermApp>,
 ) -> gpui::AnyElement {
+    if matches!(
+        field,
+        NetworkTunnelEditorField::ListenPort | NetworkTunnelEditorField::TargetPort
+    ) {
+        let palette = app.theme_palette();
+        return div()
+            .min_w_0()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(rgb(palette.text_muted))
+                    .child(caption),
+            )
+            .child(app.number_input_box(
+                format!("network.tunnel-editor.{}", tunnel_editor_field_key(field)),
+                &value,
+                NyaNumberInputOptions::default().range(1.0, 65535.0),
+                cx,
+            ))
+            .into_any_element();
+    }
+
     app.text_input_field(
         format!("network.tunnel-editor.{}", tunnel_editor_field_key(field)),
         caption,

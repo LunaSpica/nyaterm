@@ -175,7 +175,7 @@ fn open_quick_command_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut App)
                 true
             });
             let editor_focus = view_app.read(cx).commands.quick_editor_focus().clone();
-            window.focus(&editor_focus);
+            window.focus(&editor_focus, cx);
             let view = cx.new(|cx| QuickCommandWindow::new(view_app, cx));
             cx.new(|cx| nya_root(view, window, cx))
         },

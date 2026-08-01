@@ -44,7 +44,7 @@ impl NyaTermApp {
             .pt(px(96.))
             .track_focus(self.terminal.actions_focus())
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(this.terminal.actions_focus());
+                window.focus(this.terminal.actions_focus(), cx);
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
@@ -264,7 +264,7 @@ impl NyaTermApp {
                                                 this.ai.set_panel_status(
                                                     "terminal output loaded into AI prompt",
                                                 );
-                                                window.focus(this.ai.chat_focus());
+                                                window.focus(this.ai.chat_focus(), cx);
                                             }
                                             cx.notify();
                                         }),
@@ -291,7 +291,7 @@ impl NyaTermApp {
                                                 this.ai.set_panel_status(
                                                     "terminal buffer loaded into AI prompt",
                                                 );
-                                                window.focus(this.ai.chat_focus());
+                                                window.focus(this.ai.chat_focus(), cx);
                                             }
                                             cx.notify();
                                         }),
@@ -306,7 +306,7 @@ impl NyaTermApp {
                                 cx.listener(|this, _, window, cx| {
                                     this.terminal.close_actions();
                                     this.set_bottom_panel_mode(BottomPanelMode::CommandSend);
-                                    window.focus(this.send_command.editor_focus());
+                                    window.focus(this.send_command.editor_focus(), cx);
                                     cx.notify();
                                 }),
                             )),

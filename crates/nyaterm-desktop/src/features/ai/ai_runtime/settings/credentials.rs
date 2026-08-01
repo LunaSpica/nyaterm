@@ -52,7 +52,7 @@ impl NyaTermApp {
                 .unwrap_or(0)
         );
         let focus = self.ai.add_settings_credential(id);
-        window.focus(&focus);
+        window.focus(&focus, cx);
         self.persist_ai_settings_now(cx);
     }
 

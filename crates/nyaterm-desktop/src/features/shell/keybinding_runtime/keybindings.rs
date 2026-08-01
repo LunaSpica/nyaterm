@@ -29,7 +29,7 @@ impl NyaTermApp {
     ) {
         self.settings.begin_keybinding_recording(shortcut_id);
         self.shell.set_status("recording shortcut".to_string());
-        window.focus(self.settings.keybinding_focus());
+        window.focus(self.settings.keybinding_focus(), cx);
         cx.notify();
     }
 

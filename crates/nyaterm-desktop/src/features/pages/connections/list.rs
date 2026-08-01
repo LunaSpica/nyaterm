@@ -5,13 +5,16 @@ use gpui::{
     prelude::{
         FluentBuilder, InteractiveElement, ParentElement, StatefulInteractiveElement, Styled,
     },
-    px, rgb, rgba, svg,
+    px, rgb, svg,
 };
 use nyaterm_core::{Group, ProxyConfig, SavedConnection, natural_compare, truncate_preview};
 
 use crate::features::{NyaTermApp, format_last_used_ms};
 use crate::models::{ConnectionEditorField, ConnectionEditorSelect, ConnectionSortMode};
-use nyaterm_ui::{NyaIconButton, NyaInput, NyaInputState, NyaSelect, NyaSelectState};
+use nyaterm_ui::{
+    NYA_FORM_CONTROL_HEIGHT_PX, NyaInput, NyaInputState, NyaNumberInput, NyaNumberInputState,
+    NyaSelect, NyaSelectState,
+};
 
 #[derive(Clone)]
 pub(super) enum ConnectionListRow {
@@ -293,46 +296,6 @@ pub(super) fn connection_tree_indent_px(depth: usize) -> f32 {
     }
 }
 
-pub(super) fn connection_kind_tab(
-    palette: crate::theme::ThemePalette,
-    label: impl Into<SharedString>,
-    selected: bool,
-    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
-) -> impl IntoElement {
-    let label = label.into();
-    div()
-        .id(SharedString::from(format!("connection-kind-tab-{label}")))
-        .h(px(28.))
-        .flex_1()
-        .min_w_0()
-        .flex()
-        .items_center()
-        .justify_center()
-        .rounded_sm()
-        .border_1()
-        .border_color(if selected {
-            rgba((palette.primary << 8) | 0x66)
-        } else {
-            rgba(0x00000000)
-        })
-        .text_xs()
-        .font_weight(FontWeight(600.))
-        .cursor_pointer()
-        .text_color(if selected {
-            rgb(palette.primary)
-        } else {
-            rgb(palette.text_muted)
-        })
-        .bg(if selected {
-            rgba((palette.primary << 8) | 0x18)
-        } else {
-            rgba(0x00000000)
-        })
-        .hover(|this| this.bg(rgb(palette.hover)).text_color(rgb(palette.text)))
-        .child(label)
-        .on_click(on_click)
-}
-
 #[derive(Clone)]
 pub(super) struct ConnectionEditorChoice {
     pub value: Option<String>,
@@ -340,83 +303,10 @@ pub(super) struct ConnectionEditorChoice {
     pub selected: bool,
 }
 
-#[derive(Clone)]
-pub(super) struct ConnectionGroupChoice {
-    pub value: Option<String>,
-    pub label: String,
-    pub depth: usize,
-    pub selected: bool,
-}
-
 pub(super) struct ConnectionEditorRenderContext<'a, 'cx> {
     pub palette: crate::theme::ThemePalette,
     pub fields: &'a ConnectionEditorFields,
     pub cx: &'a mut Context<'cx, NyaTermApp>,
-}
-
-pub(super) fn connection_editor_group_select(
-    render: ConnectionEditorRenderContext<'_, '_>,
-    label: &'static str,
-    parent_hint: String,
-) -> impl IntoElement {
-    let ConnectionEditorRenderContext {
-        palette,
-        fields,
-        cx,
-    } = render;
-    let new_group_entity = fields.get(&ConnectionEditorField::NewGroupName);
-    let new_group_field = new_group_entity.cloned();
-    let can_add = new_group_entity.is_some_and(|field| !field.read(cx).value(cx).trim().is_empty());
-    div()
-        .id("connection-editor-group")
-        .min_w_0()
-        .flex_1()
-        .flex()
-        .flex_col()
-        .gap_1()
-        .child(
-            div()
-                .text_xs()
-                .text_color(rgb(palette.text_muted))
-                .child(label),
-        )
-        .child(
-            div()
-                .id("connection-editor-group-select-container")
-                .h(px(34.))
-                .min_w_0()
-                .child(NyaSelect::new(
-                    &fields.select(ConnectionEditorSelect::Group),
-                )),
-        )
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .gap_1()
-                .child(
-                    div()
-                        .id("connection-editor-new-group-input")
-                        .h(px(30.))
-                        .min_w_0()
-                        .flex_1()
-                        .children(new_group_field),
-                )
-                .child(
-                    NyaIconButton::new("connection-editor-new-group-add", "icons/conn/add.svg")
-                        .disabled(!can_add)
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.commit_connection_editor_new_group(cx);
-                        })),
-                ),
-        )
-        .child(
-            div()
-                .px_1()
-                .text_size(px(10.))
-                .text_color(rgb(palette.text_dimmed))
-                .child(parent_hint),
-        )
 }
 
 pub(super) fn connection_editor_select(
@@ -428,8 +318,9 @@ pub(super) fn connection_editor_select(
     let ConnectionEditorRenderContext {
         palette,
         fields,
-        cx: _,
+        cx,
     } = render;
+    let _ = cx;
     let label = label.into();
     let show_label = !label.is_empty();
     div()
@@ -445,7 +336,7 @@ pub(super) fn connection_editor_select(
         .child(
             div()
                 .id(SharedString::from(format!("{id}-container")))
-                .h(px(34.))
+                .h(px(EDITOR_CONTROL_HEIGHT_PX))
                 .min_w_0()
                 .child(NyaSelect::new(&fields.select(select))),
         )
@@ -699,19 +590,32 @@ mod tests {
 /// own update panics.
 pub(super) struct ConnectionEditorFields {
     fields: HashMap<ConnectionEditorField, Entity<NyaInputState>>,
+    number_fields: HashMap<ConnectionEditorField, Entity<NyaNumberInputState>>,
     selects: HashMap<ConnectionEditorSelect, Entity<NyaSelectState>>,
 }
 
 impl ConnectionEditorFields {
     pub(super) fn new(
         fields: HashMap<ConnectionEditorField, Entity<NyaInputState>>,
+        number_fields: HashMap<ConnectionEditorField, Entity<NyaNumberInputState>>,
         selects: HashMap<ConnectionEditorSelect, Entity<NyaSelectState>>,
     ) -> Self {
-        Self { fields, selects }
+        Self {
+            fields,
+            number_fields,
+            selects,
+        }
     }
 
     pub(super) fn get(&self, field: &ConnectionEditorField) -> Option<&Entity<NyaInputState>> {
         self.fields.get(field)
+    }
+
+    pub(super) fn get_number(
+        &self,
+        field: &ConnectionEditorField,
+    ) -> Option<&Entity<NyaNumberInputState>> {
+        self.number_fields.get(field)
     }
 
     pub(super) fn select(&self, select: ConnectionEditorSelect) -> Entity<NyaSelectState> {
@@ -787,7 +691,7 @@ pub(super) fn field_caption(
 }
 
 /// The height every input, select and stepper in the editor shares.
-pub(super) const EDITOR_CONTROL_HEIGHT_PX: f32 = 30.;
+pub(super) const EDITOR_CONTROL_HEIGHT_PX: f32 = NYA_FORM_CONTROL_HEIGHT_PX;
 
 /// A caption above one editable field.
 ///
@@ -824,6 +728,7 @@ pub(super) fn editor_field_box(
     let focused = entity.is_some_and(|field| field.read(cx).has_focus());
     div()
         .h(px(EDITOR_CONTROL_HEIGHT_PX))
+        .id("connection-list-search-input-shell")
         .min_w_0()
         .px_2()
         .flex()
@@ -838,8 +743,8 @@ pub(super) fn editor_field_box(
         .bg(rgb(palette.input))
         .cursor_text()
         .when_some(handle, |row, handle| {
-            row.on_mouse_down(gpui::MouseButton::Left, move |_, window, _| {
-                window.focus(&handle);
+            row.on_click(move |_, window, cx| {
+                window.focus(&handle, cx);
             })
         })
         .children(entity.map(|field| {
@@ -852,19 +757,16 @@ pub(super) fn editor_field_box(
         }))
 }
 
-/// A numeric field flanked by the two buttons that step it.
-///
-/// Tauri's port and delay inputs are spinners; typing still works, so the
-/// buttons are a shortcut rather than the only way in.
+/// A numeric field backed by gpui-component's spinner control.
 pub(super) fn editor_stepper_field(
     palette: crate::theme::ThemePalette,
     label: impl Into<FieldLabel>,
     field: ConnectionEditorField,
     fields: &ConnectionEditorFields,
-    cx: &mut Context<NyaTermApp>,
+    _cx: &App,
 ) -> impl IntoElement {
     let label = label.into();
-    let box_element = editor_field_box(palette, field, fields, cx).into_any_element();
+    let entity = fields.get_number(&field);
     div()
         .flex()
         .flex_col()
@@ -874,50 +776,19 @@ pub(super) fn editor_stepper_field(
         })
         .child(
             div()
+                .h(px(EDITOR_CONTROL_HEIGHT_PX))
+                .min_w_0()
                 .flex()
                 .items_center()
-                .gap_1()
-                .child(stepper_button(
-                    palette,
-                    field,
-                    "icons/conn/remove.svg",
-                    -1,
-                    cx,
-                ))
-                .child(div().min_w_0().flex_1().child(box_element))
-                .child(stepper_button(palette, field, "icons/conn/add.svg", 1, cx)),
+                .children(entity.map(|field| {
+                    div()
+                        .min_w_0()
+                        .flex_1()
+                        .text_xs()
+                        .text_color(rgb(palette.text))
+                        .child(NyaNumberInput::new(field))
+                })),
         )
-}
-
-fn stepper_button(
-    palette: crate::theme::ThemePalette,
-    field: ConnectionEditorField,
-    icon: &'static str,
-    delta: i64,
-    cx: &mut Context<NyaTermApp>,
-) -> impl IntoElement {
-    div()
-        .id(SharedString::from(format!("stepper-{delta}-{field:?}")))
-        .size(px(EDITOR_CONTROL_HEIGHT_PX))
-        .flex_none()
-        .flex()
-        .items_center()
-        .justify_center()
-        .rounded_sm()
-        .border_1()
-        .border_color(rgb(palette.border))
-        .bg(rgb(palette.input))
-        .cursor_pointer()
-        .hover(|this| this.bg(rgb(palette.hover)))
-        .child(
-            svg()
-                .size(px(14.))
-                .path(icon)
-                .text_color(rgb(palette.text_muted)),
-        )
-        .on_click(cx.listener(move |this, _, _, cx| {
-            this.step_connection_editor_number(field, delta, cx);
-        }))
 }
 
 pub(super) fn icon_action_button(

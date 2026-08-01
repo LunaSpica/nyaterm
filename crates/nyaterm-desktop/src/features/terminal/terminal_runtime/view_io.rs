@@ -465,7 +465,7 @@ impl NyaTermApp {
     ) {
         self.terminal.menus.actions_open = true;
         self.shell.set_status("terminal actions opened".to_string());
-        window.focus(&self.terminal.menus.actions_focus);
+        window.focus(&self.terminal.menus.actions_focus, cx);
         cx.notify();
     }
 
@@ -476,7 +476,7 @@ impl NyaTermApp {
     ) {
         self.terminal.menus.actions_open = false;
         self.shell.set_status("terminal actions closed".to_string());
-        window.focus(&self.terminal.input.focus);
+        window.focus(&self.terminal.input.focus, cx);
         cx.notify();
     }
 

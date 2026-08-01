@@ -1,15 +1,12 @@
 use super::state::SendCommandBarViewState;
-use gpui::{
-    Context, FontWeight, IntoElement, KeyDownEvent, SharedString, div, prelude::*, px, rgb,
-};
+use gpui::{Context, IntoElement, div, prelude::*, px};
 use nyaterm_transport::SessionKind;
-use nyaterm_ui::{NyaInput, NyaSelectOption};
+use nyaterm_ui::{NyaNumberInputOptions, NyaSelectOption};
 
-use super::super::{send_command_control_group, send_command_stepper_button};
-use crate::features::{NyaTermApp, TextInputSetup};
+use super::super::send_command_control_group;
+use crate::features::NyaTermApp;
 use crate::send_command::{
-    SendCommandControlFocus, SendCommandDataType, SendCommandLineEnding, SendCommandMode,
-    SendCommandTarget,
+    SendCommandDataType, SendCommandLineEnding, SendCommandMode, SendCommandTarget,
 };
 
 impl NyaTermApp {
@@ -21,20 +18,6 @@ impl NyaTermApp {
         let palette = state.palette;
         let is_sending = state.is_sending;
         let is_serial = matches!(self.active_session_kind(), Some(SessionKind::Serial));
-        let count_input = self.text_input(
-            "send-command.count",
-            &state.send.count_input,
-            TextInputSetup::default(),
-            cx,
-        );
-        let count_focused = count_input.read(cx).has_focus();
-        let interval_input = self.text_input(
-            "send-command.interval",
-            &state.send.interval_input,
-            TextInputSetup::default(),
-            cx,
-        );
-        let interval_focused = interval_input.read(cx).has_focus();
         let data_options = vec![
             NyaSelectOption::new("text", self.tr("serialSend.text")),
             NyaSelectOption::new("hex", self.tr("serialSend.hex")),
@@ -156,128 +139,34 @@ impl NyaTermApp {
             .child(send_command_control_group(
                 palette,
                 self.tr("serialSend.count"),
-                div()
-                    .h_full()
-                    .flex()
-                    .items_center()
-                    .child(send_command_stepper_button(
-                        palette,
-                        "bottom-command-count-down",
-                        "-",
-                        is_sending,
-                        cx.listener(|this, _, _, cx| {
-                            this.adjust_send_command_count(-1, cx);
-                        }),
-                    ))
-                    .child(
-                        div()
-                            .id(SharedString::from("bottom-command-count-input"))
-                            .min_w(px(44.))
-                            .h_full()
-                            .px_1()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .border_l_1()
-                            .border_r_1()
-                            .border_color(rgb(if count_focused {
-                                palette.link
-                            } else {
-                                palette.border
-                            }))
-                            .bg(if count_focused {
-                                rgb(palette.input)
-                            } else {
-                                rgb(0x00000000)
-                            })
-                            .font_family(crate::features::gpui_code_font_family())
-                            .text_size(px(12.))
-                            .font_weight(FontWeight(600.))
-                            .text_color(rgb(if is_sending {
-                                palette.text_dimmed
-                            } else {
-                                palette.text
-                            }))
-                            .when(!is_sending, |this| this.cursor_text())
-                            .child(
-                                div()
-                                    .min_w(px(36.))
-                                    .flex_1()
-                                    .child(NyaInput::new(&count_input)),
-                            )
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.focus_send_command_control(
-                                    SendCommandControlFocus::Count,
-                                    window,
-                                    cx,
-                                );
-                            }))
-                            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
-                                cx.stop_propagation();
-                                this.handle_send_command_control_key_down(event, window, cx);
-                            })),
-                    )
-                    .child(send_command_stepper_button(
-                        palette,
-                        "bottom-command-count-up",
-                        "+",
-                        is_sending,
-                        cx.listener(|this, _, _, cx| {
-                            this.adjust_send_command_count(1, cx);
-                        }),
-                    )),
+                div().w(px(112.)).child(
+                    self.number_input_box(
+                        "send-command.count",
+                        &state.send.count_input,
+                        NyaNumberInputOptions::default()
+                            .range(1.0, 9_999.0)
+                            .step(1.0)
+                            .allow_infinity(true)
+                            .disabled(is_sending),
+                        cx,
+                    ),
+                ),
             ))
             .child(send_command_control_group(
                 palette,
                 self.tr("serialSend.interval"),
-                div().h_full().flex().items_center().child(
-                    div()
-                        .id(SharedString::from("bottom-command-interval-input"))
-                        .min_w(px(58.))
-                        .h_full()
-                        .px_2()
-                        .flex()
-                        .items_center()
-                        .justify_end()
-                        .gap_1()
-                        .bg(if interval_focused {
-                            rgb(palette.input)
-                        } else {
-                            rgb(0x00000000)
-                        })
-                        .font_family(crate::features::gpui_code_font_family())
-                        .text_size(px(12.))
-                        .font_weight(FontWeight(600.))
-                        .text_color(rgb(if is_sending {
-                            palette.text_dimmed
-                        } else {
-                            palette.text
-                        }))
-                        .when(!is_sending, |this| this.cursor_text())
-                        .child(
-                            div()
-                                .min_w(px(42.))
-                                .flex_1()
-                                .child(NyaInput::new(&interval_input)),
-                        )
-                        .child(
-                            div()
-                                .text_size(px(10.))
-                                .font_weight(FontWeight(500.))
-                                .text_color(rgb(palette.text_dimmed))
-                                .child(self.tr("serialSend.seconds")),
-                        )
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            this.focus_send_command_control(
-                                SendCommandControlFocus::Interval,
-                                window,
-                                cx,
-                            );
-                        }))
-                        .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
-                            cx.stop_propagation();
-                            this.handle_send_command_control_key_down(event, window, cx);
-                        })),
+                div().w(px(136.)).child(
+                    self.number_input_box(
+                        "send-command.interval",
+                        &state.send.interval_input,
+                        NyaNumberInputOptions::default()
+                            .range(0.0, 60.0)
+                            .step(0.01)
+                            .decimal_places(2)
+                            .suffix(self.tr("serialSend.seconds"))
+                            .disabled(is_sending),
+                        cx,
+                    ),
                 ),
             ))
             .when(state.is_serial_text_line, |this| {

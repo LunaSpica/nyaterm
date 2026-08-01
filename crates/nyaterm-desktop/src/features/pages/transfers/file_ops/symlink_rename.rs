@@ -178,7 +178,7 @@ impl NyaTermApp {
         if !self.open_transfer_rename_for_path(old_path, cx) {
             return;
         }
-        window.focus(self.transfer.rename_focus());
+        window.focus(self.transfer.rename_focus(), cx);
         cx.notify();
     }
 

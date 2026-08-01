@@ -60,7 +60,7 @@ impl NyaTermApp {
         };
         self.security
             .open_credential_editor(editor, "credential editor opened".to_string());
-        window.focus(self.security.credential_editor_focus());
+        window.focus(self.security.credential_editor_focus(), cx);
         cx.notify();
     }
 

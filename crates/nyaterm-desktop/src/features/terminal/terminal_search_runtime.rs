@@ -26,7 +26,7 @@ impl NyaTermApp {
             cx,
         );
         self.refresh_terminal_search_state(cx);
-        window.focus(&field.read(cx).focus_handle());
+        window.focus(&field.read(cx).focus_handle(), cx);
     }
 
     pub(in crate::features) fn close_terminal_search(
@@ -38,7 +38,7 @@ impl NyaTermApp {
         self.terminal.search.active_index = 0;
         self.forget_text_inputs("terminal.search.");
         self.shell.set_status("terminal search closed".to_string());
-        window.focus(&self.terminal.input.focus);
+        window.focus(&self.terminal.input.focus, cx);
         self.notify_active_terminal_surface(cx);
         cx.notify();
     }

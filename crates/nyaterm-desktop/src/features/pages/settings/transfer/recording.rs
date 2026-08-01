@@ -1,6 +1,7 @@
-use gpui::{Context, FontWeight, IntoElement, SharedString, div, prelude::*, px, rgb};
+use gpui::{Context, IntoElement, SharedString, div, prelude::*, px};
+use nyaterm_ui::NyaNumberInputOptions;
 
-use crate::features::{NyaTermApp, TextInputSetup, gpui_code_font_family};
+use crate::features::{NyaTermApp, TextInputSetup};
 use crate::widgets::small_button;
 
 use super::super::{settings_form_row, settings_form_section, settings_switch};
@@ -103,36 +104,15 @@ impl NyaTermApp {
                     Some(SharedString::from(
                         self.tr("settings.recordingMemoryLimitDesc"),
                     )),
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_1()
-                        .child(small_button(
-                            palette,
-                            "settings-recording-memory-minus",
-                            "-1 MiB",
-                            cx.listener(|this, _, _, cx| {
-                                this.adjust_recording_memory_limit(-1, cx);
-                            }),
-                        ))
-                        .child(
-                            div()
-                                .min_w(px(42.))
-                                .text_center()
-                                .font_family(gpui_code_font_family())
-                                .text_size(px(12.))
-                                .font_weight(FontWeight(700.))
-                                .text_color(rgb(palette.text))
-                                .child(format!("{memory_mib}")),
-                        )
-                        .child(small_button(
-                            palette,
-                            "settings-recording-memory-plus",
-                            "+1 MiB",
-                            cx.listener(|this, _, _, cx| {
-                                this.adjust_recording_memory_limit(1, cx);
-                            }),
-                        )),
+                    self.number_input_box(
+                        "settings.number.recording-memory-limit",
+                        memory_mib.to_string().as_str(),
+                        NyaNumberInputOptions::default()
+                            .range(1.0, 512.0)
+                            .step(1.0)
+                            .suffix("MiB"),
+                        cx,
+                    ),
                 )),
         ))
     }

@@ -268,7 +268,7 @@ impl NyaTermApp {
                                 MouseButton::Left,
                                 cx.listener(move |this, _, window, cx| {
                                     this.close_quick_command_toolbar_popovers();
-                                    window.focus(&search_focus);
+                                    window.focus(&search_focus, cx);
                                     cx.notify();
                                 }),
                             )

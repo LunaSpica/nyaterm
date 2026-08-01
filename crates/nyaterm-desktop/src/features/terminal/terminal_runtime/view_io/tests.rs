@@ -28,6 +28,7 @@ fn key_event(key: &str, key_char: Option<&str>, modifiers: gpui::Modifiers) -> K
             key_char: key_char.map(str::to_string),
         },
         is_held: false,
+        prefer_character_input: false,
     }
 }
 

@@ -24,7 +24,7 @@ impl NyaTermApp {
         self.shell
             .set_status("quick command editor opened".to_string());
         if !self.open_quick_command_window(cx) {
-            window.focus(self.commands.quick_editor_focus());
+            window.focus(self.commands.quick_editor_focus(), cx);
         }
         cx.notify();
     }
@@ -55,7 +55,7 @@ impl NyaTermApp {
         self.shell
             .set_status("quick command editor opened".to_string());
         if !self.open_quick_command_window(cx) {
-            window.focus(self.commands.quick_editor_focus());
+            window.focus(self.commands.quick_editor_focus(), cx);
         }
         cx.notify();
     }
@@ -100,7 +100,7 @@ impl NyaTermApp {
             });
         self.shell
             .set_status("quick command details opened".to_string());
-        window.focus(self.commands.quick_details_focus());
+        window.focus(self.commands.quick_details_focus(), cx);
         cx.notify();
     }
 

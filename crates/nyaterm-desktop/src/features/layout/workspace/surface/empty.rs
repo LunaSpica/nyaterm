@@ -68,7 +68,7 @@ impl NyaTermApp {
                                 open_chat,
                                 cx.listener(|this, _, window, cx| {
                                     this.ensure_panel_open(NavItem::AiAssistant);
-                                    window.focus(this.ai.chat_focus());
+                                    window.focus(this.ai.chat_focus(), cx);
                                     this.ai.set_panel_status("AI assistant focused");
                                     cx.notify();
                                 }),
@@ -88,7 +88,7 @@ impl NyaTermApp {
                                         ),
                                         cx,
                                     );
-                                    window.focus(&field.read(cx).focus_handle());
+                                    window.focus(&field.read(cx).focus_handle(), cx);
                                     this.shell.set_status("quick commands opened".to_string());
                                     cx.notify();
                                 }),

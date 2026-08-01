@@ -4,7 +4,7 @@ use std::sync::{
 };
 use std::time::Duration;
 
-use gpui::{Context, KeyDownEvent, Timer, Window};
+use gpui::{Context, KeyDownEvent, Window};
 use nyaterm_transport::SessionKind;
 
 use crate::features::{NyaTermApp, TextInputSetup};
@@ -39,7 +39,7 @@ impl NyaTermApp {
         };
         self.reset_text_input(id, &value, cx);
         let input = self.text_input(id, &value, TextInputSetup::default(), cx);
-        window.focus(&input.read(cx).focus_handle());
+        window.focus(&input.read(cx).focus_handle(), cx);
         cx.notify();
     }
 
@@ -49,7 +49,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.commit_send_command_control_input(cx);
-        window.focus(self.send_command.editor_focus());
+        window.focus(self.send_command.editor_focus(), cx);
         cx.notify();
     }
 
@@ -86,7 +86,7 @@ impl NyaTermApp {
                 let (count, interval) = self.send_command.cancel_control_edit();
                 self.reset_text_input("send-command.count", &count, cx);
                 self.reset_text_input("send-command.interval", &interval, cx);
-                window.focus(self.send_command.editor_focus());
+                window.focus(self.send_command.editor_focus(), cx);
                 cx.notify();
             }
             _ => {}
@@ -246,7 +246,7 @@ impl NyaTermApp {
                         break 'outer;
                     }
                     if !first && interval > 0.0 {
-                        Timer::after(Duration::from_secs_f64(interval)).await;
+                        cx.background_executor().timer(Duration::from_secs_f64(interval)).await;
                         if cancel.load(Ordering::SeqCst) {
                             aborted = true;
                             break 'outer;

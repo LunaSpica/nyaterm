@@ -153,12 +153,30 @@ impl NyaTermApp {
         self.save_interaction_settings(cx);
     }
 
+    pub(in crate::features) fn set_command_suggestion_min_chars(
+        &mut self,
+        value: u32,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.set_command_suggestion_min_chars(value);
+        self.save_interaction_settings(cx);
+    }
+
     pub(in crate::features) fn adjust_command_suggestion_max_chars(
         &mut self,
         delta: i32,
         cx: &mut Context<Self>,
     ) {
         self.settings.adjust_command_suggestion_max_chars(delta);
+        self.save_interaction_settings(cx);
+    }
+
+    pub(in crate::features) fn set_command_suggestion_max_chars(
+        &mut self,
+        value: u32,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.set_command_suggestion_max_chars(value);
         self.save_interaction_settings(cx);
     }
 
@@ -169,6 +187,15 @@ impl NyaTermApp {
     ) {
         self.settings
             .adjust_duplicate_session_command_delay(delta_ms);
+        self.save_interaction_settings(cx);
+    }
+
+    pub(in crate::features) fn set_duplicate_session_command_delay(
+        &mut self,
+        value_ms: u32,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.set_duplicate_session_command_delay(value_ms);
         self.save_interaction_settings(cx);
     }
 
@@ -240,6 +267,16 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.settings.adjust_idle_lock_minutes(delta);
+        self.security.reset_screen_lock_idle_timer();
+        self.save_screen_lock_settings(cx);
+    }
+
+    pub(in crate::features) fn set_idle_lock_minutes(
+        &mut self,
+        value: u32,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.set_idle_lock_minutes(value);
         self.security.reset_screen_lock_idle_timer();
         self.save_screen_lock_settings(cx);
     }

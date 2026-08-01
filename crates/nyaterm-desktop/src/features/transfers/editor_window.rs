@@ -88,7 +88,7 @@ impl Render for RemoteFileEditorWindow {
         if self.active_editor_id.as_deref() != Some(active_tab.id.as_str()) {
             self.active_editor_id = Some(active_tab.id.clone());
             if active_tab.focused_field == crate::models::TransferEditorField::Content {
-                window.focus(&editor.read(cx).focus_handle());
+                window.focus(&editor.read(cx).focus_handle(), cx);
             }
         }
         window.set_window_title(&title);

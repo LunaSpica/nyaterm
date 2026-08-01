@@ -70,7 +70,7 @@ impl NyaTermApp {
                     .shadow_lg()
                     .track_focus(self.commands.quick_details_focus())
                     .on_click(cx.listener(|this, _, window, cx| {
-                        window.focus(this.commands.quick_details_focus());
+                        window.focus(this.commands.quick_details_focus(), cx);
                         cx.stop_propagation();
                         cx.notify();
                     }))

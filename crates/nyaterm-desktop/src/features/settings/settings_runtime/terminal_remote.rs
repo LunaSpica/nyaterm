@@ -52,12 +52,33 @@ impl NyaTermApp {
         self.save_terminal_settings(cx);
     }
 
+    pub(in crate::features) fn set_terminal_scrollback_lines(
+        &mut self,
+        value: u32,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.set_terminal_scrollback_lines(value);
+        if !self.shell.has_settings_draft() {
+            self.enforce_terminal_scrollback_limit();
+        }
+        self.save_terminal_settings(cx);
+    }
+
     pub(in crate::features) fn adjust_terminal_keep_alive_interval(
         &mut self,
         delta: i32,
         cx: &mut Context<Self>,
     ) {
         self.settings.adjust_terminal_keep_alive_interval(delta);
+        self.save_terminal_settings(cx);
+    }
+
+    pub(in crate::features) fn set_terminal_keep_alive_interval(
+        &mut self,
+        value: u32,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.set_terminal_keep_alive_interval(value);
         self.save_terminal_settings(cx);
     }
 
@@ -111,6 +132,15 @@ impl NyaTermApp {
         self.save_terminal_settings(cx);
     }
 
+    pub(in crate::features) fn set_remote_stats_interval(
+        &mut self,
+        value: u32,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.set_remote_stats_interval(value);
+        self.save_terminal_settings(cx);
+    }
+
     pub(in crate::features) fn toggle_process_manager_panel(&mut self, cx: &mut Context<Self>) {
         self.settings.toggle_process_manager_panel();
         self.save_terminal_settings(cx);
@@ -125,6 +155,15 @@ impl NyaTermApp {
         self.save_terminal_settings(cx);
     }
 
+    pub(in crate::features) fn set_process_manager_interval(
+        &mut self,
+        value: u32,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.set_process_manager_interval(value);
+        self.save_terminal_settings(cx);
+    }
+
     pub(in crate::features) fn toggle_docker_manager_panel(&mut self, cx: &mut Context<Self>) {
         self.settings.toggle_docker_manager_panel();
         self.save_terminal_settings(cx);
@@ -136,6 +175,15 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.settings.adjust_docker_manager_interval(delta);
+        self.save_terminal_settings(cx);
+    }
+
+    pub(in crate::features) fn set_docker_manager_interval(
+        &mut self,
+        value: u32,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.set_docker_manager_interval(value);
         self.save_terminal_settings(cx);
     }
 

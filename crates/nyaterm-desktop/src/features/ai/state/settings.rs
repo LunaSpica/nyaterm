@@ -347,15 +347,30 @@ impl AiFeatureState {
         self.panel.status = "AI context line limit updated".to_string();
     }
 
+    pub(in crate::features) fn set_settings_context_line_limit(&mut self, value: u32) {
+        self.settings.config.context_line_limit = value.clamp(50, 500);
+        self.panel.status = "AI context line limit updated".to_string();
+    }
+
     pub(in crate::features) fn adjust_settings_timeout_ms(&mut self, delta: i64) {
         let current = self.settings.config.timeout_ms as i64;
         self.settings.config.timeout_ms = (current + delta).clamp(5_000, 300_000) as u64;
         self.panel.status = "AI timeout updated".to_string();
     }
 
+    pub(in crate::features) fn set_settings_timeout_ms(&mut self, value: u64) {
+        self.settings.config.timeout_ms = value.clamp(5_000, 300_000);
+        self.panel.status = "AI timeout updated".to_string();
+    }
+
     pub(in crate::features) fn adjust_settings_agent_steps(&mut self, delta: i16) {
         let current = self.settings.config.max_agent_steps.unwrap_or(10) as i16;
         self.settings.config.max_agent_steps = Some((current + delta).clamp(1, 50) as u16);
+        self.panel.status = "AI Agent max steps updated".to_string();
+    }
+
+    pub(in crate::features) fn set_settings_agent_steps(&mut self, value: u16) {
+        self.settings.config.max_agent_steps = Some(value.clamp(1, 50));
         self.panel.status = "AI Agent max steps updated".to_string();
     }
 
@@ -366,9 +381,19 @@ impl AiFeatureState {
         self.panel.status = "AI Agent step timeout updated".to_string();
     }
 
+    pub(in crate::features) fn set_settings_agent_step_timeout_ms(&mut self, value: u64) {
+        self.settings.config.agent_step_timeout_ms = Some(value.clamp(5_000, 120_000));
+        self.panel.status = "AI Agent step timeout updated".to_string();
+    }
+
     pub(in crate::features) fn adjust_settings_terminal_output_lines(&mut self, delta: i16) {
         let current = self.settings.config.terminal_output_lines as i16;
         self.settings.config.terminal_output_lines = (current + delta).clamp(0, 100) as u16;
+        self.panel.status = "AI terminal output lines updated".to_string();
+    }
+
+    pub(in crate::features) fn set_settings_terminal_output_lines(&mut self, value: u16) {
+        self.settings.config.terminal_output_lines = value.clamp(0, 100);
         self.panel.status = "AI terminal output lines updated".to_string();
     }
 
@@ -376,6 +401,12 @@ impl AiFeatureState {
         let mb = 1024 * 1024;
         let current = (self.settings.config.max_ai_file_size_bytes / mb).max(1) as i64;
         self.settings.config.max_ai_file_size_bytes = (current + delta).clamp(1, 256) as u64 * mb;
+        self.panel.status = "AI file size limit updated".to_string();
+    }
+
+    pub(in crate::features) fn set_settings_file_size_mb(&mut self, value: u64) {
+        let mb = 1024 * 1024;
+        self.settings.config.max_ai_file_size_bytes = value.clamp(1, 256) * mb;
         self.panel.status = "AI file size limit updated".to_string();
     }
 

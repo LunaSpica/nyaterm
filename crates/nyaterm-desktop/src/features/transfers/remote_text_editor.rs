@@ -407,7 +407,7 @@ impl RemoteTextEditor {
         cx: &mut Context<Self>,
     ) {
         cx.stop_propagation();
-        window.focus(&self.focus_handle);
+        window.focus(&self.focus_handle, cx);
         self.app.update(cx, |app, cx| {
             if let Some(tab) = app.transfer.active_editor_tab_mut() {
                 tab.focused_field = TransferEditorField::Content;
@@ -505,7 +505,7 @@ impl RemoteTextEditor {
                         if let Some(tab) = app.transfer.active_editor_tab_mut() {
                             tab.focused_field = TransferEditorField::Search;
                         }
-                        window.focus(app.transfer.editor_focus());
+                        window.focus(app.transfer.editor_focus(), cx);
                         cx.notify();
                     });
                     true
@@ -638,8 +638,8 @@ impl RemoteTextEditor {
             offset.y -= cursor.y + line_height - viewport.bottom();
         }
         let max = self.scroll.max_offset();
-        offset.x = offset.x.clamp(-max.width, px(0.));
-        offset.y = offset.y.clamp(-max.height, px(0.));
+        offset.x = offset.x.clamp(-max.x, px(0.));
+        offset.y = offset.y.clamp(-max.y, px(0.));
         self.scroll.set_offset(offset);
     }
 }
@@ -1060,7 +1060,14 @@ impl Element for RemoteTextElement {
         self.text
             .paint(id, inspector_id, bounds, state, &mut (), window, cx);
         for (line, origin) in prepaint.line_numbers.drain(..) {
-            let _ = line.paint(origin, self.text.layout().line_height(), window, cx);
+            let _ = line.paint(
+                origin,
+                self.text.layout().line_height(),
+                gpui::TextAlign::Left,
+                None,
+                window,
+                cx,
+            );
         }
         if focus_handle.is_focused(window)
             && let Some(cursor) = prepaint.cursor.take()

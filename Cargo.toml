@@ -12,8 +12,10 @@ members = [
 ]
 resolver = "3"
 exclude = [
+    "vendor/gpui-component",
     "vendor/russh",
     "vendor/russh-sftp",
+    "vendor/zed",
     "vendor/zmodem2",
 ]
 
@@ -35,8 +37,9 @@ digest = "0.11.0-rc.5"
 dirs = "6"
 encoding_rs = "0.8"
 futures = "0.3"
-gpui = "0.2.2"
-gpui-component = "=0.5.1"
+gpui = { path = "vendor/zed/crates/gpui" }
+gpui-component = { path = "vendor/gpui-component/crates/ui" }
+gpui_platform = { path = "vendor/zed/crates/gpui_platform" }
 hex = "0.4"
 hmac = "0.13"
 log = "0.4.11"

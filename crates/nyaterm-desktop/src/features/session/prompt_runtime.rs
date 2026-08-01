@@ -239,7 +239,7 @@ impl NyaTermApp {
                     TextInputSetup::masked()
                 };
                 let field = self.text_input(target.id, &target.seed, setup, cx);
-                window.focus(&field.read(cx).focus_handle());
+                window.focus(&field.read(cx).focus_handle(), cx);
                 cx.notify();
             }
             _ => {}
@@ -293,7 +293,7 @@ impl NyaTermApp {
             TextInputSetup::masked()
         };
         let field = self.text_input(target.id, &target.seed, setup, cx);
-        window.focus(&field.read(cx).focus_handle());
+        window.focus(&field.read(cx).focus_handle(), cx);
         true
     }
 

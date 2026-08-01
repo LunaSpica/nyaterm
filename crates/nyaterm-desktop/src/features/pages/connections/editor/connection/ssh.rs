@@ -7,7 +7,7 @@ use gpui::{
 };
 
 use nyaterm_core::truncate_preview;
-use nyaterm_ui::NyaRadioGroup;
+use nyaterm_ui::{NyaTabItem, NyaTabs};
 
 use crate::features::{ConnectionEditorToggle, NyaTermApp};
 use crate::models::{
@@ -30,46 +30,6 @@ pub(super) struct SshConnectionSectionLabels {
 
 pub(super) struct SshConnectionSectionOptions {
     pub(super) auth: Vec<ConnectionEditorChoice>,
-}
-
-fn ssh_segment_tab(
-    palette: crate::theme::ThemePalette,
-    id: &'static str,
-    label: &'static str,
-    selected: bool,
-    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
-) -> impl IntoElement {
-    div()
-        .id(id)
-        .h(px(28.))
-        .min_w_0()
-        .flex_1()
-        .flex()
-        .items_center()
-        .justify_center()
-        .rounded_sm()
-        .border_1()
-        .border_color(if selected {
-            rgba((palette.primary << 8) | 0x66)
-        } else {
-            rgba(0x00000000)
-        })
-        .bg(if selected {
-            rgba((palette.primary << 8) | 0x18)
-        } else {
-            rgba(0x00000000)
-        })
-        .text_xs()
-        .font_weight(FontWeight(600.))
-        .text_color(if selected {
-            rgb(palette.primary)
-        } else {
-            rgb(palette.text_muted)
-        })
-        .cursor_pointer()
-        .hover(|this| this.bg(rgb(palette.hover)).text_color(rgb(palette.text)))
-        .child(label)
-        .on_click(on_click)
 }
 
 fn ssh_advanced_content(
@@ -130,164 +90,116 @@ pub(super) fn connection_editor_ssh_section(
     let SshConnectionSectionOptions { auth: auth_options } = options;
     let tr = |key: &'static str| crate::i18n::text(language, key);
 
-    let auth_values = auth_options
+    let auth_tab_options = auth_options
         .iter()
-        .map(|option| option.value.clone())
+        .filter_map(|option| option.value.as_ref().map(|value| (value, option)))
         .collect::<Vec<_>>();
-    let auth_tabs = div().h(px(34.)).child(
-        NyaRadioGroup::new("connection-authentication")
-            .items(auth_options.iter().map(|option| option.label.clone()))
-            .selected_index(auth_options.iter().position(|option| option.selected))
-            .horizontal()
-            .on_select(cx.listener(move |this, index: &usize, _, cx| {
-                let Some(value) = auth_values.get(*index) else {
-                    return;
-                };
-                this.set_connection_editor_select_value(
-                    ConnectionEditorSelect::Authentication,
-                    value.as_deref(),
-                    cx,
-                );
-            })),
-    );
+    let auth_tab_values: Vec<String> = auth_tab_options
+        .iter()
+        .map(|(value, _)| (*value).clone())
+        .collect::<Vec<_>>();
+    let auth_tabs = NyaTabs::new("connection-authentication-tabs")
+        .items(
+            auth_tab_options
+                .iter()
+                .map(|(_, option)| NyaTabItem::new(option.label.clone())),
+        )
+        .selected_index_if_visible(
+            auth_tab_options
+                .iter()
+                .position(|(_, option)| option.selected),
+        )
+        .on_select(cx.listener(move |this, index: &usize, _, cx| {
+            let Some(value) = auth_tab_values.get(*index) else {
+                return;
+            };
+            this.set_connection_editor_select_value(
+                ConnectionEditorSelect::Authentication,
+                Some(value.as_str()),
+                cx,
+            );
+        }));
 
-    let advanced_tabs = div()
-        .h(px(32.))
-        .p_1()
-        .flex()
-        .gap_1()
-        .rounded_md()
-        .bg(rgb(palette.surface_elevated))
-        .child(ssh_segment_tab(
-            palette,
-            "connection-advanced-proxy-tab",
-            tr("dialog.proxySelect"),
-            editor.advanced_network_tab == ConnectionEditorAdvancedTab::Proxy,
-            cx.listener(|this, _, _, cx| {
-                this.set_connection_editor_advanced_tab(ConnectionEditorAdvancedTab::Proxy, cx);
-            }),
-        ))
-        .child(ssh_segment_tab(
-            palette,
-            "connection-advanced-jump-tab",
-            tr("dialog.proxyJump"),
-            editor.advanced_network_tab == ConnectionEditorAdvancedTab::JumpHost,
-            cx.listener(|this, _, _, cx| {
-                this.set_connection_editor_advanced_tab(ConnectionEditorAdvancedTab::JumpHost, cx);
-            }),
-        ))
-        .child(ssh_segment_tab(
-            palette,
-            "connection-advanced-otp-tab",
-            tr("dialog.twoFactorAuth"),
-            editor.advanced_network_tab == ConnectionEditorAdvancedTab::TwoFactor,
-            cx.listener(|this, _, _, cx| {
-                this.set_connection_editor_advanced_tab(ConnectionEditorAdvancedTab::TwoFactor, cx);
-            }),
-        ));
+    let advanced_tabs = NyaTabs::new("connection-advanced-network-tabs")
+        .items([
+            NyaTabItem::new(tr("dialog.proxySelect")),
+            NyaTabItem::new(tr("dialog.proxyJump")),
+            NyaTabItem::new(tr("dialog.twoFactorAuth")),
+        ])
+        .selected_index(match editor.advanced_network_tab {
+            ConnectionEditorAdvancedTab::Proxy => 0,
+            ConnectionEditorAdvancedTab::JumpHost => 1,
+            ConnectionEditorAdvancedTab::TwoFactor => 2,
+            _ => 0,
+        })
+        .on_select(cx.listener(|this, index, _, cx| {
+            let tab = match *index {
+                0 => ConnectionEditorAdvancedTab::Proxy,
+                1 => ConnectionEditorAdvancedTab::JumpHost,
+                _ => ConnectionEditorAdvancedTab::TwoFactor,
+            };
+            this.set_connection_editor_advanced_tab(tab, cx);
+        }));
 
-    let behavior_tabs = div()
-        .h(px(32.))
-        .p_1()
-        .flex()
-        .gap_1()
-        .rounded_md()
-        .bg(rgb(palette.surface_elevated))
-        .child(ssh_segment_tab(
-            palette,
-            "connection-advanced-command-tab",
-            tr("dialog.commandExecution"),
-            editor.advanced_behavior_tab == ConnectionEditorAdvancedTab::PostLogin,
-            cx.listener(|this, _, _, cx| {
-                this.set_connection_editor_advanced_tab(ConnectionEditorAdvancedTab::PostLogin, cx);
-            }),
-        ))
-        .child(ssh_segment_tab(
-            palette,
-            "connection-advanced-x11-tab",
-            tr("dialog.x11Forwarding"),
-            editor.advanced_behavior_tab == ConnectionEditorAdvancedTab::X11,
-            cx.listener(|this, _, _, cx| {
-                this.set_connection_editor_advanced_tab(ConnectionEditorAdvancedTab::X11, cx);
-            }),
-        ))
-        .child(ssh_segment_tab(
-            palette,
-            "connection-advanced-backspace-tab",
-            tr("dialog.backspaceMode"),
-            editor.advanced_behavior_tab == ConnectionEditorAdvancedTab::Backspace,
-            cx.listener(|this, _, _, cx| {
-                this.set_connection_editor_advanced_tab(ConnectionEditorAdvancedTab::Backspace, cx);
-            }),
-        ));
+    let behavior_tabs = NyaTabs::new("connection-advanced-behavior-tabs")
+        .items([
+            NyaTabItem::new(tr("dialog.commandExecution")),
+            NyaTabItem::new(tr("dialog.x11Forwarding")),
+            NyaTabItem::new(tr("dialog.backspaceMode")),
+        ])
+        .selected_index(match editor.advanced_behavior_tab {
+            ConnectionEditorAdvancedTab::PostLogin => 0,
+            ConnectionEditorAdvancedTab::X11 => 1,
+            ConnectionEditorAdvancedTab::Backspace => 2,
+            _ => 0,
+        })
+        .on_select(cx.listener(|this, index, _, cx| {
+            let tab = match *index {
+                0 => ConnectionEditorAdvancedTab::PostLogin,
+                1 => ConnectionEditorAdvancedTab::X11,
+                _ => ConnectionEditorAdvancedTab::Backspace,
+            };
+            this.set_connection_editor_advanced_tab(tab, cx);
+        }));
 
-    let password_source_tabs = div()
-        .h(px(32.))
-        .p_1()
-        .flex()
-        .gap_1()
-        .rounded_md()
-        .bg(rgb(palette.surface_elevated))
-        .child(ssh_segment_tab(
-            palette,
-            "connection-password-source-ask",
-            tr("dialog.askWhenConnecting"),
-            editor.password_source == ConnectionEditorPasswordSource::Ask,
-            cx.listener(|this, _, _, cx| {
-                this.set_connection_editor_password_source(ConnectionEditorPasswordSource::Ask, cx);
-            }),
-        ))
-        .child(ssh_segment_tab(
-            palette,
-            "connection-password-source-direct",
-            tr("dialog.directPassword"),
-            editor.password_source == ConnectionEditorPasswordSource::Direct,
-            cx.listener(|this, _, _, cx| {
-                this.set_connection_editor_password_source(
-                    ConnectionEditorPasswordSource::Direct,
-                    cx,
-                );
-            }),
-        ))
-        .child(ssh_segment_tab(
-            palette,
-            "connection-password-source-saved",
-            tr("dialog.savedPassword"),
-            editor.password_source == ConnectionEditorPasswordSource::Saved,
-            cx.listener(|this, _, _, cx| {
-                this.set_connection_editor_password_source(
-                    ConnectionEditorPasswordSource::Saved,
-                    cx,
-                );
-            }),
-        ));
+    let password_source_tabs = NyaTabs::new("connection-password-source-tabs")
+        .items([
+            NyaTabItem::new(tr("dialog.askWhenConnecting")),
+            NyaTabItem::new(tr("dialog.directPassword")),
+            NyaTabItem::new(tr("dialog.savedPassword")),
+        ])
+        .selected_index(match editor.password_source {
+            ConnectionEditorPasswordSource::Ask => 0,
+            ConnectionEditorPasswordSource::Direct => 1,
+            ConnectionEditorPasswordSource::Saved => 2,
+        })
+        .on_select(cx.listener(|this, index, _, cx| {
+            let source = match *index {
+                0 => ConnectionEditorPasswordSource::Ask,
+                1 => ConnectionEditorPasswordSource::Direct,
+                _ => ConnectionEditorPasswordSource::Saved,
+            };
+            this.set_connection_editor_password_source(source, cx);
+        }));
 
     div()
         .flex()
         .flex_col()
         .gap_3()
-        .child(
-            // Tauri gives the host the room and pins the port at a fixed width,
-            // rather than splitting the row down the middle: a host is long and
-            // a port is never more than five digits.
-            div()
-                .flex()
-                .gap_3()
-                .child(div().min_w_0().flex_1().child(editor_field(
-                    palette,
-                    required(tr("dialog.host")),
-                    ConnectionEditorField::Host,
-                    fields,
-                    cx,
-                )))
-                .child(div().w(px(150.)).flex_none().child(editor_stepper_field(
-                    palette,
-                    required(tr("dialog.port")),
-                    ConnectionEditorField::Port,
-                    fields,
-                    cx,
-                ))),
-        )
+        .child(editor_field(
+            palette,
+            required(tr("dialog.host")),
+            ConnectionEditorField::Host,
+            fields,
+            cx,
+        ))
+        .child(editor_stepper_field(
+            palette,
+            required(tr("dialog.port")),
+            ConnectionEditorField::Port,
+            fields,
+            cx,
+        ))
         .child(editor_field(
             palette,
             required(tr("dialog.username")),

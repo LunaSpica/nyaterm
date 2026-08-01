@@ -1,13 +1,8 @@
-use gpui::{
-    App, ClickEvent, Context, FontWeight, IntoElement, SharedString, Window, div, prelude::*, px,
-    rgb,
-};
+use gpui::{Context, FontWeight, IntoElement, SharedString, div, prelude::*, px, rgb};
+use nyaterm_ui::NyaNumberInputOptions;
 
-use crate::features::{
-    NyaTermApp, TAB_MOUSE_ACTIONS, TabMouseActionTarget, TextInputSetup, gpui_code_font_family,
-};
+use crate::features::{NyaTermApp, TAB_MOUSE_ACTIONS, TabMouseActionTarget, TextInputSetup};
 use crate::theme::ThemePalette;
-use crate::widgets::small_button;
 
 use super::super::{
     settings_choice_chip, settings_form_row, settings_form_section, settings_switch,
@@ -131,17 +126,13 @@ impl NyaTermApp {
                             Some(SharedString::from(
                                 self.tr("settings.commandSuggestionsMinCharsDesc"),
                             )),
-                            interaction_number_stepper(
-                                palette,
-                                "interaction-suggest-min-minus",
-                                "interaction-suggest-min-plus",
-                                min_chars,
-                                cx.listener(|this, _, _, cx| {
-                                    this.adjust_command_suggestion_min_chars(-1, cx);
-                                }),
-                                cx.listener(|this, _, _, cx| {
-                                    this.adjust_command_suggestion_min_chars(1, cx);
-                                }),
+                            self.number_input_box(
+                                "settings.number.command-suggestion-min-chars",
+                                min_chars.to_string().as_str(),
+                                NyaNumberInputOptions::default()
+                                    .range(1.0, max_chars as f64)
+                                    .step(1.0),
+                                cx,
                             ),
                         ))
                         .child(settings_form_row(
@@ -150,17 +141,13 @@ impl NyaTermApp {
                             Some(SharedString::from(
                                 self.tr("settings.commandSuggestionsMaxCharsDesc"),
                             )),
-                            interaction_number_stepper(
-                                palette,
-                                "interaction-suggest-max-minus",
-                                "interaction-suggest-max-plus",
-                                max_chars,
-                                cx.listener(|this, _, _, cx| {
-                                    this.adjust_command_suggestion_max_chars(-1, cx);
-                                }),
-                                cx.listener(|this, _, _, cx| {
-                                    this.adjust_command_suggestion_max_chars(1, cx);
-                                }),
+                            self.number_input_box(
+                                "settings.number.command-suggestion-max-chars",
+                                max_chars.to_string().as_str(),
+                                NyaNumberInputOptions::default()
+                                    .range(min_chars as f64, 500.0)
+                                    .step(1.0),
+                                cx,
                             ),
                         ))
                     })
@@ -182,35 +169,15 @@ impl NyaTermApp {
                         Some(SharedString::from(
                             self.tr("settings.duplicateSessionCommandDelayDesc"),
                         )),
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .child(small_button(
-                                palette,
-                                "interaction-dup-delay-minus",
-                                "-",
-                                cx.listener(|this, _, _, cx| {
-                                    this.adjust_duplicate_session_command_delay(-100, cx);
-                                }),
-                            ))
-                            .child(
-                                div()
-                                    .min_w(px(64.))
-                                    .text_center()
-                                    .font_family(gpui_code_font_family())
-                                    .text_size(px(11.))
-                                    .text_color(rgb(palette.text))
-                                    .child(format!("{delay_ms} ms")),
-                            )
-                            .child(small_button(
-                                palette,
-                                "interaction-dup-delay-plus",
-                                "+",
-                                cx.listener(|this, _, _, cx| {
-                                    this.adjust_duplicate_session_command_delay(100, cx);
-                                }),
-                            )),
+                        self.number_input_box(
+                            "settings.number.duplicate-session-command-delay",
+                            delay_ms.to_string().as_str(),
+                            NyaNumberInputOptions::default()
+                                .range(0.0, 60_000.0)
+                                .step(100.0)
+                                .suffix("ms"),
+                            cx,
+                        ),
                     ))
                     .child(settings_form_row(
                         palette,
@@ -369,31 +336,6 @@ struct TabMouseActionPresentation<'a> {
     id_prefix: &'static str,
     target: TabMouseActionTarget,
     current: &'a str,
-}
-
-fn interaction_number_stepper(
-    palette: ThemePalette,
-    minus_id: &'static str,
-    plus_id: &'static str,
-    value: u32,
-    on_minus: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    on_plus: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    div()
-        .flex()
-        .items_center()
-        .gap_1()
-        .child(small_button(palette, minus_id, "-", on_minus))
-        .child(
-            div()
-                .min_w(px(42.))
-                .text_center()
-                .font_family(gpui_code_font_family())
-                .text_size(px(11.))
-                .text_color(rgb(palette.text))
-                .child(value.to_string()),
-        )
-        .child(small_button(palette, plus_id, "+", on_plus))
 }
 
 fn settings_field_meta(

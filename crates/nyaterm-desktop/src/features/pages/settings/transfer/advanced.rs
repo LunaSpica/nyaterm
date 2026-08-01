@@ -1,7 +1,7 @@
-use gpui::{Context, FontWeight, IntoElement, SharedString, div, prelude::*, px, rgb};
+use gpui::{Context, IntoElement, SharedString, div, prelude::*};
+use nyaterm_ui::NyaNumberInputOptions;
 
-use crate::features::{NyaTermApp, gpui_code_font_family};
-use crate::widgets::small_button;
+use crate::features::NyaTermApp;
 
 use super::super::{
     settings_choice_chip, settings_form_row, settings_form_section, settings_switch,
@@ -33,41 +33,16 @@ impl NyaTermApp {
                     Some(SharedString::from(
                         self.tr("settings.downloadConcurrentTasksDesc"),
                     )),
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_1()
-                        .child(small_button(
-                            palette,
-                            "settings-transfer-download-threads-dec",
-                            "-",
-                            cx.listener(|this, _, _, cx| {
-                                this.adjust_transfer_download_threads(-1, cx);
-                            }),
-                        ))
-                        .child(
-                            div()
-                                .min_w(px(28.))
-                                .text_center()
-                                .font_family(gpui_code_font_family())
-                                .text_size(px(12.))
-                                .font_weight(FontWeight(700.))
-                                .text_color(rgb(palette.text))
-                                .child(
-                                    self.settings
-                                        .summary()
-                                        .transfer_download_threads
-                                        .to_string(),
-                                ),
-                        )
-                        .child(small_button(
-                            palette,
-                            "settings-transfer-download-threads-inc",
-                            "+",
-                            cx.listener(|this, _, _, cx| {
-                                this.adjust_transfer_download_threads(1, cx);
-                            }),
-                        )),
+                    self.number_input_box(
+                        "settings.number.transfer-download-threads",
+                        self.settings
+                            .summary()
+                            .transfer_download_threads
+                            .to_string()
+                            .as_str(),
+                        NyaNumberInputOptions::default().range(1.0, 10.0).step(1.0),
+                        cx,
+                    ),
                 ))
                 .child(settings_form_row(
                     palette,
@@ -75,36 +50,16 @@ impl NyaTermApp {
                     Some(SharedString::from(
                         self.tr("settings.uploadConcurrentTasksDesc"),
                     )),
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_1()
-                        .child(small_button(
-                            palette,
-                            "settings-transfer-upload-threads-dec",
-                            "-",
-                            cx.listener(|this, _, _, cx| {
-                                this.adjust_transfer_upload_threads(-1, cx);
-                            }),
-                        ))
-                        .child(
-                            div()
-                                .min_w(px(28.))
-                                .text_center()
-                                .font_family(gpui_code_font_family())
-                                .text_size(px(12.))
-                                .font_weight(FontWeight(700.))
-                                .text_color(rgb(palette.text))
-                                .child(self.settings.summary().transfer_upload_threads.to_string()),
-                        )
-                        .child(small_button(
-                            palette,
-                            "settings-transfer-upload-threads-inc",
-                            "+",
-                            cx.listener(|this, _, _, cx| {
-                                this.adjust_transfer_upload_threads(1, cx);
-                            }),
-                        )),
+                    self.number_input_box(
+                        "settings.number.transfer-upload-threads",
+                        self.settings
+                            .summary()
+                            .transfer_upload_threads
+                            .to_string()
+                            .as_str(),
+                        NyaNumberInputOptions::default().range(1.0, 10.0).step(1.0),
+                        cx,
+                    ),
                 ))
                 .child(settings_form_row(
                     palette,
@@ -112,36 +67,16 @@ impl NyaTermApp {
                     Some(SharedString::from(
                         self.tr("settings.maxTransferRetriesDesc"),
                     )),
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_1()
-                        .child(small_button(
-                            palette,
-                            "settings-transfer-retries-dec",
-                            "-",
-                            cx.listener(|this, _, _, cx| {
-                                this.adjust_transfer_max_retries(-1, cx);
-                            }),
-                        ))
-                        .child(
-                            div()
-                                .min_w(px(28.))
-                                .text_center()
-                                .font_family(gpui_code_font_family())
-                                .text_size(px(12.))
-                                .font_weight(FontWeight(700.))
-                                .text_color(rgb(palette.text))
-                                .child(self.settings.summary().transfer_max_retries.to_string()),
-                        )
-                        .child(small_button(
-                            palette,
-                            "settings-transfer-retries-inc",
-                            "+",
-                            cx.listener(|this, _, _, cx| {
-                                this.adjust_transfer_max_retries(1, cx);
-                            }),
-                        )),
+                    self.number_input_box(
+                        "settings.number.transfer-max-retries",
+                        self.settings
+                            .summary()
+                            .transfer_max_retries
+                            .to_string()
+                            .as_str(),
+                        NyaNumberInputOptions::default().range(0.0, 10.0).step(1.0),
+                        cx,
+                    ),
                 ))
                 .child(settings_form_row(
                     palette,
@@ -149,36 +84,16 @@ impl NyaTermApp {
                     Some(SharedString::from(
                         self.tr("settings.transferBufferSizeDesc"),
                     )),
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_1()
-                        .child(small_button(
-                            palette,
-                            "settings-transfer-buffer-dec",
-                            "-",
-                            cx.listener(|this, _, _, cx| {
-                                this.adjust_transfer_buffer_size(-1, cx);
-                            }),
-                        ))
-                        .child(
-                            div()
-                                .min_w(px(36.))
-                                .text_center()
-                                .font_family(gpui_code_font_family())
-                                .text_size(px(12.))
-                                .font_weight(FontWeight(700.))
-                                .text_color(rgb(palette.text))
-                                .child(self.settings.summary().transfer_buffer_size.to_string()),
-                        )
-                        .child(small_button(
-                            palette,
-                            "settings-transfer-buffer-inc",
-                            "+",
-                            cx.listener(|this, _, _, cx| {
-                                this.adjust_transfer_buffer_size(1, cx);
-                            }),
-                        )),
+                    self.number_input_box(
+                        "settings.number.transfer-buffer-size",
+                        self.settings
+                            .summary()
+                            .transfer_buffer_size
+                            .to_string()
+                            .as_str(),
+                        NyaNumberInputOptions::default().range(8.0, 256.0).step(8.0),
+                        cx,
+                    ),
                 ))
                 .child(settings_form_row(
                     palette,

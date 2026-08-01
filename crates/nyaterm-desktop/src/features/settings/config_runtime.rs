@@ -168,7 +168,7 @@ impl NyaTermApp {
         }
         self.forget_text_inputs("snapshot-password.");
         let field = self.text_input("snapshot-password.value", "", TextInputSetup::masked(), cx);
-        window.focus(&field.read(cx).focus_handle());
+        window.focus(&field.read(cx).focus_handle(), cx);
         self.shell.set_status(
             match kind {
                 SnapshotPasswordPromptKind::Export => "enter password for encrypted .nya export",

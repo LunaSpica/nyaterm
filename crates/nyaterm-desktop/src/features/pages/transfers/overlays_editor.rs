@@ -113,7 +113,7 @@ impl NyaTermApp {
             .justify_center()
             .track_focus(self.transfer.external_sync_focus())
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(this.transfer.external_sync_focus());
+                window.focus(this.transfer.external_sync_focus(), cx);
                 cx.notify();
             }))
             .on_key_down(cx.listener(move |this, event: &KeyDownEvent, _, cx| {
@@ -609,7 +609,7 @@ impl NyaTermApp {
             .track_focus(self.transfer.editor_focus())
             .on_click(cx.listener(|this, _, window, cx| {
                 this.transfer.close_editor_tabs_menu();
-                window.focus(this.transfer.editor_focus());
+                window.focus(this.transfer.editor_focus(), cx);
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
@@ -791,7 +791,7 @@ impl NyaTermApp {
                                             {
                                                 state.focused_field = TransferEditorField::Search;
                                             }
-                                            window.focus(this.transfer.editor_focus());
+                                            window.focus(this.transfer.editor_focus(), cx);
                                             cx.notify();
                                         }))
                                         .child(truncate_preview(&search_label, 96)),

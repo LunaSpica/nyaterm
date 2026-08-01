@@ -296,6 +296,7 @@
     "manageKeys": "Keys...",
     "managePasswords": "Passwords...",
     "newConnection": "New Conn.",
+    "newGroup": "New Group",
     "newGroupParentHint": "Create as a subgroup under \"{{group}}\"",
     "newGroupPlaceholder": "New group...",
     "newGroupRootHint": "Create at the top level",

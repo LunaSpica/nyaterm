@@ -1,6 +1,6 @@
 use gpui::{
     Context, Entity, IntoElement, MouseButton, Render, ScrollDelta, ScrollWheelEvent, SharedString,
-    Timer, Window, div, prelude::*, px, rgb, rgba,
+    Window, div, prelude::*, px, rgb, rgba,
 };
 use nyaterm_terminal::{TerminalScreen, TerminalSnapshot};
 
@@ -1771,7 +1771,9 @@ impl TerminalSurface {
         }
         let surface = cx.entity();
         cx.spawn(async move |_, cx| {
-            Timer::after(TERMINAL_SURFACE_LOCAL_SCROLL_SYNC_DELAY).await;
+            cx.background_executor()
+                .timer(TERMINAL_SURFACE_LOCAL_SCROLL_SYNC_DELAY)
+                .await;
             let _ = surface.update(cx, |surface, cx| {
                 surface.flush_local_scroll_app_sync(app, cx);
             });

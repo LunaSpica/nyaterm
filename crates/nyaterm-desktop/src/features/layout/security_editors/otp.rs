@@ -1,12 +1,15 @@
 use gpui::{
     Context, FontWeight, IntoElement, KeyDownEvent, SharedString, div, prelude::*, px, rgb,
 };
+use nyaterm_ui::NyaNumberInputOptions;
 
 use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::SecurityOtpEditorState;
 use crate::widgets::small_button;
 
-use super::super::view_helpers::{security_editor_field, security_type_chip};
+use super::super::view_helpers::{
+    security_editor_field, security_number_editor_field, security_type_chip,
+};
 
 impl NyaTermApp {
     pub(in crate::features) fn security_otp_editor_view(
@@ -123,28 +126,32 @@ impl NyaTermApp {
                     .grid()
                     .grid_cols(3)
                     .gap_2()
-                    .child(security_editor_field(
+                    .child(security_number_editor_field(
                         self,
                         "otp-digits",
                         self.tr("otpManager.digits"),
                         editor.digits.clone(),
-                        TextInputSetup::default(),
+                        NyaNumberInputOptions::default().range(4.0, 10.0).step(1.0),
                         cx,
                     ))
-                    .child(security_editor_field(
+                    .child(security_number_editor_field(
                         self,
                         "otp-period",
                         self.tr("otpManager.period"),
                         editor.period.clone(),
-                        TextInputSetup::default(),
+                        NyaNumberInputOptions::default()
+                            .range(1.0, 3600.0)
+                            .step(1.0),
                         cx,
                     ))
-                    .child(security_editor_field(
+                    .child(security_number_editor_field(
                         self,
                         "otp-counter",
                         self.tr("otpManager.counter"),
                         editor.counter.clone(),
-                        TextInputSetup::default(),
+                        NyaNumberInputOptions::default()
+                            .range(0.0, i64::MAX as f64)
+                            .step(1.0),
                         cx,
                     )),
             )

@@ -1,5 +1,10 @@
 use gpui::{App, IntoElement, RenderOnce, SharedString, Window, div, prelude::*};
-use gpui_component::tab::{Tab, TabBar};
+use gpui_component::{
+    Sizable,
+    tab::{Tab, TabBar},
+};
+
+use crate::sizing::form_control_size;
 
 type NyaTabSelectHandler = Box<dyn Fn(&usize, &mut Window, &mut App)>;
 
@@ -34,7 +39,7 @@ impl NyaTabItem {
 pub struct NyaTabs {
     id: SharedString,
     items: Vec<NyaTabItem>,
-    selected_index: usize,
+    selected_index: Option<usize>,
     variant: NyaTabsVariant,
     full_width: bool,
     on_select: Option<NyaTabSelectHandler>,
@@ -45,7 +50,7 @@ impl NyaTabs {
         Self {
             id: id.into(),
             items: Vec::new(),
-            selected_index: 0,
+            selected_index: Some(0),
             variant: NyaTabsVariant::Segmented,
             full_width: true,
             on_select: None,
@@ -63,6 +68,11 @@ impl NyaTabs {
     }
 
     pub fn selected_index(mut self, selected_index: usize) -> Self {
+        self.selected_index = Some(selected_index);
+        self
+    }
+
+    pub fn selected_index_if_visible(mut self, selected_index: Option<usize>) -> Self {
         self.selected_index = selected_index;
         self
     }
@@ -85,7 +95,10 @@ impl NyaTabs {
 
 impl RenderOnce for NyaTabs {
     fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
-        let mut tabs = TabBar::new(self.id).selected_index(self.selected_index);
+        let mut tabs = TabBar::new(self.id).with_size(form_control_size());
+        if let Some(selected_index) = self.selected_index {
+            tabs = tabs.selected_index(selected_index);
+        }
         tabs = match self.variant {
             NyaTabsVariant::Segmented => tabs.segmented(),
             NyaTabsVariant::Pill => tabs.pill(),
@@ -105,5 +118,20 @@ impl RenderOnce for NyaTabs {
                 .min_w_0()
         }))
         .last_empty_space(div())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{NyaTabItem, NyaTabs, NyaTabsVariant};
+
+    #[test]
+    fn segmented_tabs_default_to_full_width_equal_segments() {
+        let tabs = NyaTabs::new("settings-tabs")
+            .items([NyaTabItem::new("General"), NyaTabItem::new("Advanced")]);
+
+        assert_eq!(tabs.variant, NyaTabsVariant::Segmented);
+        assert!(tabs.full_width);
+        assert_eq!(tabs.items.len(), 2);
     }
 }

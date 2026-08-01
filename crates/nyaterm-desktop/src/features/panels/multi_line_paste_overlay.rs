@@ -108,7 +108,7 @@ impl NyaTermApp {
             .justify_center()
             .track_focus(&paste_focus)
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(this.terminal.paste_review().focus);
+                window.focus(this.terminal.paste_review().focus, cx);
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
@@ -148,7 +148,7 @@ impl NyaTermApp {
                             .relative()
                             .track_focus(&paste_focus)
                             .on_click(cx.listener(|this, _, window, cx| {
-                                window.focus(this.terminal.paste_review().focus);
+                                window.focus(this.terminal.paste_review().focus, cx);
                                 cx.notify();
                             }))
                             .child(

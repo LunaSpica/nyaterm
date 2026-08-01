@@ -3,6 +3,7 @@ use gpui::{
     rgb,
 };
 use nyaterm_transport::RemoteDockerOverview;
+use nyaterm_ui::{NyaTabItem, NyaTabs};
 
 use crate::features::{NyaTermApp, gpui_code_font_family};
 use crate::models::DockerTab;
@@ -153,8 +154,10 @@ pub(in crate::features::pages::remote) fn docker_tab_bar(
         tabs.len()
     };
     let visible_count = visible_count.min(tabs.len());
+    let visible_tabs = &tabs[..visible_count];
     let hidden_tabs = &tabs[visible_count..];
     let more_active = hidden_tabs.iter().any(|(tab, _)| *tab == active_tab);
+    let visible_tab_values = visible_tabs.iter().map(|(tab, _)| *tab).collect::<Vec<_>>();
     let mut bar = div()
         .id("docker-tab-bar")
         .relative()
@@ -167,25 +170,25 @@ pub(in crate::features::pages::remote) fn docker_tab_bar(
         .flex()
         .items_center()
         .gap_1();
-    for (index, (tab, label)) in tabs.iter().take(visible_count).enumerate() {
-        let tab = *tab;
-        let label = label.clone();
-        let compose_disabled = tab == DockerTab::Compose && !overview.compose_available;
-        let tab_button = docker_tab_button(
-            palette,
-            format!("docker-tab-{index}"),
-            label,
-            active_tab == tab,
-            cx.listener(move |this, _, _, cx| {
-                this.set_docker_tab(tab, cx);
-            }),
-        );
-        bar = bar.child(
-            div()
-                .when(compose_disabled, |this| this.opacity(0.45))
-                .child(tab_button),
-        );
-    }
+    bar = bar.child(
+        div().min_w_0().flex_1().child(
+            NyaTabs::new("docker-tabs")
+                .items(
+                    visible_tabs
+                        .iter()
+                        .map(|(_, label)| NyaTabItem::new((*label).clone())),
+                )
+                .selected_index_if_visible(
+                    visible_tabs.iter().position(|(tab, _)| *tab == active_tab),
+                )
+                .on_select(cx.listener(move |this, index: &usize, _, cx| {
+                    let Some(tab) = visible_tab_values.get(*index).copied() else {
+                        return;
+                    };
+                    this.set_docker_tab(tab, cx);
+                })),
+        ),
+    );
     if !hidden_tabs.is_empty() {
         bar = bar.child(
             div()

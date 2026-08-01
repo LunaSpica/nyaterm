@@ -1,14 +1,10 @@
-use gpui::{
-    AnyElement, App, ClickEvent, Context, IntoElement, SharedString, Window, div, prelude::*, px,
-    rgb,
-};
+use gpui::{AnyElement, Context, IntoElement, SharedString, div, prelude::*, px, rgb};
 use nyaterm_core::RiskLevel;
-use nyaterm_ui::NyaSelectOption;
+use nyaterm_ui::{NyaNumberInputOptions, NyaSelectOption};
 
 use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::AiInputField;
 use crate::theme::ThemePalette;
-use crate::widgets::small_button;
 
 use super::super::{settings_form_row, settings_form_section, settings_switch};
 
@@ -133,34 +129,30 @@ impl NyaTermApp {
                         palette,
                         self.tr("ai.contextLineLimit"),
                         None,
-                        ai_number_stepper(
-                            palette,
-                            "ai-context-minus",
-                            "ai-context-plus",
-                            self.ai.settings_config().context_line_limit.to_string(),
-                            cx.listener(|this, _, _, cx| {
-                                this.adjust_ai_context_line_limit(-50, cx);
-                            }),
-                            cx.listener(|this, _, _, cx| {
-                                this.adjust_ai_context_line_limit(50, cx);
-                            }),
+                        self.number_input_box(
+                            "ai.number.context-line-limit",
+                            self.ai
+                                .settings_config()
+                                .context_line_limit
+                                .to_string()
+                                .as_str(),
+                            NyaNumberInputOptions::default()
+                                .range(50.0, 500.0)
+                                .step(50.0),
+                            cx,
                         ),
                     ))
                     .child(settings_form_row(
                         palette,
                         self.tr("ai.timeoutMs"),
                         None,
-                        ai_number_stepper(
-                            palette,
-                            "ai-timeout-minus",
-                            "ai-timeout-plus",
-                            self.ai.settings_config().timeout_ms.to_string(),
-                            cx.listener(|this, _, _, cx| {
-                                this.adjust_ai_timeout_ms(-1_000, cx);
-                            }),
-                            cx.listener(|this, _, _, cx| {
-                                this.adjust_ai_timeout_ms(1_000, cx);
-                            }),
+                        self.number_input_box(
+                            "ai.number.timeout-ms",
+                            self.ai.settings_config().timeout_ms.to_string().as_str(),
+                            NyaNumberInputOptions::default()
+                                .range(5_000.0, 300_000.0)
+                                .step(1_000.0),
+                            cx,
                         ),
                     )),
             ))
@@ -190,90 +182,55 @@ impl NyaTermApp {
                         palette,
                         self.tr("ai.agentMaxSteps"),
                         None,
-                        ai_number_stepper(
-                            palette,
-                            "ai-agent-steps-minus",
-                            "ai-agent-steps-plus",
+                        self.number_input_box(
+                            "ai.number.agent-steps",
                             self.ai
                                 .settings_config()
                                 .max_agent_steps
                                 .unwrap_or(10)
-                                .to_string(),
-                            cx.listener(|this, _, _, cx| {
-                                this.adjust_ai_agent_steps(-1, cx);
-                            }),
-                            cx.listener(|this, _, _, cx| {
-                                this.adjust_ai_agent_steps(1, cx);
-                            }),
+                                .to_string()
+                                .as_str(),
+                            NyaNumberInputOptions::default().range(1.0, 50.0).step(1.0),
+                            cx,
                         ),
                     ))
                     .child(settings_form_row(
                         palette,
                         self.tr("ai.agentStepTimeout"),
                         None,
-                        ai_number_stepper(
-                            palette,
-                            "ai-agent-step-timeout-minus",
-                            "ai-agent-step-timeout-plus",
+                        self.number_input_box(
+                            "ai.number.agent-step-timeout-ms",
                             self.ai
                                 .settings_config()
                                 .agent_step_timeout_ms
                                 .unwrap_or(30_000)
-                                .to_string(),
-                            cx.listener(|this, _, _, cx| {
-                                this.adjust_ai_agent_step_timeout_ms(-1_000, cx);
-                            }),
-                            cx.listener(|this, _, _, cx| {
-                                this.adjust_ai_agent_step_timeout_ms(1_000, cx);
-                            }),
+                                .to_string()
+                                .as_str(),
+                            NyaNumberInputOptions::default()
+                                .range(5_000.0, 120_000.0)
+                                .step(1_000.0),
+                            cx,
                         ),
                     ))
                     .child(settings_form_row(
                         palette,
                         self.tr("ai.terminalOutputLines"),
                         None,
-                        ai_number_stepper(
-                            palette,
-                            "ai-output-lines-minus",
-                            "ai-output-lines-plus",
-                            self.ai.settings_config().terminal_output_lines.to_string(),
-                            cx.listener(|this, _, _, cx| {
-                                this.adjust_ai_terminal_output_lines(-1, cx);
-                            }),
-                            cx.listener(|this, _, _, cx| {
-                                this.adjust_ai_terminal_output_lines(1, cx);
-                            }),
+                        self.number_input_box(
+                            "ai.number.terminal-output-lines",
+                            self.ai
+                                .settings_config()
+                                .terminal_output_lines
+                                .to_string()
+                                .as_str(),
+                            NyaNumberInputOptions::default().range(0.0, 100.0).step(1.0),
+                            cx,
                         ),
                     ))
                     .child(ai_help_text(palette, self.tr("ai.agentMaxStepsDesc")))
                     .child(ai_help_text(palette, self.tr("ai.terminalOutputLinesDesc"))),
             ))
     }
-}
-
-fn ai_number_stepper(
-    palette: ThemePalette,
-    minus_id: &'static str,
-    plus_id: &'static str,
-    value: String,
-    on_minus: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    on_plus: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    div()
-        .flex()
-        .items_center()
-        .gap_1()
-        .child(small_button(palette, minus_id, "-", on_minus))
-        .child(
-            div()
-                .min_w(px(72.))
-                .text_center()
-                .font_family(crate::features::gpui_code_font_family())
-                .text_size(px(11.))
-                .text_color(rgb(palette.text))
-                .child(value),
-        )
-        .child(small_button(palette, plus_id, "+", on_plus))
 }
 
 fn ai_help_text(palette: ThemePalette, text: &'static str) -> impl IntoElement {

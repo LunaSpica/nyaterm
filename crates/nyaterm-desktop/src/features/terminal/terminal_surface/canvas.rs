@@ -860,7 +860,7 @@ impl NyaTermApp {
                                     cx.listener(
                                         move |this, event: &gpui::MouseDownEvent, window, cx| {
                                             this.activate_workspace_pane(session_id.clone(), cx);
-                                            window.focus(&this.terminal.input.focus);
+                                            window.focus(&this.terminal.input.focus, cx);
                                             this.close_action_link_menu(cx);
                                             let mods = event.modifiers;
                                             let skip_selection = this
@@ -884,7 +884,7 @@ impl NyaTermApp {
                                     cx.listener(
                                         move |this, event: &gpui::MouseDownEvent, window, cx| {
                                             this.activate_workspace_pane(session_id.clone(), cx);
-                                            window.focus(&this.terminal.input.focus);
+                                            window.focus(&this.terminal.input.focus, cx);
                                             if let Some(cell) = this
                                                 .point_to_terminal_cell_for_session(
                                                     Some(session_id.as_str()),
@@ -924,7 +924,7 @@ impl NyaTermApp {
                                         move |this, event: &gpui::MouseDownEvent, window, cx| {
                                             // xterm/Linux middle-click paste convention.
                                             this.activate_workspace_pane(session_id.clone(), cx);
-                                            window.focus(&this.terminal.input.focus);
+                                            window.focus(&this.terminal.input.focus, cx);
                                             this.close_action_link_menu(cx);
                                             if let Some(cell) = this
                                                 .point_to_terminal_cell_for_session(
@@ -962,7 +962,7 @@ impl NyaTermApp {
                                             cx.stop_propagation();
                                             return;
                                         }
-                                        window.focus(&this.terminal.input.focus);
+                                        window.focus(&this.terminal.input.focus, cx);
                                         let modifiers = event.modifiers();
                                         if this.settings.summary().terminal_action_links_enabled {
                                             if modifiers.alt {

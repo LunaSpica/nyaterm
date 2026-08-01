@@ -40,7 +40,7 @@ pub(in crate::features::panels) use helpers::{
 };
 
 mod send_command_helpers;
-use send_command_helpers::{send_command_control_group, send_command_stepper_button};
+use send_command_helpers::send_command_control_group;
 
 mod send_command_bar;
 mod send_command_state;

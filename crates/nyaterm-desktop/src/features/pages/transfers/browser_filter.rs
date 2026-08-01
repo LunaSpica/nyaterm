@@ -77,7 +77,7 @@ impl NyaTermApp {
             TextInputSetup::placeholder(self.tr("fileExplorer.searchPlaceholder")),
             cx,
         );
-        window.focus(&field.read(cx).focus_handle());
+        window.focus(&field.read(cx).focus_handle(), cx);
         let status = transfer_browser_search_status(
             self.transfer.browser_view().search.as_str(),
             self.visible_transfer_browser_entries().len(),
@@ -96,7 +96,7 @@ impl NyaTermApp {
             self.transfer.close_browser_search();
             self.forget_text_inputs("transfer.browser.search");
             self.transfer.set_browser_status("file search closed");
-            window.focus(self.transfer.browser_view().focus);
+            window.focus(self.transfer.browser_view().focus, cx);
         } else {
             self.transfer.clear_browser_search();
             self.reset_text_input("transfer.browser.search", "", cx);
@@ -178,6 +178,7 @@ mod tests {
                 key_char: key_char.map(str::to_string),
             },
             is_held: false,
+            prefer_character_input: false,
         }
     }
 

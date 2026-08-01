@@ -269,7 +269,7 @@ impl NyaTermApp {
                                     ), cx);
                                     this.ai
                                         .set_panel_status("terminal output loaded into AI prompt");
-                                    window.focus(this.ai.chat_focus());
+                                    window.focus(this.ai.chat_focus(), cx);
                                 }
                                 cx.notify();
                             }),
@@ -299,7 +299,7 @@ impl NyaTermApp {
                                     ), cx);
                                     this.ai
                                         .set_panel_status("terminal buffer loaded into AI prompt");
-                                    window.focus(this.ai.chat_focus());
+                                    window.focus(this.ai.chat_focus(), cx);
                                 }
                                 cx.notify();
                             }),

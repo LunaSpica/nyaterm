@@ -37,7 +37,7 @@ impl NyaTermApp {
         self.security.show_unlock_prompt();
         self.forget_text_inputs("security.unlock.password");
         let field = self.text_input("security.unlock.password", "", TextInputSetup::masked(), cx);
-        window.focus(&field.read(cx).focus_handle());
+        window.focus(&field.read(cx).focus_handle(), cx);
         cx.notify();
     }
 

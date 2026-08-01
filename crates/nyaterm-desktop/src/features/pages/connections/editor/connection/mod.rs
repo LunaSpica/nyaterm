@@ -6,14 +6,15 @@ mod telnet;
 use std::collections::{HashMap, HashSet};
 
 use gpui::{
-    AnyElement, App, Context, Entity, FontWeight, IntoElement, KeyDownEvent, SharedString, div,
+    AnyElement, App, Bounds, Context, Entity, FontWeight, IntoElement, KeyDownEvent, Pixels, Point,
+    SharedString, anchored, deferred, div,
     prelude::{
         FluentBuilder, InteractiveElement, ParentElement, StatefulInteractiveElement, Styled,
     },
-    px, rgb, rgba,
+    px, rgb, rgba, svg,
 };
 use nyaterm_core::{ConnectionType, Group, SavedConnection, natural_compare, truncate_preview};
-use nyaterm_ui::{NyaInput, NyaSelectOption, NyaSelectState};
+use nyaterm_ui::{NyaInput, NyaScrollArea, NyaSelectOption, NyaSelectState, NyaTabItem, NyaTabs};
 
 use self::local::connection_editor_local_section;
 use self::serial::connection_editor_serial_section;
@@ -22,10 +23,9 @@ use self::ssh::{
 };
 use self::telnet::connection_editor_telnet_section;
 use super::super::list::{
-    ConnectionEditorChoice, ConnectionEditorFields, ConnectionEditorRenderContext,
-    ConnectionGroupChoice, connection_editor_group_select, connection_kind_tab, editor_field,
+    ConnectionEditorChoice, ConnectionEditorFields, EDITOR_CONTROL_HEIGHT_PX, editor_field,
 };
-use crate::features::selects::NO_SELECTION_VALUE;
+use crate::features::selects::{NO_SELECTION_VALUE, PENDING_CONNECTION_GROUP_VALUE};
 use crate::features::{
     CONNECTION_ICON_OPTIONS, DEFAULT_CONNECTION_ICON, NyaTermApp, modal_dialog_shell,
     resolve_connection_icon, themed_icon,
@@ -95,38 +95,6 @@ impl NyaTermApp {
         select
     }
 
-    fn connection_editor_group_select_entity(
-        &mut self,
-        choices: &[ConnectionGroupChoice],
-        cx: &mut Context<Self>,
-    ) -> Entity<NyaSelectState> {
-        let options = choices
-            .iter()
-            .map(|choice| {
-                NyaSelectOption::new(
-                    choice
-                        .value
-                        .clone()
-                        .unwrap_or_else(|| NO_SELECTION_VALUE.to_string()),
-                    format!("{}{}", "  ".repeat(choice.depth), choice.label),
-                )
-            })
-            .collect::<Vec<_>>();
-        let selected_value = choices.iter().find(|choice| choice.selected).map(|choice| {
-            choice
-                .value
-                .clone()
-                .unwrap_or_else(|| NO_SELECTION_VALUE.to_string())
-        });
-        self.select_entity(
-            "connection-editor-group-select",
-            options,
-            selected_value,
-            false,
-            cx,
-        )
-    }
-
     fn connection_editor_surface(
         &mut self,
         editor: ConnectionEditorState,
@@ -152,24 +120,11 @@ impl NyaTermApp {
         let icon_auto_detect_label = self.tr("dialog.iconAutoDetect");
         let icon_auto_detect_hint = self.tr("dialog.iconAutoDetectTooltip");
         let icon_auto_detect = editor.icon_auto_detect;
-        let mut group_options = vec![ConnectionGroupChoice {
-            value: None,
-            label: none_label.to_string(),
-            depth: 0,
-            selected: editor.group_id.is_none() && editor.pending_group_name.is_none(),
-        }];
-        group_options.extend(
-            ordered_connection_groups(self.connection_state.groups())
-                .into_iter()
-                .map(|(group, depth)| {
-                    let selected = editor.group_id.as_deref() == Some(group.id.as_str());
-                    ConnectionGroupChoice {
-                        value: Some(group.id),
-                        label: group.name,
-                        depth,
-                        selected,
-                    }
-                }),
+        let group_options = connection_editor_group_menu_options(
+            self.connection_state.groups(),
+            &editor,
+            none_label,
+            self.tr("dialog.newGroup"),
         );
         let group_parent_id = if editor.pending_group_name.is_some() {
             editor.pending_group_parent_id.as_deref()
@@ -471,10 +426,6 @@ impl NyaTermApp {
         })
         .collect::<Vec<_>>();
         let mut selects = HashMap::new();
-        selects.insert(
-            ConnectionEditorSelect::Group,
-            self.connection_editor_group_select_entity(&group_options, cx),
-        );
         for (select_key, choices, placeholder) in [
             (
                 ConnectionEditorSelect::SavedPassword,
@@ -547,11 +498,15 @@ impl NyaTermApp {
                 self.connection_editor_select_entity(select_key, choices, placeholder, cx),
             );
         }
-        let fields =
-            ConnectionEditorFields::new(self.connection_state.editor_fields().clone(), selects);
+        let fields = ConnectionEditorFields::new(
+            self.connection_state.editor_fields().clone(),
+            self.connection_state.editor_number_fields().clone(),
+            selects,
+        );
         let icon_key = editor.icon.as_deref();
         let icon_def = resolve_connection_icon(icon_key, editor.kind.label());
         let icon_picker_open = self.connection_state.editor_icon_picker_is_open();
+        let group_select_open = self.connection_state.editor_group_select_is_open();
         let icon_picker_bg = if native_window {
             rgb(palette.surface)
         } else {
@@ -734,51 +689,34 @@ impl NyaTermApp {
                     .pt_4()
                     .when(!native_window, |this| this.pt_3())
                     .child(
-                        div()
-                            .h(px(32.))
-                            .p_1()
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .rounded_md()
-                            .bg(rgb(palette.surface_elevated))
-                            .child(connection_kind_tab(
-                                palette,
-                                "SSH",
-                                editor.kind == ConnectionKindTab::Ssh,
-                                cx.listener(|this, _, _, cx| {
-                                    this.set_connection_editor_kind(ConnectionKindTab::Ssh, cx);
-                                }),
-                            ))
-                            .child(connection_kind_tab(
-                                palette,
-                                local_label,
-                                editor.kind == ConnectionKindTab::Local,
-                                cx.listener(|this, _, _, cx| {
-                                    this.set_connection_editor_kind(ConnectionKindTab::Local, cx);
-                                }),
-                            ))
-                            .child(connection_kind_tab(
-                                palette,
-                                "Telnet",
-                                editor.kind == ConnectionKindTab::Telnet,
-                                cx.listener(|this, _, _, cx| {
-                                    this.set_connection_editor_kind(ConnectionKindTab::Telnet, cx);
-                                }),
-                            ))
-                            .child(connection_kind_tab(
-                                palette,
-                                serial_label,
-                                editor.kind == ConnectionKindTab::Serial,
-                                cx.listener(|this, _, _, cx| {
-                                    this.set_connection_editor_kind(ConnectionKindTab::Serial, cx);
-                                }),
-                            )),
+                        NyaTabs::new("connection-kind-tabs")
+                            .items([
+                                NyaTabItem::new("SSH"),
+                                NyaTabItem::new(local_label),
+                                NyaTabItem::new("Telnet"),
+                                NyaTabItem::new(serial_label),
+                            ])
+                            .selected_index(match editor.kind {
+                                ConnectionKindTab::Ssh => 0,
+                                ConnectionKindTab::Local => 1,
+                                ConnectionKindTab::Telnet => 2,
+                                ConnectionKindTab::Serial => 3,
+                            })
+                            .on_select(cx.listener(|this, index, _, cx| {
+                                let kind = match *index {
+                                    0 => ConnectionKindTab::Ssh,
+                                    1 => ConnectionKindTab::Local,
+                                    2 => ConnectionKindTab::Telnet,
+                                    _ => ConnectionKindTab::Serial,
+                                };
+                                this.set_connection_editor_kind(kind, cx);
+                            })),
                     ),
             )
             .child(
                 div()
                     .id("connection-editor-scroll")
+                    .relative()
                     .flex_1()
                     .min_h_0()
                     .overflow_y_scroll()
@@ -800,17 +738,30 @@ impl NyaTermApp {
                                 &fields,
                                 cx,
                             )))
-                            .child(div().min_w(px(192.)).max_w(px(288.)).flex_1().child(
-                                connection_editor_group_select(
-                                    ConnectionEditorRenderContext {
-                                        palette,
-                                        fields: &fields,
+                            .child(
+                                div().min_w(px(192.)).max_w(px(288.)).flex_1().child(
+                                    connection_editor_group_control(
+                                        ConnectionEditorGroupControlArgs {
+                                            palette,
+                                            label: group_title,
+                                            display_label: connection_editor_group_display_label(
+                                                self.connection_state.groups(),
+                                                &editor,
+                                                none_label,
+                                                self.tr("dialog.newGroup"),
+                                            ),
+                                            select_open: group_select_open,
+                                            trigger_bounds: self
+                                                .connection_state
+                                                .editor_group_select_trigger_bounds(),
+                                            parent_hint: group_parent_hint.clone(),
+                                            choices: &group_options,
+                                            fields: &fields,
+                                        },
                                         cx,
-                                    },
-                                    group_title,
-                                    group_parent_hint,
+                                    ),
                                 ),
-                            )),
+                            ),
                     )
                     .when(editor.kind == ConnectionKindTab::Ssh, |this| {
                         this.child(connection_editor_ssh_section(
@@ -920,7 +871,7 @@ impl NyaTermApp {
 fn connection_editor_select_id(select: ConnectionEditorSelect) -> &'static str {
     match select {
         ConnectionEditorSelect::Authentication => {
-            unreachable!("authentication uses a radio group")
+            unreachable!("authentication uses connection-specific segmented tabs")
         }
         ConnectionEditorSelect::Group => "connection-editor-group-select",
         ConnectionEditorSelect::SavedPassword => "connection-editor-saved-password",
@@ -953,6 +904,376 @@ fn connection_group_path_label(groups: &[Group], group_id: &str) -> Option<Strin
     }
     parts.reverse();
     Some(parts.join(" / "))
+}
+
+struct ConnectionEditorGroupControlArgs<'a> {
+    palette: crate::theme::ThemePalette,
+    label: &'static str,
+    display_label: String,
+    select_open: bool,
+    trigger_bounds: Option<Bounds<Pixels>>,
+    parent_hint: String,
+    choices: &'a [ConnectionEditorGroupMenuOption],
+    fields: &'a ConnectionEditorFields,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ConnectionEditorGroupMenuOption {
+    value: Option<String>,
+    label: String,
+    depth: usize,
+    selected: bool,
+    disabled: bool,
+    none_option: bool,
+}
+
+fn connection_editor_group_control(
+    args: ConnectionEditorGroupControlArgs<'_>,
+    cx: &mut Context<NyaTermApp>,
+) -> impl IntoElement {
+    let ConnectionEditorGroupControlArgs {
+        palette,
+        label,
+        display_label,
+        select_open,
+        trigger_bounds,
+        parent_hint,
+        choices,
+        fields,
+    } = args;
+    let new_group_entity = fields.get(&ConnectionEditorField::NewGroupName);
+    let new_group_field = new_group_entity.cloned();
+    let can_add = new_group_entity.is_some_and(|field| !field.read(cx).value(cx).trim().is_empty());
+    let popup_position = trigger_bounds.map(connection_editor_group_popup_position);
+    let popup_width = trigger_bounds.map(|bounds| bounds.size.width.max(px(192.)));
+    let app = cx.entity();
+
+    div()
+        .id("connection-editor-group")
+        .relative()
+        .min_w_0()
+        .flex()
+        .flex_col()
+        .gap_1()
+        .child(
+            div()
+                .text_xs()
+                .text_color(rgb(palette.text_muted))
+                .child(label),
+        )
+        .child(
+            div()
+                .on_children_prepainted({
+                    let app = app.clone();
+                    move |bounds, _, cx| {
+                        let Some(bounds) = bounds.into_iter().next() else {
+                            return;
+                        };
+                        _ = app.update(cx, |this, cx| {
+                            this.set_connection_group_select_trigger_bounds(bounds, cx);
+                        });
+                    }
+                })
+                .id("connection-editor-group-row")
+                .h(px(EDITOR_CONTROL_HEIGHT_PX))
+                .min_w_0()
+                .flex()
+                .items_center()
+                .child(
+                    div()
+                        .id("connection-editor-group-trigger")
+                        .h(px(EDITOR_CONTROL_HEIGHT_PX))
+                        .min_w_0()
+                        .flex_1()
+                        .px_2()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .rounded_sm()
+                        .border_1()
+                        .border_color(if select_open {
+                            rgb(palette.primary)
+                        } else {
+                            rgb(palette.border)
+                        })
+                        .bg(rgb(palette.input))
+                        .cursor_pointer()
+                        .hover(|this| this.bg(rgb(palette.hover)))
+                        .child(
+                            div()
+                                .min_w_0()
+                                .flex_1()
+                                .truncate()
+                                .text_xs()
+                                .text_color(rgb(palette.text))
+                                .child(display_label),
+                        )
+                        .child(
+                            svg()
+                                .size(px(14.))
+                                .path("icons/chevron-down.svg")
+                                .text_color(rgb(palette.text_muted)),
+                        )
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.toggle_connection_group_select(cx);
+                        })),
+                ),
+        )
+        .when(select_open, |this| {
+            let Some(popup_position) = popup_position else {
+                return this;
+            };
+            let popup_width = popup_width.unwrap_or(px(192.));
+            this.child(
+                deferred(
+                    anchored()
+                        .snap_to_window_with_margin(px(8.))
+                        .position(popup_position)
+                        .child(
+                            div()
+                                .occlude()
+                                .w(popup_width)
+                                .rounded_md()
+                                .border_1()
+                                .border_color(rgb(palette.border))
+                                .bg(rgb(palette.surface_elevated))
+                                .shadow_lg()
+                                .overflow_hidden()
+                                .flex()
+                                .flex_col()
+                                .child(
+                                    div().flex_none().w_full().max_h(px(192.)).bg(rgb(
+                                        palette.surface_elevated,
+                                    )).child(
+                                        NyaScrollArea::new("connection-editor-group-options")
+                                            .max_h(px(192.))
+                                            .child(connection_editor_group_option_list(
+                                                palette, choices, cx,
+                                            )),
+                                    ),
+                                )
+                                .child(
+                                    div()
+                                        .id("connection-editor-new-group-footer")
+                                        .flex_none()
+                                        .p_2()
+                                        .border_t_1()
+                                        .border_color(rgb(palette.border))
+                                        .flex()
+                                        .flex_col()
+                                        .gap_1()
+                                        .child(
+                                            div()
+                                                .h(px(32.))
+                                                .min_w_0()
+                                                .flex()
+                                                .items_center()
+                                                .gap_2()
+                                                .child(
+                                                    div()
+                                                        .id("connection-editor-new-group-input")
+                                                        .h(px(32.))
+                                                        .min_w_0()
+                                                        .flex_1()
+                                                        .px_2()
+                                                        .flex()
+                                                        .items_center()
+                                                        .rounded_sm()
+                                                        .border_1()
+                                                        .border_color(rgb(palette.border))
+                                                        .bg(rgb(palette.input))
+                                                        .children(new_group_field.map(|field| {
+                                                            div()
+                                                                .min_w_0()
+                                                                .flex_1()
+                                                                .text_xs()
+                                                                .child(NyaInput::new(&field))
+                                                        })),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .id("connection-editor-new-group-add")
+                                                        .size(px(32.))
+                                                        .flex_none()
+                                                        .flex()
+                                                        .items_center()
+                                                        .justify_center()
+                                                        .rounded_sm()
+                                                        .border_1()
+                                                        .border_color(rgb(palette.border))
+                                                        .bg(rgb(palette.input))
+                                                        .text_color(rgb(palette.text_muted))
+                                                        .opacity(if can_add { 1.0 } else { 0.45 })
+                                                        .when(can_add, |this| {
+                                                            this.cursor_pointer()
+                                                                .hover(|this| {
+                                                                    this.bg(rgb(palette.hover))
+                                                                })
+                                                                .on_click(cx.listener(
+                                                                    |this, _, _, cx| {
+                                                                        this.commit_connection_editor_new_group(cx);
+                                                                    },
+                                                                ))
+                                                        })
+                                                        .child(
+                                                            svg()
+                                                                .size(px(15.))
+                                                                .path("icons/conn/add.svg")
+                                                                .text_color(rgb(
+                                                                    palette.text_muted,
+                                                                )),
+                                                        ),
+                                                ),
+                                        )
+                                        .child(
+                                            div()
+                                                .min_w_0()
+                                                .truncate()
+                                                .text_size(px(10.))
+                                                .text_color(rgb(palette.text_dimmed))
+                                                .child(parent_hint),
+                                        ),
+                                )
+                                .on_mouse_down_out(cx.listener(|this, _, _, cx| {
+                                    this.close_connection_group_select(cx);
+                                })),
+                        ),
+                )
+                .with_priority(1),
+            )
+        })
+}
+
+fn connection_editor_group_option_list(
+    palette: crate::theme::ThemePalette,
+    choices: &[ConnectionEditorGroupMenuOption],
+    cx: &mut Context<NyaTermApp>,
+) -> impl IntoElement {
+    choices
+        .iter()
+        .fold(div().w_full().flex().flex_col(), |list, choice| {
+            let selected = choice.selected;
+            let value = choice.value.clone();
+            let disabled = choice.disabled;
+            let none_option = choice.none_option;
+            let padding_left = px(12. + (choice.depth as f32 * 16.));
+            let row_id = value
+                .as_deref()
+                .map(|id| format!("connection-editor-group-option-{id}"))
+                .unwrap_or_else(|| "connection-editor-group-option-none".to_string());
+            list.child(
+                div()
+                    .id(SharedString::from(row_id))
+                    .w_full()
+                    .h(px(28.))
+                    .pl(padding_left)
+                    .pr_3()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .bg(if selected {
+                        rgba((palette.primary << 8) | 0x26)
+                    } else {
+                        rgba(0x00000000)
+                    })
+                    .text_color(if selected {
+                        rgb(palette.primary)
+                    } else if none_option || disabled {
+                        rgb(palette.text_muted)
+                    } else {
+                        rgb(palette.text)
+                    })
+                    .when(!disabled, |this| {
+                        this.cursor_pointer()
+                            .hover(|this| this.bg(rgb(palette.hover)))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.set_connection_editor_select_value(
+                                    ConnectionEditorSelect::Group,
+                                    value.as_deref(),
+                                    cx,
+                                );
+                            }))
+                    })
+                    .child(
+                        div()
+                            .min_w_0()
+                            .flex_1()
+                            .truncate()
+                            .text_xs()
+                            .child(choice.label.clone()),
+                    ),
+            )
+        })
+}
+
+fn connection_editor_group_popup_position(bounds: Bounds<Pixels>) -> Point<Pixels> {
+    Point {
+        x: bounds.origin.x,
+        y: bounds.origin.y + bounds.size.height + px(4.),
+    }
+}
+
+fn connection_editor_group_display_label(
+    groups: &[Group],
+    editor: &ConnectionEditorState,
+    none_label: &'static str,
+    new_group_label: &'static str,
+) -> String {
+    if let Some(name) = editor.pending_group_name.as_deref() {
+        return format!("{name} ({new_group_label})");
+    }
+    editor
+        .group_id
+        .as_deref()
+        .and_then(|id| connection_group_path_label(groups, id))
+        .unwrap_or_else(|| none_label.to_string())
+}
+
+fn connection_editor_group_menu_options(
+    groups: &[Group],
+    editor: &ConnectionEditorState,
+    none_label: &'static str,
+    new_group_label: &'static str,
+) -> Vec<ConnectionEditorGroupMenuOption> {
+    let mut options = vec![ConnectionEditorGroupMenuOption {
+        value: None,
+        label: none_label.to_string(),
+        depth: 0,
+        selected: editor.group_id.is_none() && editor.pending_group_name.is_none(),
+        disabled: false,
+        none_option: true,
+    }];
+
+    if let Some(name) = editor.pending_group_name.as_deref() {
+        options.push(ConnectionEditorGroupMenuOption {
+            value: Some(PENDING_CONNECTION_GROUP_VALUE.to_string()),
+            label: format!("{name} ({new_group_label})"),
+            depth: 0,
+            selected: true,
+            disabled: true,
+            none_option: false,
+        });
+    }
+
+    options.extend(
+        ordered_connection_groups(groups)
+            .into_iter()
+            .map(|(group, depth)| {
+                let selected = editor.pending_group_name.is_none()
+                    && editor.group_id.as_deref() == Some(group.id.as_str());
+                ConnectionEditorGroupMenuOption {
+                    value: Some(group.id.clone()),
+                    label: group.name,
+                    depth,
+                    selected,
+                    disabled: false,
+                    none_option: false,
+                }
+            }),
+    );
+
+    options
 }
 
 pub(in crate::features::pages::connections) fn ordered_connection_groups(
@@ -1063,8 +1384,8 @@ fn connection_description_field(
                 .py_2()
                 .cursor_text()
                 .when_some(handle, |this, handle| {
-                    this.on_mouse_down(gpui::MouseButton::Left, move |_, window, _| {
-                        window.focus(&handle);
+                    this.on_click(move |_, window, cx| {
+                        window.focus(&handle, cx);
                     })
                 })
                 .children(entity.map(NyaInput::new)),
@@ -1141,7 +1462,12 @@ fn connection_proxy_jump_would_cycle(
 mod tests {
     use nyaterm_core::Group;
 
-    use super::ordered_connection_groups;
+    use super::{connection_editor_group_menu_options, ordered_connection_groups};
+    use crate::features::selects::PENDING_CONNECTION_GROUP_VALUE;
+    use crate::models::{
+        ConnectionEditorAdvancedTab, ConnectionEditorField, ConnectionEditorPasswordSource,
+        ConnectionEditorState, ConnectionEditorTelnetTab, ConnectionKindTab,
+    };
 
     fn group(id: &str, name: &str, parent_id: Option<&str>, sort_order: i32) -> Group {
         Group {
@@ -1154,8 +1480,63 @@ mod tests {
         }
     }
 
+    fn editor(group_id: Option<&str>, pending_group_name: Option<&str>) -> ConnectionEditorState {
+        ConnectionEditorState {
+            id: None,
+            kind: ConnectionKindTab::Ssh,
+            name: String::new(),
+            description: String::new(),
+            icon: None,
+            icon_auto_detect: false,
+            group_id: group_id.map(ToOwned::to_owned),
+            new_group_name: String::new(),
+            pending_group_name: pending_group_name.map(ToOwned::to_owned),
+            pending_group_parent_id: group_id.map(ToOwned::to_owned),
+            host: String::new(),
+            port: "22".to_string(),
+            username: String::new(),
+            auth_mode: "password".to_string(),
+            password_source: ConnectionEditorPasswordSource::Ask,
+            password_id: None,
+            password: String::new(),
+            existing_password: None,
+            key_id: None,
+            otp_id: None,
+            auto_fill_otp: false,
+            proxy_id: None,
+            proxy_jump_id: None,
+            x11_forwarding: false,
+            backspace_mode: "del".to_string(),
+            shell_path: String::new(),
+            shell_args: String::new(),
+            working_dir: String::new(),
+            serial_port: String::new(),
+            baud_rate: "115200".to_string(),
+            data_bits: "8".to_string(),
+            parity: "none".to_string(),
+            stop_bits: "1".to_string(),
+            raw_tcp_cli: false,
+            telnet_enter_mode: "cr".to_string(),
+            local_echo: false,
+            local_line_edit: false,
+            force_character_at_a_time: false,
+            send_naws: true,
+            send_sga: true,
+            post_login_enabled: false,
+            post_login_command: String::new(),
+            post_login_delay_ms: "0".to_string(),
+            advanced_open: false,
+            advanced_network_tab: ConnectionEditorAdvancedTab::Proxy,
+            advanced_behavior_tab: ConnectionEditorAdvancedTab::PostLogin,
+            telnet_advanced_tab: ConnectionEditorTelnetTab::Input,
+            connect_after_save: false,
+            focused_field: ConnectionEditorField::Name,
+            error: None,
+        }
+    }
+
     #[test]
-    fn group_picker_orders_tree_and_keeps_orphans_visible() {
+    fn connection_editor_group_select_orders_tree_and_keeps_orphans_visible() {
         let groups = vec![
             group("child", "Child", Some("parent"), 0),
             group("orphan", "Orphan", Some("missing"), 2),
@@ -1175,5 +1556,63 @@ mod tests {
                 ("orphan".to_string(), 0),
             ]
         );
+    }
+
+    #[test]
+    fn connection_editor_group_menu_options_keep_depth_labels_and_pending_group() {
+        let groups = vec![
+            group("child", "Child", Some("parent"), 0),
+            group("parent", "Parent", None, 1),
+        ];
+        let editor = editor(Some("parent"), Some("Staging"));
+
+        let options = connection_editor_group_menu_options(&groups, &editor, "None", "New Group");
+        let values = options
+            .iter()
+            .map(|option| {
+                (
+                    option.value.as_deref(),
+                    option.label.as_str(),
+                    option.depth,
+                    option.selected,
+                    option.disabled,
+                    option.none_option,
+                )
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            values,
+            vec![
+                (None, "None", 0, false, false, true),
+                (
+                    Some(PENDING_CONNECTION_GROUP_VALUE),
+                    "Staging (New Group)",
+                    0,
+                    true,
+                    true,
+                    false
+                ),
+                (Some("parent"), "Parent", 0, false, false, false),
+                (Some("child"), "Child", 1, false, false, false),
+            ]
+        );
+    }
+
+    #[test]
+    fn connection_editor_group_menu_options_select_existing_group_without_pending_group() {
+        let groups = vec![
+            group("child", "Child", Some("parent"), 0),
+            group("parent", "Parent", None, 1),
+        ];
+        let editor = editor(Some("child"), None);
+
+        let selected = connection_editor_group_menu_options(&groups, &editor, "None", "New Group")
+            .into_iter()
+            .filter(|option| option.selected)
+            .map(|option| option.value)
+            .collect::<Vec<_>>();
+
+        assert_eq!(selected, vec![Some("child".to_string())]);
     }
 }

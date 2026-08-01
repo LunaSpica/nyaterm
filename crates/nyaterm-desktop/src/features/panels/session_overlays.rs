@@ -3,6 +3,7 @@ use gpui::{
     div, prelude::*, px, rgb, rgba,
 };
 use nyaterm_core::truncate_preview;
+use nyaterm_ui::NyaNumberInputOptions;
 
 use crate::features::{NyaTermApp, TextInputSetup};
 use crate::widgets::{session_info_row, small_button};
@@ -69,7 +70,7 @@ impl NyaTermApp {
             .justify_center()
             .track_focus(self.session.dialog_color_picker_focus())
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(this.session.dialog_color_picker_focus());
+                window.focus(this.session.dialog_color_picker_focus(), cx);
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, _, cx| {
@@ -173,7 +174,7 @@ impl NyaTermApp {
             .justify_center()
             .track_focus(self.session.dialog_session_info_focus())
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(this.session.dialog_session_info_focus());
+                window.focus(this.session.dialog_session_info_focus(), cx);
                 cx.notify();
             }))
             .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, _, cx| {
@@ -266,7 +267,7 @@ impl NyaTermApp {
                 cx,
             )
             .into_any_element();
-        let delay_label = format!("{} ms", self.session.dialog_startup_command_delay_ms());
+        let delay_ms = self.session.dialog_startup_command_delay_ms();
 
         div()
             .min_w_0()
@@ -301,43 +302,28 @@ impl NyaTermApp {
                     .justify_between()
                     .gap_3()
                     .child(
-                        div()
-                            .font_family(crate::features::gpui_code_font_family())
-                            .text_sm()
-                            .text_color(rgb(palette.text))
-                            .child(delay_label),
+                        div().w(px(180.)).child(
+                            self.number_input_box(
+                                "session.number.startup-delay",
+                                delay_ms.to_string().as_str(),
+                                NyaNumberInputOptions::default()
+                                    .range(0.0, 60_000.0)
+                                    .step(100.0)
+                                    .suffix("ms"),
+                                cx,
+                            ),
+                        ),
                     )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .child(small_button(
-                                palette,
-                                "startup-delay-minus",
-                                "-100",
-                                cx.listener(|this, _, _, cx| {
-                                    this.adjust_startup_command_delay(-100, cx);
-                                }),
-                            ))
-                            .child(small_button(
-                                palette,
-                                "startup-delay-zero",
-                                "0",
-                                cx.listener(|this, _, _, cx| {
-                                    this.session.dialog_reset_startup_command_delay();
-                                    cx.notify();
-                                }),
-                            ))
-                            .child(small_button(
-                                palette,
-                                "startup-delay-plus",
-                                "+100",
-                                cx.listener(|this, _, _, cx| {
-                                    this.adjust_startup_command_delay(100, cx);
-                                }),
-                            )),
-                    ),
+                    .child(div().flex().items_center().gap_2().child(small_button(
+                        palette,
+                        "startup-delay-zero",
+                        "0",
+                        cx.listener(|this, _, _, cx| {
+                            this.session.dialog_reset_startup_command_delay();
+                            this.reset_number_input("session.number.startup-delay", "0", cx);
+                            cx.notify();
+                        }),
+                    ))),
             )
             .when(command_draft.trim().is_empty(), |this| {
                 this.child(

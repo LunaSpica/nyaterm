@@ -134,7 +134,7 @@ impl NyaTermApp {
         }
         if shortcut_matches(event, "view.openChat", &keybindings) {
             self.ensure_panel_open(NavItem::AiAssistant);
-            window.focus(self.ai.chat_focus());
+            window.focus(self.ai.chat_focus(), cx);
             self.shell.set_status("AI panel focused".to_string());
             cx.notify();
             return true;

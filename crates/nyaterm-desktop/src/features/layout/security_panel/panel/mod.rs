@@ -2,6 +2,7 @@ use gpui::{
     App, ClickEvent, Context, FontWeight, IntoElement, SharedString, Window, div, prelude::*, px,
     rgb,
 };
+use nyaterm_ui::{NyaTabItem, NyaTabs};
 
 use crate::features::NyaTermApp;
 use crate::models::SecurityAuthTab;
@@ -34,28 +35,30 @@ impl NyaTermApp {
             .flex_col()
             .bg(self.shell_transparent_color(palette.surface))
             .child(
-                div()
-                    .px_3()
-                    .pt_3()
-                    .pb_0()
-                    .flex()
-                    .flex_col()
-                    // Tauri SecurityAuthPanel: full-width 4-col segment tabs under PanelHeader.
-                    .child(
-                        div()
-                            .h(px(32.))
-                            .w_full()
-                            .rounded_md()
-                            .bg(rgb(palette.surface_elevated))
-                            .p(px(2.))
-                            .flex()
-                            .items_center()
-                            .gap(px(2.))
-                            .child(self.security_tab_chip(SecurityAuthTab::Keys, cx))
-                            .child(self.security_tab_chip(SecurityAuthTab::Passwords, cx))
-                            .child(self.security_tab_chip(SecurityAuthTab::Otp, cx))
-                            .child(self.security_tab_chip(SecurityAuthTab::Credentials, cx)),
-                    ),
+                div().px_3().pt_3().pb_0().flex().flex_col().child(
+                    NyaTabs::new("security-auth-tabs")
+                        .items([
+                            NyaTabItem::new(self.tr(SecurityAuthTab::Keys.i18n_key())),
+                            NyaTabItem::new(self.tr(SecurityAuthTab::Passwords.i18n_key())),
+                            NyaTabItem::new(self.tr(SecurityAuthTab::Otp.i18n_key())),
+                            NyaTabItem::new(self.tr(SecurityAuthTab::Credentials.i18n_key())),
+                        ])
+                        .selected_index(match active_tab {
+                            SecurityAuthTab::Keys => 0,
+                            SecurityAuthTab::Passwords => 1,
+                            SecurityAuthTab::Otp => 2,
+                            SecurityAuthTab::Credentials => 3,
+                        })
+                        .on_select(cx.listener(|this, index, _, cx| {
+                            let tab = match *index {
+                                0 => SecurityAuthTab::Keys,
+                                1 => SecurityAuthTab::Passwords,
+                                2 => SecurityAuthTab::Otp,
+                                _ => SecurityAuthTab::Credentials,
+                            };
+                            this.set_security_auth_tab(tab, cx);
+                        })),
+                ),
             )
             .child(body)
             .when(

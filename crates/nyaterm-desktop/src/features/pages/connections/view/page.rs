@@ -289,7 +289,7 @@ impl NyaTermApp {
                     .cursor_text()
                     .on_click(cx.listener(|this, _, window, cx| {
                         let field = this.connection_state.list_search_field();
-                        window.focus(&field.read(cx).focus_handle());
+                        window.focus(&field.read(cx).focus_handle(), cx);
                         cx.notify();
                     }))
                     // Result navigation stays here: the field leaves the arrows

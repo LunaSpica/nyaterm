@@ -50,14 +50,13 @@ impl NyaDialog {
     }
 
     pub fn confirm(mut self, footer: NyaDialogFooter) -> Self {
-        self.inner = self.inner.confirm().button_props(footer.into_component());
+        self.inner = self.inner.button_props(footer.into_component());
         self
     }
 
     pub fn alert(mut self, action_label: impl Into<SharedString>) -> Self {
         self.inner = self
             .inner
-            .alert()
             .button_props(DialogButtonProps::default().ok_text(action_label));
         self
     }
@@ -155,6 +154,7 @@ impl NyaDialogFooter {
         DialogButtonProps::default()
             .cancel_text(self.cancel_label)
             .ok_text(self.action_label)
+            .show_cancel(true)
             .ok_variant(if self.danger {
                 ButtonVariant::Danger
             } else {

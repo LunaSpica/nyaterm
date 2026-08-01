@@ -52,7 +52,7 @@ impl NyaTermApp {
             .p_3()
             .track_focus(self.transfer.panel_focus())
             .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(this.transfer.panel_focus());
+                window.focus(this.transfer.panel_focus(), cx);
                 cx.notify();
             }))
             .on_key_down(cx.listener(move |this, event: &KeyDownEvent, _, cx| {

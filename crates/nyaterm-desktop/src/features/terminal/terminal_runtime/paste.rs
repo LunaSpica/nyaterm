@@ -39,7 +39,7 @@ impl NyaTermApp {
             self.terminal.paste.open(text);
             self.shell
                 .set_status("multi-line paste confirmation opened".to_string());
-            window.focus(&self.terminal.paste.focus);
+            window.focus(&self.terminal.paste.focus, cx);
             cx.notify();
             return;
         }

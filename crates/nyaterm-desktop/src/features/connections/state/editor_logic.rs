@@ -12,10 +12,12 @@ use crate::models::{
 pub(super) fn clear_connection_editor_runtime_state(
     draft: &mut Option<ConnectionEditorState>,
     icon_picker_open: &mut bool,
+    group_select_open: &mut bool,
     window: &mut Option<NyaWindowHandle>,
     window_open_pending: &mut bool,
 ) {
     *icon_picker_open = false;
+    *group_select_open = false;
     *draft = None;
     *window = None;
     *window_open_pending = false;

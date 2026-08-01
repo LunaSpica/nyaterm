@@ -52,8 +52,22 @@ impl NyaTermApp {
         self.persist_ai_settings_now(cx);
     }
 
+    pub(in crate::features) fn set_ai_context_line_limit(
+        &mut self,
+        value: u32,
+        cx: &mut Context<Self>,
+    ) {
+        self.ai.set_settings_context_line_limit(value);
+        self.persist_ai_settings_now(cx);
+    }
+
     pub(in crate::features) fn adjust_ai_timeout_ms(&mut self, delta: i64, cx: &mut Context<Self>) {
         self.ai.adjust_settings_timeout_ms(delta);
+        self.persist_ai_settings_now(cx);
+    }
+
+    pub(in crate::features) fn set_ai_timeout_ms(&mut self, value: u64, cx: &mut Context<Self>) {
+        self.ai.set_settings_timeout_ms(value);
         self.persist_ai_settings_now(cx);
     }
 
@@ -66,12 +80,26 @@ impl NyaTermApp {
         self.persist_ai_settings_now(cx);
     }
 
+    pub(in crate::features) fn set_ai_agent_steps(&mut self, value: u16, cx: &mut Context<Self>) {
+        self.ai.set_settings_agent_steps(value);
+        self.persist_ai_settings_now(cx);
+    }
+
     pub(in crate::features) fn adjust_ai_agent_step_timeout_ms(
         &mut self,
         delta: i64,
         cx: &mut Context<Self>,
     ) {
         self.ai.adjust_settings_agent_step_timeout_ms(delta);
+        self.persist_ai_settings_now(cx);
+    }
+
+    pub(in crate::features) fn set_ai_agent_step_timeout_ms(
+        &mut self,
+        value: u64,
+        cx: &mut Context<Self>,
+    ) {
+        self.ai.set_settings_agent_step_timeout_ms(value);
         self.persist_ai_settings_now(cx);
     }
 
@@ -84,12 +112,26 @@ impl NyaTermApp {
         self.persist_ai_settings_now(cx);
     }
 
+    pub(in crate::features) fn set_ai_terminal_output_lines(
+        &mut self,
+        value: u16,
+        cx: &mut Context<Self>,
+    ) {
+        self.ai.set_settings_terminal_output_lines(value);
+        self.persist_ai_settings_now(cx);
+    }
+
     pub(in crate::features) fn adjust_ai_file_size_mb(
         &mut self,
         delta: i64,
         cx: &mut Context<Self>,
     ) {
         self.ai.adjust_settings_file_size_mb(delta);
+        self.persist_ai_settings_now(cx);
+    }
+
+    pub(in crate::features) fn set_ai_file_size_mb(&mut self, value: u64, cx: &mut Context<Self>) {
+        self.ai.set_settings_file_size_mb(value);
         self.persist_ai_settings_now(cx);
     }
 

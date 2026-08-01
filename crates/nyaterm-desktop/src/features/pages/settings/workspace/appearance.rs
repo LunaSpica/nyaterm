@@ -2,11 +2,9 @@ use gpui::{
     App, ClickEvent, Context, FontWeight, IntoElement, SharedString, Window, div, prelude::*, px,
     rgb, rgba, svg,
 };
-use nyaterm_ui::NyaSelectOption;
+use nyaterm_ui::{NyaNumberInputOptions, NyaSelectOption};
 
-use crate::features::{
-    FOLLOW_UI_THEME_VALUE, NyaTermApp, appearance_font_stack, gpui_code_font_family,
-};
+use crate::features::{FOLLOW_UI_THEME_VALUE, NyaTermApp, appearance_font_stack};
 use crate::theme::{APPEARANCE_THEME_IDS, ThemePalette, appearance_theme_label};
 use nyaterm_ui::NyaTooltip;
 
@@ -172,17 +170,11 @@ impl NyaTermApp {
                         palette,
                         self.tr("settings.fontSize"),
                         None,
-                        appearance_number_stepper(
-                            palette,
-                            "appearance-font-minus",
-                            "appearance-font-plus",
-                            font_size_label,
-                            cx.listener(|this, _, _, cx| {
-                                this.adjust_terminal_font_size(-1, cx);
-                            }),
-                            cx.listener(|this, _, _, cx| {
-                                this.adjust_terminal_font_size(1, cx);
-                            }),
+                        self.number_input_box(
+                            "appearance.number.terminal-font-size",
+                            font_size_label.as_str(),
+                            NyaNumberInputOptions::default().range(8.0, 72.0).step(1.0),
+                            cx,
                         ),
                     ))
                     .child(appearance_settings_field(
@@ -205,17 +197,11 @@ impl NyaTermApp {
                         palette,
                         self.tr("settings.uiFontSize"),
                         None,
-                        appearance_number_stepper(
-                            palette,
-                            "appearance-ui-font-minus",
-                            "appearance-ui-font-plus",
-                            ui_font_size_label,
-                            cx.listener(|this, _, _, cx| {
-                                this.adjust_ui_font_size(-1, cx);
-                            }),
-                            cx.listener(|this, _, _, cx| {
-                                this.adjust_ui_font_size(1, cx);
-                            }),
+                        self.number_input_box(
+                            "appearance.number.ui-font-size",
+                            ui_font_size_label.as_str(),
+                            NyaNumberInputOptions::default().range(12.0, 24.0).step(1.0),
+                            cx,
                         ),
                     ))
                     .child(appearance_settings_field(
@@ -713,71 +699,6 @@ fn appearance_settings_field(
             )
         })
         .child(div().w_full().max_w(px(576.)).child(control))
-}
-
-fn appearance_number_stepper(
-    palette: ThemePalette,
-    minus_id: &'static str,
-    plus_id: &'static str,
-    value: String,
-    on_minus: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    on_plus: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let hover = palette.hover;
-    div()
-        .h(px(34.))
-        .w_full()
-        .max_w(px(360.))
-        .rounded_sm()
-        .border_1()
-        .border_color(rgb(palette.border))
-        .bg(rgb(palette.input))
-        .flex()
-        .items_center()
-        .child(
-            div()
-                .id(minus_id)
-                .w(px(34.))
-                .h_full()
-                .flex()
-                .items_center()
-                .justify_center()
-                .border_r_1()
-                .border_color(rgb(palette.border))
-                .text_size(px(13.))
-                .text_color(rgb(palette.text_muted))
-                .cursor_pointer()
-                .hover(move |this| this.bg(rgb(hover)))
-                .child("-")
-                .on_click(on_minus),
-        )
-        .child(
-            div()
-                .flex_1()
-                .text_center()
-                .font_family(gpui_code_font_family())
-                .text_size(px(12.))
-                .font_weight(FontWeight(600.))
-                .text_color(rgb(palette.text))
-                .child(value),
-        )
-        .child(
-            div()
-                .id(plus_id)
-                .w(px(34.))
-                .h_full()
-                .flex()
-                .items_center()
-                .justify_center()
-                .border_l_1()
-                .border_color(rgb(palette.border))
-                .text_size(px(13.))
-                .text_color(rgb(palette.text_muted))
-                .cursor_pointer()
-                .hover(move |this| this.bg(rgb(hover)))
-                .child("+")
-                .on_click(on_plus),
-        )
 }
 
 fn appearance_icon_text_button(

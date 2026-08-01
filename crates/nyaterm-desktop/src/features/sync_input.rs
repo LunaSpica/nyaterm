@@ -403,7 +403,7 @@ impl NyaTermApp {
         self.forget_text_inputs("sync.groups.search");
         self.forget_text_inputs("sync.group-name.");
         self.shell.set_status("sync groups opened".to_string());
-        window.focus(self.sync_input.focus());
+        window.focus(self.sync_input.focus(), cx);
         cx.notify();
     }
 

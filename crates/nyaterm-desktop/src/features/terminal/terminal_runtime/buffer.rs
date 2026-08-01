@@ -3,7 +3,7 @@ use std::collections::{HashMap, VecDeque};
 use std::fmt::Write as _;
 use std::time::{Duration, Instant};
 
-use gpui::{ClipboardItem, Context, Timer};
+use gpui::{ClipboardItem, Context};
 use nyaterm_terminal::{TerminalClipboardLoad, TerminalEffects, TerminalSnapshot};
 
 use crate::features::NyaTermApp;
@@ -322,7 +322,9 @@ impl NyaTermApp {
             .saturating_add(1);
         let generation = self.terminal.view.live_prefetch_generation;
         self.terminal.view.live_prefetch_task = Some(cx.spawn(async move |this, cx| {
-            Timer::after(TERMINAL_LIVE_PREFETCH_IDLE_DELAY).await;
+            cx.background_executor()
+                .timer(TERMINAL_LIVE_PREFETCH_IDLE_DELAY)
+                .await;
             let _ = this.update(cx, |this, _cx| {
                 if this.terminal.view.live_prefetch_generation == generation {
                     this.request_terminal_live_scrollback_prefetch(&session_id);

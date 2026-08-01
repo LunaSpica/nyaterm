@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::time::Duration;
 
-use gpui::{Context, Timer, Window};
+use gpui::{Context, Window};
 
 use crate::features::NyaTermApp;
 use crate::features::formatting::{normalize_startup_command, short_id};
@@ -27,7 +27,9 @@ impl NyaTermApp {
         ));
         cx.spawn(async move |this, cx| {
             if delay_ms > 0 {
-                Timer::after(Duration::from_millis(delay_ms)).await;
+                cx.background_executor()
+                    .timer(Duration::from_millis(delay_ms))
+                    .await;
             }
             let _ = this.update(cx, |this, cx| {
                 if this.send_terminal_input_to_session(session_id, command.into_bytes(), cx) {

@@ -25,7 +25,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        window.focus(self.transfer.queue_focus());
+        window.focus(self.transfer.queue_focus(), cx);
         if self
             .transfer
             .open_transfer_job_menu_at(&job_id, event.position.x, event.position.y)

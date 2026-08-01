@@ -11,6 +11,8 @@ use gpui_component::{
     switch::Switch,
 };
 
+use crate::sizing::{form_control_height, form_control_size};
+
 type NyaToggleHandler = Box<dyn Fn(&bool, &mut Window, &mut App)>;
 type NyaIndexSelectHandler = Box<dyn Fn(&usize, &mut Window, &mut App)>;
 
@@ -438,7 +440,8 @@ impl Render for NyaSelectState {
         let state = self.ensure_component(window, cx);
         self.sync_component(window, cx);
         Select::new(&state)
-            .small()
+            .with_size(form_control_size())
+            .h(form_control_height())
             .placeholder(self.placeholder.clone())
             .disabled(self.disabled)
     }
@@ -473,7 +476,8 @@ impl RenderOnce for NyaSelect {
             (component, state.placeholder.clone(), state.disabled)
         });
         Select::new(&state)
-            .small()
+            .with_size(form_control_size())
+            .h(form_control_height())
             .appearance(appearance)
             .placeholder(placeholder)
             .disabled(disabled)
@@ -485,6 +489,7 @@ mod tests {
     use gpui::{AppContext as _, TestAppContext};
 
     use super::{NyaSelectOption, NyaSelectState};
+    use crate::sizing::{NYA_FORM_CONTROL_HEIGHT_PX, form_control_size};
 
     #[test]
     fn selected_value_tracks_pre_render_updates() {
@@ -516,5 +521,11 @@ mod tests {
                 .map(str::to_string)),
             Some("dark".to_string())
         );
+    }
+
+    #[test]
+    fn select_uses_standard_form_control_size() {
+        assert_eq!(NYA_FORM_CONTROL_HEIGHT_PX, 32.);
+        assert_eq!(form_control_size(), gpui_component::Size::Medium);
     }
 }

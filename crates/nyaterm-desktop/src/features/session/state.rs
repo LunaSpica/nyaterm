@@ -1731,6 +1731,10 @@ impl SessionDialogState {
         self.startup_command_delay_ms = next as u64;
     }
 
+    pub(in crate::features) fn set_startup_command_delay(&mut self, delay_ms: u64) {
+        self.startup_command_delay_ms = delay_ms.min(60_000);
+    }
+
     pub(in crate::features) fn reset_startup_command_delay(&mut self) {
         self.startup_command_delay_ms = 0;
     }

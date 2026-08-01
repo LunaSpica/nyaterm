@@ -11,7 +11,9 @@ use gpui::{
     SharedString, Styled as _, Subscription, div, px,
 };
 use nyaterm_core::RiskLevel;
-use nyaterm_ui::{NyaSelect, NyaSelectEvent, NyaSelectOption, NyaSelectState};
+use nyaterm_ui::{
+    NYA_FORM_CONTROL_HEIGHT_PX, NyaSelect, NyaSelectEvent, NyaSelectOption, NyaSelectState,
+};
 
 use super::NyaTermApp;
 use crate::models::ConnectionEditorSelect;
@@ -21,6 +23,8 @@ use crate::send_command::{
 
 pub(in crate::features) const FOLLOW_UI_THEME_VALUE: &str = "__nya_follow_ui_theme__";
 pub(in crate::features) const NO_SELECTION_VALUE: &str = "__nya_no_selection__";
+pub(in crate::features) const PENDING_CONNECTION_GROUP_VALUE: &str =
+    "__nya_pending_connection_group__";
 
 #[derive(Default)]
 pub(in crate::features) struct SelectRegistry {
@@ -115,7 +119,7 @@ impl NyaTermApp {
         div()
             .id(id)
             .w_full()
-            .h(px(34.))
+            .h(px(NYA_FORM_CONTROL_HEIGHT_PX))
             .child(NyaSelect::new(&select))
     }
 
@@ -138,7 +142,7 @@ impl NyaTermApp {
             .id(id)
             .w_full()
             .max_w(px(360.))
-            .h(px(34.))
+            .h(px(NYA_FORM_CONTROL_HEIGHT_PX))
             .child(NyaSelect::new(&select).appearance(appearance))
     }
 
@@ -247,6 +251,11 @@ impl NyaTermApp {
                     "connection-editor-stop-bits" => ConnectionEditorSelect::StopBits,
                     _ => return,
                 };
+                if select == ConnectionEditorSelect::Group
+                    && value == PENDING_CONNECTION_GROUP_VALUE
+                {
+                    return;
+                }
                 self.set_connection_editor_select_value(
                     select,
                     (value != NO_SELECTION_VALUE).then_some(value),

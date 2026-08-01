@@ -688,8 +688,7 @@ impl NyaTermApp {
         let new_session_menu = self.shell.new_session_menu_is_open();
         let open_tabs_label = self.tr("terminal.openTabs").to_string();
         let new_session_label = self.tr("terminal.newSession").to_string();
-        let tab_strip_has_overflow =
-            self.shell.session_tab_strip_scroll().max_offset().width > px(0.);
+        let tab_strip_has_overflow = self.shell.session_tab_strip_scroll().max_offset().x > px(0.);
         // Tauri shows Open Tabs only when the strip actually overflows.
         let show_open_tabs_menu = tab_strip_has_overflow || open_tabs_menu;
 

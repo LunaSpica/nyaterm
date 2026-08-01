@@ -156,7 +156,7 @@ impl NyaTermApp {
         };
         self.security
             .open_otp_editor(editor, "OTP editor opened".to_string());
-        window.focus(self.security.otp_editor_focus());
+        window.focus(self.security.otp_editor_focus(), cx);
         cx.notify();
     }
 

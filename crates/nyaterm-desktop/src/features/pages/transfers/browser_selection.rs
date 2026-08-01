@@ -1,5 +1,5 @@
 use gpui::{
-    ClickEvent, ClipboardItem, Context, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Timer, Window,
+    ClickEvent, ClipboardItem, Context, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Window,
 };
 use nyaterm_core::truncate_preview;
 use nyaterm_transport::{SftpFileEntry, SftpFileType};
@@ -34,7 +34,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        window.focus(self.transfer.browser_view().focus);
+        window.focus(self.transfer.browser_view().focus, cx);
         let modifiers = event.modifiers();
         if event.click_count() >= 2 && !modifiers.modified() {
             self.cancel_transfer_browser_pending_rename(cx);
@@ -63,7 +63,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        window.focus(self.transfer.browser_view().focus);
+        window.focus(self.transfer.browser_view().focus, cx);
         if self
             .transfer
             .browser_view()
@@ -146,7 +146,9 @@ impl NyaTermApp {
             return;
         };
         cx.spawn(async move |this, cx| {
-            Timer::after(Duration::from_millis(220)).await;
+            cx.background_executor()
+                .timer(Duration::from_millis(220))
+                .await;
             let _ = this.update(cx, |this, cx| {
                 let rename_dialog_open = this.transfer.rename_dialog_is_open();
                 let should_rename =
@@ -212,7 +214,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        window.focus(self.transfer.browser_view().focus);
+        window.focus(self.transfer.browser_view().focus, cx);
         if let Some(selected_count) = self.transfer.activate_marked_browser_path(&path) {
             self.transfer.set_remote_path(path);
             self.shell
@@ -268,7 +270,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        window.focus(self.transfer.browser_view().focus);
+        window.focus(self.transfer.browser_view().focus, cx);
         self.transfer.clear_browser_selection();
         self.transfer.open_browser_context_menu(
             TransferBrowserContextMenuState {
@@ -291,7 +293,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        window.focus(self.transfer.browser_view().focus);
+        window.focus(self.transfer.browser_view().focus, cx);
         self.transfer.clear_browser_selection();
         let path = normalized_transfer_browser_path(self.transfer.browser_view().path);
         self.transfer.open_browser_context_menu(

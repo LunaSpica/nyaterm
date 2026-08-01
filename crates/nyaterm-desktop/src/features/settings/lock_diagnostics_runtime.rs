@@ -21,9 +21,9 @@ impl NyaTermApp {
         self.shell.set_status("screen locked".to_string());
         if self.settings.summary().has_master_password {
             let field = self.text_input("lock-screen.password", "", TextInputSetup::masked(), cx);
-            window.focus(&field.read(cx).focus_handle());
+            window.focus(&field.read(cx).focus_handle(), cx);
         } else {
-            window.focus(self.security.screen_lock_focus());
+            window.focus(self.security.screen_lock_focus(), cx);
         }
         cx.notify();
     }

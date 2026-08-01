@@ -9,6 +9,7 @@ NyaTerm component names rather than importing `gpui_component` directly.
 | Current implementation | Main call sites | Target component | Risk | Migrate |
 | --- | --- | --- | --- | --- |
 | Custom ordinary `TextField` | Ordinary forms and search | `Input/InputState` | Medium | Done for ordinary inputs |
+| Custom numeric steppers/text boxes | Connection/network editors, settings, send-command, session delay, OTP, process nice | `NumberInput/InputState` | Medium | Done for ordinary numeric inputs |
 | `small_button` | Common action buttons | `Button` | Low | Yes |
 | `network_switch_button` / settings switches | Tunnel list, settings pages, Telnet editor, keyword-highlight rules | `Switch` | Low | Yes |
 | Manual Select | Settings, commands, tunnels | `Select` | Medium | Yes |
@@ -23,8 +24,8 @@ Core component phases are in place for reusable controls:
 
 | Item | Status | Evidence |
 | --- | --- | --- |
-| Add exact `gpui-component` dependency | Done | `gpui-component = "=0.5.1"` in workspace dependencies. |
-| Verify GPUI version consistency | Done | `cargo tree -i gpui` shows one `gpui v0.2.2`; `cargo tree -p gpui-component` shows `gpui v0.2.2`. |
+| Add exact `gpui-component` dependency | Done | `gpui-component` is vendored at `vendor/gpui-component/crates/ui` as `0.5.2`. |
+| Verify GPUI version consistency | Done | `cargo tree -i gpui` shows one active `gpui v0.2.2` from `vendor/zed/crates/gpui`; `gpui-component` uses that same path. |
 | Initialize component library | Done | `gpui_component::init(cx)` runs before the main window opens. |
 | Establish `nyaterm-ui` wrappers | Done | `NyaInput`, `NyaButton`, `NyaIconButton`, `NyaSwitch`, `NyaCheckbox`, `NyaRadioGroup`, `NyaTabs`, `NyaSelect`, `NyaDialog`, `NyaConfirmDialog`, `NyaTooltip`, menu wrappers, and `NyaRoot` are exported. |
 | Theme bridge | Done for Phase 0 | `apply_component_theme(ThemePalette, &mut App)` maps NyaTerm colors into component theme colors. Startup calls `sync_component_theme` after the main window opens; user-driven appearance changes call it after updating the NyaTerm theme id; UI-triggered store reloads use `refresh_store_from_runtime_and_sync_theme`. |
@@ -33,10 +34,13 @@ Core component phases are in place for reusable controls:
 Phase 1 has migrated ordinary inputs: the id-keyed `TextInputRegistry`,
 connection-list search, connection-editor fields, and group-name editor now
 store `NyaInputState` and render `gpui-component` `Input` through `NyaInput` or
-the entity render path. The old `text_field.rs` custom caret, hit-testing,
-selection, paste normalization, and IME implementation has been deleted. Manual
-GUI/IME verification is still required before claiming the full component
-migration complete.
+the entity render path. Ordinary numeric fields now use
+`nyaterm-ui::NyaNumberInputState` / `NyaNumberInput`, backed by
+`gpui_component::input::NumberInput`, while existing feature state remains
+authoritative for values, validation and persistence. The old `text_field.rs`
+custom caret, hit-testing, selection, paste normalization, and IME
+implementation has been deleted. Manual GUI/IME verification is still required
+before claiming the full component migration complete.
 
 ## Current Search Inventory
 
@@ -45,6 +49,7 @@ Required pre-migration searches were run on 2026-07-30:
 | Search | Result summary |
 | --- | --- |
 | `TextField\|text_input_box\|text_input_field` | Ordinary inputs now use `NyaInputState`; no code exports or imports the old `TextField` implementation. Registry helper names remain for business routing compatibility. |
+| `number_stepper\|stepper_button\|NumberInput` | User-editable numeric fields now go through `nyaterm-ui::NyaNumberInput`; remaining ordinary text boxes are textual, masked, multiline, search/path, or semantics-preserving fields such as octal file modes. |
 | `small_button\|mode_button\|svg_icon_button` | `small_button`, `mode_button`, `settings_choice_chip`, and `dialog_action_button` now render through `NyaButton`; `svg_icon_button` and `modal_close_icon_button` now render through asset-path based `NyaIconButton`. |
 | `modal_dialog_shell\|modal_dialog_footer` | Only two retained custom shells remain: the inline connection-editor fallback and Docker details surface. |
 | `overflow_menu\|select_trigger\|select_menu\|selector` | Ordinary selects and action menus use `NyaSelect`/`NyaDropdownMenu`/`NyaContextMenu`; remaining hits are dedicated large-list, editor, terminal, or domain-workspace surfaces. |
@@ -85,6 +90,14 @@ component selects; their four manual absolute menus and four pure-UI open flags
 were deleted while the send state still gates changes during an active run.
 Cloud-sync provider selection is component-backed and no longer stores
 `provider_menu_open` in `CloudSyncFeatureState`.
+Numeric form controls now follow the same boundary. `nyaterm-ui::NyaNumberInput`
+wraps component `NumberInput` with range, step, decimal formatting, disabled,
+prefix/suffix and infinity support. The desktop registry keeps number input
+entities by stable id and routes their text events through existing feature
+owners. Migrated fields include connection editor port/baud/delay, tunnel and
+proxy ports, settings limits and intervals, send-command count/interval,
+session startup delay, OTP digits/period/counter, and remote process nice
+values. Persisted formats and save-time clamps remain unchanged.
 
 Header-specific icon buttons, remote Docker tabs, settings sidebar tabs, and the
 terminal search's dedicated mode buttons remain custom in this slice because
@@ -164,16 +177,16 @@ component names. An architecture check rejects `gpui_component` imports under
 
 | Command | Result |
 | --- | --- |
-| `cargo tree -i gpui` | Passed; one `gpui v0.2.2`. |
-| `cargo tree -p gpui-component` | Passed; component crate depends on `gpui v0.2.2`. |
+| `cargo tree -i gpui` | Passed on 2026-08-01; one active `gpui v0.2.2` from `vendor/zed/crates/gpui`. |
+| `cargo tree -d` | Completed on 2026-08-01; duplicate transitive crates remain, but no duplicate `gpui` was introduced. |
 | `cargo check -p nyaterm-ui` | Passed after wrapper scaffolding. |
-| `cargo test -p nyaterm-ui` | Passed after adding wrapper reset/value coverage; old custom `TextField` tests were removed with the implementation. |
-| `cargo check -p nyaterm-desktop` | Passed after Root handle migration, ordinary input migration, and the import/translation/update dialog migration. |
-| `cargo test -p nyaterm-desktop` | Passed; 728 tests after removing old visual dialog state from import and update owners. |
-| `cargo check -p nyaterm-app` | Passed after main-window Root wrapping and the small-button/switch slice. |
-| `bash scripts/check-architecture-boundaries.sh` | Passed; desktop feature modules do not import `gpui_component` directly. |
+| `cargo test -p nyaterm-ui` | Passed on 2026-08-01; 15 tests. |
+| `cargo check -p nyaterm-desktop` | Passed after Root handle migration, ordinary input migration, numeric input migration, and the import/translation/update dialog migration. |
+| `cargo test -p nyaterm-desktop` | Passed on 2026-08-01; 730 tests after the vendored GPUI stack upgrade. |
+| `cargo test -p nyaterm-terminal-gpui` | Passed on 2026-08-01; 101 tests after terminal paint API adaptation. |
+| `cargo check -p nyaterm-app` | Passed on 2026-08-01 after the vendored GPUI stack upgrade. |
+| `bash scripts/check-architecture-boundaries.sh` | Passed on 2026-08-01; desktop feature modules do not import `gpui_component` directly. |
 | `cargo fmt --all -- --check` | Passed after formatting; stable rustfmt reports existing warnings for unstable config options. |
 | `cargo check --workspace` | Passed. |
 | `cargo test --workspace` | Passed; SFTP service E2E remains ignored without `NYATERM_TEST_SFTP_*` variables. |
 | `cargo clippy --workspace --all-targets` | Passed. |
-| `cargo tree -d` | Completed; duplicate transitive crates remain, but no duplicate `gpui` version was introduced. |

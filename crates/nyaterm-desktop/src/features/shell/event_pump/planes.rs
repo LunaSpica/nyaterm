@@ -47,11 +47,11 @@ impl NyaTermApp {
         }
         let mut dirty = false;
         if self.ai.take_chat_focus_request() {
-            window.focus(self.ai.chat_focus());
+            window.focus(self.ai.chat_focus(), cx);
             dirty = true;
         }
         if let Some(focus) = self.transfer.take_pending_rename_focus() {
-            window.focus(&focus);
+            window.focus(&focus, cx);
             dirty = true;
         }
         if self.session.prompt_credential_focus_is_pending()

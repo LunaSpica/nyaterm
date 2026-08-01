@@ -201,7 +201,7 @@ fn open_transfer_external_sync_window_now_from_app(
                 true
             });
             let prompt_focus = view_app.read(cx).transfer.external_sync_focus().clone();
-            window.focus(&prompt_focus);
+            window.focus(&prompt_focus, cx);
             let view = cx.new(|cx| TransferExternalSyncWindow::new(view_app, view_prompt_id, cx));
             cx.new(|cx| nya_root(view, window, cx))
         },

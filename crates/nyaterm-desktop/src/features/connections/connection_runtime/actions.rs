@@ -320,7 +320,7 @@ impl NyaTermApp {
         let field = self.connection_state.list_search_field();
         field.update(cx, |field, cx| field.set_content("", cx));
         self.connection_state.set_list_search_text(String::new());
-        window.focus(&field.read(cx).focus_handle());
+        window.focus(&field.read(cx).focus_handle(), cx);
         self.shell
             .set_status("connection search cleared".to_string());
         self.sync_connection_keyboard_active(cx);

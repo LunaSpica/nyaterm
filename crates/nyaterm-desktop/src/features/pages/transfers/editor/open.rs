@@ -252,7 +252,7 @@ impl NyaTermApp {
             if !self.transfer.editor_window_is_open()
                 && !self.transfer.editor_window_open_is_pending()
             {
-                window.focus(self.transfer.editor_focus());
+                window.focus(self.transfer.editor_focus(), cx);
             }
             self.transfer.set_browser_status(status.clone());
             self.shell.set_status(status);
@@ -286,7 +286,7 @@ impl NyaTermApp {
         self.open_remote_file_editor_window(cx);
         if !self.transfer.editor_window_is_open() && !self.transfer.editor_window_open_is_pending()
         {
-            window.focus(self.transfer.editor_focus());
+            window.focus(self.transfer.editor_focus(), cx);
         }
         self.start_sftp_editor_load_job(session_id, entry.path, window, cx);
         cx.notify();

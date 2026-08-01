@@ -223,7 +223,7 @@ impl NyaTermApp {
             TextInputSetup::placeholder(self.tr("settings.keywordHighlightNewRule")),
             cx,
         );
-        window.focus(&input.read(cx).focus_handle());
+        window.focus(&input.read(cx).focus_handle(), cx);
         self.save_keyword_highlights(cx);
     }
 
@@ -305,7 +305,7 @@ impl NyaTermApp {
             cx,
         );
         self.settings.begin_keyword_highlight_edit(rule_id, field);
-        window.focus(&input.read(cx).focus_handle());
+        window.focus(&input.read(cx).focus_handle(), cx);
         cx.notify();
     }
 
@@ -324,7 +324,7 @@ impl NyaTermApp {
         match event.keystroke.key.as_str() {
             "escape" => {
                 self.settings.clear_keyword_highlight_edit();
-                window.focus(self.settings.keyword_highlight_focus());
+                window.focus(self.settings.keyword_highlight_focus(), cx);
                 self.shell
                     .set_status("keyword rule edit cancelled".to_string());
                 cx.notify();
@@ -342,7 +342,7 @@ impl NyaTermApp {
             }
             "enter" => {
                 self.settings.clear_keyword_highlight_edit();
-                window.focus(self.settings.keyword_highlight_focus());
+                window.focus(self.settings.keyword_highlight_focus(), cx);
                 self.save_keyword_highlights(cx);
             }
             _ => {}

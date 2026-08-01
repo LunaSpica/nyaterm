@@ -1,6 +1,6 @@
 use gpui::{
-    App, ClickEvent, Context, FontWeight, IntoElement, KeyDownEvent, MouseButton, SharedString,
-    Window, div, prelude::*, px, rgb, rgba, svg,
+    App, ClickEvent, Context, FontWeight, IntoElement, KeyDownEvent, SharedString, Window, div,
+    prelude::*, px, rgb, rgba, svg,
 };
 use nyaterm_core::truncate_preview;
 use nyaterm_transport::SessionInfo;
@@ -294,8 +294,8 @@ impl NyaTermApp {
                                 .items_center()
                                 .gap_1()
                                 .cursor_text()
-                                .on_mouse_down(MouseButton::Left, move |_, window, _| {
-                                    window.focus(&search_focus);
+                                .on_click(move |_, window, cx| {
+                                    window.focus(&search_focus, cx);
                                 })
                                 .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
                                     if event.keystroke.key == "escape" {

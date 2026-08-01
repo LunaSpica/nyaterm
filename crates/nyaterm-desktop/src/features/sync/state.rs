@@ -264,6 +264,11 @@ impl CloudSyncFeatureState {
         self.status = "cloud sync debounce setting edited".to_string();
     }
 
+    pub(in crate::features) fn set_debounce(&mut self, value: u64) {
+        self.settings.sync_debounce_seconds = value.clamp(1, 3_600);
+        self.status = "cloud sync debounce setting edited".to_string();
+    }
+
     pub(super) fn begin_job(&mut self) -> bool {
         if self.job_running {
             return false;

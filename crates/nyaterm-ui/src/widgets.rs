@@ -1,14 +1,58 @@
 use crate::button::{NyaButton, NyaButtonVariant, NyaIconButton};
 use crate::theme::ThemePalette;
 use gpui::{
-    App, ClickEvent, FontWeight, Hsla, IntoElement, SharedString, Window, div, prelude::*, px, rgb,
+    AnyElement, App, ClickEvent, FontWeight, Hsla, IntoElement, Pixels, RenderOnce, SharedString,
+    Window, div, prelude::*, px, rgb,
 };
+use gpui_component::scroll::ScrollableElement as _;
 
 fn platform_code_font_family() -> &'static str {
     if cfg!(target_os = "windows") {
         "Consolas"
     } else {
         "JetBrains Mono"
+    }
+}
+
+#[derive(IntoElement)]
+pub struct NyaScrollArea {
+    id: SharedString,
+    max_height: Option<Pixels>,
+    children: Vec<AnyElement>,
+}
+
+impl NyaScrollArea {
+    pub fn new(id: impl Into<SharedString>) -> Self {
+        Self {
+            id: id.into(),
+            max_height: None,
+            children: Vec::new(),
+        }
+    }
+
+    pub fn max_h(mut self, height: Pixels) -> Self {
+        self.max_height = Some(height);
+        self
+    }
+
+    pub fn child(mut self, child: impl IntoElement) -> Self {
+        self.children.push(child.into_any_element());
+        self
+    }
+}
+
+impl RenderOnce for NyaScrollArea {
+    fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
+        let mut area = div()
+            .id(self.id)
+            .flex()
+            .flex_col()
+            .children(self.children)
+            .overflow_y_scrollbar();
+        if let Some(max_height) = self.max_height {
+            area = area.max_h(max_height);
+        }
+        area
     }
 }
 

@@ -77,7 +77,7 @@ impl NyaTermApp {
         match event.keystroke.key.as_str() {
             "escape" => {
                 let focus = self.ai.cancel_settings_manual_model_edit();
-                window.focus(&focus);
+                window.focus(&focus, cx);
                 cx.notify();
             }
             "enter" => {
@@ -118,7 +118,7 @@ impl NyaTermApp {
             cx,
         );
         self.ai.focus_settings_manual_model_edit(group_key);
-        window.focus(&input.read(cx).focus_handle());
+        window.focus(&input.read(cx).focus_handle(), cx);
         cx.notify();
     }
 

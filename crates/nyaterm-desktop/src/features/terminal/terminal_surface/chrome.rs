@@ -394,8 +394,8 @@ impl NyaTermApp {
                             .cursor_text()
                             .text_xs()
                             .text_color(rgb(palette.text))
-                            .on_mouse_down(MouseButton::Left, move |_, window, _| {
-                                window.focus(&search_focus);
+                            .on_click(move |_, window, cx| {
+                                window.focus(&search_focus, cx);
                             })
                             .child(
                                 div()

@@ -1,5 +1,5 @@
 use anyhow::Context as _;
-use gpui::{App, AppContext, Application, Bounds, WindowBounds, WindowOptions, px, size};
+use gpui::{App, AppContext, Bounds, WindowBounds, WindowOptions, px, size};
 use nyaterm_app::assets;
 use nyaterm_core::{AppRuntime, LOG_FILE_PREFIX, LOG_FILE_SUFFIX};
 use nyaterm_desktop::AppShell;
@@ -14,7 +14,7 @@ fn main() -> anyhow::Result<()> {
         .context("prepare runtime directories")?;
     let _log_guard = init_tracing(&runtime);
 
-    Application::new()
+    gpui_platform::application()
         .with_assets(assets::NyaTermAssets)
         .run(move |cx: &mut App| {
             gpui_component::init(cx);
