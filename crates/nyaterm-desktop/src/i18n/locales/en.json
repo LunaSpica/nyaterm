@@ -1416,7 +1416,6 @@
     "exportFailed": "Export failed",
     "exportSuccess": "Configuration exported.",
     "followUiTheme": "Follow UI Theme",
-    "fontBuiltIn": "Built-in",
     "fontFallback": "Fallback",
     "fontFamily": "Font Family",
     "fontFamilyDesc": "The font family used in the terminal and app UI. Topmost font has highest priority.",

@@ -1,6 +1,8 @@
 use std::{path::Path, sync::Arc};
 
-use gpui::{App, Context, PathPromptOptions, SharedString, font, px, rgb, rgba};
+use gpui::{
+    App, Context, Font, FontFallbacks, PathPromptOptions, SharedString, font, px, rgb, rgba,
+};
 use nyaterm_core::{
     AppSettingsSummary, ConnectionStore, ResolvedKeywordHighlightRule,
     merge_keyword_highlight_rules_for_paint,
@@ -12,6 +14,20 @@ pub(in crate::features) use crate::theme::{ThemePalette, apply_component_theme, 
 const TERMINAL_FONT_SIZE_MIN: i16 = 8;
 const TERMINAL_FONT_SIZE_MAX: i16 = 72;
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(in crate::features) struct ResolvedAppearanceFont {
+    pub family: String,
+    pub fallbacks: Option<FontFallbacks>,
+}
+
+impl ResolvedAppearanceFont {
+    pub(in crate::features) fn font(&self) -> Font {
+        let mut font = font(SharedString::from(self.family.clone()));
+        font.fallbacks = self.fallbacks.clone();
+        font
+    }
+}
+
 impl NyaTermApp {
     pub(in crate::features) fn apply_gpui_settings(&mut self, settings: AppSettingsSummary) {
         self.settings.replace_summary(settings);
@@ -22,21 +38,21 @@ impl NyaTermApp {
         apply_component_theme(self.theme_palette(), cx);
     }
 
-    pub(in crate::features) fn gpui_terminal_font_family(&self) -> String {
-        gpui_platform_font_family(
+    pub(in crate::features) fn gpui_terminal_font(&self) -> ResolvedAppearanceFont {
+        gpui_platform_font(
             &self.settings.summary().terminal_font_family,
             gpui_terminal_font_fallback(),
             true,
         )
     }
 
-    pub(in crate::features) fn gpui_ui_font_family(&self) -> String {
+    pub(in crate::features) fn gpui_ui_font(&self) -> ResolvedAppearanceFont {
         let raw = if self.settings.summary().ui_font_family.trim().is_empty() {
             self.settings.summary().terminal_font_family.as_str()
         } else {
             self.settings.summary().ui_font_family.as_str()
         };
-        gpui_platform_font_family(raw, gpui_ui_font_fallback(), false)
+        gpui_platform_font(raw, gpui_ui_font_fallback(), false)
     }
 
     pub(in crate::features) fn theme_palette(&self) -> ThemePalette {
@@ -639,14 +655,10 @@ pub(in crate::features) fn appearance_font_options(cx: &App) -> (Vec<String>, Ve
     let mut ui_fonts = Vec::new();
     let mut terminal_fonts = Vec::new();
 
-    for family in ["JetBrains Mono", "Noto Sans SC Variable", "Inter"] {
-        push_unique_font(&mut ui_fonts, family.to_string());
-    }
     for family in &system_fonts {
         push_unique_font(&mut ui_fonts, family.clone());
     }
 
-    push_unique_font(&mut terminal_fonts, "JetBrains Mono".to_string());
     for family in &system_fonts {
         let font_id = text_system.resolve_font(&font(SharedString::from(family.clone())));
         let font_size = px(14.);
@@ -687,26 +699,46 @@ fn parse_minimum_contrast_ratio(raw: &str) -> f32 {
     }
 }
 
-fn gpui_platform_font_family(raw: &str, fallback: &str, monospace: bool) -> String {
-    gpui_platform_font_family_for_target(raw, fallback, monospace, cfg!(target_os = "windows"))
+fn gpui_platform_font(raw: &str, fallback: &str, monospace: bool) -> ResolvedAppearanceFont {
+    gpui_platform_font_for_target(raw, fallback, monospace, cfg!(target_os = "windows"))
 }
 
+fn gpui_platform_font_for_target(
+    raw: &str,
+    fallback: &str,
+    monospace: bool,
+    is_windows: bool,
+) -> ResolvedAppearanceFont {
+    let mut families = appearance_font_stack(raw, fallback)
+        .into_iter()
+        .map(|family| {
+            if is_windows && windows_gpui_font_should_fallback(&family, monospace) {
+                fallback.to_string()
+            } else {
+                family
+            }
+        })
+        .collect::<Vec<_>>();
+    push_unique_font(&mut families, fallback.to_string());
+    let family = families
+        .first()
+        .cloned()
+        .unwrap_or_else(|| fallback.to_string());
+    let fallbacks = families.into_iter().skip(1).collect::<Vec<_>>();
+    ResolvedAppearanceFont {
+        family,
+        fallbacks: (!fallbacks.is_empty()).then(|| FontFallbacks::from_fonts(fallbacks)),
+    }
+}
+
+#[cfg(test)]
 fn gpui_platform_font_family_for_target(
     raw: &str,
     fallback: &str,
     monospace: bool,
     is_windows: bool,
 ) -> String {
-    let primary = raw
-        .split(',')
-        .map(trim_gpui_font_family)
-        .find(|family| !family.is_empty())
-        .unwrap_or(fallback);
-    if is_windows && windows_gpui_font_should_fallback(primary, monospace) {
-        fallback.to_string()
-    } else {
-        primary.to_string()
-    }
+    gpui_platform_font_for_target(raw, fallback, monospace, is_windows).family
 }
 
 fn trim_gpui_font_family(value: &str) -> &str {
@@ -737,31 +769,15 @@ fn gpui_ui_font_fallback() -> &'static str {
     }
 }
 
-fn windows_gpui_font_should_fallback(family: &str, monospace: bool) -> bool {
-    if matches!(family, "monospace" | "system-ui" | "sans-serif") {
-        return true;
-    }
-    if monospace {
-        matches!(
-            family,
-            "JetBrains Mono"
-                | "Fira Code"
-                | "FiraCode Nerd Font Mono"
-                | "Iosevka"
-                | "Maple Mono CN"
-        )
-    } else {
-        matches!(
-            family,
-            "Inter" | "JetBrains Mono" | "Noto Sans SC Variable" | "微软雅黑"
-        )
-    }
+fn windows_gpui_font_should_fallback(family: &str, _monospace: bool) -> bool {
+    matches!(family, "monospace" | "system-ui" | "sans-serif")
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
         appearance_font_stack, gpui_code_font_family, gpui_platform_font_family_for_target,
+        gpui_platform_font_for_target,
     };
 
     #[test]
@@ -773,7 +789,7 @@ mod tests {
     }
 
     #[test]
-    fn windows_ui_font_family_collapses_known_missing_stack() {
+    fn windows_ui_font_family_keeps_named_primary_family() {
         assert_eq!(
             gpui_platform_font_family_for_target(
                 "JetBrains Mono, Noto Sans SC Variable, 微软雅黑",
@@ -781,7 +797,38 @@ mod tests {
                 false,
                 true,
             ),
-            "Microsoft YaHei UI"
+            "JetBrains Mono"
+        );
+    }
+
+    #[test]
+    fn windows_terminal_font_family_keeps_installed_named_family() {
+        assert_eq!(
+            gpui_platform_font_family_for_target(
+                "FiraCode Nerd Font Mono, Maple Mono CN",
+                "Consolas",
+                true,
+                true,
+            ),
+            "FiraCode Nerd Font Mono"
+        );
+    }
+
+    #[test]
+    fn windows_terminal_font_keeps_configured_fallback_stack() {
+        let font = gpui_platform_font_for_target(
+            "FiraCode Nerd Font Mono, Maple Mono CN",
+            "Consolas",
+            true,
+            true,
+        );
+
+        assert_eq!(font.family, "FiraCode Nerd Font Mono");
+        assert_eq!(
+            font.fallbacks
+                .as_ref()
+                .map(|fallbacks| fallbacks.fallback_list()),
+            Some(["Maple Mono CN".to_string(), "Consolas".to_string()].as_slice())
         );
     }
 

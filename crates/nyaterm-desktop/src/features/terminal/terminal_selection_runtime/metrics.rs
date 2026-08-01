@@ -1,4 +1,4 @@
-use gpui::{App, Bounds, Context, Pixels, Point, SharedString, px};
+use gpui::{App, Bounds, Context, Pixels, Point, px};
 
 use nyaterm_core::TerminalViewportInsets;
 
@@ -40,9 +40,8 @@ impl NyaTermApp {
     /// Refresh monospaced cell metrics from GPUI TextSystem for the configured terminal font.
     pub(in crate::features) fn refresh_terminal_cell_metrics(&mut self, cx: &App) {
         let font_size = self.settings.summary().terminal_font_size.max(8) as f32;
-        let family = self.gpui_terminal_font_family();
         let text_system = cx.text_system();
-        let font_id = text_system.resolve_font(&gpui::font(SharedString::from(family)));
+        let font_id = text_system.resolve_font(&self.gpui_terminal_font().font());
         let size = px(font_size);
         let measured_w = text_system
             .ch_advance(font_id, size)

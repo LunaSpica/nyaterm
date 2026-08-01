@@ -274,7 +274,6 @@ impl NyaTermApp {
             self.tr("settings.addFallbackFont"),
             add_handler,
         );
-        let built_in_label = self.tr("settings.fontBuiltIn");
         let primary_label = self.tr("settings.fontPrimary");
         let fallback_label = self.tr("settings.fontFallback");
         let remove_label = self.tr("common.remove");
@@ -293,19 +292,8 @@ impl NyaTermApp {
                     let select_options = options
                         .iter()
                         .map(|option| {
-                            let built_in = if terminal {
-                                option.eq_ignore_ascii_case("JetBrains Mono")
-                            } else {
-                                ["JetBrains Mono", "Noto Sans SC Variable", "Inter"]
-                                    .iter()
-                                    .any(|font| option.eq_ignore_ascii_case(font))
-                            };
-                            let label = if built_in {
-                                format!("{option} ({built_in_label})")
-                            } else {
-                                option.clone()
-                            };
-                            NyaSelectOption::new(option.clone(), label).font_family(option.clone())
+                            NyaSelectOption::new(option.clone(), option.clone())
+                                .font_family(option.clone())
                         })
                         .collect::<Vec<_>>();
                     let selected_family = family.clone();

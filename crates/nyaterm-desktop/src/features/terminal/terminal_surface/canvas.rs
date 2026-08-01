@@ -325,7 +325,10 @@ impl NyaTermApp {
         };
         let element_stage_started_at = Instant::now();
         let (cell_w, cell_h) = self.terminal_cell_size();
-        let terminal_font_family = self.gpui_terminal_font_family();
+        let terminal_font = self.gpui_terminal_font();
+        let terminal_font_family = terminal_font.family.clone();
+        let terminal_font_fallbacks = terminal_font.fallbacks.clone();
+        let terminal_gpui_font = terminal_font.font();
         let ime_preedit_text = (is_active
             && !session_id.is_empty()
             && self.settings.summary().interaction_mac_ime_compatibility
@@ -403,7 +406,7 @@ impl NyaTermApp {
                         .flex_none()
                         .pr(px(8.))
                         .text_color(rgb(palette.text_dimmed))
-                        .font_family(terminal_font_family.clone())
+                        .font(terminal_gpui_font.clone())
                         .text_size(px(self.settings.summary().terminal_font_size as f32))
                         .when(show_timestamps, |this| {
                             this.child(div().w(px(ts_w)).flex_none().child(ts_label))
@@ -463,6 +466,7 @@ impl NyaTermApp {
                 self.settings.summary().terminal_font_weight as f32,
                 self.settings.summary().terminal_font_weight_bold as f32,
             );
+            grid = grid.with_font_fallbacks(terminal_font_fallbacks.clone());
             if let Some(cache) = layout_cache {
                 grid = grid.with_layout_cache(cache);
             }
@@ -486,6 +490,7 @@ impl NyaTermApp {
                 self.settings.summary().terminal_font_weight as f32,
                 self.settings.summary().terminal_font_weight_bold as f32,
             );
+            grid = grid.with_font_fallbacks(terminal_font_fallbacks.clone());
             if let Some(cache) = layout_cache {
                 grid = grid.with_layout_cache(cache);
             }
@@ -587,7 +592,7 @@ impl NyaTermApp {
             .flex_1()
             .h_full()
             .min_h_0()
-            .font_family(terminal_font_family.clone())
+            .font(terminal_gpui_font)
             .text_size(px(terminal_font_size))
             .font_weight(FontWeight(
                 self.settings.summary().terminal_font_weight as f32,

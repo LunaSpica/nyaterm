@@ -1,6 +1,6 @@
 use gpui::{
-    Context, Entity, IntoElement, MouseButton, Render, ScrollDelta, ScrollWheelEvent, SharedString,
-    Window, div, prelude::*, px, rgb, rgba,
+    Context, Entity, FontFallbacks, IntoElement, MouseButton, Render, ScrollDelta,
+    ScrollWheelEvent, SharedString, Window, div, font, prelude::*, px, rgb, rgba,
 };
 use nyaterm_terminal::{TerminalScreen, TerminalSnapshot};
 
@@ -115,6 +115,7 @@ pub(in crate::features) struct TerminalSurfaceHitTestScrollGeometry {
 pub(in crate::features) struct TerminalSurfacePaintChrome {
     pub palette: ThemePalette,
     pub font_family: String,
+    pub font_fallbacks: Option<FontFallbacks>,
     pub font_size: f32,
     pub normal_weight: f32,
     pub bold_weight: f32,
@@ -218,6 +219,7 @@ pub(in crate::features) struct TerminalSurface {
     selection_visual_row_range: Option<Range<usize>>,
     palette: ThemePalette,
     font_family: String,
+    font_fallbacks: Option<FontFallbacks>,
     font_size: f32,
     normal_weight: f32,
     bold_weight: f32,
@@ -272,6 +274,7 @@ impl TerminalSurface {
             selection_visual_row_range: None,
             palette: crate::theme::theme_palette("github-dark"),
             font_family: "monospace".to_string(),
+            font_fallbacks: None,
             font_size: 14.0,
             normal_weight: 400.0,
             bold_weight: 700.0,
@@ -1125,6 +1128,7 @@ impl TerminalSurface {
         let TerminalSurfacePaintChrome {
             palette,
             font_family,
+            font_fallbacks,
             font_size,
             normal_weight,
             bold_weight,
@@ -1140,6 +1144,7 @@ impl TerminalSurface {
         let cell_height = cell_height.max(1.0);
         let state_matches = self.palette == palette
             && self.font_family == font_family
+            && self.font_fallbacks == font_fallbacks
             && (self.font_size - font_size).abs() < f32::EPSILON * 8.0
             && (self.normal_weight - normal_weight).abs() < f32::EPSILON * 8.0
             && (self.bold_weight - bold_weight).abs() < f32::EPSILON * 8.0
@@ -1155,6 +1160,7 @@ impl TerminalSurface {
         }
         self.palette = palette;
         self.font_family = font_family;
+        self.font_fallbacks = font_fallbacks;
         self.font_size = font_size;
         self.normal_weight = normal_weight;
         self.bold_weight = bold_weight;
@@ -2264,6 +2270,8 @@ impl Render for TerminalSurface {
         let performance_overlay = self.performance_overlay;
         let skipped_output_chars = self.skipped_output_chars;
         let visual_bell = self.visual_bell && self.is_active;
+        let mut surface_font = font(SharedString::from(self.font_family.clone()));
+        surface_font.fallbacks = self.font_fallbacks.clone();
         let app = self.app.clone();
         let session_id = self.session_id.clone();
         let is_active = self.is_active;
@@ -2282,6 +2290,7 @@ impl Render for TerminalSurface {
             self.bold_weight,
         );
         grid = grid
+            .with_font_fallbacks(self.font_fallbacks.clone())
             .with_layout_cache(self.layout_cache.clone())
             .with_layout_rows(self.viewport_rows)
             .with_fill_height(true)
@@ -2351,7 +2360,7 @@ impl Render for TerminalSurface {
                         .flex_none()
                         .pr(px(8.))
                         .text_color(rgb(palette.text_dimmed))
-                        .font_family(self.font_family.clone())
+                        .font(surface_font.clone())
                         .text_size(px(self.font_size))
                         .when(self.show_timestamps, |this| {
                             this.child(div().w(px(ts_w)).flex_none().child(ts_label))
@@ -2416,7 +2425,7 @@ impl Render for TerminalSurface {
                 rgb(palette.terminal_bg)
             })
             .text_color(rgb(palette.terminal_fg))
-            .font_family(self.font_family.clone())
+            .font(surface_font)
             .text_size(px(self.font_size))
             .when(!self.protocol_state.mouse_reporting, |this| {
                 this.cursor_text()

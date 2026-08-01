@@ -724,7 +724,9 @@ impl NyaTermApp {
         };
         let palette = self.terminal_theme_palette();
         let transparent_background = self.wallpaper_enabled();
-        let font_family = self.gpui_terminal_font_family();
+        let font = self.gpui_terminal_font();
+        let font_family = font.family;
+        let font_fallbacks = font.fallbacks;
         let font_size = self.settings.summary().terminal_font_size as f32;
         let normal_weight = self.settings.summary().terminal_font_weight as f32;
         let bold_weight = self.settings.summary().terminal_font_weight_bold as f32;
@@ -813,6 +815,7 @@ impl NyaTermApp {
             changed |= surface.set_paint_chrome(TerminalSurfacePaintChrome {
                 palette,
                 font_family,
+                font_fallbacks,
                 font_size,
                 normal_weight,
                 bold_weight,
@@ -985,7 +988,9 @@ impl NyaTermApp {
         let view = self.terminal.view.views.get(session_id);
         let palette = self.terminal_theme_palette();
         let transparent_background = self.wallpaper_enabled();
-        let font_family = self.gpui_terminal_font_family();
+        let font = self.gpui_terminal_font();
+        let font_family = font.family;
+        let font_fallbacks = font.fallbacks;
         let font_size = self.settings.summary().terminal_font_size as f32;
         let normal_weight = self.settings.summary().terminal_font_weight as f32;
         let bold_weight = self.settings.summary().terminal_font_weight_bold as f32;
@@ -1048,6 +1053,7 @@ impl NyaTermApp {
                 changed |= surface.set_paint_chrome(TerminalSurfacePaintChrome {
                     palette,
                     font_family,
+                    font_fallbacks,
                     font_size,
                     normal_weight,
                     bold_weight,
@@ -1276,6 +1282,7 @@ impl NyaTermApp {
             changed |= surface.set_paint_chrome(TerminalSurfacePaintChrome {
                 palette,
                 font_family,
+                font_fallbacks,
                 font_size,
                 normal_weight,
                 bold_weight,

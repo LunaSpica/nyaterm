@@ -39,7 +39,7 @@ impl Render for RemoteFileEditorWindow {
             return div().size_full().into_any_element();
         }
 
-        let (palette, font_family, font_size, title, active_tab, tab_ids) =
+        let (palette, font, font_size, title, active_tab, tab_ids) =
             self.app.read_with(cx, |app, _| {
                 let workspace = app
                     .transfer
@@ -55,7 +55,7 @@ impl Render for RemoteFileEditorWindow {
                 };
                 (
                     app.theme_palette(),
-                    app.gpui_ui_font_family(),
+                    app.gpui_ui_font().font(),
                     app.settings.summary().ui_font_size.clamp(12, 24) as f32,
                     format!(
                         "{}{}",
@@ -105,7 +105,7 @@ impl Render for RemoteFileEditorWindow {
             .overflow_hidden()
             .bg(rgb(palette.bg))
             .text_color(rgb(palette.text))
-            .font_family(font_family)
+            .font(font)
             .text_size(px(font_size))
             .child(child_window_header(
                 palette,

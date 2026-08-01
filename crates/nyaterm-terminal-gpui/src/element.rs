@@ -4,9 +4,9 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use gpui::{
-    App, Bounds, ContentMask, Element, ElementId, Font, GlobalElementId, InspectorElementId,
-    IntoElement, LayoutId, PaintQuad, Pixels, ShapedLine, SharedString, Style, TextRun, Window,
-    fill, font, point, px, relative, rgb, size,
+    App, Bounds, ContentMask, Element, ElementId, Font, FontFallbacks, GlobalElementId,
+    InspectorElementId, IntoElement, LayoutId, PaintQuad, Pixels, ShapedLine, SharedString, Style,
+    TextRun, Window, fill, font, point, px, relative, rgb, size,
 };
 use nyaterm_core::ResolvedKeywordHighlightRule;
 use nyaterm_terminal::{
@@ -281,6 +281,7 @@ pub struct NyaTerminalElement {
     cell_height: f32,
     palette: nyaterm_ui::ThemePalette,
     font_family: String,
+    font_fallbacks: Option<FontFallbacks>,
     font_size: f32,
     normal_weight: f32,
     bold_weight: f32,
@@ -359,6 +360,7 @@ impl NyaTerminalElement {
             cell_height,
             palette,
             font_family,
+            font_fallbacks: None,
             font_size,
             normal_weight,
             bold_weight,
@@ -370,6 +372,11 @@ impl NyaTerminalElement {
 
     pub fn with_layout_cache(mut self, cache: Arc<Mutex<NyaTerminalLayoutCache>>) -> Self {
         self.layout_cache = Some(cache);
+        self
+    }
+
+    pub fn with_font_fallbacks(mut self, fallbacks: Option<FontFallbacks>) -> Self {
+        self.font_fallbacks = fallbacks;
         self
     }
 
@@ -474,6 +481,7 @@ impl NyaTerminalElement {
         self.palette.terminal_bg.hash(&mut hasher);
         self.palette.terminal_ansi.hash(&mut hasher);
         self.font_family.hash(&mut hasher);
+        self.font_fallbacks.hash(&mut hasher);
         self.font_size.to_bits().hash(&mut hasher);
         self.normal_weight.to_bits().hash(&mut hasher);
         self.bold_weight.to_bits().hash(&mut hasher);
@@ -956,7 +964,8 @@ impl Element for NyaTerminalElement {
         let scale_factor = window.scale_factor();
         let cell_h = nyaterm_core::terminal_snapped_cell_height(self.cell_height, scale_factor);
         let font_size = px(self.font_size.max(8.));
-        let base_font = font(SharedString::from(self.font_family.clone()));
+        let mut base_font = font(SharedString::from(self.font_family.clone()));
+        base_font.fallbacks = self.font_fallbacks.clone();
         let keyword_rules_key = if let Some(highlights) = self.keyword_highlights.as_ref() {
             highlights.rules_key()
         } else if self.keyword_rules.is_empty() {
