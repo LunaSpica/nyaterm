@@ -1,4 +1,7 @@
-use gpui::{AppContext, Context, KeyDownEvent, PathPromptOptions, SharedString, Window};
+use gpui::{
+    AnyElement, AppContext, Context, FontWeight, KeyDownEvent, PathPromptOptions, SharedString,
+    Window, div, prelude::*, rgb,
+};
 use nyaterm_core::{
     AppSettingsSummary, ConnectionStore, KeywordHighlightConfig, TranslationSettings,
 };
@@ -16,7 +19,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.start_snapshot_password_prompt(SnapshotPasswordPromptKind::Export, window, cx);
+        self.open_local_snapshot_password_dialog(SnapshotPasswordPromptKind::Export, window, cx);
     }
 
     pub(in crate::features) fn prompt_encrypted_portable_snapshot_import(
@@ -33,125 +36,155 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        self.start_snapshot_password_prompt(SnapshotPasswordPromptKind::Import, window, cx);
+        self.open_local_snapshot_password_dialog(SnapshotPasswordPromptKind::Import, window, cx);
     }
 
-    pub(in crate::features) fn prompt_config_export(&mut self, cx: &mut Context<Self>) {
-        if !self
-            .settings
-            .begin_config_path_prompt(ConfigPathPromptKind::Export)
-        {
+    fn open_local_snapshot_password_dialog(
+        &mut self,
+        kind: SnapshotPasswordPromptKind,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.clear_stale_local_snapshot_password_prompt(cx);
+        if !self.settings.begin_snapshot_password_prompt(kind) {
             self.shell
-                .set_status("config path picker is already open".to_string());
+                .set_status("backup or sync prompt is already open".to_string());
             cx.notify();
             return;
         }
 
-        let directory = self.runtime.config_dir().to_path_buf();
-        let receiver = cx.prompt_for_new_path(&directory, Some("nyaterm-backup.redb"));
-        let config_dir = self.runtime.config_dir().to_path_buf();
-        let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
-        self.shell
-            .set_status("selecting config backup destination".to_string());
-        self.settings
-            .set_store_message("selecting backup destination");
-        cx.spawn(async move |this, cx| {
-            let result = match receiver.await {
-                Ok(Ok(Some(path))) => {
-                    cx.background_spawn(async move {
-                        match ConnectionStore::export_config_database(
-                            &config_dir,
-                            portable_key_path,
-                            &path,
-                        ) {
-                            Ok(info) => ConfigPathPromptResult::Exported(info),
-                            Err(error) => ConfigPathPromptResult::Failed(error.to_string()),
-                        }
-                    })
-                    .await
+        self.forget_text_inputs("snapshot-password.");
+        let field = self.text_input("snapshot-password.value", "", TextInputSetup::masked(), cx);
+        self.shell.set_status(
+            match kind {
+                SnapshotPasswordPromptKind::Export => "enter password for encrypted .nya export",
+                SnapshotPasswordPromptKind::Import => "enter password for encrypted .nya import",
+                SnapshotPasswordPromptKind::CloudForcePush
+                | SnapshotPasswordPromptKind::CloudForcePull
+                | SnapshotPasswordPromptKind::CloudProviderPush
+                | SnapshotPasswordPromptKind::CloudProviderPull
+                | SnapshotPasswordPromptKind::CloudProviderForcePush
+                | SnapshotPasswordPromptKind::CloudProviderForcePull => {
+                    "enter password for encrypted cloud sync snapshot"
                 }
-                Ok(Ok(None)) => ConfigPathPromptResult::Cancelled,
-                Ok(Err(error)) => ConfigPathPromptResult::Failed(error.to_string()),
-                Err(_) => ConfigPathPromptResult::Closed,
-            };
-            let _ = this.update(cx, |this, cx| {
-                this.apply_config_path_prompt_result(ConfigPathPromptKind::Export, result, cx);
-                cx.notify();
-            });
-        })
-        .detach();
+            }
+            .to_string(),
+        );
+        self.settings
+            .set_store_message("awaiting .nya master password");
+
+        let title = match kind {
+            SnapshotPasswordPromptKind::Export => self.tr("runtimePrompt.snapshotExport"),
+            SnapshotPasswordPromptKind::Import => self.tr("runtimePrompt.snapshotImport"),
+            SnapshotPasswordPromptKind::CloudForcePush
+            | SnapshotPasswordPromptKind::CloudForcePull
+            | SnapshotPasswordPromptKind::CloudProviderPush
+            | SnapshotPasswordPromptKind::CloudProviderPull
+            | SnapshotPasswordPromptKind::CloudProviderForcePush
+            | SnapshotPasswordPromptKind::CloudProviderForcePull => {
+                self.tr("runtimePrompt.cloudPush")
+            }
+        };
+        self.open_form_dialog(
+            (
+                title.to_string(),
+                448.,
+                self.tr("runtimePrompt.submit").to_string(),
+                |app, _, cx| app.local_snapshot_password_dialog_content(cx),
+                |app, _, cx| app.submit_local_snapshot_password_dialog(cx),
+                |app, cx| app.cancel_snapshot_password_prompt(cx),
+            ),
+            window,
+            cx,
+        );
+        window.focus(&field.read(cx).focus_handle(), cx);
         cx.notify();
     }
 
-    pub(in crate::features) fn prompt_portable_snapshot_import(&mut self, cx: &mut Context<Self>) {
-        if self.block_import_for_settings_draft(cx) {
+    fn clear_stale_local_snapshot_password_prompt(&mut self, cx: &mut Context<Self>) {
+        let Some(prompt) = self.settings.snapshot_password_prompt() else {
             return;
-        }
-        if self.settings.config_path_prompt_active() {
-            self.shell
-                .set_status("config path picker is already open".to_string());
-            cx.notify();
-            return;
-        }
-        if self.session.active_id().is_some() || self.session.start_has_pending() {
-            self.shell
-                .set_status("close active session before importing config".to_string());
-            cx.notify();
-            return;
-        }
-        let prompt_started = self
-            .settings
-            .begin_config_path_prompt(ConfigPathPromptKind::PortableImport);
-        debug_assert!(prompt_started);
-        if !prompt_started {
-            return;
-        }
-
-        let options = PathPromptOptions {
-            files: true,
-            directories: false,
-            multiple: false,
-            prompt: Some(SharedString::from("Select .nya snapshot")),
         };
-        let receiver = cx.prompt_for_paths(options);
-        let config_dir = self.runtime.config_dir().to_path_buf();
-        let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
-        self.shell
-            .set_status("selecting portable snapshot to import".to_string());
-        self.settings.set_store_message("selecting .nya snapshot");
-        cx.spawn(async move |this, cx| {
-            let result = match receiver.await {
-                Ok(Ok(Some(paths))) => match paths.into_iter().next() {
-                    Some(path) => {
-                        cx.background_spawn(async move {
-                            match ConnectionStore::import_portable_snapshot(
-                                &config_dir,
-                                portable_key_path,
-                                &path,
-                            ) {
-                                Ok(info) => ConfigPathPromptResult::Imported(info),
-                                Err(error) => ConfigPathPromptResult::Failed(error.to_string()),
-                            }
-                        })
-                        .await
-                    }
-                    None => ConfigPathPromptResult::Cancelled,
-                },
-                Ok(Ok(None)) => ConfigPathPromptResult::Cancelled,
-                Ok(Err(error)) => ConfigPathPromptResult::Failed(error.to_string()),
-                Err(_) => ConfigPathPromptResult::Closed,
-            };
-            let _ = this.update(cx, |this, cx| {
-                this.apply_config_path_prompt_result(
-                    ConfigPathPromptKind::PortableImport,
-                    result,
-                    cx,
+        if matches!(
+            prompt.kind,
+            SnapshotPasswordPromptKind::Export | SnapshotPasswordPromptKind::Import
+        ) {
+            let _ = self.settings.take_snapshot_password_prompt();
+            self.forget_text_inputs("snapshot-password.");
+            self.settings.set_store_message("config picker cancelled");
+            cx.notify();
+        }
+    }
+
+    fn local_snapshot_password_dialog_content(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        let Some(prompt) = self.settings.snapshot_password_prompt() else {
+            return div().into_any_element();
+        };
+        let palette = self.theme_palette();
+        let description = self.tr("runtimePrompt.localSnapshotDescription");
+        let password_input = self.text_input_box(
+            "snapshot-password.value",
+            &prompt.value,
+            TextInputSetup::masked(),
+            cx,
+        );
+
+        div()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                cx.stop_propagation();
+                this.handle_snapshot_password_key_down(event, cx);
+            }))
+            .child(
+                div()
+                    .text_sm()
+                    .font_weight(FontWeight(600.))
+                    .text_color(rgb(palette.text))
+                    .child(description),
+            )
+            .child(password_input)
+            .into_any_element()
+    }
+
+    fn submit_local_snapshot_password_dialog(&mut self, cx: &mut Context<Self>) -> bool {
+        let Some(state) = self.settings.take_snapshot_password_prompt() else {
+            return true;
+        };
+        let password = state.value.trim().to_string();
+        if password.is_empty() {
+            self.settings.restore_snapshot_password_prompt(state.kind);
+            self.reset_text_input("snapshot-password.value", "", cx);
+            self.shell
+                .set_status("master password is required for encrypted .nya".to_string());
+            cx.notify();
+            return false;
+        }
+        self.forget_text_inputs("snapshot-password.");
+
+        match state.kind {
+            SnapshotPasswordPromptKind::Export => {
+                self.prompt_encrypted_portable_snapshot_export_path(password, cx);
+            }
+            SnapshotPasswordPromptKind::Import => {
+                self.prompt_encrypted_portable_snapshot_import_path(password, cx);
+            }
+            SnapshotPasswordPromptKind::CloudForcePush
+            | SnapshotPasswordPromptKind::CloudForcePull
+            | SnapshotPasswordPromptKind::CloudProviderPush
+            | SnapshotPasswordPromptKind::CloudProviderPull
+            | SnapshotPasswordPromptKind::CloudProviderForcePush
+            | SnapshotPasswordPromptKind::CloudProviderForcePull => {
+                self.settings.restore_snapshot_password_prompt(state.kind);
+                self.shell.set_status(
+                    "cloud sync password prompt must be submitted from settings".to_string(),
                 );
                 cx.notify();
-            });
-        })
-        .detach();
-        cx.notify();
+                return false;
+            }
+        }
+        true
     }
 
     pub(in crate::features) fn start_snapshot_password_prompt(
@@ -451,7 +484,9 @@ impl NyaTermApp {
                     ConfigPathPromptKind::EncryptedPortableExport => {
                         format!("exported {} byte encrypted .nya snapshot", info.bytes)
                     }
-                    _ => format!("exported {} byte config backup", info.bytes),
+                    ConfigPathPromptKind::EncryptedPortableImport => {
+                        format!("exported {} byte encrypted .nya snapshot", info.bytes)
+                    }
                 };
                 self.settings.replace_store_status(
                     info.database_path.display().to_string(),
@@ -465,7 +500,12 @@ impl NyaTermApp {
                             info.backup_path.display()
                         )
                     }
-                    _ => format!("config exported to {}", info.backup_path.display()),
+                    ConfigPathPromptKind::EncryptedPortableImport => {
+                        format!(
+                            "encrypted portable snapshot exported to {}",
+                            info.backup_path.display()
+                        )
+                    }
                 });
             }
             ConfigPathPromptResult::Imported(info) => {
@@ -477,40 +517,37 @@ impl NyaTermApp {
                     .map(|path| format!("; previous db saved to {}", path.display()))
                     .unwrap_or_default();
                 let message = match kind {
-                    ConfigPathPromptKind::PortableImport => {
-                        format!("imported {} byte .nya snapshot{safety}", info.bytes)
-                    }
                     ConfigPathPromptKind::EncryptedPortableImport => {
                         format!(
                             "imported {} byte encrypted .nya snapshot{safety}",
                             info.bytes
                         )
                     }
-                    _ => format!("imported {} byte config backup{safety}", info.bytes),
+                    ConfigPathPromptKind::EncryptedPortableExport => {
+                        format!(
+                            "imported {} byte encrypted .nya snapshot{safety}",
+                            info.bytes
+                        )
+                    }
                 };
                 self.settings.update_store_status(message, true);
                 self.shell.set_status(match kind {
-                    ConfigPathPromptKind::PortableImport => {
-                        format!(
-                            "portable snapshot imported from {}",
-                            info.backup_path.display()
-                        )
-                    }
                     ConfigPathPromptKind::EncryptedPortableImport => {
                         format!(
                             "encrypted portable snapshot imported from {}",
                             info.backup_path.display()
                         )
                     }
-                    _ => format!("config imported from {}", info.backup_path.display()),
+                    ConfigPathPromptKind::EncryptedPortableExport => {
+                        format!(
+                            "encrypted portable snapshot imported from {}",
+                            info.backup_path.display()
+                        )
+                    }
                 });
             }
             ConfigPathPromptResult::Cancelled => {
                 self.shell.set_status(match kind {
-                    ConfigPathPromptKind::Export => "config export cancelled".to_string(),
-                    ConfigPathPromptKind::PortableImport => {
-                        "portable snapshot import cancelled".to_string()
-                    }
                     ConfigPathPromptKind::EncryptedPortableExport => {
                         "encrypted portable snapshot export cancelled".to_string()
                     }
@@ -522,10 +559,6 @@ impl NyaTermApp {
             }
             ConfigPathPromptResult::Failed(error) => {
                 self.shell.set_status(match kind {
-                    ConfigPathPromptKind::Export => format!("config export failed: {error}"),
-                    ConfigPathPromptKind::PortableImport => {
-                        format!("portable snapshot import failed: {error}")
-                    }
                     ConfigPathPromptKind::EncryptedPortableExport => {
                         format!("encrypted portable snapshot export failed: {error}")
                     }

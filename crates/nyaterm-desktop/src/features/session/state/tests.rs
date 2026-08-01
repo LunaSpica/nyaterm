@@ -15,6 +15,7 @@ use crate::models::{
     SessionEventBridge, SessionLaunchConfig, SessionRuntimeMetadata, StartupCommandAction,
     TabActionsSubmenu, TerminalFramePipeline, WorkspaceSplitDirection,
 };
+use crate::temporary_ssh_link::TemporaryLinkProtocol;
 
 use super::{
     CredentialPromptBroker, CredentialPromptState, FailedSessionStart, HostKeyPromptBroker,
@@ -406,8 +407,30 @@ fn session_state_owns_live_runtime_and_initializes_transient_state() {
         sessions.dialogs.temporary_ssh_link_error(),
         Some("temporarySsh.invalid")
     );
+    sessions
+        .dialogs
+        .set_temporary_link_protocol(TemporaryLinkProtocol::Serial);
+    assert_eq!(
+        sessions.dialogs.temporary_link_protocol(),
+        TemporaryLinkProtocol::Serial
+    );
+    assert_eq!(sessions.dialogs.temporary_ssh_link_error(), None);
+    sessions
+        .dialogs
+        .apply_temporary_serial_port_name("COM7".to_string());
+    sessions
+        .dialogs
+        .apply_temporary_serial_baud_rate("115200x".to_string());
+    assert_eq!(sessions.dialogs.temporary_serial_port_name(), "COM7");
+    assert_eq!(sessions.dialogs.temporary_serial_baud_rate(), "115200");
     sessions.dialogs.close_temporary_ssh_link();
+    assert_eq!(
+        sessions.dialogs.temporary_link_protocol(),
+        TemporaryLinkProtocol::Ssh
+    );
     assert!(sessions.dialogs.temporary_ssh_link_draft().is_empty());
+    assert!(sessions.dialogs.temporary_serial_port_name().is_empty());
+    assert_eq!(sessions.dialogs.temporary_serial_baud_rate(), "115200");
 }
 
 #[test]

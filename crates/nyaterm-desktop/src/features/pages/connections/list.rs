@@ -854,6 +854,7 @@ pub(super) fn icon_action_button_styled(
         .id(id.clone())
         .group(id.clone())
         .size(px(24.))
+        .flex_none()
         .flex()
         .items_center()
         .justify_center()

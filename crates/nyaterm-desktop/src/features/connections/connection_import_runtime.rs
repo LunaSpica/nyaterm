@@ -42,7 +42,6 @@ impl NyaTermApp {
     ) {
         if self.connection_state.import_path_prompt_active()
             || self.settings.config_path_prompt_active()
-            || window.has_active_nya_dialog(cx)
         {
             self.shell
                 .set_status("connection import picker is already open".to_string());
@@ -71,7 +70,7 @@ impl NyaTermApp {
     ) {
         window.close_nya_dialog(cx);
         if source == ConnectionImportSource::NyatermBackup {
-            self.prompt_portable_snapshot_import(cx);
+            self.prompt_encrypted_portable_snapshot_import(window, cx);
             return;
         }
         self.prompt_connection_session_import(source, cx);

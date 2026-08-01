@@ -2050,17 +2050,25 @@
     "unsplit": "合并所有窗格"
   },
   "temporarySsh": {
+    "baudRatePlaceholder": "115200",
     "connect": "连接",
     "connecting": "已有会话正在连接，请稍后再试。",
-    "description": "粘贴或输入 SSH 目标，将直接打开一个不保存的 SSH 会话。",
-    "empty": "请输入 SSH 目标。",
+    "description": "粘贴或输入临时目标，将直接打开一个不保存的会话。",
+    "empty": "请输入连接目标。",
     "inlinePassword": "不支持在输入中携带密码。需要凭据时 NyaTerm 会再询问。",
-    "invalidInput": "请输入有效的 SSH 命令、URL 或主机。",
+    "invalidBaudRate": "波特率必须是正数。",
+    "invalidInput": "请输入有效的命令、URL 或主机。",
     "invalidPort": "端口必须在 1 到 65535 之间。",
     "missingHost": "请输入要连接的主机。",
     "placeholder": "ssh -p 2222 root@192.168.142.100",
+    "protocolSerial": "串口",
+    "protocolSsh": "SSH",
+    "protocolTelnet": "Telnet",
+    "serialPortPlaceholder": "COM1 或 /dev/ttyS0",
+    "serialPortRequired": "串口名不能为空。",
+    "telnetPlaceholder": "telnet 192.168.142.100 23",
     "title": "临时链接",
-    "unsupportedOption": "临时链接暂时只支持 SSH 直连。"
+    "unsupportedOption": "临时链接仅支持直连。"
   },
   "terminal": {
     "actionLinkAltClickHint": "Alt+单击：更多动作",

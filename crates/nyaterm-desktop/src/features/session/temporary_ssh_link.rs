@@ -2,11 +2,16 @@ use std::sync::Arc;
 
 use gpui::{Context, Window};
 use nyaterm_core::AiExecutionProfile;
-use nyaterm_transport::SshSessionConfig;
+use nyaterm_transport::{SerialSessionConfig, SshSessionConfig, TelnetSessionConfig};
 
 use super::NativeHostKeyVerifier;
 use crate::features::{NyaTermApp, SavedConnectionStartOptions};
-use crate::temporary_ssh_link::{TemporarySshLinkConfig, parse_temporary_ssh_link};
+use crate::models::SessionLaunchConfig;
+use crate::temporary_ssh_link::{
+    TemporaryLinkProtocol, TemporarySerialLinkConfig, TemporarySshLinkConfig,
+    TemporaryTelnetLinkConfig, build_temporary_serial_link, parse_temporary_ssh_link,
+    parse_temporary_telnet_link,
+};
 
 impl NyaTermApp {
     pub(in crate::features) fn open_temporary_ssh_link_dialog(
@@ -20,10 +25,11 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
+        self.refresh_connection_serial_ports();
         self.session.dialogs.open_temporary_ssh_link();
         self.forget_text_inputs("temporary-ssh.link");
-        self.shell
-            .set_status("temporary SSH link opened".to_string());
+        self.forget_text_inputs("temporary-ssh.serial-");
+        self.shell.set_status("temporary link opened".to_string());
         self.open_form_dialog(
             (
                 self.tr("temporarySsh.title").to_string(),
@@ -42,8 +48,9 @@ impl NyaTermApp {
     pub(in crate::features) fn close_temporary_ssh_link_dialog(&mut self, cx: &mut Context<Self>) {
         self.session.dialogs.close_temporary_ssh_link();
         self.forget_text_inputs("temporary-ssh.link");
+        self.forget_text_inputs("temporary-ssh.serial-");
         self.shell
-            .set_status("temporary SSH link cancelled".to_string());
+            .set_status("temporary link cancelled".to_string());
         cx.notify();
     }
 
@@ -62,6 +69,53 @@ impl NyaTermApp {
             return false;
         }
 
+        match self.session.dialogs.temporary_link_protocol() {
+            TemporaryLinkProtocol::Ssh => self.submit_temporary_ssh_link(cx),
+            TemporaryLinkProtocol::Telnet => self.submit_temporary_telnet_link(cx),
+            TemporaryLinkProtocol::Serial => self.submit_temporary_serial_link(cx),
+        }
+    }
+
+    pub(in crate::features) fn apply_temporary_ssh_link(
+        &mut self,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
+        self.session.dialogs.apply_temporary_ssh_link(text);
+        cx.notify();
+    }
+
+    pub(in crate::features) fn apply_temporary_serial_port_name(
+        &mut self,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
+        self.session.dialogs.apply_temporary_serial_port_name(text);
+        cx.notify();
+    }
+
+    pub(in crate::features) fn apply_temporary_serial_baud_rate(
+        &mut self,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
+        self.session.dialogs.apply_temporary_serial_baud_rate(text);
+        cx.notify();
+    }
+
+    pub(in crate::features) fn set_temporary_link_protocol(
+        &mut self,
+        protocol: TemporaryLinkProtocol,
+        cx: &mut Context<Self>,
+    ) {
+        if protocol == TemporaryLinkProtocol::Serial {
+            self.refresh_connection_serial_ports();
+        }
+        self.session.dialogs.set_temporary_link_protocol(protocol);
+        cx.notify();
+    }
+
+    fn submit_temporary_ssh_link(&mut self, cx: &mut Context<Self>) -> bool {
         let parsed = match parse_temporary_ssh_link(self.session.dialogs.temporary_ssh_link_draft())
         {
             Ok(parsed) => parsed,
@@ -76,8 +130,7 @@ impl NyaTermApp {
             }
         };
         let config = self.temporary_ssh_session_config(parsed.clone());
-        self.session.dialogs.close_temporary_ssh_link();
-        self.forget_text_inputs("temporary-ssh.link");
+        self.close_temporary_link_draft();
         self.begin_background_ssh_start(
             parsed.name,
             config,
@@ -89,13 +142,66 @@ impl NyaTermApp {
         true
     }
 
-    pub(in crate::features) fn apply_temporary_ssh_link(
-        &mut self,
-        text: String,
-        cx: &mut Context<Self>,
-    ) {
-        self.session.dialogs.apply_temporary_ssh_link(text);
-        cx.notify();
+    fn submit_temporary_telnet_link(&mut self, cx: &mut Context<Self>) -> bool {
+        let parsed =
+            match parse_temporary_telnet_link(self.session.dialogs.temporary_ssh_link_draft()) {
+                Ok(parsed) => parsed,
+                Err(error) => {
+                    self.session
+                        .dialogs
+                        .reject_temporary_ssh_link(error.locale_key());
+                    self.shell
+                        .set_status("temporary Telnet link is invalid".to_string());
+                    cx.notify();
+                    return false;
+                }
+            };
+        let config = self.temporary_telnet_session_config(parsed.clone());
+        self.close_temporary_link_draft();
+        self.begin_background_session_start(
+            parsed.name,
+            SessionLaunchConfig::Telnet(config),
+            None,
+            AiExecutionProfile::SendOnly,
+            SavedConnectionStartOptions::default(),
+            cx,
+        );
+        true
+    }
+
+    fn submit_temporary_serial_link(&mut self, cx: &mut Context<Self>) -> bool {
+        let parsed = match build_temporary_serial_link(
+            self.session.dialogs.temporary_serial_port_name(),
+            self.session.dialogs.temporary_serial_baud_rate(),
+        ) {
+            Ok(parsed) => parsed,
+            Err(error) => {
+                self.session
+                    .dialogs
+                    .reject_temporary_ssh_link(error.locale_key());
+                self.shell
+                    .set_status("temporary serial link is invalid".to_string());
+                cx.notify();
+                return false;
+            }
+        };
+        let config = self.temporary_serial_session_config(parsed.clone());
+        self.close_temporary_link_draft();
+        self.begin_background_session_start(
+            parsed.name,
+            SessionLaunchConfig::Serial(config),
+            None,
+            AiExecutionProfile::SendOnly,
+            SavedConnectionStartOptions::default(),
+            cx,
+        );
+        true
+    }
+
+    fn close_temporary_link_draft(&mut self) {
+        self.session.dialogs.close_temporary_ssh_link();
+        self.forget_text_inputs("temporary-ssh.link");
+        self.forget_text_inputs("temporary-ssh.serial-");
     }
 
     fn temporary_ssh_session_config(&self, parsed: TemporarySshLinkConfig) -> SshSessionConfig {
@@ -129,6 +235,30 @@ impl NyaTermApp {
             })),
             credential_provider: Some(self.session.prompts.credential_broker()),
             otp_provider: Some(self.session.prompts.otp_provider()),
+        }
+    }
+
+    fn temporary_telnet_session_config(
+        &self,
+        parsed: TemporaryTelnetLinkConfig,
+    ) -> TelnetSessionConfig {
+        TelnetSessionConfig {
+            name: parsed.name,
+            host: parsed.host,
+            port: parsed.port,
+            ..TelnetSessionConfig::default()
+        }
+    }
+
+    fn temporary_serial_session_config(
+        &self,
+        parsed: TemporarySerialLinkConfig,
+    ) -> SerialSessionConfig {
+        SerialSessionConfig {
+            name: parsed.name,
+            port_name: parsed.port_name,
+            baud_rate: parsed.baud_rate,
+            ..SerialSessionConfig::default()
         }
     }
 }

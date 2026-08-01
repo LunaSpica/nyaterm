@@ -14,6 +14,7 @@ use crate::models::{
     SessionRuntimeMetadata, StartupCommandAction, StartupCommandRequest, TabActionsSubmenu,
     WorkspaceSplitDirection,
 };
+use crate::temporary_ssh_link::TemporaryLinkProtocol;
 
 use super::SessionProtocolRuntimeState;
 use super::auth_runtime::{
@@ -118,7 +119,10 @@ pub(super) struct SessionDialogState {
     startup_command_draft: String,
     startup_command_delay_ms: u64,
     temporary_ssh_link_open: bool,
+    temporary_link_protocol: TemporaryLinkProtocol,
     temporary_ssh_link_draft: String,
+    temporary_serial_port_name: String,
+    temporary_serial_baud_rate: String,
     temporary_ssh_link_error: Option<&'static str>,
 }
 
@@ -176,7 +180,10 @@ impl SessionFeatureState {
                 startup_command_draft: String::new(),
                 startup_command_delay_ms: DEFAULT_DUPLICATE_STARTUP_DELAY_MS,
                 temporary_ssh_link_open: false,
+                temporary_link_protocol: TemporaryLinkProtocol::Ssh,
                 temporary_ssh_link_draft: String::new(),
+                temporary_serial_port_name: String::new(),
+                temporary_serial_baud_rate: "115200".to_string(),
                 temporary_ssh_link_error: None,
             },
             command_history: HashMap::new(),
@@ -461,6 +468,18 @@ impl SessionFeatureState {
 
     pub(in crate::features) fn dialog_temporary_ssh_link_draft(&self) -> &str {
         self.dialogs.temporary_ssh_link_draft()
+    }
+
+    pub(in crate::features) fn dialog_temporary_link_protocol(&self) -> TemporaryLinkProtocol {
+        self.dialogs.temporary_link_protocol()
+    }
+
+    pub(in crate::features) fn dialog_temporary_serial_port_name(&self) -> &str {
+        self.dialogs.temporary_serial_port_name()
+    }
+
+    pub(in crate::features) fn dialog_temporary_serial_baud_rate(&self) -> &str {
+        self.dialogs.temporary_serial_baud_rate()
     }
 
     pub(in crate::features) fn dialog_temporary_ssh_link_error(&self) -> Option<&'static str> {
@@ -1738,6 +1757,18 @@ impl SessionDialogState {
         &self.temporary_ssh_link_draft
     }
 
+    pub(in crate::features) fn temporary_link_protocol(&self) -> TemporaryLinkProtocol {
+        self.temporary_link_protocol
+    }
+
+    pub(in crate::features) fn temporary_serial_port_name(&self) -> &str {
+        &self.temporary_serial_port_name
+    }
+
+    pub(in crate::features) fn temporary_serial_baud_rate(&self) -> &str {
+        &self.temporary_serial_baud_rate
+    }
+
     pub(in crate::features) fn temporary_ssh_link_error(&self) -> Option<&'static str> {
         self.temporary_ssh_link_error
     }
@@ -1749,7 +1780,18 @@ impl SessionDialogState {
 
     pub(in crate::features) fn close_temporary_ssh_link(&mut self) {
         self.temporary_ssh_link_open = false;
+        self.temporary_link_protocol = TemporaryLinkProtocol::Ssh;
         self.temporary_ssh_link_draft.clear();
+        self.temporary_serial_port_name.clear();
+        self.temporary_serial_baud_rate = "115200".to_string();
+        self.temporary_ssh_link_error = None;
+    }
+
+    pub(in crate::features) fn set_temporary_link_protocol(
+        &mut self,
+        protocol: TemporaryLinkProtocol,
+    ) {
+        self.temporary_link_protocol = protocol;
         self.temporary_ssh_link_error = None;
     }
 
@@ -1759,6 +1801,16 @@ impl SessionDialogState {
 
     pub(in crate::features) fn apply_temporary_ssh_link(&mut self, text: String) {
         self.temporary_ssh_link_draft = text;
+        self.temporary_ssh_link_error = None;
+    }
+
+    pub(in crate::features) fn apply_temporary_serial_port_name(&mut self, text: String) {
+        self.temporary_serial_port_name = text;
+        self.temporary_ssh_link_error = None;
+    }
+
+    pub(in crate::features) fn apply_temporary_serial_baud_rate(&mut self, text: String) {
+        self.temporary_serial_baud_rate = text.chars().filter(|ch| ch.is_ascii_digit()).collect();
         self.temporary_ssh_link_error = None;
     }
 

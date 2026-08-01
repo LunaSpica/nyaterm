@@ -1,6 +1,6 @@
 //! Bridge from NyaTerm's persisted theme palette to gpui-component's theme.
 
-use gpui::{App, Hsla, rgb, transparent_black};
+use gpui::{App, Hsla, hsla, rgb, transparent_black};
 use gpui_component::{Theme, ThemeMode, ThemeTokens};
 
 use crate::theme::ThemePalette;
@@ -163,7 +163,7 @@ pub fn apply_component_theme(palette: ThemePalette, cx: &mut App) {
     component_theme.colors.table_hover = color(palette.hover);
     component_theme.colors.table_row_border = color(palette.border);
     component_theme.colors.tiles = color(palette.surface);
-    component_theme.colors.overlay = color(palette.bg);
+    component_theme.colors.overlay = hsla(0., 0., 0., if mode.is_dark() { 0.2 } else { 0.05 });
     component_theme.colors.window_border = color(palette.border);
     component_theme.colors.red = color(palette.danger);
     component_theme.colors.red_light = color(palette.danger);
@@ -263,6 +263,21 @@ mod tests {
                 Theme::global(cx).colors.scrollbar,
                 gpui::transparent_black()
             );
+        });
+    }
+
+    #[test]
+    fn dialog_overlay_is_translucent_so_window_context_remains_visible() {
+        let cx = TestAppContext::single();
+
+        cx.update(|cx| {
+            gpui_component::init(cx);
+
+            apply_component_theme(theme_palette("github-dark"), cx);
+            assert_eq!(Theme::global(cx).colors.overlay.a, 0.2);
+
+            apply_component_theme(theme_palette("github-light"), cx);
+            assert_eq!(Theme::global(cx).colors.overlay.a, 0.05);
         });
     }
 }

@@ -402,6 +402,10 @@ impl NyaTermApp {
             self.apply_sync_group_name(group_id, text, cx);
         } else if id.as_ref() == "temporary-ssh.link" {
             self.apply_temporary_ssh_link(text, cx);
+        } else if id.as_ref() == "temporary-ssh.serial-port" {
+            self.apply_temporary_serial_port_name(text, cx);
+        } else if id.as_ref() == "temporary-ssh.baud-rate" {
+            self.apply_temporary_serial_baud_rate(text, cx);
         } else if let Some(field) = id.strip_prefix("session.") {
             self.apply_session_text_input(field, text, cx);
         } else if id.as_ref() == "lock-screen.password" {

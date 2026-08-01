@@ -1376,11 +1376,11 @@ mod tests {
     #[test]
     fn settings_owner_admits_and_finishes_prompts_by_identity() {
         let mut state = settings_state();
-        assert!(state.begin_config_path_prompt(ConfigPathPromptKind::Export));
-        assert!(!state.begin_config_path_prompt(ConfigPathPromptKind::PortableImport));
-        assert!(!state.finish_config_path_prompt(ConfigPathPromptKind::PortableImport));
+        assert!(state.begin_config_path_prompt(ConfigPathPromptKind::EncryptedPortableExport));
+        assert!(!state.begin_config_path_prompt(ConfigPathPromptKind::EncryptedPortableImport));
+        assert!(!state.finish_config_path_prompt(ConfigPathPromptKind::EncryptedPortableImport));
         assert!(state.config_path_prompt_active());
-        assert!(state.finish_config_path_prompt(ConfigPathPromptKind::Export));
+        assert!(state.finish_config_path_prompt(ConfigPathPromptKind::EncryptedPortableExport));
 
         assert!(state.begin_snapshot_password_prompt(SnapshotPasswordPromptKind::CloudForcePush));
         assert!(!state.begin_snapshot_password_prompt(SnapshotPasswordPromptKind::Export));
@@ -1389,6 +1389,23 @@ mod tests {
         assert_eq!(prompt.kind, SnapshotPasswordPromptKind::CloudForcePush);
         assert_eq!(prompt.value, "secret");
         assert!(!state.snapshot_password_prompt_active());
+    }
+
+    #[test]
+    fn settings_owner_restores_snapshot_prompt_after_empty_password() {
+        let mut state = settings_state();
+        assert!(state.begin_snapshot_password_prompt(SnapshotPasswordPromptKind::Export));
+
+        let prompt = state.take_snapshot_password_prompt().expect("prompt");
+        assert_eq!(prompt.kind, SnapshotPasswordPromptKind::Export);
+        assert!(prompt.value.is_empty());
+        assert!(!state.snapshot_password_prompt_active());
+
+        state.restore_snapshot_password_prompt(prompt.kind);
+        assert!(state.snapshot_password_prompt_active());
+        let prompt = state.snapshot_password_prompt().expect("restored prompt");
+        assert_eq!(prompt.kind, SnapshotPasswordPromptKind::Export);
+        assert!(prompt.value.is_empty());
     }
 
     #[test]

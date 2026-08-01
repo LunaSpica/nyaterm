@@ -2050,17 +2050,25 @@
     "unsplit": "Merge All Panes"
   },
   "temporarySsh": {
+    "baudRatePlaceholder": "115200",
     "connect": "Connect",
     "connecting": "A session is already connecting. Try again after it finishes.",
-    "description": "Paste or type an SSH target. This opens a direct SSH session without saving it.",
-    "empty": "Enter an SSH target.",
+    "description": "Paste or type a temporary target. This opens a direct session without saving it.",
+    "empty": "Enter a target.",
     "inlinePassword": "Inline passwords are not supported. NyaTerm will ask for credentials when needed.",
-    "invalidInput": "Enter a valid SSH command, URL, or host.",
+    "invalidBaudRate": "Baud rate must be a positive number.",
+    "invalidInput": "Enter a valid command, URL, or host.",
     "invalidPort": "Port must be between 1 and 65535.",
     "missingHost": "Enter a host to connect to.",
     "placeholder": "ssh -p 2222 root@192.168.142.100",
+    "protocolSerial": "Serial",
+    "protocolSsh": "SSH",
+    "protocolTelnet": "Telnet",
+    "serialPortPlaceholder": "COM1 or /dev/ttyS0",
+    "serialPortRequired": "Serial port required.",
+    "telnetPlaceholder": "telnet 192.168.142.100 23",
     "title": "Temporary Link",
-    "unsupportedOption": "Temporary links only support direct SSH connections."
+    "unsupportedOption": "Temporary links only support direct connections."
   },
   "terminal": {
     "actionLinkAltClickHint": "Alt+Click: more actions",

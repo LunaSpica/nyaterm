@@ -226,14 +226,14 @@ impl NyaTermApp {
 
     pub(in crate::features) fn connections_search_bar(
         &mut self,
-        window: &mut gpui::Window,
+        _window: &mut gpui::Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let search_empty = self.connection_state.list_search_is_empty();
         let search_field = self.connection_state.list_search_field();
         let search_focus = search_field.read(cx).focus_handle();
-        let search_focused = search_focus.is_focused(window);
+        let search_focused = search_field.read(cx).has_focus();
         // Tauri swaps the glyph, flips it for Z-A and tints it while a name sort is
         // active, so the current mode is readable without hovering for the tooltip.
         let sort_mode = self.connection_state.list_sort_mode();
@@ -289,11 +289,13 @@ impl NyaTermApp {
                     .items_center()
                     .gap_2()
                     .cursor_text()
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        let field = this.connection_state.list_search_field();
-                        window.focus(&field.read(cx).focus_handle(), cx);
-                        cx.notify();
-                    }))
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(move |_, _, window, cx| {
+                            window.focus(&search_focus, cx);
+                            cx.notify();
+                        }),
+                    )
                     // Result navigation stays here: the field leaves the arrows
                     // and enter unconsumed precisely so the list can claim them.
                     .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {

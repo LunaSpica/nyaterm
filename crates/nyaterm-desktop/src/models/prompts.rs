@@ -376,8 +376,6 @@ pub(crate) enum RecordingPathPromptResult {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ConfigPathPromptKind {
-    Export,
-    PortableImport,
     EncryptedPortableExport,
     EncryptedPortableImport,
 }

@@ -1,6 +1,6 @@
 use gpui::Context;
 use nyaterm_core::SavedConnection;
-use nyaterm_ui::NyaMenuItem;
+use nyaterm_ui::{NyaDialogWindowExt as _, NyaMenuItem};
 
 use crate::features::NyaTermApp;
 
@@ -277,6 +277,7 @@ impl NyaTermApp {
             NyaMenuItem::action(self.tr("settings.importConfig"))
                 .icon("icons/import.svg")
                 .on_click(cx.listener(|this, _, window, cx| {
+                    window.close_nya_dialog(cx);
                     this.open_connection_import_dialog(window, cx);
                 })),
         ]);
@@ -291,12 +292,14 @@ impl NyaTermApp {
         let mut items = vec![
             NyaMenuItem::action(self.tr("settings.exportConfig"))
                 .icon("icons/menu/export.svg")
-                .on_click(cx.listener(|this, _, _, cx| {
-                    this.prompt_config_export(cx);
+                .on_click(cx.listener(|this, _, window, cx| {
+                    window.close_nya_dialog(cx);
+                    this.prompt_encrypted_portable_snapshot_export(window, cx);
                 })),
             NyaMenuItem::action(self.tr("settings.importConfig"))
                 .icon("icons/import.svg")
                 .on_click(cx.listener(|this, _, window, cx| {
+                    window.close_nya_dialog(cx);
                     this.open_connection_import_dialog(window, cx);
                 })),
         ];
