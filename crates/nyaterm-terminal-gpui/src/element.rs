@@ -14,14 +14,13 @@ use nyaterm_terminal::{
 };
 
 use crate::keywords::{
-    CompiledKeywordRules, TerminalKeywordHighlightSnapshot, compile_keyword_rules,
-    terminal_keyword_rules_key,
+    CompiledKeywordRule, CompiledKeywordRules, TerminalKeywordHighlightSnapshot,
+    compile_keyword_rules, terminal_keyword_rules_key,
 };
 use crate::paint::{
-    apply_search_ranges, flatten_highlight_spans, flush_bg, line_strike_color, push_col_range_bg,
-    terminal_cell_text_at_col, terminal_highlight_spans_compiled,
-    terminal_highlight_spans_with_keyword_ranges, terminal_keyword_exclusion_ranges,
-    terminal_run_font,
+    apply_search_ranges, flush_bg, line_strike_color, push_col_range_bg, terminal_cell_text_at_col,
+    terminal_highlight_spans_compiled, terminal_highlight_spans_with_keyword_ranges,
+    terminal_keyword_exclusion_ranges, terminal_run_font,
 };
 use crate::types::{TerminalHighlightSpan, TerminalPaintGeometry};
 
@@ -683,6 +682,24 @@ fn pad_wide_cells(text: &str) -> String {
     padded
 }
 
+fn append_padded_wide_cells(output: &mut String, input: &str) -> usize {
+    let start_len = output.len();
+    if !input.chars().any(|ch| terminal_char_cell_width(ch) > 1) {
+        output.push_str(input);
+        return output.len().saturating_sub(start_len);
+    }
+    for ch in input.chars() {
+        output.push(ch);
+        if terminal_is_zero_width_mark(ch) {
+            continue;
+        }
+        for _ in 1..terminal_char_cell_width(ch) {
+            output.push(' ');
+        }
+    }
+    output.len().saturating_sub(start_len)
+}
+
 fn terminal_text_run_for_span(
     span: &TerminalHighlightSpan,
     len: usize,
@@ -763,15 +780,19 @@ fn terminal_underline_ranges_for_spans(
     spans: &[TerminalHighlightSpan],
     palette: nyaterm_ui::ThemePalette,
 ) -> Vec<TerminalRowUnderlineRange> {
-    let flat = flatten_highlight_spans(spans.to_vec());
     let mut out = Vec::new();
     let mut pending: Option<TerminalRowUnderlineRange> = None;
-    for (col, cell) in flat.iter().enumerate() {
-        if cell.underline {
-            let color = cell.color.unwrap_or(palette.accent);
+    let mut col = 0usize;
+    for span in spans {
+        let span_cols = terminal_cell_count(&span.text);
+        if span_cols == 0 {
+            continue;
+        }
+        if span.underline {
+            let color = span.color.unwrap_or(palette.accent);
             match pending.as_mut() {
                 Some(current) if current.color == color && current.end == col => {
-                    current.end = col + 1;
+                    current.end = col + span_cols;
                 }
                 _ => {
                     if let Some(range) = pending.take() {
@@ -780,13 +801,14 @@ fn terminal_underline_ranges_for_spans(
                     pending = Some(TerminalRowUnderlineRange {
                         color,
                         start: col,
-                        end: col + 1,
+                        end: col + span_cols,
                     });
                 }
             }
         } else if let Some(range) = pending.take() {
             out.push(range);
         }
+        col += span_cols;
     }
     if let Some(range) = pending.take() {
         out.push(range);
@@ -1186,7 +1208,7 @@ impl Element for NyaTerminalElement {
                         )
                     })
                     .unwrap_or_else(|| {
-                        let row_compiled_keyword_rules: &[(regex::Regex, u32)] =
+                        let row_compiled_keyword_rules: &[CompiledKeywordRule] =
                             if keyword_result_known_empty {
                                 &[]
                             } else {
@@ -1206,27 +1228,30 @@ impl Element for NyaTerminalElement {
                     });
                 // Glyph spans intentionally exclude search/selection/cursor state so
                 // dynamic overlays do not invalidate shaped base rows.
-                let mut spans = background_spans.clone();
-                if !decorations.active_search_ranges.is_empty() {
-                    spans = apply_search_ranges(
-                        spans,
+                let glyph_spans_storage;
+                let glyph_spans = if decorations.active_search_ranges.is_empty() {
+                    background_spans.as_slice()
+                } else {
+                    glyph_spans_storage = apply_search_ranges(
+                        background_spans.clone(),
                         &decorations.active_search_ranges,
                         true,
                         self.palette,
                     );
-                }
+                    glyph_spans_storage.as_slice()
+                };
                 let background_ranges = terminal_background_ranges_for_spans(&background_spans);
-                let underline_ranges = terminal_underline_ranges_for_spans(&spans, self.palette);
+                let underline_ranges =
+                    terminal_underline_ranges_for_spans(glyph_spans, self.palette);
 
-                let mut text = String::new();
-                let mut text_runs = Vec::new();
-                for span in spans {
-                    let padded = pad_wide_cells(&span.text);
-                    let run_len = padded.len();
-                    text.push_str(&padded);
+                let mut text =
+                    String::with_capacity(display_line.len().saturating_add(glyph_spans.len()));
+                let mut text_runs = Vec::with_capacity(glyph_spans.len());
+                for span in glyph_spans {
+                    let run_len = append_padded_wide_cells(&mut text, &span.text);
                     if run_len > 0 {
                         text_runs.push(terminal_text_run_for_span(
-                            &span,
+                            span,
                             run_len,
                             base_font.clone(),
                             self.normal_weight,

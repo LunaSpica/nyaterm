@@ -808,6 +808,7 @@ impl NyaTermApp {
             );
         }
         self.remember_terminal_scroll_window_snapshot(session_id, display_offset, &snapshot);
+        let keyword_output_pressure = self.runtime_output_pressure_active();
         surface.update(cx, |surface, cx| {
             let mut changed = false;
             changed |= surface.set_layout_cache(layout_cache);
@@ -860,7 +861,11 @@ impl NyaTermApp {
                 )
             };
             if frame_applied || paint_details_changed {
-                surface.schedule_keyword_highlights(clear_keyword_highlights, cx);
+                surface.schedule_keyword_highlights(
+                    clear_keyword_highlights,
+                    keyword_output_pressure,
+                    cx,
+                );
             }
             if changed || frame_applied || paint_details_changed || had_pending_local_scroll_sync {
                 cx.notify();
@@ -1334,7 +1339,11 @@ impl NyaTermApp {
                 )
             };
             if frame_applied || paint_details_changed {
-                surface.schedule_keyword_highlights(clear_keyword_highlights, cx);
+                surface.schedule_keyword_highlights(
+                    clear_keyword_highlights,
+                    render_output_pressure,
+                    cx,
+                );
             }
             if changed || frame_applied || paint_details_changed || had_pending_local_scroll_sync {
                 cx.notify();

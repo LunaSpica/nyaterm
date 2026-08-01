@@ -2,6 +2,7 @@ use std::collections::{HashMap, hash_map::DefaultHasher};
 use std::hash::{Hash, Hasher};
 use std::ops::Range;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use nyaterm_core::ResolvedKeywordHighlightRule;
 use nyaterm_terminal::{TerminalSnapshot, terminal_cell_col_for_byte_index};
@@ -9,11 +10,28 @@ use nyaterm_terminal::{TerminalSnapshot, terminal_cell_col_for_byte_index};
 use crate::element::{TerminalBufferMatch, TerminalSearchFlags};
 use crate::types::{TerminalHighlightSpan, TerminalKeywordRange};
 
-pub(super) type CompiledKeywordRules = Vec<(regex::Regex, u32)>;
+pub(super) type CompiledKeywordRules = Vec<CompiledKeywordRule>;
+
+#[derive(Debug)]
+pub(super) struct CompiledKeywordRule {
+    pub(super) regex: regex::Regex,
+    pub(super) color: u32,
+    pub(super) priority: usize,
+}
 
 pub struct TerminalKeywordHighlighter {
     rules_key: u64,
     compiled: CompiledKeywordRules,
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct TerminalKeywordHighlightPrecomputeStats {
+    pub match_duration_us: u64,
+    pub range_build_duration_us: u64,
+    pub known_rows: usize,
+    pub range_count: usize,
+    pub requested_rows: usize,
+    pub reused_rows: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -186,25 +204,47 @@ pub fn precompute_terminal_keyword_highlights_for_rows(
     previous: Option<&TerminalKeywordHighlightSnapshot>,
     requested_rows: Range<usize>,
 ) -> TerminalKeywordHighlightSnapshot {
+    precompute_terminal_keyword_highlights_for_rows_with_stats(
+        snapshot,
+        highlighter,
+        palette,
+        previous,
+        requested_rows,
+    )
+    .0
+}
+
+pub fn precompute_terminal_keyword_highlights_for_rows_with_stats(
+    snapshot: &TerminalSnapshot,
+    highlighter: &TerminalKeywordHighlighter,
+    palette: nyaterm_ui::ThemePalette,
+    previous: Option<&TerminalKeywordHighlightSnapshot>,
+    requested_rows: Range<usize>,
+) -> (
+    TerminalKeywordHighlightSnapshot,
+    TerminalKeywordHighlightPrecomputeStats,
+) {
     let palette_key = terminal_keyword_palette_key(palette);
     let previous = previous.filter(|previous| {
         previous.rules_key == highlighter.rules_key && previous.palette_key == palette_key
     });
     let requested_rows = terminal_keyword_highlight_expanded_rows(snapshot, requested_rows);
+    let mut stats = TerminalKeywordHighlightPrecomputeStats {
+        requested_rows: requested_rows.len(),
+        ..TerminalKeywordHighlightPrecomputeStats::default()
+    };
     let mut known_rows = vec![false; snapshot.row_count()];
     let mut rows: Vec<Option<Arc<Vec<TerminalKeywordRange>>>> = vec![None; snapshot.row_count()];
-    let row_reuse_keys = (0..snapshot.row_count())
-        .map(|row| terminal_keyword_row_reuse_key(snapshot, row))
-        .collect::<Vec<_>>();
+    let row_reuse_keys = terminal_keyword_row_reuse_keys(snapshot);
 
     let mut row = 0;
     while row < snapshot.row_count() {
         let group = terminal_keyword_wrapped_group_bounds(snapshot, row);
         let group_range = group.start..group.end;
         let requested = group.start < requested_rows.end && group.end > requested_rows.start;
-        let group_keys = (group.start..group.end)
-            .map(|idx| terminal_keyword_row_reuse_key(snapshot, idx))
-            .collect::<Option<Vec<_>>>();
+        let group_keys = row_reuse_keys
+            .get(group_range.clone())
+            .and_then(|keys| keys.iter().copied().collect::<Option<Vec<_>>>());
         if let Some(keys) = group_keys.as_ref()
             && let Some(previous) = previous
             && keys
@@ -214,6 +254,7 @@ pub fn precompute_terminal_keyword_highlights_for_rows(
             for (idx, key) in group_range.clone().zip(keys.iter()) {
                 known_rows[idx] = true;
                 rows[idx] = previous.rows_by_reuse_key.get(key).cloned().flatten();
+                stats.reused_rows = stats.reused_rows.saturating_add(1);
             }
             row = group.end;
             continue;
@@ -223,8 +264,12 @@ pub fn precompute_terminal_keyword_highlights_for_rows(
             continue;
         }
 
-        let group_rows =
-            terminal_keyword_ranges_for_wrapped_group(snapshot, group_range.clone(), highlighter);
+        let group_rows = terminal_keyword_ranges_for_wrapped_group(
+            snapshot,
+            group_range.clone(),
+            highlighter,
+            Some(&mut stats),
+        );
         for (idx, ranges) in group_range.zip(group_rows) {
             known_rows[idx] = true;
             rows[idx] = (!ranges.is_empty()).then(|| Arc::new(ranges));
@@ -234,11 +279,9 @@ pub fn precompute_terminal_keyword_highlights_for_rows(
 
     let rows_by_reuse_key = (0..snapshot.row_count())
         .filter(|row| known_rows[*row])
-        .filter_map(|row| {
-            terminal_keyword_row_reuse_key(snapshot, row).map(|key| (key, rows[row].clone()))
-        })
+        .filter_map(|row| row_reuse_keys[row].map(|key| (key, rows[row].clone())))
         .collect();
-    TerminalKeywordHighlightSnapshot {
+    let snapshot = TerminalKeywordHighlightSnapshot {
         rules_key: highlighter.rules_key,
         palette_key,
         display_offset: snapshot.display_offset,
@@ -248,7 +291,10 @@ pub fn precompute_terminal_keyword_highlights_for_rows(
         known_rows,
         rows,
         rows_by_reuse_key,
-    }
+    };
+    stats.known_rows = snapshot.known_row_count();
+    stats.range_count = snapshot.range_count();
+    (snapshot, stats)
 }
 
 #[derive(Clone, Copy)]
@@ -305,11 +351,54 @@ fn terminal_keyword_row_reuse_key(
     })
 }
 
+fn terminal_keyword_row_reuse_keys(
+    snapshot: &TerminalSnapshot,
+) -> Vec<Option<TerminalKeywordRowReuseKey>> {
+    let mut keys = vec![None; snapshot.row_count()];
+    let mut row = 0usize;
+    while row < snapshot.row_count() {
+        let group = terminal_keyword_wrapped_group_bounds(snapshot, row);
+        if group.end == group.start.saturating_add(1) {
+            keys[row] = snapshot
+                .row(row)
+                .map(|row| TerminalKeywordRowReuseKey::Single {
+                    signature: row.signature,
+                });
+            row = group.end;
+            continue;
+        }
+
+        let mut hasher = DefaultHasher::new();
+        for idx in group.start..group.end {
+            if let Some(row) = snapshot.row(idx) {
+                row.signature.hash(&mut hasher);
+                row.wrapped.hash(&mut hasher);
+            }
+        }
+        let group_key = hasher.finish();
+        for (idx, key) in keys
+            .iter_mut()
+            .enumerate()
+            .take(group.end)
+            .skip(group.start)
+        {
+            *key = Some(TerminalKeywordRowReuseKey::Wrapped {
+                group_key,
+                row_offset: idx.saturating_sub(group.start),
+            });
+        }
+        row = group.end;
+    }
+    keys
+}
+
 fn terminal_keyword_ranges_for_wrapped_group(
     snapshot: &TerminalSnapshot,
     rows: Range<usize>,
     highlighter: &TerminalKeywordHighlighter,
+    mut stats: Option<&mut TerminalKeywordHighlightPrecomputeStats>,
 ) -> Vec<Vec<TerminalKeywordRange>> {
+    let range_build_started = Instant::now();
     let row_count = rows.end.saturating_sub(rows.start);
     let mut row_ranges = vec![Vec::new(); row_count];
     if highlighter.compiled.is_empty() || row_count == 0 {
@@ -342,11 +431,21 @@ fn terminal_keyword_ranges_for_wrapped_group(
             }));
         }
     }
+    let line_build_duration = range_build_started.elapsed();
     if line.is_empty() || byte_cells.is_empty() {
+        if let Some(stats) = stats.as_mut() {
+            stats.range_build_duration_us = stats
+                .range_build_duration_us
+                .saturating_add(duration_micros_u64(line_build_duration));
+        }
         return row_ranges;
     }
 
-    for (start, end, color) in keyword_matches_compiled(&line, &highlighter.compiled) {
+    let match_started = Instant::now();
+    let matches = keyword_matches_compiled(&line, &highlighter.compiled);
+    let match_duration = match_started.elapsed();
+    let range_map_started = Instant::now();
+    for (start, end, color) in matches {
         if start >= end || end > byte_cells.len() {
             continue;
         }
@@ -368,23 +467,37 @@ fn terminal_keyword_ranges_for_wrapped_group(
             }
         }
     }
+    if let Some(stats) = stats.as_mut() {
+        stats.match_duration_us = stats
+            .match_duration_us
+            .saturating_add(duration_micros_u64(match_duration));
+        stats.range_build_duration_us = stats
+            .range_build_duration_us
+            .saturating_add(duration_micros_u64(line_build_duration))
+            .saturating_add(duration_micros_u64(range_map_started.elapsed()));
+    }
 
     row_ranges
 }
 
+fn duration_micros_u64(duration: Duration) -> u64 {
+    duration.as_micros().min(u128::from(u64::MAX)) as u64
+}
+
 pub(super) fn keyword_matches_compiled(
     line: &str,
-    compiled: &[(regex::Regex, u32)],
+    compiled: &[CompiledKeywordRule],
 ) -> Vec<(usize, usize, u32)> {
     let mut pending = compiled
         .iter()
-        .enumerate()
-        .map(|(priority, (regex, color))| {
-            find_next_non_empty_match(regex, line, 0).map(|(start, end)| PendingKeywordMatch {
-                start,
-                end,
-                color: *color,
-                priority,
+        .map(|rule| {
+            find_next_non_empty_match(&rule.regex, line, 0).map(|(start, end)| {
+                PendingKeywordMatch {
+                    start,
+                    end,
+                    color: rule.color,
+                    priority: rule.priority,
+                }
             })
         })
         .collect::<Vec<_>>();
@@ -392,18 +505,17 @@ pub(super) fn keyword_matches_compiled(
     let mut cursor = 0;
 
     loop {
-        for (priority, ((regex, color), candidate)) in
-            compiled.iter().zip(pending.iter_mut()).enumerate()
-        {
+        for (rule, candidate) in compiled.iter().zip(pending.iter_mut()) {
             if candidate.is_some_and(|candidate| candidate.start < cursor) {
-                *candidate = find_next_non_empty_match(regex, line, cursor).map(|(start, end)| {
-                    PendingKeywordMatch {
-                        start,
-                        end,
-                        color: *color,
-                        priority,
-                    }
-                });
+                *candidate =
+                    find_next_non_empty_match(&rule.regex, line, cursor).map(|(start, end)| {
+                        PendingKeywordMatch {
+                            start,
+                            end,
+                            color: rule.color,
+                            priority: rule.priority,
+                        }
+                    });
             }
         }
 
@@ -514,7 +626,7 @@ pub(super) fn terminal_keyword_palette_key(palette: nyaterm_ui::ThemePalette) ->
 
 pub(super) fn keyword_highlight_spans_compiled(
     line: &str,
-    compiled: &[(regex::Regex, u32)],
+    compiled: &[CompiledKeywordRule],
 ) -> Vec<TerminalHighlightSpan> {
     if compiled.is_empty() || line.is_empty() {
         return vec![TerminalHighlightSpan {
@@ -591,20 +703,13 @@ pub(super) fn compile_keyword_rules(
     let mut compiled = Vec::new();
     for rule in rules.iter().filter(|rule| rule.enabled) {
         let color = parse_hex_rgb(&rule.color).unwrap_or(0x79c0ff);
-        let mut alts = Vec::new();
-        for pattern in rule
+        let alts = rule
             .patterns
             .iter()
             .map(|p| p.trim())
             .filter(|p| !p.is_empty())
-        {
-            // Validate each alternative; skip invalid regex like Tauri.
-            if regex::Regex::new(&format!("(?i)(?:{pattern})")).is_ok()
-                || regex::Regex::new(pattern).is_ok()
-            {
-                alts.push(pattern.to_string());
-            }
-        }
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
         if alts.is_empty() {
             continue;
         }
@@ -616,22 +721,22 @@ pub(super) fn compile_keyword_rules(
                 .collect::<Vec<_>>()
                 .join("|")
         };
-        let pattern = if combined.contains("(?i)") || combined.contains("(?-i)") {
-            combined
-        } else {
-            format!("(?i){combined}")
-        };
+        let pattern = keyword_pattern_with_default_case(&combined);
         match regex::Regex::new(&pattern) {
-            Ok(regex) => compiled.push((regex, color)),
+            Ok(regex) => compiled.push(CompiledKeywordRule {
+                regex,
+                color,
+                priority: compiled.len(),
+            }),
             Err(_) => {
                 for alt in alts {
-                    let pat = if alt.contains("(?i)") {
-                        alt
-                    } else {
-                        format!("(?i){alt}")
-                    };
-                    if let Ok(regex) = regex::Regex::new(&pat) {
-                        compiled.push((regex, color));
+                    let pattern = keyword_pattern_with_default_case(&alt);
+                    if let Ok(regex) = regex::Regex::new(&pattern) {
+                        compiled.push(CompiledKeywordRule {
+                            regex,
+                            color,
+                            priority: compiled.len(),
+                        });
                     }
                 }
             }
@@ -639,6 +744,19 @@ pub(super) fn compile_keyword_rules(
     }
     compiled
 }
+
+fn keyword_pattern_with_default_case(pattern: &str) -> String {
+    if keyword_pattern_has_inline_case_flag(pattern) {
+        pattern.to_string()
+    } else {
+        format!("(?i){pattern}")
+    }
+}
+
+fn keyword_pattern_has_inline_case_flag(pattern: &str) -> bool {
+    pattern.contains("(?i)") || pattern.contains("(?-i)")
+}
+
 pub fn terminal_buffer_matches(
     output: &str,
     query: &str,
@@ -737,10 +855,12 @@ mod tests {
     };
 
     use super::{
-        TerminalKeywordHighlightLookup, compile_terminal_keyword_highlighter,
-        keyword_highlight_spans_compiled, keyword_matches_compiled,
-        precompute_terminal_keyword_highlights, precompute_terminal_keyword_highlights_for_rows,
-        terminal_buffer_matches,
+        CompiledKeywordRule, TerminalKeywordHighlightLookup, compile_keyword_rules,
+        compile_terminal_keyword_highlighter, keyword_highlight_spans_compiled,
+        keyword_matches_compiled, precompute_terminal_keyword_highlights,
+        precompute_terminal_keyword_highlights_for_rows,
+        precompute_terminal_keyword_highlights_for_rows_with_stats, terminal_buffer_matches,
+        terminal_keyword_row_reuse_keys,
     };
     use crate::element::TerminalSearchFlags;
     use crate::types::TerminalKeywordRange;
@@ -842,14 +962,14 @@ mod tests {
 
     fn keyword_matches_reference(
         line: &str,
-        compiled: &[(regex::Regex, u32)],
+        compiled: &[CompiledKeywordRule],
     ) -> Vec<(usize, usize, u32)> {
         let mut matches = Vec::new();
         let mut cursor = 0;
         while cursor < line.len() {
             let mut best: Option<(usize, usize, u32)> = None;
-            for (regex, color) in compiled {
-                if let Some(found) = regex.find_at(line, cursor) {
+            for rule in compiled {
+                if let Some(found) = rule.regex.find_at(line, cursor) {
                     let start = found.start();
                     let end = found.end();
                     if end <= start {
@@ -861,7 +981,7 @@ mod tests {
                         })
                         .unwrap_or(true);
                     if replace {
-                        best = Some((start, end, *color));
+                        best = Some((start, end, rule.color));
                     }
                 }
             }
@@ -875,13 +995,21 @@ mod tests {
         matches
     }
 
+    fn compiled_rules(patterns: &[(&str, u32)]) -> Vec<CompiledKeywordRule> {
+        patterns
+            .iter()
+            .enumerate()
+            .map(|(priority, (pattern, color))| CompiledKeywordRule {
+                regex: regex::Regex::new(pattern).unwrap(),
+                color: *color,
+                priority,
+            })
+            .collect()
+    }
+
     #[test]
     fn keyword_highlights_keep_earliest_longest_and_rule_priority() {
-        let compiled = vec![
-            (regex::Regex::new("ERR").unwrap(), 1),
-            (regex::Regex::new("ERROR").unwrap(), 2),
-            (regex::Regex::new("ERROR").unwrap(), 3),
-        ];
+        let compiled = compiled_rules(&[("ERR", 1), ("ERROR", 2), ("ERROR", 3)]);
 
         assert_eq!(
             keyword_matches_compiled("x ERROR ERR", &compiled),
@@ -903,7 +1031,7 @@ mod tests {
 
     #[test]
     fn keyword_matches_return_contiguous_matches_for_one_rule() {
-        let compiled = vec![(regex::Regex::new("ERROR").unwrap(), 0xff2244)];
+        let compiled = compiled_rules(&[("ERROR", 0xff2244)]);
 
         assert_eq!(
             keyword_matches_compiled("ERROR ERROR ERROR", &compiled),
@@ -913,10 +1041,7 @@ mod tests {
 
     #[test]
     fn keyword_matches_choose_longest_match_at_same_start() {
-        let compiled = vec![
-            (regex::Regex::new("ERR").unwrap(), 1),
-            (regex::Regex::new("ERROR").unwrap(), 2),
-        ];
+        let compiled = compiled_rules(&[("ERR", 1), ("ERROR", 2)]);
 
         assert_eq!(
             keyword_matches_compiled("ERROR", &compiled),
@@ -926,10 +1051,7 @@ mod tests {
 
     #[test]
     fn keyword_matches_keep_first_rule_for_identical_range() {
-        let compiled = vec![
-            (regex::Regex::new("ERROR").unwrap(), 1),
-            (regex::Regex::new("ERROR").unwrap(), 2),
-        ];
+        let compiled = compiled_rules(&[("ERROR", 1), ("ERROR", 2)]);
 
         assert_eq!(
             keyword_matches_compiled("ERROR", &compiled),
@@ -939,10 +1061,7 @@ mod tests {
 
     #[test]
     fn keyword_matches_refresh_overlapped_candidate_after_cursor_moves() {
-        let compiled = vec![
-            (regex::Regex::new("XXa12").unwrap(), 1),
-            (regex::Regex::new("a.*?b").unwrap(), 2),
-        ];
+        let compiled = compiled_rules(&[("XXa12", 1), ("a.*?b", 2)]);
 
         assert_eq!(
             keyword_matches_compiled("XXa12a3b", &compiled),
@@ -953,7 +1072,7 @@ mod tests {
     #[test]
     fn keyword_matches_preserve_unicode_byte_boundaries() {
         let line = "前ERROR后";
-        let compiled = vec![(regex::Regex::new("ERROR").unwrap(), 0xff2244)];
+        let compiled = compiled_rules(&[("ERROR", 0xff2244)]);
         let matches = keyword_matches_compiled(line, &compiled);
 
         assert_eq!(matches, vec![(3, 8, 0xff2244)]);
@@ -964,12 +1083,7 @@ mod tests {
 
     #[test]
     fn keyword_matches_skip_zero_length_rules_without_losing_later_matches() {
-        let compiled = vec![
-            (regex::Regex::new("^").unwrap(), 1),
-            (regex::Regex::new(r"\b").unwrap(), 2),
-            (regex::Regex::new("a*").unwrap(), 3),
-            (regex::Regex::new("ERROR").unwrap(), 4),
-        ];
+        let compiled = compiled_rules(&[("^", 1), (r"\b", 2), ("a*", 3), ("ERROR", 4)]);
 
         assert_eq!(
             keyword_matches_compiled("b ERROR", &compiled),
@@ -980,10 +1094,7 @@ mod tests {
     #[test]
     fn keyword_highlight_spans_follow_compiled_matches() {
         let line = "pre ERROR mid WARN end";
-        let compiled = vec![
-            (regex::Regex::new("ERROR").unwrap(), 0xff2244),
-            (regex::Regex::new("WARN").unwrap(), 0xffcc00),
-        ];
+        let compiled = compiled_rules(&[("ERROR", 0xff2244), ("WARN", 0xffcc00)]);
         let matches = keyword_matches_compiled(line, &compiled);
         let spans = keyword_highlight_spans_compiled(line, &compiled);
 
@@ -1018,7 +1129,12 @@ mod tests {
         for (line, patterns) in cases {
             let compiled = patterns
                 .into_iter()
-                .map(|(pattern, color)| (regex::Regex::new(pattern).unwrap(), color))
+                .enumerate()
+                .map(|(priority, (pattern, color))| CompiledKeywordRule {
+                    regex: regex::Regex::new(pattern).unwrap(),
+                    color,
+                    priority,
+                })
                 .collect::<Vec<_>>();
 
             assert_eq!(
@@ -1027,6 +1143,131 @@ mod tests {
                 "line: {line}"
             );
         }
+    }
+
+    #[test]
+    fn compile_keyword_rules_skips_invalid_patterns_without_dropping_rule() {
+        let rules = vec![ResolvedKeywordHighlightRule {
+            id: "mixed".to_string(),
+            name: "Mixed".to_string(),
+            patterns: vec!["ERROR".to_string(), "(".to_string()],
+            color: "#ff2244".to_string(),
+            enabled: true,
+        }];
+        let compiled = compile_keyword_rules(&rules);
+
+        assert_eq!(compiled.len(), 1);
+        assert_eq!(
+            keyword_matches_compiled("prefix ERROR suffix", &compiled),
+            vec![(7, 12, 0xff2244)]
+        );
+    }
+
+    #[test]
+    #[ignore]
+    fn keyword_highlight_benchmark() {
+        let rules = nyaterm_core::get_builtin_keyword_rules(true);
+        let compiled = compile_keyword_rules(&rules);
+        let cases = [
+            (
+                "no-match",
+                benchmark_lines("plain alphabet segment with calm filler ", 200, 200),
+            ),
+            (
+                "sparse",
+                benchmark_lines("prefix INFO user=42 ok=true trailing text ", 200, 200),
+            ),
+            (
+                "dense",
+                benchmark_lines(
+                    "2026-08-01 22:30:01 ERROR user=123 status=500 retry=3 duration=15ms a+b=c ",
+                    200,
+                    200,
+                ),
+            ),
+            (
+                "unicode",
+                benchmark_lines(
+                    "错误 ERROR 用户=张三 状态=500 界面=a\u{301} 🚀 duration=15ms ",
+                    200,
+                    200,
+                ),
+            ),
+            (
+                "dense-short-token",
+                benchmark_lines("E W I 1 2 3 + - = / E W I 4 5 6 ", 200, 200),
+            ),
+        ];
+        let iterations = 10usize;
+        println!(
+            "case,rows,rules,ranges,iterations,old_match_us,new_match_us,new_span_us,span_count,text_run_count"
+        );
+        for (case, lines) in cases {
+            let mut warmup = 0usize;
+            for line in &lines {
+                warmup = warmup.saturating_add(keyword_matches_compiled(line, &compiled).len());
+            }
+            std::hint::black_box(warmup);
+
+            let old_started = std::time::Instant::now();
+            let mut old_ranges = 0usize;
+            for _ in 0..iterations {
+                for line in &lines {
+                    old_ranges =
+                        old_ranges.saturating_add(keyword_matches_reference(line, &compiled).len());
+                }
+            }
+            let old_duration = old_started.elapsed();
+
+            let new_started = std::time::Instant::now();
+            let mut new_ranges = 0usize;
+            for _ in 0..iterations {
+                for line in &lines {
+                    new_ranges =
+                        new_ranges.saturating_add(keyword_matches_compiled(line, &compiled).len());
+                }
+            }
+            let new_duration = new_started.elapsed();
+
+            let span_started = std::time::Instant::now();
+            let mut span_count = 0usize;
+            for _ in 0..iterations {
+                for line in &lines {
+                    span_count = span_count
+                        .saturating_add(keyword_highlight_spans_compiled(line, &compiled).len());
+                }
+            }
+            let span_duration = span_started.elapsed();
+
+            let divisor = iterations.max(1) as u128;
+            println!(
+                "{case},{},{},{},{iterations},{},{},{},{},{}",
+                lines.len(),
+                compiled.len(),
+                new_ranges / iterations.max(1),
+                old_duration.as_micros() / divisor,
+                new_duration.as_micros() / divisor,
+                span_duration.as_micros() / divisor,
+                span_count / iterations.max(1),
+                span_count / iterations.max(1),
+            );
+            std::hint::black_box(old_ranges);
+        }
+    }
+
+    fn benchmark_lines(seed: &str, rows: usize, cols: usize) -> Vec<String> {
+        (0..rows)
+            .map(|idx| {
+                let mut line = format!("{idx:04} {seed}");
+                while line.len() < cols {
+                    line.push_str(seed);
+                }
+                while line.len() > cols {
+                    line.pop();
+                }
+                line
+            })
+            .collect()
     }
 
     #[test]
@@ -1230,6 +1471,47 @@ mod tests {
     }
 
     #[test]
+    fn precomputed_keyword_stats_count_reused_rows_and_ranges() {
+        let mut snapshot = TerminalScreen::default().snapshot();
+        for (row, signature) in [(0, 41), (1, 42)] {
+            set_snapshot_row(&mut snapshot, row, format!("row {row} ERROR"), signature);
+        }
+        let rules = vec![ResolvedKeywordHighlightRule {
+            id: "error".to_string(),
+            name: "Error".to_string(),
+            patterns: vec!["ERROR".to_string()],
+            color: "#ff2244".to_string(),
+            enabled: true,
+        }];
+        let highlighter = compile_terminal_keyword_highlighter(&rules);
+        let palette = nyaterm_ui::theme_palette("github-dark");
+
+        let (first, first_stats) = precompute_terminal_keyword_highlights_for_rows_with_stats(
+            &snapshot,
+            &highlighter,
+            palette,
+            None,
+            0..1,
+        );
+        assert_eq!(first_stats.requested_rows, 1);
+        assert_eq!(first_stats.known_rows, 1);
+        assert_eq!(first_stats.range_count, 1);
+        assert_eq!(first_stats.reused_rows, 0);
+
+        let (_second, second_stats) = precompute_terminal_keyword_highlights_for_rows_with_stats(
+            &snapshot,
+            &highlighter,
+            palette,
+            Some(&first),
+            0..2,
+        );
+        assert_eq!(second_stats.requested_rows, 2);
+        assert_eq!(second_stats.known_rows, 2);
+        assert_eq!(second_stats.range_count, 2);
+        assert_eq!(second_stats.reused_rows, 1);
+    }
+
+    #[test]
     fn precomputed_keyword_snapshot_reuses_matching_rows_after_scroll() {
         let mut snapshot = TerminalScreen::default().snapshot();
         set_snapshot_row(&mut snapshot, 0, "prefix ERROR suffix", 41);
@@ -1349,6 +1631,40 @@ mod tests {
                 end_col: 2,
                 color: 0xff2244,
             }]
+        );
+    }
+
+    #[test]
+    fn wrapped_row_reuse_keys_share_group_key_with_row_offsets() {
+        let screen = TerminalScreen::new(3, 4);
+        let mut snapshot = screen.snapshot();
+        set_snapshot_row_wrapped(&mut snapshot, 0, "ERR", 41, false);
+        set_snapshot_row_wrapped(&mut snapshot, 1, "OR ", 42, true);
+        set_snapshot_row_wrapped(&mut snapshot, 2, "END", 43, true);
+
+        let keys = terminal_keyword_row_reuse_keys(&snapshot);
+
+        assert_eq!(keys.len(), snapshot.row_count());
+        let Some(super::TerminalKeywordRowReuseKey::Wrapped {
+            group_key: first_group,
+            row_offset: 0,
+        }) = keys[0]
+        else {
+            panic!("first row should be wrapped group key");
+        };
+        assert_eq!(
+            keys[1],
+            Some(super::TerminalKeywordRowReuseKey::Wrapped {
+                group_key: first_group,
+                row_offset: 1,
+            })
+        );
+        assert_eq!(
+            keys[2],
+            Some(super::TerminalKeywordRowReuseKey::Wrapped {
+                group_key: first_group,
+                row_offset: 2,
+            })
         );
     }
 

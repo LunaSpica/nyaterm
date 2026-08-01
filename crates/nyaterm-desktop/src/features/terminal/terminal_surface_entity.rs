@@ -19,8 +19,8 @@ use crate::models::{TerminalPerformanceOverlay, TerminalProtocolState, TerminalS
 use crate::terminal::{
     NyaTerminalElement, NyaTerminalLayoutCache, TerminalKeywordHighlightSnapshot,
     TerminalKeywordHighlighter, TerminalLineDecorations, compile_terminal_keyword_highlighter,
-    precompute_terminal_keyword_highlights_for_rows, terminal_keyword_highlight_expanded_rows,
-    terminal_keyword_rules_key,
+    precompute_terminal_keyword_highlights_for_rows_with_stats,
+    terminal_keyword_highlight_expanded_rows, terminal_keyword_rules_key,
 };
 use crate::theme::ThemePalette;
 use std::collections::hash_map::DefaultHasher;
@@ -42,7 +42,9 @@ const TERMINAL_SURFACE_SCROLL_PENDING_WARN_AFTER: Duration = Duration::from_mill
 const TERMINAL_SURFACE_SCROLL_PENDING_WARN_INTERVAL: Duration = Duration::from_millis(500);
 const TERMINAL_SURFACE_LOCAL_SCROLL_SYNC_DELAY: Duration = Duration::from_millis(16);
 const TERMINAL_KEYWORD_HIGHLIGHT_PREFETCH_VIEWPORTS: usize = 2;
+const TERMINAL_KEYWORD_HIGHLIGHT_PRESSURE_PREFETCH_VIEWPORTS: usize = 0;
 const TERMINAL_KEYWORD_HIGHLIGHT_SLOW: Duration = Duration::from_millis(8);
+const TERMINAL_KEYWORD_HIGHLIGHT_PRESSURE_THROTTLE: Duration = Duration::from_millis(50);
 
 #[derive(Clone)]
 struct TerminalSurfacePendingScrollSync {
@@ -89,6 +91,29 @@ fn terminal_keyword_highlight_request_key(
         row_start,
         row_end,
         line_signatures_key: hasher.finish(),
+    }
+}
+
+fn terminal_keyword_highlight_prefetch_viewports(output_pressure: bool) -> usize {
+    if output_pressure {
+        TERMINAL_KEYWORD_HIGHLIGHT_PRESSURE_PREFETCH_VIEWPORTS
+    } else {
+        TERMINAL_KEYWORD_HIGHLIGHT_PREFETCH_VIEWPORTS
+    }
+}
+
+fn terminal_keyword_highlight_pressure_delay(
+    output_pressure: bool,
+    elapsed_since_last_start: Option<Duration>,
+) -> Option<Duration> {
+    if !output_pressure {
+        return None;
+    }
+    let elapsed = elapsed_since_last_start?;
+    if elapsed < TERMINAL_KEYWORD_HIGHLIGHT_PRESSURE_THROTTLE {
+        Some(TERMINAL_KEYWORD_HIGHLIGHT_PRESSURE_THROTTLE - elapsed)
+    } else {
+        None
     }
 }
 
@@ -211,7 +236,10 @@ pub(in crate::features) struct TerminalSurface {
     keyword_highlights: Option<Arc<TerminalKeywordHighlightSnapshot>>,
     keyword_highlight_generation: u64,
     keyword_highlight_task: Option<gpui::Task<()>>,
+    keyword_highlight_deferred_task: Option<gpui::Task<()>>,
     keyword_highlight_pending_key: Option<TerminalKeywordHighlightRequestKey>,
+    keyword_highlight_last_started_at: Option<Instant>,
+    keyword_highlight_output_pressure: bool,
     keyword_highlighter_rules: Option<Arc<Vec<nyaterm_core::ResolvedKeywordHighlightRule>>>,
     keyword_highlighter: Option<Arc<TerminalKeywordHighlighter>>,
     decorations: Arc<[TerminalLineDecorations]>,
@@ -266,7 +294,10 @@ impl TerminalSurface {
             keyword_highlights: None,
             keyword_highlight_generation: 0,
             keyword_highlight_task: None,
+            keyword_highlight_deferred_task: None,
             keyword_highlight_pending_key: None,
+            keyword_highlight_last_started_at: None,
+            keyword_highlight_output_pressure: false,
             keyword_highlighter_rules: None,
             keyword_highlighter: None,
             decorations: Arc::from(Vec::<TerminalLineDecorations>::new()),
@@ -1270,8 +1301,13 @@ impl TerminalSurface {
     pub(in crate::features) fn schedule_keyword_highlights(
         &mut self,
         clear_if_empty: bool,
+        output_pressure: bool,
         cx: &mut Context<Self>,
     ) {
+        self.keyword_highlight_output_pressure = output_pressure;
+        if !output_pressure {
+            self.keyword_highlight_deferred_task = None;
+        }
         if self.handle_empty_keyword_rules_for_highlights(clear_if_empty) {
             return;
         }
@@ -1301,11 +1337,13 @@ impl TerminalSurface {
             }
             return;
         }
+        let prefetch_viewports = terminal_keyword_highlight_prefetch_viewports(output_pressure);
         let requested_rows = terminal_keyword_highlight_prefetch_rows(
             snapshot.as_ref(),
             self.display_offset,
             self.viewport_rows,
             self.scrollback_len,
+            prefetch_viewports,
         );
         let requested_row_count = requested_rows.len();
         let requested_rows =
@@ -1316,39 +1354,53 @@ impl TerminalSurface {
             rules_key,
             requested_rows.clone(),
         );
-        if self.keyword_highlight_pending_key == Some(request_key) {
+        if self.keyword_highlight_pending_key == Some(request_key)
+            && (self.keyword_highlight_task.is_some()
+                || self.keyword_highlight_deferred_task.is_some())
+        {
             return;
         }
+        self.keyword_highlight_pending_key = Some(request_key);
         // Let one parse finish, then have its completion schedule the newest
         // surface snapshot. Replacing the task on every output frame can starve
         // highlighting indefinitely during continuous input.
         if self.keyword_highlight_task.is_some() {
             return;
         }
+        if let Some(delay) = terminal_keyword_highlight_pressure_delay(
+            output_pressure,
+            self.keyword_highlight_last_started_at
+                .map(|last_started_at| last_started_at.elapsed()),
+        ) {
+            self.schedule_deferred_keyword_highlights(clear_if_empty, delay, cx);
+            return;
+        }
         self.keyword_highlight_generation = self.keyword_highlight_generation.saturating_add(1);
         let generation = self.keyword_highlight_generation;
-        self.keyword_highlight_pending_key = Some(request_key);
+        let now = Instant::now();
+        self.keyword_highlight_last_started_at = Some(now);
         // Keep the last published snapshot drawable while the replacement is parsed in the
         // background, matching the editor's stale-until-reparsed behavior.
         let highlighter = self.cached_keyword_highlighter_for_rules(&rules);
         let palette = self.palette;
         let previous_highlights = self.keyword_highlights.clone();
         self.keyword_highlight_task = Some(cx.spawn(async move |this, cx| {
-            let (rules, highlighter, highlights, highlight_duration) = cx
+            let (rules, highlighter, highlights, stats, highlight_duration) = cx
                 .background_spawn(async move {
                     let highlighter = highlighter.unwrap_or_else(|| {
                         Arc::new(compile_terminal_keyword_highlighter(rules.as_ref()))
                     });
                     let highlight_started_at = Instant::now();
-                    let highlights = precompute_terminal_keyword_highlights_for_rows(
-                        snapshot.as_ref(),
-                        highlighter.as_ref(),
-                        palette,
-                        previous_highlights.as_deref(),
-                        requested_rows,
-                    );
+                    let (highlights, stats) =
+                        precompute_terminal_keyword_highlights_for_rows_with_stats(
+                            snapshot.as_ref(),
+                            highlighter.as_ref(),
+                            palette,
+                            previous_highlights.as_deref(),
+                            requested_rows,
+                        );
                     let highlight_duration = highlight_started_at.elapsed();
-                    (rules, highlighter, highlights, highlight_duration)
+                    (rules, highlighter, highlights, stats, highlight_duration)
                 })
                 .await;
             let _ = this.update(cx, |this, cx| {
@@ -1364,10 +1416,14 @@ impl TerminalSurface {
                             diagnostic = "terminal_keyword_highlight_slow",
                             session_id = %this.session_id,
                             rules = rules.len(),
-                            requested_rows = requested_row_count,
+                            requested_rows = stats.requested_rows,
+                            original_requested_rows = requested_row_count,
                             expanded_rows = expanded_requested_row_count,
-                            known_rows = highlights.known_row_count(),
-                            ranges = highlights.range_count(),
+                            known_rows = stats.known_rows,
+                            range_count = stats.range_count,
+                            reused_rows = stats.reused_rows,
+                            match_duration_us = stats.match_duration_us,
+                            range_build_duration_us = stats.range_build_duration_us,
                             duration_us = highlight_duration.as_micros(),
                             "slow terminal keyword highlight precompute"
                         );
@@ -1379,7 +1435,33 @@ impl TerminalSurface {
                 }
                 // The surface may have advanced while this task was running.
                 // Schedule exactly one follow-up for its latest snapshot.
-                this.schedule_keyword_highlights(clear_if_empty, cx);
+                this.schedule_keyword_highlights(
+                    clear_if_empty,
+                    this.keyword_highlight_output_pressure,
+                    cx,
+                );
+            });
+        }));
+    }
+
+    fn schedule_deferred_keyword_highlights(
+        &mut self,
+        clear_if_empty: bool,
+        delay: Duration,
+        cx: &mut Context<Self>,
+    ) {
+        if self.keyword_highlight_deferred_task.is_some() {
+            return;
+        }
+        self.keyword_highlight_deferred_task = Some(cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(delay).await;
+            let _ = this.update(cx, |this, cx| {
+                this.keyword_highlight_deferred_task = None;
+                this.schedule_keyword_highlights(
+                    clear_if_empty,
+                    this.keyword_highlight_output_pressure,
+                    cx,
+                );
             });
         }));
     }
@@ -1390,6 +1472,8 @@ impl TerminalSurface {
         }
         if clear_if_empty {
             self.cancel_pending_keyword_highlights();
+            self.keyword_highlight_last_started_at = None;
+            self.keyword_highlight_output_pressure = false;
             self.keyword_highlighter_rules = None;
             self.keyword_highlighter = None;
             self.keyword_highlights = None;
@@ -1408,11 +1492,15 @@ impl TerminalSurface {
     }
 
     fn cancel_pending_keyword_highlights(&mut self) {
-        if self.keyword_highlight_task.is_none() && self.keyword_highlight_pending_key.is_none() {
+        if self.keyword_highlight_task.is_none()
+            && self.keyword_highlight_deferred_task.is_none()
+            && self.keyword_highlight_pending_key.is_none()
+        {
             return;
         }
         self.keyword_highlight_generation = self.keyword_highlight_generation.saturating_add(1);
         self.keyword_highlight_task = None;
+        self.keyword_highlight_deferred_task = None;
         self.keyword_highlight_pending_key = None;
     }
 
@@ -1629,7 +1717,7 @@ impl TerminalSurface {
         {
             if result.visual_changed {
                 let state = self.current_scroll_visual_state();
-                self.schedule_keyword_highlights(false, cx);
+                self.schedule_keyword_highlights(false, false, cx);
                 cx.notify();
                 let mut request_offsets = Vec::new();
                 if result.needs_text_snapshot && state.display_offset > 0 {
@@ -2079,6 +2167,7 @@ fn terminal_keyword_highlight_prefetch_rows(
     display_offset: usize,
     viewport_rows: usize,
     scrollback_len: usize,
+    prefetch_viewports: usize,
 ) -> Range<usize> {
     let viewport_rows = viewport_rows.max(1);
     let anchor = terminal_snapshot_anchor_row_for_display_offset(
@@ -2087,7 +2176,7 @@ fn terminal_keyword_highlight_prefetch_rows(
         viewport_rows,
         scrollback_len,
     );
-    let extra_rows = viewport_rows.saturating_mul(TERMINAL_KEYWORD_HIGHLIGHT_PREFETCH_VIEWPORTS);
+    let extra_rows = viewport_rows.saturating_mul(prefetch_viewports);
     let start = anchor
         .saturating_sub(extra_rows)
         .saturating_sub(1)

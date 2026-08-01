@@ -9,7 +9,7 @@ use nyaterm_terminal::{TerminalScreen, TerminalSnapshot};
 use super::{
     NyaTerminalElement, NyaTerminalLayoutCache, TERMINAL_LAYOUT_CACHE_ROW_CAP,
     TerminalKeywordLayoutState, TerminalLineDecorations, TerminalRowBackgroundRange,
-    TerminalRowUnderlineRange, hash_styled_spans, pad_wide_cells,
+    TerminalRowUnderlineRange, append_padded_wide_cells, hash_styled_spans, pad_wide_cells,
     push_dynamic_decoration_backgrounds, push_dynamic_link_underlines,
     terminal_background_ranges_for_spans, terminal_cursor_cell_hidden,
     terminal_glyph_decorations_needed, terminal_layout_height_px, terminal_layout_prefetch_row,
@@ -21,7 +21,7 @@ use crate::keywords::{
     compile_terminal_keyword_highlighter, precompute_terminal_keyword_highlights,
     terminal_keyword_rules_key,
 };
-use crate::paint::apply_action_link_ranges;
+use crate::paint::{apply_action_link_ranges, flatten_highlight_spans};
 use crate::types::{TerminalHighlightSpan, TerminalPaintGeometry};
 
 fn edit_snapshot_row(
@@ -31,6 +31,98 @@ fn edit_snapshot_row(
 ) {
     let rows = Arc::make_mut(&mut snapshot.row_data);
     edit(Arc::make_mut(&mut rows[row]));
+}
+
+#[test]
+fn append_padded_wide_cells_matches_allocating_padding() {
+    let input = "a界e\u{301} 🚀";
+    let expected = pad_wide_cells(input);
+    let mut output = String::from("prefix:");
+    let before = output.len();
+    let added = append_padded_wide_cells(&mut output, input);
+
+    assert_eq!(&output[before..], expected);
+    assert_eq!(added, expected.len());
+}
+
+#[test]
+fn underline_ranges_match_flatten_reference_for_wide_and_combining_text() {
+    let palette = nyaterm_ui::theme_palette("github-dark");
+    let spans = vec![
+        TerminalHighlightSpan {
+            text: "a界".to_string(),
+            color: Some(0xff2244),
+            bg: None,
+            keyword: true,
+            underline: true,
+            strikeout: false,
+            bold: false,
+            italic: false,
+        },
+        TerminalHighlightSpan {
+            text: "e\u{301}".to_string(),
+            color: Some(0xff2244),
+            bg: None,
+            keyword: true,
+            underline: true,
+            strikeout: false,
+            bold: false,
+            italic: false,
+        },
+        TerminalHighlightSpan {
+            text: "x".to_string(),
+            color: None,
+            bg: None,
+            keyword: false,
+            underline: false,
+            strikeout: false,
+            bold: false,
+            italic: false,
+        },
+    ];
+
+    let ranges = terminal_underline_ranges_for_spans(&spans, palette);
+    let reference = underline_ranges_from_flatten_reference(&spans, palette);
+
+    assert_eq!(underline_ranges_as_tuples(&ranges), reference);
+}
+
+fn underline_ranges_from_flatten_reference(
+    spans: &[TerminalHighlightSpan],
+    palette: nyaterm_ui::ThemePalette,
+) -> Vec<(u32, usize, usize)> {
+    let flat = flatten_highlight_spans(spans.to_vec());
+    let mut out = Vec::new();
+    let mut pending: Option<(u32, usize, usize)> = None;
+    for (col, cell) in flat.iter().enumerate() {
+        if cell.underline {
+            let color = cell.color.unwrap_or(palette.accent);
+            match pending.as_mut() {
+                Some((pending_color, _, end)) if *pending_color == color && *end == col => {
+                    *end = col + 1;
+                }
+                _ => {
+                    if let Some(range) = pending.take() {
+                        out.push(range);
+                    }
+                    pending = Some((color, col, col + 1));
+                }
+            }
+        } else if let Some(range) = pending.take() {
+            out.push(range);
+        }
+    }
+    if let Some(range) = pending {
+        out.push(range);
+    }
+    out
+}
+
+fn underline_ranges_as_tuples(ranges: &[TerminalRowUnderlineRange]) -> Vec<(u32, usize, usize)> {
+    ranges
+        .iter()
+        .map(|range| (range.color, range.start, range.end))
+        .collect()
 }
 
 #[test]

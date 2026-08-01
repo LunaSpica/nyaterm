@@ -19,10 +19,11 @@ pub use input::{
 };
 pub use keywords::terminal_buffer_matches;
 pub use keywords::{
-    TerminalKeywordHighlightSnapshot, TerminalKeywordHighlighter,
-    compile_terminal_keyword_highlighter, precompute_terminal_keyword_highlights,
-    precompute_terminal_keyword_highlights_for_rows, terminal_keyword_highlight_expanded_rows,
-    terminal_keyword_rules_key,
+    TerminalKeywordHighlightPrecomputeStats, TerminalKeywordHighlightSnapshot,
+    TerminalKeywordHighlighter, compile_terminal_keyword_highlighter,
+    precompute_terminal_keyword_highlights, precompute_terminal_keyword_highlights_for_rows,
+    precompute_terminal_keyword_highlights_for_rows_with_stats,
+    terminal_keyword_highlight_expanded_rows, terminal_keyword_rules_key,
 };
 
 #[cfg(test)]

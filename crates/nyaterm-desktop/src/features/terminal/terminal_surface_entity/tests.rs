@@ -1,23 +1,29 @@
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use crate::models::TerminalCellPos;
 use crate::models::{TerminalProtocolState, TerminalSelection};
 use crate::terminal::{
     TerminalLineDecorations, compile_terminal_keyword_highlighter, terminal_keyword_rules_key,
 };
+use gpui::{AppContext, TestAppContext};
 use nyaterm_terminal::{TerminalScreen, TerminalSnapshot};
 use nyaterm_terminal_gpui::precompute_terminal_keyword_highlights;
 
 use super::{
-    TerminalKeywordHighlightRequestKey, TerminalScrollVisualState, TerminalSurface,
-    TerminalSurfaceFrameSnapshot, TerminalSurfaceLocalScrollResult, TerminalVisualScrollGeometry,
-    empty_terminal_keyword_rules, terminal_effective_visual_scroll_offset_px,
-    terminal_keyword_highlight_prefetch_rows, terminal_keyword_highlight_request_key,
-    terminal_keyword_highlight_visible_rows, terminal_selection_visual_row_range,
-    terminal_selection_visual_row_union, terminal_snapshot_anchor_row_for_display_offset,
-    terminal_snapshot_covers_display_offset, terminal_surface_fractional_prefetch_offset,
-    terminal_surface_synthesized_window_extra_rows, terminal_surface_text_first_repaint_ready,
-    terminal_surface_visible_rows_for_viewport, terminal_visual_scroll_offset_px,
+    TERMINAL_KEYWORD_HIGHLIGHT_PREFETCH_VIEWPORTS,
+    TERMINAL_KEYWORD_HIGHLIGHT_PRESSURE_PREFETCH_VIEWPORTS,
+    TERMINAL_KEYWORD_HIGHLIGHT_PRESSURE_THROTTLE, TerminalKeywordHighlightRequestKey,
+    TerminalScrollVisualState, TerminalSurface, TerminalSurfaceFrameSnapshot,
+    TerminalSurfaceLocalScrollResult, TerminalVisualScrollGeometry, empty_terminal_keyword_rules,
+    terminal_effective_visual_scroll_offset_px, terminal_keyword_highlight_prefetch_rows,
+    terminal_keyword_highlight_prefetch_viewports, terminal_keyword_highlight_pressure_delay,
+    terminal_keyword_highlight_request_key, terminal_keyword_highlight_visible_rows,
+    terminal_selection_visual_row_range, terminal_selection_visual_row_union,
+    terminal_snapshot_anchor_row_for_display_offset, terminal_snapshot_covers_display_offset,
+    terminal_surface_fractional_prefetch_offset, terminal_surface_synthesized_window_extra_rows,
+    terminal_surface_text_first_repaint_ready, terminal_surface_visible_rows_for_viewport,
+    terminal_visual_scroll_offset_px,
 };
 
 macro_rules! apply_test_frame_snapshot {
@@ -323,6 +329,7 @@ fn keyword_highlight_prefetch_covers_two_viewports_of_local_scroll() {
         80,
         viewport_rows,
         snapshot.scrollback_len,
+        2,
     );
 
     for display_offset in 80..=80usize.saturating_add(viewport_rows.saturating_mul(2)) {
@@ -337,6 +344,144 @@ fn keyword_highlight_prefetch_covers_two_viewports_of_local_scroll() {
     }
     assert!(rows.len() <= viewport_rows.saturating_mul(5).saturating_add(2));
     assert!(snapshot.row_count() > rows.len());
+}
+
+#[test]
+fn keyword_highlight_prefetch_uses_visible_window_under_output_pressure() {
+    let mut screen = TerminalScreen::new(80, 24);
+    screen.advance_decoded_text(&terminal_test_output_lines(240));
+    let snapshot = screen.viewport_snapshot_with_window(80, 64, 64);
+    let viewport_rows = snapshot.viewport_rows;
+
+    let rows = terminal_keyword_highlight_prefetch_rows(
+        &snapshot,
+        80,
+        viewport_rows,
+        snapshot.scrollback_len,
+        0,
+    );
+    let visible_rows = terminal_keyword_highlight_visible_rows(
+        &snapshot,
+        80,
+        viewport_rows,
+        snapshot.scrollback_len,
+    );
+
+    assert_eq!(rows, visible_rows);
+    assert!(rows.len() <= viewport_rows.saturating_add(2));
+}
+
+#[test]
+fn keyword_highlight_prefetch_viewports_follow_output_pressure() {
+    assert_eq!(
+        terminal_keyword_highlight_prefetch_viewports(false),
+        TERMINAL_KEYWORD_HIGHLIGHT_PREFETCH_VIEWPORTS
+    );
+    assert_eq!(
+        terminal_keyword_highlight_prefetch_viewports(true),
+        TERMINAL_KEYWORD_HIGHLIGHT_PRESSURE_PREFETCH_VIEWPORTS
+    );
+}
+
+#[test]
+fn keyword_highlight_pressure_delay_uses_throttle_window() {
+    assert_eq!(
+        terminal_keyword_highlight_pressure_delay(false, Some(Duration::ZERO)),
+        None
+    );
+    assert_eq!(terminal_keyword_highlight_pressure_delay(true, None), None);
+    assert_eq!(
+        terminal_keyword_highlight_pressure_delay(true, Some(Duration::ZERO)),
+        Some(TERMINAL_KEYWORD_HIGHLIGHT_PRESSURE_THROTTLE)
+    );
+    assert_eq!(
+        terminal_keyword_highlight_pressure_delay(
+            true,
+            Some(TERMINAL_KEYWORD_HIGHLIGHT_PRESSURE_THROTTLE + Duration::from_millis(1)),
+        ),
+        None
+    );
+}
+
+#[test]
+fn keyword_highlight_deferred_task_coalesces_latest_snapshot_under_pressure() {
+    let mut cx = TestAppContext::single();
+    let surface = cx.new(|_| TerminalSurface::new("session"));
+    let mut first_screen = TerminalScreen::default();
+    first_screen.advance_decoded_text("alpha\n");
+    let first_snapshot = Arc::new(first_screen.viewport_snapshot(0));
+    let mut second_screen = TerminalScreen::default();
+    second_screen.advance_decoded_text("beta\n");
+    let second_snapshot = Arc::new(second_screen.viewport_snapshot(0));
+    let rules = Arc::new(vec![nyaterm_core::ResolvedKeywordHighlightRule {
+        id: "beta".to_string(),
+        name: "Beta".to_string(),
+        patterns: vec!["beta".to_string()],
+        color: "#ff0000".to_string(),
+        enabled: true,
+    }]);
+
+    cx.update_entity(&surface, |surface, cx| {
+        surface.keyword_rules = rules.clone();
+        apply_test_frame_snapshot!(
+            surface,
+            first_snapshot.clone(),
+            0,
+            0.0,
+            0,
+            first_snapshot.scrollback_len,
+            first_snapshot.viewport_rows,
+            false,
+            None,
+            0,
+            false,
+            false,
+            "block",
+        );
+        surface.keyword_highlight_last_started_at = Some(Instant::now());
+        surface.schedule_keyword_highlights(false, true, cx);
+        assert!(surface.keyword_highlight_deferred_task.is_some());
+        let first_pending_key = surface.keyword_highlight_pending_key;
+
+        apply_test_frame_snapshot!(
+            surface,
+            second_snapshot.clone(),
+            0,
+            0.0,
+            0,
+            second_snapshot.scrollback_len,
+            second_snapshot.viewport_rows,
+            false,
+            None,
+            0,
+            false,
+            false,
+            "block",
+        );
+        surface.schedule_keyword_highlights(false, true, cx);
+        assert!(surface.keyword_highlight_deferred_task.is_some());
+        assert_ne!(surface.keyword_highlight_pending_key, first_pending_key);
+        surface.keyword_highlight_last_started_at = None;
+    });
+
+    cx.executor()
+        .advance_clock(TERMINAL_KEYWORD_HIGHLIGHT_PRESSURE_THROTTLE);
+    cx.run_until_parked();
+
+    cx.read_entity(&surface, |surface, _| {
+        assert!(surface.keyword_highlight_deferred_task.is_none());
+        assert!(surface.keyword_highlight_task.is_none());
+        let highlights = surface
+            .keyword_highlights
+            .as_ref()
+            .expect("deferred task should publish latest highlights");
+        assert!(highlights.matches_snapshot_rows(
+            second_snapshot.as_ref(),
+            surface.palette,
+            0..second_snapshot.row_count(),
+        ));
+        assert_eq!(highlights.range_count(), 1);
+    });
 }
 
 #[test]

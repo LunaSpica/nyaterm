@@ -1,10 +1,10 @@
-use crate::keywords::keyword_highlight_spans_compiled;
+use crate::keywords::{CompiledKeywordRule, keyword_highlight_spans_compiled};
 use crate::types::TerminalHighlightSpan;
 
 pub(super) fn ansi_to_highlight_spans_compiled(
     ansi: &[nyaterm_terminal::StyledSpan],
     palette: nyaterm_ui::ThemePalette,
-    compiled_keyword_rules: &[(regex::Regex, u32)],
+    compiled_keyword_rules: &[CompiledKeywordRule],
 ) -> Vec<TerminalHighlightSpan> {
     // Build plain line for keyword overlay, then prefer keyword fg over default ANSI fg.
     let line: String = ansi.iter().map(|s| s.text.as_str()).collect();
@@ -134,6 +134,7 @@ fn push_ansi_segment(
 #[cfg(test)]
 mod tests {
     use super::ansi_to_highlight_spans_compiled;
+    use crate::keywords::CompiledKeywordRule;
 
     fn spans(text: &str, style: nyaterm_terminal::CellStyle) -> Vec<nyaterm_terminal::StyledSpan> {
         vec![nyaterm_terminal::StyledSpan {
@@ -142,11 +143,19 @@ mod tests {
         }]
     }
 
+    fn compiled(pattern: &str, color: u32) -> Vec<CompiledKeywordRule> {
+        vec![CompiledKeywordRule {
+            regex: regex::Regex::new(pattern).unwrap(),
+            color,
+            priority: 0,
+        }]
+    }
+
     #[test]
     fn keyword_overlay_splits_default_ansi_span_at_match_boundaries() {
         let palette = nyaterm_ui::theme_palette("github-dark");
         let keyword_color = 0xff2244;
-        let compiled = vec![(regex::Regex::new("ERROR").unwrap(), keyword_color)];
+        let compiled = compiled("ERROR", keyword_color);
 
         let highlighted = ansi_to_highlight_spans_compiled(
             &spans(
@@ -174,7 +183,7 @@ mod tests {
             fg_rgb: Some(0x112233),
             ..nyaterm_terminal::CellStyle::default()
         };
-        let compiled = vec![(regex::Regex::new("ERROR").unwrap(), 0xff2244)];
+        let compiled = compiled("ERROR", 0xff2244);
 
         let highlighted =
             ansi_to_highlight_spans_compiled(&spans("ERROR", style), palette, &compiled);
@@ -192,7 +201,7 @@ mod tests {
             hidden: true,
             ..nyaterm_terminal::CellStyle::default()
         };
-        let compiled = vec![(regex::Regex::new("secret").unwrap(), 0xff2244)];
+        let compiled = compiled("secret", 0xff2244);
 
         let highlighted =
             ansi_to_highlight_spans_compiled(&spans("secret", style), palette, &compiled);
@@ -207,7 +216,7 @@ mod tests {
     fn keyword_overlay_handles_multibyte_prefixes() {
         let palette = nyaterm_ui::theme_palette("github-dark");
         let keyword_color = 0xff2244;
-        let compiled = vec![(regex::Regex::new("ERROR").unwrap(), keyword_color)];
+        let compiled = compiled("ERROR", keyword_color);
 
         let highlighted = ansi_to_highlight_spans_compiled(
             &spans("界 ERROR", nyaterm_terminal::CellStyle::default()),
