@@ -653,14 +653,8 @@ impl NyaTermApp {
         } else {
             self.shell.runtime.cursor_blink_next_at = Some(now + CURSOR_BLINK_INTERVAL);
         }
-        // Visual BEL flash (~200ms at 50ms ticks).
-        if self.shell.runtime.visual_bell_ticks > 0 {
-            self.shell.runtime.visual_bell_ticks =
-                self.shell.runtime.visual_bell_ticks.saturating_sub(1);
-            surface_visual_dirty = true;
-        }
         if surface_visual_dirty {
-            // Cursor blink / bell are terminal-local; do not rebuild full shell.
+            // Cursor blink is terminal-local; do not rebuild full shell.
             self.notify_active_terminal_surface(cx);
         }
         let render_work_pressure = terminal_render_work_pressure_active(

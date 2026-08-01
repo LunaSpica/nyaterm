@@ -739,7 +739,6 @@ impl NyaTermApp {
             .cell_metrics
             .unwrap_or(((font_size * 0.6).max(6.0), (font_size * 1.35).max(12.0)));
         let is_active = self.session.active_id() == Some(session_id);
-        let visual_bell = is_active && self.shell.visual_bell_active();
         let layout_cache = view.render_cache.layout_cache.clone();
         let render_degraded =
             view.render_degraded || self.settings.summary().terminal_low_latency_mode;
@@ -826,7 +825,6 @@ impl NyaTermApp {
                 show_timestamps,
                 show_timestamp_ms,
                 is_active,
-                visual_bell,
             });
             changed |= surface.set_protocol_state(protocol_state);
             let had_pending_local_scroll_sync = surface.has_pending_local_scroll_sync();
@@ -1007,7 +1005,6 @@ impl NyaTermApp {
             .layout
             .cell_metrics
             .unwrap_or(((font_size * 0.6).max(6.0), (font_size * 1.35).max(12.0)));
-        let visual_bell = is_active && self.shell.visual_bell_active();
         let Some(snapshot) = snapshot else {
             if let Some(request_offset) = terminal_scroll_snapshot_request_offset(
                 scroll_offset,
@@ -1068,7 +1065,6 @@ impl NyaTermApp {
                     show_timestamps,
                     show_timestamp_ms,
                     is_active,
-                    visual_bell,
                 });
                 changed |= surface.set_protocol_state(protocol_state);
                 changed |= surface.update_scroll_chrome_without_snapshot(&scroll_state);
@@ -1297,7 +1293,6 @@ impl NyaTermApp {
                 show_timestamps,
                 show_timestamp_ms,
                 is_active,
-                visual_bell,
             });
             changed |= surface.set_protocol_state(protocol_state);
             let had_pending_local_scroll_sync = surface.has_pending_local_scroll_sync();
@@ -1565,7 +1560,7 @@ impl NyaTermApp {
         }
     }
 
-    /// Notify surface only (no full shell). Used for cursor blink / visual bell.
+    /// Notify surface only (no full shell). Used for cursor blink.
     pub(in crate::features) fn notify_active_terminal_surface(&mut self, cx: &mut Context<Self>) {
         let Some(session_id) = self.session.active_id_owned() else {
             return;

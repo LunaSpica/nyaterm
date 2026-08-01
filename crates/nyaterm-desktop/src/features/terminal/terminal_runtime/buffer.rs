@@ -1179,9 +1179,6 @@ impl NyaTermApp {
             pending_pty_writes = effects.pty_write;
             clipboard_store = effects.clipboard_store;
             clipboard_loads = effects.clipboard_loads;
-            if effects.bell {
-                self.shell.trigger_visual_bell();
-            }
             if let Some(title) = effects.title {
                 self.session.set_dynamic_title(session_id, Some(title));
             }
@@ -1207,9 +1204,6 @@ impl NyaTermApp {
             pending_pty_writes = effects.pty_write;
             clipboard_store = effects.clipboard_store;
             clipboard_loads = effects.clipboard_loads;
-            if effects.bell {
-                self.shell.trigger_visual_bell();
-            }
         }
 
         self.handle_terminal_clipboard_effects(
@@ -1260,9 +1254,6 @@ impl NyaTermApp {
         let mut pending_pty_writes = effects.pty_write;
         let mut clipboard_store = effects.clipboard_store;
         let mut clipboard_loads = effects.clipboard_loads;
-        if effects.bell {
-            self.shell.trigger_visual_bell();
-        }
         if let Some(title) = effects.title {
             self.session.set_dynamic_title(session_id, Some(title));
         }

@@ -150,7 +150,6 @@ pub(in crate::features) struct TerminalSurfacePaintChrome {
     pub show_timestamps: bool,
     pub show_timestamp_ms: bool,
     pub is_active: bool,
-    pub visual_bell: bool,
 }
 
 pub(in crate::features) struct TerminalSurfaceFrameSnapshot {
@@ -269,7 +268,6 @@ pub(in crate::features) struct TerminalSurface {
     has_action_link_decorations: bool,
     performance_overlay: Option<TerminalPerformanceOverlay>,
     skipped_output_chars: u64,
-    visual_bell: bool,
     transparent_background: bool,
     is_active: bool,
     protocol_state: TerminalProtocolState,
@@ -327,7 +325,6 @@ impl TerminalSurface {
             has_action_link_decorations: false,
             performance_overlay: None,
             skipped_output_chars: 0,
-            visual_bell: false,
             transparent_background: false,
             is_active: false,
             protocol_state: TerminalProtocolState::default(),
@@ -1169,7 +1166,6 @@ impl TerminalSurface {
             show_timestamps,
             show_timestamp_ms,
             is_active,
-            visual_bell,
         } = chrome;
         let cell_width = cell_width.max(1.0);
         let cell_height = cell_height.max(1.0);
@@ -1184,8 +1180,7 @@ impl TerminalSurface {
             && self.show_line_numbers == show_line_numbers
             && self.show_timestamps == show_timestamps
             && self.show_timestamp_ms == show_timestamp_ms
-            && self.is_active == is_active
-            && self.visual_bell == visual_bell;
+            && self.is_active == is_active;
         if state_matches {
             return false;
         }
@@ -1201,7 +1196,6 @@ impl TerminalSurface {
         self.show_timestamps = show_timestamps;
         self.show_timestamp_ms = show_timestamp_ms;
         self.is_active = is_active;
-        self.visual_bell = visual_bell;
         true
     }
 
@@ -2358,7 +2352,6 @@ impl Render for TerminalSurface {
         let gutter_enabled = self.show_line_numbers || self.show_timestamps;
         let performance_overlay = self.performance_overlay;
         let skipped_output_chars = self.skipped_output_chars;
-        let visual_bell = self.visual_bell && self.is_active;
         let mut surface_font = font(SharedString::from(self.font_family.clone()));
         surface_font.fallbacks = self.font_fallbacks.clone();
         let app = self.app.clone();
@@ -2522,9 +2515,6 @@ impl Render for TerminalSurface {
             .on_scroll_wheel(cx.listener(|this, event: &ScrollWheelEvent, _, cx| {
                 this.handle_scroll_wheel(event, cx);
             }))
-            .when(visual_bell, |this| {
-                this.border_2().border_color(rgb(palette.warning))
-            })
             .child(
                 div()
                     .flex_1()

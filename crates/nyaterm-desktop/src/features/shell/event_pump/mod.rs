@@ -356,9 +356,6 @@ impl NyaTermApp {
         if self.terminal.terminal_file_drop_hover_is_pending() {
             return true;
         }
-        if self.shell.runtime.visual_bell_ticks > 0 {
-            return true;
-        }
         if self.settings.summary().cursor_blink
             && !self.visible_terminal_session_ids().is_empty()
             && self

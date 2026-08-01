@@ -74,7 +74,6 @@ pub(super) struct ShellRuntimeState {
     pub(super) window_layout_persist_dirty: bool,
     pub(super) cursor_blink_on: bool,
     pub(super) cursor_blink_next_at: Option<Instant>,
-    pub(super) visual_bell_ticks: u8,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -143,7 +142,6 @@ impl Default for ShellRuntimeState {
             window_layout_persist_dirty: false,
             cursor_blink_on: true,
             cursor_blink_next_at: None,
-            visual_bell_ticks: 0,
         }
     }
 }
@@ -205,14 +203,6 @@ impl ShellFeatureState {
 
     pub(in crate::features) fn cursor_blink_on(&self) -> bool {
         self.runtime.cursor_blink_on
-    }
-
-    pub(in crate::features) fn visual_bell_active(&self) -> bool {
-        self.runtime.visual_bell_ticks > 0
-    }
-
-    pub(in crate::features) fn trigger_visual_bell(&mut self) {
-        self.runtime.visual_bell_ticks = 4;
     }
 
     pub(in crate::features) fn mark_open_tabs_persist_dirty(&mut self) {

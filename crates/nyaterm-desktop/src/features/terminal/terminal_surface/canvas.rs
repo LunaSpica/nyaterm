@@ -696,7 +696,6 @@ impl NyaTermApp {
                     })
                 })
                 .unwrap_or((0, 0, 0, 0));
-        let show_visual_bell = is_active && self.shell.visual_bell_active();
         let file_drop_hover = self
             .terminal
             .terminal_file_drop_hover_matches(session_id.as_str());
@@ -1056,17 +1055,6 @@ impl NyaTermApp {
                                             ))
                                         }),
                                 )
-                                .when(show_visual_bell, |this| {
-                                    this.child(
-                                        div()
-                                            .absolute()
-                                            .inset_0()
-                                            .bg(rgba(0xffffff22))
-                                            .border_2()
-                                            .border_color(rgb(palette.warning))
-                                            .rounded_sm(),
-                                    )
-                                })
                                 .when_some(
                                     ime_preedit_text.clone().zip(ime_preedit_position),
                                     |this, (marked_text, (x, y))| {
