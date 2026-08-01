@@ -8,6 +8,7 @@ mod number_input;
 mod popover;
 mod root;
 mod selection;
+mod settings;
 mod sizing;
 mod tabs;
 mod theme;
@@ -28,6 +29,7 @@ pub use selection::{
     NyaCheckbox, NyaRadioGroup, NyaSelect, NyaSelectEvent, NyaSelectOption, NyaSelectState,
     NyaSwitch,
 };
+pub use settings::{NyaSettingsLayout, NyaSettingsNavGroup, NyaSettingsNavItem};
 pub use sizing::NYA_FORM_CONTROL_HEIGHT_PX;
 pub use tabs::{NyaTabItem, NyaTabs, NyaTabsVariant};
 pub use theme::{APPEARANCE_THEME_IDS, ThemePalette, appearance_theme_label, theme_palette};

@@ -155,17 +155,17 @@ impl SettingsTab {
     pub(crate) fn icon_path(self) -> &'static str {
         match self {
             Self::General => "icons/settings.svg",
-            Self::Appearance => "icons/view-grid.svg",
-            Self::Interaction => "icons/send.svg",
-            Self::Keybindings => "icons/commands.svg",
-            Self::TerminalGeneral => "icons/conn/terminal.svg",
+            Self::Appearance => "icons/menu/palette.svg",
+            Self::Interaction => "icons/mouse.svg",
+            Self::Keybindings => "icons/keyboard.svg",
+            Self::TerminalGeneral => "icons/settings.svg",
             Self::Search => "icons/fe/search.svg",
             Self::Translation => "icons/translation.svg",
             Self::AiGeneral => "icons/ai/settings.svg",
             Self::AiModels => "icons/ai.svg",
-            Self::AiRules => "icons/ai/exec-smart.svg",
-            Self::Transfer => "icons/files.svg",
-            Self::Security => "icons/auth.svg",
+            Self::AiRules => "icons/menu/book.svg",
+            Self::Transfer => "icons/swap-horiz.svg",
+            Self::Security => "icons/security.svg",
             Self::SyncBackup => "icons/sync.svg",
         }
     }

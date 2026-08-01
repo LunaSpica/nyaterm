@@ -1,11 +1,14 @@
 use gpui::{
     AnyElement, App, ClickEvent, Context, FontWeight, IntoElement, SharedString, Window, div,
-    prelude::*, px, rgb, rgba, svg,
+    prelude::*, px, rgb, rgba,
 };
 
 use crate::models::{SettingsTab, SnapshotPasswordPromptKind, SnapshotPasswordPromptState};
 use crate::theme::ThemePalette;
-use nyaterm_ui::{NyaButton, NyaButtonVariant, NyaSwitch, NyaTooltip};
+use nyaterm_ui::{
+    NyaButton, NyaButtonVariant, NyaSettingsLayout, NyaSettingsNavGroup, NyaSettingsNavItem,
+    NyaSwitch,
+};
 
 use super::super::NyaTermApp;
 
@@ -139,23 +142,7 @@ impl NyaTermApp {
                         ),
                 )
             })
-            .child(
-                div()
-                    .flex()
-                    .flex_1()
-                    .min_h(px(0.))
-                    .size_full()
-                    .child(self.settings_sidebar(viewport_width, cx))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .min_h_0()
-                            .overflow_hidden()
-                            .bg(rgb(palette.bg))
-                            .child(self.settings_active_panel(viewport_width, cx)),
-                    ),
-            )
+            .child(self.settings_layout(viewport_width, cx))
             .when_some(backup_snapshot_prompt, |this, prompt| {
                 this.child(
                     div()
@@ -294,407 +281,93 @@ impl NyaTermApp {
             )
     }
 
-    fn settings_sidebar(
-        &mut self,
-        viewport_width: f32,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let palette = self.theme_palette();
-        let compact = viewport_width < 640.;
-        let sidebar_width = if compact {
-            56.
-        } else if viewport_width < 1024. {
-            192.
-        } else {
-            224.
-        };
-        let workspace_expanded = self.shell.settings_group_is_expanded("workspace");
-        let terminal_expanded = self.shell.settings_group_is_expanded("terminal_session");
-        let ai_expanded = self.shell.settings_group_is_expanded("ai_group");
-
-        let mut sidebar_nav = div()
-            .id(SharedString::from("settings-sidebar-scroll"))
-            .flex_1()
-            .min_h_0()
-            .when(compact, |this| this.px_2().py_3())
-            .when(!compact, |this| this.px_3().py_3())
-            .overflow_scroll();
-
-        sidebar_nav = sidebar_nav
-            .child(self.settings_group_header(
-                SettingsGroupHeaderPresentation {
-                    group: "workspace",
-                    title: self.tr("settings.groupWorkspace"),
-                    icon_path: "icons/settings.svg",
-                    expanded: workspace_expanded,
-                    accent: palette.link,
-                    compact,
-                },
-                cx,
-            ))
-            .when(workspace_expanded, |this| {
-                this.child(self.settings_tab_button(
-                    SettingsTab::General,
-                    "settings-tab-general",
-                    compact,
-                    true,
-                    cx,
-                ))
-                .child(self.settings_tab_button(
-                    SettingsTab::Appearance,
-                    "settings-tab-appearance",
-                    compact,
-                    true,
-                    cx,
-                ))
-                .child(self.settings_tab_button(
-                    SettingsTab::Interaction,
-                    "settings-tab-interaction",
-                    compact,
-                    true,
-                    cx,
-                ))
-                .child(self.settings_tab_button(
-                    SettingsTab::Keybindings,
-                    "settings-tab-keybindings",
-                    compact,
-                    true,
-                    cx,
-                ))
-            })
-            .child(self.settings_group_header(
-                SettingsGroupHeaderPresentation {
-                    group: "terminal_session",
-                    title: self.tr("settings.groupTerminalSession"),
-                    icon_path: "icons/conn/terminal.svg",
-                    expanded: terminal_expanded,
-                    accent: palette.success,
-                    compact,
-                },
-                cx,
-            ))
-            .when(terminal_expanded, |this| {
-                this.child(self.settings_tab_button(
-                    SettingsTab::TerminalGeneral,
-                    "settings-tab-terminal-general",
-                    compact,
-                    true,
-                    cx,
-                ))
-                .child(self.settings_tab_button(
-                    SettingsTab::Search,
-                    "settings-tab-search",
-                    compact,
-                    true,
-                    cx,
-                ))
-                .child(self.settings_tab_button(
-                    SettingsTab::Translation,
-                    "settings-tab-translation",
-                    compact,
-                    true,
-                    cx,
-                ))
-            })
-            .child(self.settings_group_header(
-                SettingsGroupHeaderPresentation {
-                    group: "ai_group",
-                    title: self.tr("ai.title"),
-                    icon_path: "icons/ai.svg",
-                    expanded: ai_expanded,
-                    accent: 0xbc8cff,
-                    compact,
-                },
-                cx,
-            ))
-            .when(ai_expanded, |this| {
-                this.child(self.settings_tab_button(
-                    SettingsTab::AiGeneral,
-                    "settings-tab-ai-general",
-                    compact,
-                    true,
-                    cx,
-                ))
-                .child(self.settings_tab_button(
-                    SettingsTab::AiModels,
-                    "settings-tab-ai-models",
-                    compact,
-                    true,
-                    cx,
-                ))
-                .child(self.settings_tab_button(
-                    SettingsTab::AiRules,
-                    "settings-tab-ai-rules",
-                    compact,
-                    true,
-                    cx,
-                ))
-            })
-            .child(self.settings_tab_button(
-                SettingsTab::Transfer,
-                "settings-tab-transfer",
-                compact,
-                false,
-                cx,
-            ))
-            .child(self.settings_tab_button(
-                SettingsTab::Security,
-                "settings-tab-security",
-                compact,
-                false,
-                cx,
-            ))
-            .child(self.settings_tab_button(
-                SettingsTab::SyncBackup,
-                "settings-tab-sync-backup",
-                compact,
-                false,
-                cx,
-            ));
-
-        div()
-            .w(px(sidebar_width))
-            .flex_none()
-            .h_full()
-            .flex()
-            .flex_col()
-            .border_r_1()
-            .border_color(rgba((palette.border << 8) | 0xb3))
-            .bg(rgba((palette.surface_elevated << 8) | 0x33))
-            .child(
-                div()
-                    .h(px(64.))
-                    .flex_none()
-                    .flex()
-                    .items_center()
-                    .gap_3()
-                    .when(compact, |this| this.justify_center())
-                    .when(!compact, |this| this.px_3())
-                    .border_b_1()
-                    .border_color(rgba((palette.border << 8) | 0xb3))
-                    .child(
-                        svg()
-                            .size(px(if compact { 22. } else { 24. }))
-                            .flex_none()
-                            .path("icons/settings.svg")
-                            .text_color(rgb(palette.primary)),
-                    )
-                    .when(!compact, |this| {
-                        this.child(
-                            div()
-                                .min_w_0()
-                                .overflow_hidden()
-                                .text_size(px(16.))
-                                .font_weight(FontWeight(700.))
-                                .text_color(rgb(palette.text))
-                                .child(self.tr("settings.title")),
-                        )
-                    }),
-            )
-            .child(sidebar_nav)
-    }
-
-    fn settings_group_header(
-        &self,
-        presentation: SettingsGroupHeaderPresentation,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let SettingsGroupHeaderPresentation {
-            group,
-            title,
-            icon_path,
-            expanded,
-            accent,
-            compact,
-        } = presentation;
-        let palette = self.theme_palette();
-        div()
-            .id(SharedString::from(format!("settings-group-{group}")))
-            .mt_1()
-            .mb_1()
-            .h(px(40.))
-            .when(!compact, |this| this.px_3())
-            .flex()
-            .items_center()
-            .when(compact, |this| this.justify_center())
-            .when(!compact, |this| this.justify_between())
-            .rounded_lg()
-            .cursor_pointer()
-            .hover(|this| this.bg(rgb(palette.hover)))
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .text_size(px(14.))
-                    .font_weight(FontWeight(600.))
-                    .text_color(rgb(palette.text_muted))
-                    .child(svg().size(px(18.)).path(icon_path).text_color(rgb(accent)))
-                    .when(!compact, |this| this.child(title)),
-            )
-            .when(!compact, |this| {
-                this.child(
-                    div()
-                        .text_size(px(12.))
-                        .text_color(rgb(palette.text_dimmed))
-                        .child(
-                            svg()
-                                .size(px(18.))
-                                .flex_none()
-                                .path(if expanded {
-                                    "icons/chevron-down.svg"
-                                } else {
-                                    "icons/fe/forward.svg"
-                                })
-                                .text_color(rgb(palette.text_dimmed)),
-                        ),
-                )
-            })
-            .when(compact, |this| {
-                this.tooltip(move |window, cx| NyaTooltip::new(title).build(window, cx))
-            })
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.shell.toggle_settings_group(group.to_string());
-                cx.notify();
-            }))
-    }
-
-    fn settings_tab_button(
-        &self,
-        tab: SettingsTab,
-        id: &'static str,
-        compact: bool,
-        nested: bool,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let palette = self.theme_palette();
-        let selected = self.shell.settings_active_tab() == tab;
-        let label = self.tr(tab.i18n_key());
-
-        // Tauri settings nav item: soft primary fill, no permanent green border.
-        div()
-            .id(id)
-            .mt(if nested { px(4.) } else { px(8.) })
-            .h(px(if nested { 34. } else { 40. }))
-            .when(!compact, |this| this.px_3())
-            .flex()
-            .items_center()
-            .when(compact, |this| this.justify_center())
-            .gap_2()
-            .rounded_lg()
-            .border_1()
-            .border_color(if selected {
-                rgba((palette.primary << 8) | 0x33)
-            } else {
-                rgb(0x00000000)
-            })
-            .bg(if selected {
-                rgba((palette.primary << 8) | 0x1f)
-            } else {
-                rgb(0x00000000)
-            })
-            .text_color(if selected {
-                rgb(palette.text)
-            } else {
-                rgb(palette.text_muted)
-            })
-            .text_size(px(if nested { 13. } else { 14. }))
-            .font_weight(if selected {
-                FontWeight(600.)
-            } else {
-                FontWeight(500.)
-            })
-            .cursor_pointer()
-            .hover(move |this| {
-                this.bg(if selected {
-                    rgba((palette.primary << 8) | 0x29)
-                } else {
-                    rgb(palette.hover)
-                })
-                .text_color(rgb(palette.text))
-            })
-            .child(
-                svg()
-                    .size(px(if nested { 16. } else { 18. }))
-                    .flex_none()
-                    .path(tab.icon_path())
-                    .text_color(if selected {
-                        rgb(palette.primary)
-                    } else {
-                        rgb(palette.text_muted)
-                    }),
-            )
-            .when(!compact, |this| {
-                this.child(div().min_w_0().flex_1().overflow_hidden().child(label))
-            })
-            .when(compact, |this| {
-                this.tooltip(move |window, cx| NyaTooltip::new(label).build(window, cx))
-            })
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.shell.set_settings_active_tab(tab);
-                cx.notify();
-            }))
-    }
-
-    fn settings_active_panel(
-        &mut self,
-        viewport_width: f32,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    fn settings_layout(&mut self, viewport_width: f32, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = self.theme_palette();
         let active_tab = self.shell.settings_active_tab();
+        let active_item_id = settings_tab_nav_id(active_tab);
         let active_label = self.tr(active_tab.i18n_key());
         let content = self.settings_tab_content(active_tab, cx);
-        let compact = viewport_width < 640.;
-        let wide = viewport_width >= 1024.;
+        let select_app = cx.entity();
+        let toggle_app = select_app.clone();
 
-        // Match the responsive SettingsPage title and centered content column.
-        div()
-            .size_full()
-            .min_w_0()
-            .flex()
-            .flex_col()
-            .overflow_hidden()
-            .child(
-                div()
-                    .flex_none()
-                    .when(compact, |this| this.px_4().py_4())
-                    .when(!compact, |this| this.px_6().py_5())
-                    .border_b_1()
-                    .border_color(rgb(palette.border))
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap_3()
-                    .child(
-                        div()
-                            .min_w_0()
-                            .text_size(px(if compact { 18. } else { 24. }))
-                            .font_weight(FontWeight(700.))
-                            .text_color(rgb(palette.text))
-                            .child(active_label),
-                    ),
+        NyaSettingsLayout::new(
+            "settings-layout",
+            self.settings_nav_groups(),
+            active_item_id,
+            content,
+        )
+        .palette(palette)
+        .active_title(active_label)
+        .sidebar_title(self.tr("settings.title"))
+        .viewport_width(viewport_width)
+        .compact_breakpoint(640.)
+        .wide_breakpoint(1024.)
+        .on_select(move |item_id, _, cx| {
+            if let Some(tab) = settings_tab_from_nav_id(item_id.as_ref()) {
+                let _ = select_app.update(cx, |this, cx| {
+                    this.shell.set_settings_active_tab(tab);
+                    cx.notify();
+                });
+            }
+        })
+        .on_toggle_group(move |group_id, _, cx| {
+            let _ = toggle_app.update(cx, |this, cx| {
+                this.shell.toggle_settings_group(group_id.to_string());
+                cx.notify();
+            });
+        })
+    }
+
+    fn settings_nav_groups(&self) -> Vec<NyaSettingsNavGroup> {
+        let palette = self.theme_palette();
+        vec![
+            NyaSettingsNavGroup::new(
+                "workspace",
+                self.tr("settings.groupWorkspace"),
+                "icons/workspace.svg",
             )
-            .child(
-                div()
-                    .id(SharedString::from("settings-content-scroll"))
-                    .flex_1()
-                    .min_h_0()
-                    .overflow_scroll()
-                    .when(compact, |this| this.px_4().py_4())
-                    .when(!compact && !wide, |this| this.px_6().py_6())
-                    .when(wide, |this| this.px_8().py_8())
-                    .child(
-                        div()
-                            .w_full()
-                            .max_w(px(1024.))
-                            .mx_auto()
-                            .flex()
-                            .flex_col()
-                            .gap(if compact { px(20.) } else { px(24.) })
-                            .child(content),
-                    ),
+            .accent(palette.link)
+            .expanded(self.shell.settings_group_is_expanded("workspace"))
+            .items([
+                self.settings_nav_item(SettingsTab::General),
+                self.settings_nav_item(SettingsTab::Appearance),
+                self.settings_nav_item(SettingsTab::Interaction),
+                self.settings_nav_item(SettingsTab::Keybindings),
+            ]),
+            NyaSettingsNavGroup::new(
+                "terminal_session",
+                self.tr("settings.groupTerminalSession"),
+                "icons/conn/terminal.svg",
             )
+            .accent(palette.success)
+            .expanded(self.shell.settings_group_is_expanded("terminal_session"))
+            .items([
+                self.settings_nav_item(SettingsTab::TerminalGeneral),
+                self.settings_nav_item(SettingsTab::Search),
+                self.settings_nav_item(SettingsTab::Translation),
+            ]),
+            NyaSettingsNavGroup::new("ai_group", self.tr("ai.title"), "icons/ai.svg")
+                .accent(0xbc8cff)
+                .expanded(self.shell.settings_group_is_expanded("ai_group"))
+                .items([
+                    self.settings_nav_item(SettingsTab::AiGeneral),
+                    self.settings_nav_item(SettingsTab::AiModels),
+                    self.settings_nav_item(SettingsTab::AiRules),
+                ]),
+            NyaSettingsNavGroup::standalone([
+                self.settings_nav_item(SettingsTab::Transfer),
+                self.settings_nav_item(SettingsTab::Security),
+                self.settings_nav_item(SettingsTab::SyncBackup),
+            ]),
+        ]
+    }
+
+    fn settings_nav_item(&self, tab: SettingsTab) -> NyaSettingsNavItem {
+        NyaSettingsNavItem::new(
+            settings_tab_nav_id(tab),
+            self.tr(tab.i18n_key()),
+            tab.icon_path(),
+        )
     }
 
     fn settings_tab_content(
@@ -722,13 +395,41 @@ impl NyaTermApp {
     }
 }
 
-struct SettingsGroupHeaderPresentation {
-    group: &'static str,
-    title: &'static str,
-    icon_path: &'static str,
-    expanded: bool,
-    accent: u32,
-    compact: bool,
+fn settings_tab_nav_id(tab: SettingsTab) -> &'static str {
+    match tab {
+        SettingsTab::General => "settings-tab-general",
+        SettingsTab::Appearance => "settings-tab-appearance",
+        SettingsTab::Interaction => "settings-tab-interaction",
+        SettingsTab::Keybindings => "settings-tab-keybindings",
+        SettingsTab::TerminalGeneral => "settings-tab-terminal-general",
+        SettingsTab::Search => "settings-tab-search",
+        SettingsTab::Translation => "settings-tab-translation",
+        SettingsTab::AiGeneral => "settings-tab-ai-general",
+        SettingsTab::AiModels => "settings-tab-ai-models",
+        SettingsTab::AiRules => "settings-tab-ai-rules",
+        SettingsTab::Transfer => "settings-tab-transfer",
+        SettingsTab::Security => "settings-tab-security",
+        SettingsTab::SyncBackup => "settings-tab-sync-backup",
+    }
+}
+
+fn settings_tab_from_nav_id(id: &str) -> Option<SettingsTab> {
+    match id {
+        "settings-tab-general" => Some(SettingsTab::General),
+        "settings-tab-appearance" => Some(SettingsTab::Appearance),
+        "settings-tab-interaction" => Some(SettingsTab::Interaction),
+        "settings-tab-keybindings" => Some(SettingsTab::Keybindings),
+        "settings-tab-terminal-general" => Some(SettingsTab::TerminalGeneral),
+        "settings-tab-search" => Some(SettingsTab::Search),
+        "settings-tab-translation" => Some(SettingsTab::Translation),
+        "settings-tab-ai-general" => Some(SettingsTab::AiGeneral),
+        "settings-tab-ai-models" => Some(SettingsTab::AiModels),
+        "settings-tab-ai-rules" => Some(SettingsTab::AiRules),
+        "settings-tab-transfer" => Some(SettingsTab::Transfer),
+        "settings-tab-security" => Some(SettingsTab::Security),
+        "settings-tab-sync-backup" => Some(SettingsTab::SyncBackup),
+        _ => None,
+    }
 }
 
 /// Tauri SettingSection: rounded card with optional title/desc and body.
