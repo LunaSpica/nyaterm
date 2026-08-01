@@ -321,7 +321,7 @@ pub(crate) struct CommandSuggestionState {
     pub(crate) session_id: String,
     pub(crate) draft: String,
     pub(crate) items: Vec<CommandSuggestionItem>,
-    pub(crate) selected_index: usize,
+    pub(crate) selected_index: Option<usize>,
     pub(crate) cursor_row: usize,
     pub(crate) cursor_col: usize,
 }

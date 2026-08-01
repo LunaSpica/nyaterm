@@ -632,14 +632,6 @@ impl NyaTermApp {
         let cursor_started_at = Instant::now();
         let (cursor_row, cursor_col) = self.active_terminal_cursor_cell();
         timing.cursor = cursor_started_at.elapsed();
-        let selected_index = self
-            .terminal
-            .assist
-            .command_suggestions
-            .as_ref()
-            .filter(|state| state.session_id == session_id)
-            .map(|state| state.selected_index.min(results.len().saturating_sub(1)))
-            .unwrap_or(0);
         let update_started_at = Instant::now();
         let next_state = CommandSuggestionState {
             session_id,
@@ -654,7 +646,7 @@ impl NyaTermApp {
                     indices: item.indices,
                 })
                 .collect(),
-            selected_index,
+            selected_index: None,
             cursor_row,
             cursor_col,
         };
@@ -827,30 +819,28 @@ impl NyaTermApp {
             }
             "up" => {
                 if let Some(state) = self.terminal.assist.command_suggestions.as_mut() {
-                    if state.selected_index == 0 {
-                        state.selected_index = state.items.len().saturating_sub(1);
-                    } else {
-                        state.selected_index -= 1;
-                    }
+                    state.selected_index = command_suggestion_step_selection(
+                        state.selected_index,
+                        state.items.len(),
+                        -1,
+                    );
                     cx.notify();
                 }
                 true
             }
             "down" => {
                 if let Some(state) = self.terminal.assist.command_suggestions.as_mut() {
-                    state.selected_index = (state.selected_index + 1) % state.items.len().max(1);
+                    state.selected_index = command_suggestion_step_selection(
+                        state.selected_index,
+                        state.items.len(),
+                        1,
+                    );
                     cx.notify();
                 }
                 true
             }
-            "tab" => {
-                self.apply_selected_command_suggestion(false, cx);
-                true
-            }
-            "enter" => {
-                self.apply_selected_command_suggestion(true, cx);
-                true
-            }
+            "tab" => self.apply_selected_command_suggestion(false, cx),
+            "enter" => self.apply_selected_command_suggestion(true, cx),
             _ => false,
         }
     }
@@ -859,12 +849,14 @@ impl NyaTermApp {
         &mut self,
         execute: bool,
         cx: &mut Context<Self>,
-    ) {
+    ) -> bool {
         let Some(state) = self.terminal.assist.command_suggestions.clone() else {
-            return;
+            return false;
         };
-        let Some(item) = state.items.get(state.selected_index).cloned() else {
-            return;
+        let Some(item) =
+            command_suggestion_item_for_selection(&state.items, state.selected_index).cloned()
+        else {
+            return false;
         };
         let source = item.source.clone();
         let command = item.command;
@@ -891,6 +883,7 @@ impl NyaTermApp {
             format!("filled suggestion from {source}")
         });
         cx.notify();
+        true
     }
 
     pub(in crate::features) fn delete_command_suggestion_history(
@@ -932,9 +925,8 @@ impl NyaTermApp {
             if state.items.is_empty() {
                 self.terminal.assist.command_suggestions = None;
             } else {
-                state.selected_index = state
-                    .selected_index
-                    .min(state.items.len().saturating_sub(1));
+                state.selected_index =
+                    command_suggestion_clamp_selection(state.selected_index, state.items.len());
             }
         } else {
             self.refresh_command_suggestions(cx);
@@ -990,7 +982,7 @@ impl NyaTermApp {
             .max_h(px(280.))
             .overflow_y_scroll();
         for (index, item) in state.items.iter().enumerate() {
-            let selected = index == state.selected_index;
+            let selected = state.selected_index == Some(index);
             let source_icon = match item.source.as_str() {
                 "history" => "icons/history.svg",
                 _ => "icons/commands.svg",
@@ -1025,9 +1017,9 @@ impl NyaTermApp {
                 .cursor_pointer()
                 .on_click(cx.listener(move |this, _, _, cx| {
                     if let Some(state) = this.terminal.assist.command_suggestions.as_mut() {
-                        state.selected_index = index;
+                        state.selected_index = Some(index);
                     }
-                    this.apply_selected_command_suggestion(true, cx);
+                    let _ = this.apply_selected_command_suggestion(true, cx);
                 }))
                 .child(
                     svg()
@@ -1181,6 +1173,45 @@ fn command_suggestion_state_changed(
     current != Some(next)
 }
 
+fn command_suggestion_item_for_selection(
+    items: &[CommandSuggestionItem],
+    selected_index: Option<usize>,
+) -> Option<&CommandSuggestionItem> {
+    items.get(selected_index?)
+}
+
+fn command_suggestion_step_selection(
+    current: Option<usize>,
+    len: usize,
+    direction: i32,
+) -> Option<usize> {
+    if len == 0 {
+        return None;
+    }
+    if direction > 0 {
+        return match current {
+            None => Some(0),
+            Some(index) if index + 1 < len => Some(index + 1),
+            Some(_) => None,
+        };
+    }
+    if direction < 0 {
+        return match current {
+            None => Some(len - 1),
+            Some(0) => None,
+            Some(index) => Some(index.min(len - 1).saturating_sub(1)),
+        };
+    }
+    command_suggestion_clamp_selection(current, len)
+}
+
+fn command_suggestion_clamp_selection(current: Option<usize>, len: usize) -> Option<usize> {
+    if len == 0 {
+        return None;
+    }
+    current.map(|index| index.min(len - 1))
+}
+
 pub(in crate::features) fn suggestion_overlay_position(
     geometry: SuggestionOverlayGeometry,
     target: SuggestionOverlayTarget,
@@ -1288,10 +1319,11 @@ mod tests {
     use crate::models::{CommandSuggestionItem, CommandSuggestionState};
 
     use super::{
-        command_history_input_update, command_suggestion_input_can_defer_refresh,
-        command_suggestion_input_candidate_chars, command_suggestion_input_obvious_pager_prefix,
+        command_history_input_update, command_suggestion_clamp_selection,
+        command_suggestion_input_can_defer_refresh, command_suggestion_input_candidate_chars,
+        command_suggestion_input_obvious_pager_prefix, command_suggestion_item_for_selection,
         command_suggestion_refresh_input_delay, command_suggestion_state_changed,
-        terminal_line_prefix_for_cell_col,
+        command_suggestion_step_selection, terminal_line_prefix_for_cell_col,
     };
 
     #[test]
@@ -1374,16 +1406,59 @@ mod tests {
                 score: 42,
                 indices: vec![0, 1, 2],
             }],
-            selected_index: 0,
+            selected_index: None,
             cursor_row: 3,
             cursor_col: 4,
         };
         let mut selected = state.clone();
-        selected.selected_index = 1;
+        selected.selected_index = Some(0);
 
         assert!(!command_suggestion_state_changed(Some(&state), &state));
         assert!(command_suggestion_state_changed(None, &state));
         assert!(command_suggestion_state_changed(Some(&state), &selected));
+    }
+
+    #[test]
+    fn command_suggestion_step_selection_enters_and_exits_with_down() {
+        assert_eq!(command_suggestion_step_selection(None, 3, 1), Some(0));
+        assert_eq!(command_suggestion_step_selection(Some(0), 3, 1), Some(1));
+        assert_eq!(command_suggestion_step_selection(Some(2), 3, 1), None);
+        assert_eq!(command_suggestion_step_selection(None, 0, 1), None);
+    }
+
+    #[test]
+    fn command_suggestion_step_selection_enters_and_exits_with_up() {
+        assert_eq!(command_suggestion_step_selection(None, 3, -1), Some(2));
+        assert_eq!(command_suggestion_step_selection(Some(2), 3, -1), Some(1));
+        assert_eq!(command_suggestion_step_selection(Some(0), 3, -1), None);
+        assert_eq!(command_suggestion_step_selection(None, 0, -1), None);
+    }
+
+    #[test]
+    fn command_suggestion_clamp_selection_preserves_none_and_clamps_overflow() {
+        assert_eq!(command_suggestion_clamp_selection(None, 3), None);
+        assert_eq!(command_suggestion_clamp_selection(Some(1), 3), Some(1));
+        assert_eq!(command_suggestion_clamp_selection(Some(7), 3), Some(2));
+        assert_eq!(command_suggestion_clamp_selection(Some(0), 0), None);
+    }
+
+    #[test]
+    fn command_suggestion_accept_requires_selected_item() {
+        let items = vec![CommandSuggestionItem {
+            command: "git status".to_string(),
+            display: "git status".to_string(),
+            source: "history".to_string(),
+            score: 42,
+            indices: vec![0, 1, 2],
+        }];
+
+        assert!(command_suggestion_item_for_selection(&items, None).is_none());
+        assert!(command_suggestion_item_for_selection(&items, Some(1)).is_none());
+        assert_eq!(
+            command_suggestion_item_for_selection(&items, Some(0))
+                .map(|item| item.command.as_str()),
+            Some("git status")
+        );
     }
 
     #[test]
