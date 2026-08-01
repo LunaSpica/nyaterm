@@ -16,3 +16,7 @@ pub mod theme;
 pub mod widgets;
 
 pub use app_shell::AppShell;
+
+pub fn init(cx: &mut gpui::App) {
+    features::init(cx);
+}

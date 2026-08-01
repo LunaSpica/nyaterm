@@ -14,6 +14,7 @@ use crate::features::terminal::terminal_runtime::TerminalMouseReportRequest;
 use crate::features::terminal::terminal_selection_runtime::{
     terminal_bounds_tracker, terminal_gutter_metrics, terminal_line_number_digits,
 };
+use crate::features::terminal::{TERMINAL_KEY_CONTEXT, TerminalShiftTab, TerminalTab};
 use crate::models::{
     SessionLaunchConfig, TerminalPerformanceMode, TerminalPerformanceOverlay, TerminalSearchMode,
     terminal_action_link_matcher_key, terminal_expensive_interactions_enabled,
@@ -39,6 +40,139 @@ fn terminal_shell_placeholder_snapshot() -> std::sync::Arc<TerminalSnapshot> {
 }
 
 impl NyaTermApp {
+    fn terminal_tab_key_event(shift: bool) -> KeyDownEvent {
+        KeyDownEvent {
+            keystroke: gpui::Keystroke {
+                modifiers: gpui::Modifiers {
+                    shift,
+                    ..gpui::Modifiers::default()
+                },
+                key: "tab".to_string(),
+                key_char: None,
+            },
+            is_held: false,
+            prefer_character_input: false,
+        }
+    }
+
+    fn handle_terminal_surface_key_down(
+        &mut self,
+        event: &KeyDownEvent,
+        window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.mark_user_activity();
+        let smart_input_selection = self
+            .terminal
+            .selection
+            .selection
+            .is_some()
+            .then(|| self.smart_cursor_selected_input_range())
+            .flatten();
+        let is_plain_text_input = terminal_plain_text_input_event(event);
+        if is_plain_text_input {
+            if self.terminal.assist.credential_suggestions.is_some()
+                && self.handle_credential_suggestion_key(event, cx)
+            {
+                cx.stop_propagation();
+                return;
+            }
+            if self.terminal.selection.selection.is_some()
+                && smart_input_selection.is_some()
+                && self.handle_smart_input_selection_key(event, cx)
+            {
+                cx.stop_propagation();
+                return;
+            }
+            if self.terminal_should_defer_key_text_to_input_handler(event) {
+                return;
+            }
+            cx.stop_propagation();
+            // When a non-smart buffer selection is painted, still send
+            // keystrokes but skip suggestion tracking so the selection
+            // edit path stays isolated (Tauri preserves selection).
+            let has_buffer_selection =
+                self.terminal.selection.selection.is_some() && smart_input_selection.is_none();
+            if has_buffer_selection {
+                self.send_terminal_key_event(event, false, cx);
+            } else {
+                self.send_terminal_key_event(event, true, cx);
+            }
+            return;
+        }
+        if self.handle_global_shortcut(event, window, cx) {
+            cx.stop_propagation();
+            return;
+        }
+        if self.handle_credential_suggestion_key(event, cx) {
+            cx.stop_propagation();
+            return;
+        }
+        if self.handle_command_suggestion_key(event, cx) {
+            cx.stop_propagation();
+            return;
+        }
+        if self.handle_terminal_scroll_key(event, cx) {
+            cx.stop_propagation();
+            return;
+        }
+        if self.handle_smart_input_selection_key(event, cx) {
+            cx.stop_propagation();
+            return;
+        }
+        // Disconnected tab: Enter reconnects; other keys show status (Tauri).
+        if let Some(session_id) = self.session.active_id_owned()
+            && self.session.is_disconnected(&session_id)
+        {
+            cx.stop_propagation();
+            let keystroke = &event.keystroke;
+            if !keystroke.modifiers.control
+                && !keystroke.modifiers.platform
+                && !keystroke.modifiers.alt
+                && keystroke.key.as_str() == "enter"
+            {
+                self.reconnect_session(session_id, window, cx);
+            } else if keystroke.key.as_str() == "d"
+                && keystroke.modifiers.control
+                && !keystroke.modifiers.platform
+                && !keystroke.modifiers.alt
+            {
+                // Ctrl+D closes disconnected tab (Tauri onDisconnectedClose).
+                self.close_session(session_id, cx);
+            } else if self
+                .set_terminal_status_if_changed("session disconnected — press Enter to reconnect")
+            {
+                cx.notify();
+            }
+            return;
+        }
+        let keystroke = &event.keystroke;
+        let primary = keystroke.modifiers.control || keystroke.modifiers.platform;
+        if primary
+            && !keystroke.modifiers.alt
+            && !keystroke.modifiers.function
+            && matches!(keystroke.key.as_str(), "v" | "V")
+        {
+            cx.stop_propagation();
+            self.paste_from_clipboard(window, cx);
+            return;
+        }
+        if self.terminal_should_defer_key_text_to_input_handler(event) {
+            return;
+        }
+        cx.stop_propagation();
+        // When a non-smart buffer selection is painted, still send
+        // keystrokes but skip suggestion tracking so the selection
+        // edit path stays isolated (Tauri preserves selection).
+        let has_buffer_selection =
+            self.terminal.selection.selection.is_some() && smart_input_selection.is_none();
+        if has_buffer_selection {
+            self.send_terminal_key_event(event, false, cx);
+        } else {
+            self.send_terminal_key_event(event, true, cx);
+        }
+    }
+
     pub(in crate::features) fn terminal_canvas_for(
         &mut self,
         session_id: String,
@@ -605,120 +739,18 @@ impl NyaTermApp {
                     .flex_col()
                     .relative()
                     .bg(self.shell_transparent_color(palette.terminal_bg))
+                    .key_context(TERMINAL_KEY_CONTEXT)
                     .track_focus(&self.terminal.input.focus)
+                    .on_action(cx.listener(|this, _: &TerminalTab, window, cx| {
+                        let event = NyaTermApp::terminal_tab_key_event(false);
+                        this.handle_terminal_surface_key_down(&event, window, cx);
+                    }))
+                    .on_action(cx.listener(|this, _: &TerminalShiftTab, window, cx| {
+                        let event = NyaTermApp::terminal_tab_key_event(true);
+                        this.handle_terminal_surface_key_down(&event, window, cx);
+                    }))
                     .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
-                        this.mark_user_activity();
-                        let smart_input_selection = this
-                            .terminal
-                            .selection
-                            .selection
-                            .is_some()
-                            .then(|| this.smart_cursor_selected_input_range())
-                            .flatten();
-                        let is_plain_text_input = terminal_plain_text_input_event(event);
-                        if is_plain_text_input {
-                            if this.terminal.assist.credential_suggestions.is_some()
-                                && this.handle_credential_suggestion_key(event, cx)
-                            {
-                                cx.stop_propagation();
-                                return;
-                            }
-                            if this.terminal.selection.selection.is_some()
-                                && smart_input_selection.is_some()
-                                && this.handle_smart_input_selection_key(event, cx)
-                            {
-                                cx.stop_propagation();
-                                return;
-                            }
-                            if this.terminal_should_defer_key_text_to_input_handler(event) {
-                                return;
-                            }
-                            cx.stop_propagation();
-                            // When a non-smart buffer selection is painted, still send
-                            // keystrokes but skip suggestion tracking so the selection
-                            // edit path stays isolated (Tauri preserves selection).
-                            let has_buffer_selection = this.terminal.selection.selection.is_some()
-                                && smart_input_selection.is_none();
-                            if has_buffer_selection {
-                                this.send_terminal_key_event(event, false, cx);
-                            } else {
-                                this.send_terminal_key_event(event, true, cx);
-                            }
-                            return;
-                        }
-                        if this.handle_global_shortcut(event, window, cx) {
-                            cx.stop_propagation();
-                            return;
-                        }
-                        if this.handle_credential_suggestion_key(event, cx) {
-                            cx.stop_propagation();
-                            return;
-                        }
-                        if this.handle_command_suggestion_key(event, cx) {
-                            cx.stop_propagation();
-                            return;
-                        }
-                        if this.handle_terminal_scroll_key(event, cx) {
-                            cx.stop_propagation();
-                            return;
-                        }
-                        if this.handle_smart_input_selection_key(event, cx) {
-                            cx.stop_propagation();
-                            return;
-                        }
-                        // Disconnected tab: Enter reconnects; other keys show status (Tauri).
-                        if let Some(session_id) = this.session.active_id_owned()
-                            && this.session.is_disconnected(&session_id)
-                        {
-                            cx.stop_propagation();
-                            let keystroke = &event.keystroke;
-                            if !keystroke.modifiers.control
-                                && !keystroke.modifiers.platform
-                                && !keystroke.modifiers.alt
-                                && keystroke.key.as_str() == "enter"
-                            {
-                                this.reconnect_session(session_id, window, cx);
-                            } else if keystroke.key.as_str() == "d"
-                                && keystroke.modifiers.control
-                                && !keystroke.modifiers.platform
-                                && !keystroke.modifiers.alt
-                            {
-                                // Ctrl+D closes disconnected tab (Tauri onDisconnectedClose).
-                                this.close_session(session_id, cx);
-                            } else {
-                                if this.set_terminal_status_if_changed(
-                                    "session disconnected — press Enter to reconnect",
-                                ) {
-                                    cx.notify();
-                                }
-                            }
-                            return;
-                        }
-                        let keystroke = &event.keystroke;
-                        let primary = keystroke.modifiers.control || keystroke.modifiers.platform;
-                        if primary
-                            && !keystroke.modifiers.alt
-                            && !keystroke.modifiers.function
-                            && matches!(keystroke.key.as_str(), "v" | "V")
-                        {
-                            cx.stop_propagation();
-                            this.paste_from_clipboard(window, cx);
-                            return;
-                        }
-                        if this.terminal_should_defer_key_text_to_input_handler(event) {
-                            return;
-                        }
-                        cx.stop_propagation();
-                        // When a non-smart buffer selection is painted, still send
-                        // keystrokes but skip suggestion tracking so the selection
-                        // edit path stays isolated (Tauri preserves selection).
-                        let has_buffer_selection = this.terminal.selection.selection.is_some()
-                            && smart_input_selection.is_none();
-                        if has_buffer_selection {
-                            this.send_terminal_key_event(event, false, cx);
-                        } else {
-                            this.send_terminal_key_event(event, true, cx);
-                        }
+                        this.handle_terminal_surface_key_down(event, window, cx);
                     }))
                     .on_key_up(cx.listener(|this, event: &KeyUpEvent, _window, cx| {
                         if this.send_terminal_key_release_event(event, cx) {

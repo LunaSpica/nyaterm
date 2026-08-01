@@ -815,6 +815,35 @@ fn terminal_key_encoding_uses_target_session_mode() {
 }
 
 #[test]
+fn terminal_key_encoding_sends_plain_tab_to_pty() {
+    let event = key_event("tab", None, gpui::Modifiers::default());
+
+    assert_eq!(
+        terminal_key_bytes_for_mode_and_settings(&event, TerminalKeyMode::default(), false)
+            .unwrap(),
+        b"\t".to_vec()
+    );
+}
+
+#[test]
+fn terminal_key_encoding_sends_shift_tab_to_pty() {
+    let event = key_event(
+        "tab",
+        None,
+        gpui::Modifiers {
+            shift: true,
+            ..gpui::Modifiers::default()
+        },
+    );
+
+    assert_eq!(
+        terminal_key_bytes_for_mode_and_settings(&event, TerminalKeyMode::default(), false)
+            .unwrap(),
+        b"\x1b[Z".to_vec()
+    );
+}
+
+#[test]
 fn terminal_key_encoding_keeps_alt_meta_setting_outside_mode() {
     let event = key_event(
         "x",

@@ -26,6 +26,10 @@ mod tunnels;
 mod update;
 mod view_widgets;
 
+pub(crate) fn init(cx: &mut gpui::App) {
+    terminal::init_key_bindings(cx);
+}
+
 #[allow(unused_imports)]
 pub(in crate::features) use crate::action_links::{
     ActionLinkAction, ActionLinkKind, ActionLinkMatch, actions_for_match, find_action_links,

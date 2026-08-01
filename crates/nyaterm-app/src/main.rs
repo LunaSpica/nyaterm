@@ -18,6 +18,7 @@ fn main() -> anyhow::Result<()> {
         .with_assets(assets::NyaTermAssets)
         .run(move |cx: &mut App| {
             gpui_component::init(cx);
+            nyaterm_desktop::init(cx);
             let bounds = Bounds::centered(None, size(px(1280.), px(800.)), cx);
             let app_runtime = runtime.clone();
 
