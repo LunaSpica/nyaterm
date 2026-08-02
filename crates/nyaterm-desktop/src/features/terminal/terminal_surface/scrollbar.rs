@@ -1,4 +1,4 @@
-use gpui::{Bounds, Entity, IntoElement, Pixels, prelude::*};
+use gpui::{Bounds, Entity, IntoElement, Pixels, fill, point, prelude::*, px, rgba, size};
 
 use crate::features::NyaTermApp;
 
@@ -8,6 +8,7 @@ pub(in crate::features) const TERMINAL_SCROLLBAR_TRACK_PADDING_RIGHT: f32 = 2.0;
 pub(in crate::features) const TERMINAL_SCROLLBAR_THUMB_WIDTH: f32 = 3.0;
 pub(in crate::features) const TERMINAL_SCROLLBAR_THUMB_ACTIVE_WIDTH: f32 = 5.0;
 pub(in crate::features) const TERMINAL_SCROLLBAR_MIN_THUMB_HEIGHT: f32 = 18.0;
+const TERMINAL_OVERVIEW_MARKER_HEIGHT_PX: usize = 2;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(in crate::features) struct TerminalScrollbarMetrics {
@@ -30,6 +31,25 @@ pub(in crate::features) struct TerminalScrollbarInput {
 pub(in crate::features) struct TerminalScrollbarDragState {
     pub session_id: Option<String>,
     pub grab_offset_y: f32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub(in crate::features) enum TerminalOverviewMarkerKind {
+    SelectedOccurrence,
+    SearchMatch,
+    ActiveSearchMatch,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(in crate::features) struct TerminalOverviewMarker {
+    pub absolute_line: usize,
+    pub kind: TerminalOverviewMarkerKind,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(in crate::features) struct TerminalOverviewMarkerBucket {
+    pub y_px: usize,
+    pub kind: TerminalOverviewMarkerKind,
 }
 
 pub(in crate::features) fn terminal_scrollbar_metrics(
@@ -131,6 +151,67 @@ pub(in crate::features) fn terminal_scrollbar_track_bounds_tracker(
     .size_full()
 }
 
+pub(in crate::features) fn terminal_overview_marker_buckets(
+    markers: &[TerminalOverviewMarker],
+    total_rows: usize,
+    track_height_px: usize,
+) -> Vec<TerminalOverviewMarkerBucket> {
+    if markers.is_empty() || total_rows == 0 || track_height_px == 0 {
+        return Vec::new();
+    }
+    let max_line = total_rows.saturating_sub(1).max(1);
+    let max_y = track_height_px.saturating_sub(TERMINAL_OVERVIEW_MARKER_HEIGHT_PX);
+    let mut buckets = Vec::<TerminalOverviewMarkerBucket>::new();
+    for marker in markers {
+        let line = marker.absolute_line.min(max_line);
+        let ratio = line as f32 / max_line as f32;
+        let y_px = (ratio * max_y as f32).round() as usize;
+        if let Some(existing) = buckets.iter_mut().find(|bucket| bucket.y_px == y_px) {
+            if marker.kind > existing.kind {
+                existing.kind = marker.kind;
+            }
+        } else {
+            buckets.push(TerminalOverviewMarkerBucket {
+                y_px,
+                kind: marker.kind,
+            });
+        }
+    }
+    buckets.sort_unstable_by_key(|bucket| bucket.y_px);
+    buckets
+}
+
+pub(in crate::features) fn terminal_overview_marker_canvas(
+    markers: Vec<TerminalOverviewMarker>,
+    total_rows: usize,
+    palette: crate::theme::ThemePalette,
+) -> impl IntoElement {
+    gpui::canvas(
+        |_bounds, _window, _cx| {},
+        move |bounds, _state, window, _cx| {
+            let track_height_px = f32::from(bounds.size.height).max(0.0).round() as usize;
+            let buckets = terminal_overview_marker_buckets(&markers, total_rows, track_height_px);
+            if buckets.is_empty() {
+                return;
+            }
+            let left = f32::from(bounds.right()) - 4.0;
+            let top = f32::from(bounds.top());
+            for bucket in buckets {
+                let color = terminal_overview_marker_color(bucket.kind, palette);
+                window.paint_quad(fill(
+                    Bounds::new(
+                        point(px(left), px(top + bucket.y_px as f32)),
+                        size(px(3.0), px(TERMINAL_OVERVIEW_MARKER_HEIGHT_PX as f32)),
+                    ),
+                    rgba(color),
+                ));
+            }
+        },
+    )
+    .absolute()
+    .size_full()
+}
+
 fn finite_non_negative(value: f32) -> f32 {
     if value.is_finite() {
         value.max(0.0)
@@ -147,10 +228,23 @@ pub(in crate::features) fn track_height(bounds: Bounds<Pixels>) -> f32 {
     finite_non_negative(f32::from(bounds.size.height))
 }
 
+fn terminal_overview_marker_color(
+    kind: TerminalOverviewMarkerKind,
+    palette: crate::theme::ThemePalette,
+) -> u32 {
+    match kind {
+        TerminalOverviewMarkerKind::SelectedOccurrence => (palette.text_muted << 8) | 0x80,
+        TerminalOverviewMarkerKind::SearchMatch => (palette.accent << 8) | 0x90,
+        TerminalOverviewMarkerKind::ActiveSearchMatch => (palette.warning << 8) | 0xd8,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        TerminalScrollbarInput, terminal_scroll_offset_from_pointer, terminal_scrollbar_metrics,
+        TerminalOverviewMarker, TerminalOverviewMarkerKind, TerminalScrollbarInput,
+        terminal_overview_marker_buckets, terminal_scroll_offset_from_pointer,
+        terminal_scrollbar_metrics,
     };
 
     #[test]
@@ -253,5 +347,38 @@ mod tests {
             terminal_scroll_offset_from_pointer(f32::NAN, 0.0, metrics, 0.0, 10),
             0
         );
+    }
+
+    #[test]
+    fn terminal_scrollbar_marker_buckets_merge_and_prioritize() {
+        let buckets = terminal_overview_marker_buckets(
+            &[
+                TerminalOverviewMarker {
+                    absolute_line: 0,
+                    kind: TerminalOverviewMarkerKind::SelectedOccurrence,
+                },
+                TerminalOverviewMarker {
+                    absolute_line: 50,
+                    kind: TerminalOverviewMarkerKind::SearchMatch,
+                },
+                TerminalOverviewMarker {
+                    absolute_line: 50,
+                    kind: TerminalOverviewMarkerKind::ActiveSearchMatch,
+                },
+                TerminalOverviewMarker {
+                    absolute_line: 99,
+                    kind: TerminalOverviewMarkerKind::SelectedOccurrence,
+                },
+            ],
+            100,
+            10,
+        );
+        assert_eq!(buckets.len(), 3);
+        assert_eq!(buckets[0].y_px, 0);
+        assert_eq!(
+            buckets[1].kind,
+            TerminalOverviewMarkerKind::ActiveSearchMatch
+        );
+        assert_eq!(buckets[2].y_px, 8);
     }
 }

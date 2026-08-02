@@ -396,6 +396,7 @@ fn terminal_scroll_text_first_decorations(
         include_hyperlinks && snapshot.rows().iter().any(|row| !row.hyperlinks.is_empty());
     if !crate::features::terminal::terminal_surface::terminal_line_decorations_needed(
         false,
+        false,
         has_search_decorations,
         has_frame_action_links,
         has_hyperlinks,
@@ -409,6 +410,7 @@ fn terminal_scroll_text_first_decorations(
         snapshot,
         &crate::features::terminal::terminal_surface::TerminalDecorationSources {
             selection: None,
+            selected_occurrence_ranges_by_line: &HashMap::new(),
             search_ranges_by_line: &search_ranges_by_line,
             active_search_ranges_by_line: &active_search_ranges_by_line,
             frame_action_links,
@@ -1127,6 +1129,27 @@ impl NyaTermApp {
 
         let mut search_ranges_by_line: HashMap<usize, Vec<(usize, usize)>> = HashMap::new();
         let mut active_search_ranges_by_line: HashMap<usize, Vec<(usize, usize)>> = HashMap::new();
+        let mut selected_occurrence_ranges_by_line: HashMap<usize, Vec<(usize, usize)>> =
+            HashMap::new();
+        if enhanced && is_active {
+            let (abs_start, abs_end) =
+                crate::features::terminal::terminal_surface::terminal_snapshot_absolute_range(
+                    &snapshot,
+                );
+            for search_match in self
+                .terminal_selected_occurrence_matches_for_session(session_id)
+                .unwrap_or_default()
+            {
+                let abs = search_match.line_index;
+                if abs < abs_start || abs >= abs_end {
+                    continue;
+                }
+                selected_occurrence_ranges_by_line
+                    .entry(abs - abs_start)
+                    .or_default()
+                    .push((search_match.start_col, search_match.end_col));
+            }
+        }
         if enhanced
             && is_active
             && self.terminal.search.open
@@ -1197,6 +1220,7 @@ impl NyaTermApp {
         let decorations =
             if crate::features::terminal::terminal_surface::terminal_line_decorations_needed(
                 has_selection,
+                !selected_occurrence_ranges_by_line.is_empty(),
                 has_search_decorations,
                 has_frame_action_links,
                 has_hyperlinks,
@@ -1207,6 +1231,7 @@ impl NyaTermApp {
                 let decoration_sources =
                     crate::features::terminal::terminal_surface::TerminalDecorationSources {
                         selection: terminal_selection,
+                        selected_occurrence_ranges_by_line: &selected_occurrence_ranges_by_line,
                         search_ranges_by_line: &search_ranges_by_line,
                         active_search_ranges_by_line: &active_search_ranges_by_line,
                         frame_action_links: &frame_action_links,

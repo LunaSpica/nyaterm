@@ -99,11 +99,18 @@ pub(super) struct TerminalPasteReviewState {
 pub(super) struct TerminalSelectionState {
     pub(super) selection: Option<TerminalSelection>,
     pub(super) session_id: Option<String>,
+    pub(super) selected_occurrence: TerminalSelectedOccurrenceState,
     pub(super) dragging: bool,
     pub(super) mouse_report_button: Option<u8>,
     pub(super) mouse_report_session_id: Option<String>,
     pub(super) mouse_report_peer_session_ids: Vec<String>,
     pub(super) mouse_report_position: Option<(u16, u16)>,
+}
+
+pub(super) struct TerminalSelectedOccurrenceState {
+    pub(super) session_id: Option<String>,
+    pub(super) query: Option<String>,
+    pub(super) generation: u64,
 }
 
 /// Last painted geometry, used to map pointer positions onto cells.
@@ -196,6 +203,11 @@ impl TerminalFeatureState {
             selection: TerminalSelectionState {
                 selection: None,
                 session_id: None,
+                selected_occurrence: TerminalSelectedOccurrenceState {
+                    session_id: None,
+                    query: None,
+                    generation: 0,
+                },
                 dragging: false,
                 mouse_report_button: None,
                 mouse_report_session_id: None,

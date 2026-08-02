@@ -85,6 +85,7 @@ pub(super) fn terminal_highlight_spans_compiled(
     line: &str,
     ansi_spans: Option<&[nyaterm_terminal::StyledSpan]>,
     compiled_keyword_rules: &[CompiledKeywordRule],
+    selected_occurrence_ranges: &[(usize, usize)],
     search_ranges: &[(usize, usize)],
     active_search_ranges: &[(usize, usize)],
     selection_cols: Option<(usize, usize)>,
@@ -129,14 +130,17 @@ pub(super) fn terminal_highlight_spans_compiled(
     if !link_ranges.is_empty() {
         spans = apply_action_link_ranges(spans, link_ranges, palette);
     }
-    if let Some((start, end)) = selection_cols {
-        spans = apply_selection_range(spans, start, end, palette);
+    if !selected_occurrence_ranges.is_empty() {
+        spans = apply_selected_occurrence_ranges(spans, selected_occurrence_ranges, palette);
     }
     if !search_ranges.is_empty() {
         spans = apply_search_ranges(spans, search_ranges, false, palette);
     }
     if !active_search_ranges.is_empty() {
         spans = apply_search_ranges(spans, active_search_ranges, true, palette);
+    }
+    if let Some((start, end)) = selection_cols {
+        spans = apply_selection_range(spans, start, end, palette);
     }
     spans
 }
@@ -228,6 +232,36 @@ pub(super) fn apply_search_ranges(
                     cell.color = Some(fg);
                 }
                 cell.keyword = false;
+            }
+        }
+    }
+    compress_flat_cells(flat)
+}
+
+pub(super) fn apply_selected_occurrence_ranges(
+    spans: Vec<TerminalHighlightSpan>,
+    ranges: &[(usize, usize)],
+    palette: nyaterm_ui::ThemePalette,
+) -> Vec<TerminalHighlightSpan> {
+    if ranges.is_empty() {
+        return spans;
+    }
+    let mut flat = flatten_highlight_spans(spans);
+    let max_end = ranges.iter().map(|(_, end)| *end).max().unwrap_or(0);
+    while flat.len() < max_end {
+        flat.push(FlatTerminalCell::blank());
+    }
+    for &(start, end) in ranges {
+        if start >= end {
+            continue;
+        }
+        let end = end.min(flat.len());
+        let start = start.min(end);
+        for idx in start..end {
+            if let Some(cell) = flat.get_mut(idx)
+                && cell.bg.is_none()
+            {
+                cell.bg = Some(palette.hover);
             }
         }
     }
@@ -971,6 +1005,7 @@ mod tests {
             &compiled,
             &[],
             &[],
+            &[],
             None,
             &[],
             &[(6, 11)],
@@ -994,6 +1029,7 @@ mod tests {
             "ERROR ERROR",
             None,
             &compiled,
+            &[],
             &[],
             &[],
             None,
@@ -1036,6 +1072,7 @@ mod tests {
             line,
             None,
             &compiled,
+            &[],
             &[],
             &[],
             None,

@@ -16,15 +16,16 @@ use super::{
     TERMINAL_UI_OUTPUT_TAIL_CAP, TerminalFrameActionLinks, TerminalFrameCommand,
     TerminalFrameEvent, TerminalFrameEventQueue, TerminalFrameOutputBatch,
     TerminalFrameOutputEvent, TerminalFrameOutputSubmission, TerminalFrameParts,
-    TerminalFrameSearchKey, TerminalFrameSearchResult, TerminalFrameSession,
-    TerminalFrameSnapshotEvent, TerminalPerformanceMode, TerminalPerformanceOverlay,
-    TerminalProtocolState, TerminalRenderCache, TerminalViewState, append_terminal_ui_output_tail,
-    coalesce_terminal_frame_output_command, compact_stale_terminal_frame_commands,
-    next_terminal_frame_command, prepare_terminal_frame_action_links,
-    process_terminal_frame_output_burst, protect_terminal_output_burst,
-    terminal_expensive_interactions_enabled, terminal_frame_command_channel,
-    terminal_frame_output_commands, terminal_frame_scroll_window_extra_rows,
-    terminal_frame_search_result_is_current, terminal_snapshot_matches_grid_geometry,
+    TerminalFrameSearchKey, TerminalFrameSearchPurpose, TerminalFrameSearchResult,
+    TerminalFrameSession, TerminalFrameSnapshotEvent, TerminalPerformanceMode,
+    TerminalPerformanceOverlay, TerminalProtocolState, TerminalRenderCache, TerminalViewState,
+    append_terminal_ui_output_tail, coalesce_terminal_frame_output_command,
+    compact_stale_terminal_frame_commands, next_terminal_frame_command,
+    prepare_terminal_frame_action_links, process_terminal_frame_output_burst,
+    protect_terminal_output_burst, terminal_expensive_interactions_enabled,
+    terminal_frame_command_channel, terminal_frame_output_commands,
+    terminal_frame_scroll_window_extra_rows, terminal_frame_search_result_is_current,
+    terminal_snapshot_matches_grid_geometry,
 };
 
 /// A submission is handed over whole. Slicing it here would only be undone
@@ -1123,7 +1124,11 @@ fn terminal_frame_search_event_carries_current_session_revision() {
         limit: 100,
     };
 
-    let event = session.search_event("s1".to_string(), key.clone());
+    let event = session.search_event(
+        "s1".to_string(),
+        TerminalFrameSearchPurpose::Find,
+        key.clone(),
+    );
 
     assert_eq!(event.session_id, "s1");
     assert_eq!(event.result.key, key);
@@ -1860,6 +1865,7 @@ fn terminal_frame_command_queue_keeps_latest_search_per_session() {
     let (tx, rx) = terminal_frame_command_channel();
     assert!(tx.send(TerminalFrameCommand::RequestSearch {
         session_id: "s1".to_string(),
+        purpose: TerminalFrameSearchPurpose::Find,
         key: TerminalFrameSearchKey {
             query: "old".to_string(),
             case_sensitive: false,
@@ -1870,6 +1876,18 @@ fn terminal_frame_command_queue_keeps_latest_search_per_session() {
     }));
     assert!(tx.send(TerminalFrameCommand::RequestSearch {
         session_id: "s1".to_string(),
+        purpose: TerminalFrameSearchPurpose::SelectedOccurrence,
+        key: TerminalFrameSearchKey {
+            query: "selected".to_string(),
+            case_sensitive: true,
+            regex: false,
+            whole_word: false,
+            limit: 2000,
+        },
+    }));
+    assert!(tx.send(TerminalFrameCommand::RequestSearch {
+        session_id: "s1".to_string(),
+        purpose: TerminalFrameSearchPurpose::Find,
         key: TerminalFrameSearchKey {
             query: "new".to_string(),
             case_sensitive: false,
@@ -1881,7 +1899,13 @@ fn terminal_frame_command_queue_keeps_latest_search_per_session() {
 
     assert!(matches!(
         rx.try_recv(),
-        Some(TerminalFrameCommand::RequestSearch { key, .. }) if key.query == "new"
+        Some(TerminalFrameCommand::RequestSearch { key, purpose, .. })
+            if key.query == "selected" && purpose == TerminalFrameSearchPurpose::SelectedOccurrence
+    ));
+    assert!(matches!(
+        rx.try_recv(),
+        Some(TerminalFrameCommand::RequestSearch { key, purpose, .. })
+            if key.query == "new" && purpose == TerminalFrameSearchPurpose::Find
     ));
     assert!(rx.try_recv().is_none());
 }
@@ -2022,6 +2046,7 @@ fn terminal_frame_command_queue_prioritizes_user_scroll_snapshot() {
     }));
     assert!(tx.send(TerminalFrameCommand::RequestSearch {
         session_id: "s1".to_string(),
+        purpose: TerminalFrameSearchPurpose::Find,
         key: TerminalFrameSearchKey {
             query: "needle".to_string(),
             case_sensitive: false,

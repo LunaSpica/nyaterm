@@ -112,6 +112,12 @@ pub(crate) struct TerminalFrameSearchKey {
     pub(crate) limit: usize,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(crate) enum TerminalFrameSearchPurpose {
+    Find,
+    SelectedOccurrence,
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct TerminalFrameSearchResult {
     pub(crate) key: TerminalFrameSearchKey,
@@ -498,6 +504,8 @@ pub(crate) struct TerminalViewState {
     pub(crate) priority_pending_snapshot_offsets: HashSet<usize>,
     pub(crate) search_result: Option<TerminalFrameSearchResult>,
     pub(crate) pending_search_key: Option<TerminalFrameSearchKey>,
+    pub(crate) selected_occurrence_result: Option<TerminalFrameSearchResult>,
+    pub(crate) pending_selected_occurrence_key: Option<TerminalFrameSearchKey>,
     pub(crate) protocol_state: TerminalProtocolState,
     pub(crate) output_decoder: TerminalOutputDecoder,
     pub(crate) recording_decoder: TerminalOutputDecoder,
@@ -549,6 +557,8 @@ impl TerminalViewState {
             priority_pending_snapshot_offsets: HashSet::new(),
             search_result: None,
             pending_search_key: None,
+            selected_occurrence_result: None,
+            pending_selected_occurrence_key: None,
             protocol_state: TerminalProtocolState::default(),
             output_decoder: TerminalOutputDecoder::default(),
             recording_decoder: TerminalOutputDecoder::default(),
@@ -583,6 +593,8 @@ impl TerminalViewState {
             priority_pending_snapshot_offsets: HashSet::new(),
             search_result: None,
             pending_search_key: None,
+            selected_occurrence_result: None,
+            pending_selected_occurrence_key: None,
             protocol_state,
             output_decoder: TerminalOutputDecoder::default(),
             recording_decoder: TerminalOutputDecoder::default(),
@@ -1026,6 +1038,8 @@ impl TerminalViewState {
         self.clear_scrollback_query_caches();
         self.search_result = None;
         self.pending_search_key = None;
+        self.selected_occurrence_result = None;
+        self.pending_selected_occurrence_key = None;
     }
 
     pub(crate) fn scrollback_len_for_ui(&self) -> usize {
@@ -1280,6 +1294,7 @@ impl TerminalFramePipeline {
     pub(crate) fn request_search(
         &self,
         session_id: impl Into<String>,
+        purpose: TerminalFrameSearchPurpose,
         key: TerminalFrameSearchKey,
     ) {
         if key.query.trim().is_empty() || key.limit == 0 {
@@ -1287,6 +1302,7 @@ impl TerminalFramePipeline {
         }
         let _ = self.command_tx.send(TerminalFrameCommand::RequestSearch {
             session_id: session_id.into(),
+            purpose,
             key,
         });
     }
@@ -1362,6 +1378,7 @@ enum TerminalFrameCommand {
     },
     RequestSearch {
         session_id: String,
+        purpose: TerminalFrameSearchPurpose,
         key: TerminalFrameSearchKey,
     },
     /// Prefer building full viewport snapshots for these sessions (visible tabs).
@@ -1525,6 +1542,7 @@ pub(crate) struct TerminalFrameSnapshotEvent {
 #[derive(Clone, Debug)]
 pub(crate) struct TerminalFrameSearchEvent {
     pub(crate) session_id: String,
+    pub(crate) purpose: TerminalFrameSearchPurpose,
     pub(crate) result: TerminalFrameSearchResult,
     pub(crate) process_duration: Duration,
 }
@@ -1841,6 +1859,7 @@ impl TerminalFrameSession {
     fn search_event(
         &mut self,
         session_id: String,
+        purpose: TerminalFrameSearchPurpose,
         key: TerminalFrameSearchKey,
     ) -> TerminalFrameSearchEvent {
         let started_at = Instant::now();
@@ -1868,6 +1887,7 @@ impl TerminalFrameSession {
             .map_err(|error| error.to_string());
         TerminalFrameSearchEvent {
             session_id,
+            purpose,
             result: TerminalFrameSearchResult {
                 key,
                 revision: self.revision,
@@ -2199,7 +2219,7 @@ fn compact_stale_terminal_frame_commands(commands: &mut VecDeque<TerminalFrameCo
     }
     let mut seen_snapshots: HashSet<(String, usize)> = HashSet::new();
     let mut seen_priority_snapshots: HashSet<String> = HashSet::new();
-    let mut seen_searches: HashSet<String> = HashSet::new();
+    let mut seen_searches: HashSet<(String, TerminalFrameSearchPurpose)> = HashSet::new();
     let mut kept_snapshot_priority = false;
     let mut compacted = VecDeque::with_capacity(commands.len());
 
@@ -2213,9 +2233,11 @@ fn compact_stale_terminal_frame_commands(commands: &mut VecDeque<TerminalFrameCo
             TerminalFrameCommand::RequestSnapshot {
                 session_id, offset, ..
             } => seen_snapshots.insert((session_id.clone(), *offset)),
-            TerminalFrameCommand::RequestSearch { session_id, .. } => {
-                seen_searches.insert(session_id.clone())
-            }
+            TerminalFrameCommand::RequestSearch {
+                session_id,
+                purpose,
+                ..
+            } => seen_searches.insert((session_id.clone(), *purpose)),
             TerminalFrameCommand::SetSnapshotPriority { .. } => {
                 if kept_snapshot_priority {
                     false
@@ -2361,9 +2383,13 @@ fn run_terminal_frame_processor(
                     event_queue.push(TerminalFrameEvent::Snapshot(event));
                 }
             }
-            TerminalFrameCommand::RequestSearch { session_id, key } => {
+            TerminalFrameCommand::RequestSearch {
+                session_id,
+                purpose,
+                key,
+            } => {
                 if let Some(session) = sessions.get_mut(&session_id) {
-                    let event = session.search_event(session_id, key);
+                    let event = session.search_event(session_id, purpose, key);
                     event_queue.push(TerminalFrameEvent::Search(event));
                 }
             }

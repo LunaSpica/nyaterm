@@ -41,6 +41,7 @@ pub struct TerminalSearchFlags {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct TerminalLineDecorations {
+    pub selected_occurrence_ranges: Vec<(usize, usize)>,
     pub search_ranges: Vec<(usize, usize)>,
     pub active_search_ranges: Vec<(usize, usize)>,
     pub selection_cols: Option<(usize, usize)>,
@@ -911,6 +912,16 @@ fn push_dynamic_decoration_backgrounds(
     geometry: TerminalPaintGeometry,
     out: &mut Vec<PaintQuad>,
 ) {
+    for &(start, end) in &decorations.selected_occurrence_ranges {
+        push_col_range_bg(
+            row,
+            start,
+            end,
+            terminal_selected_occurrence_bg(palette),
+            geometry,
+            out,
+        );
+    }
     for &(start, end) in &decorations.search_ranges {
         push_col_range_bg(row, start, end, palette.terminal_selection, geometry, out);
     }
@@ -920,6 +931,10 @@ fn push_dynamic_decoration_backgrounds(
     if let Some((start, end)) = decorations.selection_cols {
         push_col_range_bg(row, start, end, palette.terminal_selection, geometry, out);
     }
+}
+
+fn terminal_selected_occurrence_bg(palette: nyaterm_ui::ThemePalette) -> u32 {
+    palette.hover
 }
 
 fn push_terminal_image_placeholder(
@@ -1243,6 +1258,7 @@ impl Element for NyaTerminalElement {
                             display_line,
                             ansi,
                             row_compiled_keyword_rules,
+                            &[],
                             &[],
                             &[],
                             None,

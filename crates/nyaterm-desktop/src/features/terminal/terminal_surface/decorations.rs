@@ -8,6 +8,7 @@ use crate::terminal::TerminalLineDecorations;
 #[derive(Clone, Copy)]
 pub(in crate::features) struct TerminalDecorationSources<'a> {
     pub selection: Option<TerminalSelection>,
+    pub selected_occurrence_ranges_by_line: &'a HashMap<usize, Vec<(usize, usize)>>,
     pub search_ranges_by_line: &'a HashMap<usize, Vec<(usize, usize)>>,
     pub active_search_ranges_by_line: &'a HashMap<usize, Vec<(usize, usize)>>,
     pub frame_action_links: &'a [TerminalFrameActionLinks],
@@ -41,6 +42,7 @@ pub(in crate::features) fn terminal_line_decorations_cache_key(
 ) -> u64 {
     let TerminalDecorationSources {
         selection,
+        selected_occurrence_ranges_by_line,
         search_ranges_by_line,
         active_search_ranges_by_line,
         frame_action_links,
@@ -56,6 +58,7 @@ pub(in crate::features) fn terminal_line_decorations_cache_key(
         row.signature.hash(&mut hasher);
     }
     selection.hash(&mut hasher);
+    hash_ranges_by_line(selected_occurrence_ranges_by_line, &mut hasher);
     include_action_links.hash(&mut hasher);
     include_hyperlinks.hash(&mut hasher);
     include_command_marks.hash(&mut hasher);
@@ -219,6 +222,7 @@ pub(in crate::features) fn build_terminal_line_decorations(
 ) -> Vec<TerminalLineDecorations> {
     let TerminalDecorationSources {
         selection,
+        selected_occurrence_ranges_by_line,
         search_ranges_by_line,
         active_search_ranges_by_line,
         frame_action_links,
@@ -264,6 +268,11 @@ pub(in crate::features) fn build_terminal_line_decorations(
             .then(|| snapshot.row(line_index).and_then(|row| row.command_mark))
             .flatten();
         line_decorations.push(TerminalLineDecorations {
+            selected_occurrence_ranges: selected_occurrence_ranges_by_line
+                .get(&line_index)
+                .map(|ranges| ranges.as_slice())
+                .unwrap_or(&empty_ranges)
+                .to_vec(),
             search_ranges: line_search_ranges.to_vec(),
             active_search_ranges: line_active_search_ranges.to_vec(),
             selection_cols,
@@ -276,12 +285,14 @@ pub(in crate::features) fn build_terminal_line_decorations(
 
 pub(in crate::features) fn terminal_line_decorations_needed(
     has_selection: bool,
+    has_selected_occurrences: bool,
     has_search_decorations: bool,
     has_frame_action_links: bool,
     has_hyperlinks: bool,
     has_command_marks: bool,
 ) -> bool {
     has_selection
+        || has_selected_occurrences
         || has_search_decorations
         || has_frame_action_links
         || has_hyperlinks
@@ -313,6 +324,7 @@ mod tests {
             &snapshot,
             &TerminalDecorationSources {
                 selection: Some(selection),
+                selected_occurrence_ranges_by_line: &HashMap::new(),
                 search_ranges_by_line: &HashMap::new(),
                 active_search_ranges_by_line: &HashMap::new(),
                 frame_action_links: &[],
@@ -349,6 +361,7 @@ mod tests {
             &snapshot,
             &TerminalDecorationSources {
                 selection: None,
+                selected_occurrence_ranges_by_line: &HashMap::new(),
                 search_ranges_by_line: &HashMap::new(),
                 active_search_ranges_by_line: &HashMap::new(),
                 frame_action_links: std::slice::from_ref(&links),
@@ -383,6 +396,7 @@ mod tests {
             &snapshot,
             &TerminalDecorationSources {
                 selection: None,
+                selected_occurrence_ranges_by_line: &HashMap::new(),
                 search_ranges_by_line: &HashMap::new(),
                 active_search_ranges_by_line: &HashMap::new(),
                 frame_action_links: std::slice::from_ref(&links),
@@ -429,6 +443,7 @@ mod tests {
             &snapshot,
             &TerminalDecorationSources {
                 selection: None,
+                selected_occurrence_ranges_by_line: &HashMap::new(),
                 search_ranges_by_line: &HashMap::new(),
                 active_search_ranges_by_line: &HashMap::new(),
                 frame_action_links: &[top_links, bottom_links],
@@ -463,6 +478,7 @@ mod tests {
             &snapshot,
             &TerminalDecorationSources {
                 selection: None,
+                selected_occurrence_ranges_by_line: &HashMap::new(),
                 search_ranges_by_line: &HashMap::new(),
                 active_search_ranges_by_line: &HashMap::new(),
                 frame_action_links: &[links],
@@ -514,6 +530,7 @@ mod tests {
             &snapshot,
             &TerminalDecorationSources {
                 selection: None,
+                selected_occurrence_ranges_by_line: &HashMap::new(),
                 search_ranges_by_line: &HashMap::new(),
                 active_search_ranges_by_line: &HashMap::new(),
                 frame_action_links: &sources,
@@ -535,6 +552,7 @@ mod tests {
             &snapshot,
             &TerminalDecorationSources {
                 selection: Some(selection),
+                selected_occurrence_ranges_by_line: &HashMap::new(),
                 search_ranges_by_line: &HashMap::new(),
                 active_search_ranges_by_line: &HashMap::new(),
                 frame_action_links: &[],
@@ -549,6 +567,7 @@ mod tests {
                 selection: Some(TerminalSelection::with_anchor(TerminalBufferCellPos::new(
                     1, 2,
                 ))),
+                selected_occurrence_ranges_by_line: &HashMap::new(),
                 search_ranges_by_line: &HashMap::new(),
                 active_search_ranges_by_line: &HashMap::new(),
                 frame_action_links: &[],

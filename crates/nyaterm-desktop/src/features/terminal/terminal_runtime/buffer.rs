@@ -15,9 +15,9 @@ use crate::features::terminal::terminal_surface_entity::{
 use crate::models::{
     MainMode, TERMINAL_UI_OUTPUT_TAIL_CAP, TerminalFrameActionLinks, TerminalFrameEvent,
     TerminalFrameOutputEvent, TerminalFrameOutputSubmission, TerminalFrameParts,
-    TerminalFrameSearchEvent, TerminalFrameSearchKey, TerminalFrameSnapshotEvent,
-    TerminalSearchMode, TerminalViewState, TerminalWindowNode, WorkspacePaneNode,
-    append_terminal_ui_output_tail, terminal_action_link_matcher_key,
+    TerminalFrameSearchEvent, TerminalFrameSearchKey, TerminalFrameSearchPurpose,
+    TerminalFrameSnapshotEvent, TerminalSearchMode, TerminalViewState, TerminalWindowNode,
+    WorkspacePaneNode, append_terminal_ui_output_tail, terminal_action_link_matcher_key,
     terminal_frame_scroll_window_extra_rows, terminal_frame_search_result_is_current,
     terminal_snapshot_matches_grid_geometry,
 };
@@ -477,6 +477,7 @@ impl NyaTermApp {
     pub(in crate::features) fn request_terminal_frame_search(
         &mut self,
         session_id: &str,
+        purpose: TerminalFrameSearchPurpose,
         key: TerminalFrameSearchKey,
     ) -> bool {
         if session_id.is_empty() {
@@ -485,17 +486,34 @@ impl NyaTermApp {
         let Some(view) = self.terminal.view.views.get_mut(session_id) else {
             return false;
         };
-        if view.search_result.as_ref().is_some_and(|result| {
-            terminal_frame_search_result_is_current(result, &key, view.screen_revision)
-        }) || view.pending_search_key.as_ref() == Some(&key)
-        {
-            return false;
+        match purpose {
+            TerminalFrameSearchPurpose::Find => {
+                if view.search_result.as_ref().is_some_and(|result| {
+                    terminal_frame_search_result_is_current(result, &key, view.screen_revision)
+                }) || view.pending_search_key.as_ref() == Some(&key)
+                {
+                    return false;
+                }
+                view.pending_search_key = Some(key.clone());
+            }
+            TerminalFrameSearchPurpose::SelectedOccurrence => {
+                if view
+                    .selected_occurrence_result
+                    .as_ref()
+                    .is_some_and(|result| {
+                        terminal_frame_search_result_is_current(result, &key, view.screen_revision)
+                    })
+                    || view.pending_selected_occurrence_key.as_ref() == Some(&key)
+                {
+                    return false;
+                }
+                view.pending_selected_occurrence_key = Some(key.clone());
+            }
         }
-        view.pending_search_key = Some(key.clone());
         self.terminal
             .view
             .frame_pipeline
-            .request_search(session_id.to_string(), key);
+            .request_search(session_id.to_string(), purpose, key);
         true
     }
 
@@ -1049,13 +1067,30 @@ impl NyaTermApp {
             .views
             .get_mut(&frame.session_id)
             .map(|view| {
-                if view.pending_search_key.as_ref() == Some(&frame.result.key) {
-                    view.pending_search_key = None;
+                match frame.purpose {
+                    TerminalFrameSearchPurpose::Find => {
+                        if view.pending_search_key.as_ref() == Some(&frame.result.key) {
+                            view.pending_search_key = None;
+                        }
+                    }
+                    TerminalFrameSearchPurpose::SelectedOccurrence => {
+                        if view.pending_selected_occurrence_key.as_ref() == Some(&frame.result.key)
+                        {
+                            view.pending_selected_occurrence_key = None;
+                        }
+                    }
                 }
                 let current_revision = view.screen_revision;
                 let is_current_revision = frame.result.revision == current_revision;
                 if is_current_revision {
-                    view.search_result = Some(frame.result.clone());
+                    match frame.purpose {
+                        TerminalFrameSearchPurpose::Find => {
+                            view.search_result = Some(frame.result.clone());
+                        }
+                        TerminalFrameSearchPurpose::SelectedOccurrence => {
+                            view.selected_occurrence_result = Some(frame.result.clone());
+                        }
+                    }
                 }
                 (current_revision, is_current_revision)
             })
@@ -1087,19 +1122,26 @@ impl NyaTermApp {
             return TerminalFrameApplyResult::default();
         }
         let is_visible = self.terminal_session_has_visible_surface(&session_id);
-        let current_search_key = self.terminal_search_key();
-        terminal_search_frame_apply_result(
-            session_id,
-            true,
-            is_visible,
-            self.session.active_id(),
-            self.terminal.search.open,
-            self.terminal.search.mode,
-            TerminalFrameSearchKeys {
-                current: current_search_key.as_ref(),
-                result: &result_key,
-            },
-        )
+        if frame.purpose == TerminalFrameSearchPurpose::Find {
+            let current_search_key = self.terminal_search_key();
+            terminal_search_frame_apply_result(
+                session_id,
+                true,
+                is_visible,
+                self.session.active_id(),
+                self.terminal.search.open,
+                self.terminal.search.mode,
+                TerminalFrameSearchKeys {
+                    current: current_search_key.as_ref(),
+                    result: &result_key,
+                },
+            )
+        } else {
+            TerminalFrameApplyResult {
+                chrome_dirty: false,
+                surface_notify: is_visible.then_some(TerminalSurfaceFrameNotify::Full(session_id)),
+            }
+        }
     }
 
     pub(in crate::features) fn enforce_terminal_scrollback_limit(&mut self) {
@@ -1764,8 +1806,8 @@ mod frame_event_queue_tests {
     use crate::models::TerminalProtocolState;
     use crate::models::{
         TerminalFrameActionLinks, TerminalFrameEvent, TerminalFrameOutputEvent,
-        TerminalFrameSearchEvent, TerminalFrameSearchKey, TerminalFrameSearchResult,
-        TerminalFrameSnapshotEvent, TerminalViewState,
+        TerminalFrameSearchEvent, TerminalFrameSearchKey, TerminalFrameSearchPurpose,
+        TerminalFrameSearchResult, TerminalFrameSnapshotEvent, TerminalViewState,
     };
     use nyaterm_core::ActionLinksMatcherSettings;
 
@@ -1812,6 +1854,7 @@ mod frame_event_queue_tests {
     fn search_frame(session_id: &str) -> TerminalFrameEvent {
         TerminalFrameEvent::Search(TerminalFrameSearchEvent {
             session_id: session_id.to_string(),
+            purpose: TerminalFrameSearchPurpose::Find,
             result: TerminalFrameSearchResult {
                 key: TerminalFrameSearchKey {
                     query: "query".to_string(),

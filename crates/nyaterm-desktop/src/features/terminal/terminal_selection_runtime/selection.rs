@@ -6,7 +6,10 @@ use nyaterm_terminal::TerminalSnapshot;
 use crate::features::NyaTermApp;
 use crate::features::terminal::terminal_runtime::TerminalMouseReportRequest;
 use crate::features::terminal::terminal_surface::terminal_absolute_line_for_snapshot_row;
-use crate::models::{TerminalBufferCellPos, TerminalCellPos, TerminalSelection};
+use crate::models::{
+    TerminalBufferCellPos, TerminalCellPos, TerminalFrameSearchKey, TerminalFrameSearchPurpose,
+    TerminalSelection,
+};
 use crate::terminal::{
     TerminalTextCell, terminal_is_zero_width_mark, terminal_text_cell_slice, terminal_text_cells,
 };
@@ -17,6 +20,9 @@ use super::metrics::{
 };
 
 const TERMINAL_SELECTION_DRAG_NOTIFY_DELAY: Duration = Duration::from_millis(8);
+const TERMINAL_SELECTED_OCCURRENCE_DEBOUNCE: Duration = Duration::from_millis(80);
+const TERMINAL_SELECTED_OCCURRENCE_LIMIT: usize = 2000;
+const TERMINAL_SELECTED_OCCURRENCE_MAX_CHARS: usize = 256;
 
 impl NyaTermApp {
     pub(in crate::features) fn clear_terminal_selection_state_for_session(
@@ -35,6 +41,7 @@ impl NyaTermApp {
         self.terminal.selection.selection = None;
         self.terminal.selection.session_id = None;
         self.terminal.selection.dragging = false;
+        self.clear_terminal_selected_occurrence_for_session(session_id);
     }
 
     fn notify_terminal_selection_owner_surface(&mut self, cx: &mut Context<Self>) {
@@ -54,6 +61,7 @@ impl NyaTermApp {
             self.terminal.selection.selection = None;
             self.terminal.selection.session_id = None;
             self.terminal.selection.dragging = false;
+            self.clear_terminal_selected_occurrence(cx);
             self.notify_terminal_surface_only(previous_session_id.as_deref(), cx);
         }
     }
@@ -63,9 +71,11 @@ impl NyaTermApp {
         if cols == 0 {
             self.terminal.selection.selection = None;
             self.terminal.selection.session_id = None;
+            self.clear_terminal_selected_occurrence(cx);
             self.notify_terminal_selection_owner_surface(cx);
             return;
         }
+        self.clear_terminal_selected_occurrence(cx);
         self.terminal.selection.selection = Some(TerminalSelection::all_buffer(cols));
         self.terminal.selection.session_id = self.session.active_id_owned();
         self.terminal.selection.dragging = false;
@@ -162,6 +172,9 @@ impl NyaTermApp {
         else {
             return;
         };
+        // A new selection invalidates the previous occurrence query immediately,
+        // including while a double/triple-click selection is being formed.
+        self.clear_terminal_selected_occurrence(cx);
         let cell = terminal_cell_for_visual_geometry(event.position, &geometry);
         let Some(buffer_cell) = self.terminal_buffer_cell_for_visual_geometry(
             selection_session_id.as_deref(),
@@ -240,6 +253,55 @@ impl NyaTermApp {
         self.terminal.selection.dragging = true;
         let _ = rows;
         self.notify_terminal_selection_owner_surface(cx);
+    }
+
+    fn clear_terminal_selected_occurrence_for_session(&mut self, session_id: &str) {
+        if self
+            .terminal
+            .selection
+            .selected_occurrence
+            .session_id
+            .as_deref()
+            != Some(session_id)
+        {
+            return;
+        }
+        self.terminal.selection.selected_occurrence.session_id = None;
+        self.terminal.selection.selected_occurrence.query = None;
+        self.terminal.selection.selected_occurrence.generation = self
+            .terminal
+            .selection
+            .selected_occurrence
+            .generation
+            .saturating_add(1);
+        if let Some(view) = self.terminal.view.views.get_mut(session_id) {
+            view.selected_occurrence_result = None;
+            view.pending_selected_occurrence_key = None;
+        }
+    }
+
+    fn clear_terminal_selected_occurrence(&mut self, cx: &mut Context<Self>) {
+        let session_id = self
+            .terminal
+            .selection
+            .selected_occurrence
+            .session_id
+            .clone();
+        self.terminal.selection.selected_occurrence.session_id = None;
+        self.terminal.selection.selected_occurrence.query = None;
+        self.terminal.selection.selected_occurrence.generation = self
+            .terminal
+            .selection
+            .selected_occurrence
+            .generation
+            .saturating_add(1);
+        if let Some(session_id) = session_id {
+            if let Some(view) = self.terminal.view.views.get_mut(&session_id) {
+                view.selected_occurrence_result = None;
+                view.pending_selected_occurrence_key = None;
+            }
+            self.notify_terminal_surface_only(Some(session_id.as_str()), cx);
+        }
     }
 
     pub(in crate::features) fn update_terminal_selection_drag(
@@ -321,6 +383,21 @@ impl NyaTermApp {
             return;
         }
         if !self.terminal.selection.dragging {
+            if self
+                .terminal
+                .selection
+                .selection
+                .as_ref()
+                .is_some_and(|selection| !selection.is_empty())
+            {
+                if self.settings.summary().interaction_copy_on_select {
+                    let _ = self.copy_terminal_selection(cx);
+                }
+                // Double/triple-click selections are committed on MouseDown,
+                // but occurrence search remains a MouseUp-only operation.
+                self.schedule_terminal_selected_occurrence_search(cx);
+                self.notify_terminal_selection_owner_surface(cx);
+            }
             // Stationary click without an active drag can still reposition the
             // tracked input cursor (Tauri handleTerminalMouseUp smart cursor).
             if self.terminal.selection.selection.is_none() {
@@ -358,6 +435,7 @@ impl NyaTermApp {
             .is_some_and(|selection| selection.is_empty())
         {
             self.terminal.selection.selection = None;
+            self.clear_terminal_selected_occurrence(cx);
             // Empty selection after click: try smart input cursor move.
             self.handle_smart_input_click(event, cx);
         } else if let Some(selected) = self.smart_cursor_selected_input_range() {
@@ -381,7 +459,70 @@ impl NyaTermApp {
             self.shell.set_status("selection ready".to_string());
             cx.notify();
         }
+        self.schedule_terminal_selected_occurrence_search(cx);
         self.notify_terminal_selection_owner_surface(cx);
+    }
+
+    fn schedule_terminal_selected_occurrence_search(&mut self, cx: &mut Context<Self>) {
+        let session_id = self
+            .terminal
+            .selection
+            .session_id
+            .clone()
+            .or_else(|| self.session.active_id_owned());
+        let Some(session_id) = session_id.filter(|id| !id.is_empty()) else {
+            self.clear_terminal_selected_occurrence(cx);
+            return;
+        };
+        let query = self
+            .selected_terminal_text()
+            .and_then(|text| terminal_selected_occurrence_query(&text));
+        let Some(query) = query else {
+            self.clear_terminal_selected_occurrence(cx);
+            return;
+        };
+        self.terminal.selection.selected_occurrence.session_id = Some(session_id.clone());
+        self.terminal.selection.selected_occurrence.query = Some(query.clone());
+        self.terminal.selection.selected_occurrence.generation = self
+            .terminal
+            .selection
+            .selected_occurrence
+            .generation
+            .saturating_add(1);
+        let generation = self.terminal.selection.selected_occurrence.generation;
+        cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(TERMINAL_SELECTED_OCCURRENCE_DEBOUNCE)
+                .await;
+            let _ = this.update(cx, |this, _cx| {
+                if this.terminal.selection.selected_occurrence.generation != generation
+                    || this
+                        .terminal
+                        .selection
+                        .selected_occurrence
+                        .session_id
+                        .as_deref()
+                        != Some(session_id.as_str())
+                    || this.terminal.selection.selected_occurrence.query.as_deref()
+                        != Some(query.as_str())
+                {
+                    return;
+                }
+                let key = TerminalFrameSearchKey {
+                    query: query.clone(),
+                    case_sensitive: true,
+                    regex: false,
+                    whole_word: false,
+                    limit: TERMINAL_SELECTED_OCCURRENCE_LIMIT,
+                };
+                let _ = this.request_terminal_frame_search(
+                    &session_id,
+                    TerminalFrameSearchPurpose::SelectedOccurrence,
+                    key,
+                );
+            });
+        })
+        .detach();
     }
 
     fn queue_terminal_selection_drag_visual_notify(&mut self, cx: &mut Context<Self>) {
@@ -496,6 +637,18 @@ fn terminal_all_lines_text(lines: Vec<String>) -> Option<String> {
     if text.is_empty() { None } else { Some(text) }
 }
 
+fn terminal_selected_occurrence_query(text: &str) -> Option<String> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() || trimmed.contains('\n') {
+        return None;
+    }
+    let char_count = trimmed.chars().count();
+    if !(2..=TERMINAL_SELECTED_OCCURRENCE_MAX_CHARS).contains(&char_count) {
+        return None;
+    }
+    Some(trimmed.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
@@ -503,7 +656,8 @@ mod tests {
     use crate::terminal::{TerminalTextCell, terminal_text_cell_slice, terminal_text_cells};
 
     use super::{
-        TERMINAL_SELECTION_DRAG_NOTIFY_DELAY, terminal_all_lines_text, terminal_text_cell_is_word,
+        TERMINAL_SELECTED_OCCURRENCE_MAX_CHARS, TERMINAL_SELECTION_DRAG_NOTIFY_DELAY,
+        terminal_all_lines_text, terminal_selected_occurrence_query, terminal_text_cell_is_word,
     };
 
     #[test]
@@ -597,6 +751,23 @@ mod tests {
                 String::new(),
             ]),
             Some("first\n\nlast".to_string())
+        );
+    }
+
+    #[test]
+    fn terminal_selected_occurrence_query_filters_short_multiline_and_long_text() {
+        assert_eq!(
+            terminal_selected_occurrence_query(" ab "),
+            Some("ab".to_string())
+        );
+        assert_eq!(terminal_selected_occurrence_query("a"), None);
+        assert_eq!(terminal_selected_occurrence_query("a\nb"), None);
+        assert_eq!(terminal_selected_occurrence_query("   "), None);
+        assert_eq!(
+            terminal_selected_occurrence_query(
+                &"x".repeat(TERMINAL_SELECTED_OCCURRENCE_MAX_CHARS + 1)
+            ),
+            None
         );
     }
 }

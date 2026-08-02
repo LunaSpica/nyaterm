@@ -1983,7 +1983,7 @@ mod tests {
         let geometry = terminal_resize_geometry_for_bounds(bounds, 10., 20., 0., 0.);
 
         assert_eq!(geometry.cols, 80);
-        assert_eq!(geometry.pixel_width, 800);
+        assert_eq!(geometry.pixel_width, text_width as u16);
     }
 
     #[test]

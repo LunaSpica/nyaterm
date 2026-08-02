@@ -360,6 +360,23 @@ impl NyaTermApp {
             let mut search_ranges_by_line: HashMap<usize, Vec<(usize, usize)>> = HashMap::new();
             let mut active_search_ranges_by_line: HashMap<usize, Vec<(usize, usize)>> =
                 HashMap::new();
+            let mut selected_occurrence_ranges_by_line: HashMap<usize, Vec<(usize, usize)>> =
+                HashMap::new();
+            if render_profile.enhanced_decorations_enabled() && is_active {
+                for search_match in self
+                    .terminal_selected_occurrence_matches_for_session(&session_id)
+                    .unwrap_or_default()
+                {
+                    let abs = search_match.line_index;
+                    if abs < abs_start || abs >= abs_end {
+                        continue;
+                    }
+                    selected_occurrence_ranges_by_line
+                        .entry(abs - abs_start)
+                        .or_default()
+                        .push((search_match.start_col, search_match.end_col));
+                }
+            }
             for (match_index, search_match) in search_matches.iter().enumerate() {
                 let abs = search_match.line_index;
                 if abs < abs_start || abs >= abs_end {
@@ -396,6 +413,7 @@ impl NyaTermApp {
                 None
             };
             let has_selection = terminal_selection.is_some();
+            let has_selected_occurrences = !selected_occurrence_ranges_by_line.is_empty();
             let has_search_decorations =
                 !search_ranges_by_line.is_empty() || !active_search_ranges_by_line.is_empty();
             let has_frame_action_links = action_links_enabled
@@ -409,6 +427,7 @@ impl NyaTermApp {
                 && snapshot.rows().iter().any(|row| row.command_mark.is_some());
             let needs_line_decorations = terminal_line_decorations_needed(
                 has_selection,
+                has_selected_occurrences,
                 has_search_decorations,
                 has_frame_action_links,
                 has_hyperlinks,
@@ -419,6 +438,7 @@ impl NyaTermApp {
                 let include_hyperlinks = action_links_enabled;
                 let decoration_sources = TerminalDecorationSources {
                     selection: terminal_selection,
+                    selected_occurrence_ranges_by_line: &selected_occurrence_ranges_by_line,
                     search_ranges_by_line: &search_ranges_by_line,
                     active_search_ranges_by_line: &active_search_ranges_by_line,
                     frame_action_links: &frame_action_links,
@@ -1394,26 +1414,26 @@ mod tests {
     #[test]
     fn terminal_line_decorations_skip_plain_viewport() {
         assert!(!terminal_line_decorations_needed(
-            false, false, false, false, false
+            false, false, false, false, false, false
         ));
     }
 
     #[test]
     fn terminal_line_decorations_keep_interactive_marks() {
         assert!(terminal_line_decorations_needed(
-            true, false, false, false, false
+            true, false, false, false, false, false
         ));
         assert!(terminal_line_decorations_needed(
-            false, true, false, false, false
+            false, true, false, false, false, false
         ));
         assert!(terminal_line_decorations_needed(
-            false, false, true, false, false
+            false, false, true, false, false, false
         ));
         assert!(terminal_line_decorations_needed(
-            false, false, false, true, false
+            false, false, false, true, false, false
         ));
         assert!(terminal_line_decorations_needed(
-            false, false, false, false, true
+            false, false, false, false, false, true
         ));
     }
 
@@ -1462,6 +1482,7 @@ mod tests {
             &snapshot,
             &TerminalDecorationSources {
                 selection: None,
+                selected_occurrence_ranges_by_line: &HashMap::new(),
                 search_ranges_by_line: &search,
                 active_search_ranges_by_line: &active,
                 frame_action_links: &[],
@@ -1477,6 +1498,7 @@ mod tests {
                     TerminalBufferCellPos::new(0, 1),
                     TerminalBufferCellPos::new(0, 3),
                 )),
+                selected_occurrence_ranges_by_line: &HashMap::new(),
                 search_ranges_by_line: &search,
                 active_search_ranges_by_line: &active,
                 frame_action_links: &[],
@@ -1507,6 +1529,7 @@ mod tests {
             &snapshot,
             &TerminalDecorationSources {
                 selection: None,
+                selected_occurrence_ranges_by_line: &HashMap::new(),
                 search_ranges_by_line: &search,
                 active_search_ranges_by_line: &active,
                 frame_action_links: std::slice::from_ref(&links),
@@ -1520,6 +1543,7 @@ mod tests {
             &snapshot,
             &TerminalDecorationSources {
                 selection: None,
+                selected_occurrence_ranges_by_line: &HashMap::new(),
                 search_ranges_by_line: &search,
                 active_search_ranges_by_line: &active,
                 frame_action_links: std::slice::from_ref(&links),
@@ -1541,6 +1565,7 @@ mod tests {
             &snapshot,
             &TerminalDecorationSources {
                 selection: None,
+                selected_occurrence_ranges_by_line: &HashMap::new(),
                 search_ranges_by_line: &search,
                 active_search_ranges_by_line: &active,
                 frame_action_links: &[],
@@ -1553,6 +1578,7 @@ mod tests {
             &snapshot,
             &TerminalDecorationSources {
                 selection: None,
+                selected_occurrence_ranges_by_line: &HashMap::new(),
                 search_ranges_by_line: &search,
                 active_search_ranges_by_line: &active,
                 frame_action_links: &[],

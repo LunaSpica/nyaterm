@@ -1,9 +1,12 @@
 use gpui::{Context, KeyDownEvent, Window};
 
+use crate::features::terminal::terminal_surface::{
+    TerminalOverviewMarker, TerminalOverviewMarkerKind,
+};
 use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::{
-    RecordingHistorySearchKey, RecordingWriteEvent, TerminalFrameSearchKey, TerminalSearchMode,
-    terminal_frame_search_result_is_current,
+    RecordingHistorySearchKey, RecordingWriteEvent, TerminalFrameSearchKey,
+    TerminalFrameSearchPurpose, TerminalSearchMode, terminal_frame_search_result_is_current,
 };
 use crate::terminal::TerminalBufferMatch;
 
@@ -84,7 +87,7 @@ impl NyaTermApp {
         let Some(key) = self.terminal_search_key() else {
             return false;
         };
-        self.request_terminal_frame_search(&session_id, key)
+        self.request_terminal_frame_search(&session_id, TerminalFrameSearchPurpose::Find, key)
     }
 
     pub(in crate::features) fn request_active_terminal_search(&mut self) {
@@ -112,6 +115,89 @@ impl NyaTermApp {
             })
             .map(|result| result.matches.clone())
             .unwrap_or_else(|| Ok(Vec::new()))
+    }
+
+    pub(in crate::features) fn terminal_selected_occurrence_matches_for_session(
+        &self,
+        session_id: &str,
+    ) -> Result<Vec<TerminalBufferMatch>, String> {
+        let Some(query) = self
+            .terminal
+            .selection
+            .selected_occurrence
+            .query
+            .as_ref()
+            .filter(|_| {
+                self.terminal
+                    .selection
+                    .selected_occurrence
+                    .session_id
+                    .as_deref()
+                    == Some(session_id)
+            })
+        else {
+            return Ok(Vec::new());
+        };
+        let Some(view) = self.terminal.view.views.get(session_id) else {
+            return Ok(Vec::new());
+        };
+        let key = TerminalFrameSearchKey {
+            query: query.clone(),
+            case_sensitive: true,
+            regex: false,
+            whole_word: false,
+            limit: 2000,
+        };
+        view.selected_occurrence_result
+            .as_ref()
+            .filter(|result| {
+                terminal_frame_search_result_is_current(result, &key, view.screen_revision)
+            })
+            .map(|result| result.matches.clone())
+            .unwrap_or_else(|| Ok(Vec::new()))
+    }
+
+    pub(in crate::features) fn terminal_overview_markers_for_session(
+        &self,
+        session_id: &str,
+    ) -> (Vec<TerminalOverviewMarker>, usize) {
+        let total_rows = self
+            .terminal
+            .view
+            .views
+            .get(session_id)
+            .map(|view| view.screen.total_rows())
+            .unwrap_or_else(|| self.terminal.view.screen.total_rows())
+            .max(1);
+        let mut markers = Vec::new();
+        if let Ok(matches) = self.terminal_selected_occurrence_matches_for_session(session_id) {
+            markers.extend(matches.into_iter().map(|m| TerminalOverviewMarker {
+                absolute_line: m.line_index,
+                kind: TerminalOverviewMarkerKind::SelectedOccurrence,
+            }));
+        }
+        if self.session.active_id() == Some(session_id)
+            && self.terminal.search.open
+            && self.terminal.search.mode == TerminalSearchMode::Buffer
+            && let Ok(matches) = self.terminal_buffer_matches()
+        {
+            let active_index = self
+                .terminal
+                .search
+                .active_index
+                .min(matches.len().saturating_sub(1));
+            for (index, m) in matches.into_iter().enumerate() {
+                markers.push(TerminalOverviewMarker {
+                    absolute_line: m.line_index,
+                    kind: if index == active_index {
+                        TerminalOverviewMarkerKind::ActiveSearchMatch
+                    } else {
+                        TerminalOverviewMarkerKind::SearchMatch
+                    },
+                });
+            }
+        }
+        (markers, total_rows)
     }
 
     /// Ensure the absolute buffer line is visible by adjusting scroll_offset.
