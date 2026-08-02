@@ -409,7 +409,6 @@ fn terminal_scroll_text_first_decorations(
         snapshot,
         &crate::features::terminal::terminal_surface::TerminalDecorationSources {
             selection: None,
-            selection_viewport_anchor_row: 0,
             search_ranges_by_line: &search_ranges_by_line,
             active_search_ranges_by_line: &active_search_ranges_by_line,
             frame_action_links,
@@ -1181,9 +1180,6 @@ impl NyaTermApp {
         } else {
             None
         };
-        let selection_viewport_anchor_row = terminal_selection
-            .map(|selection| selection.viewport_anchor_row)
-            .unwrap_or(0);
         let has_selection = terminal_selection.is_some();
         let has_search_decorations =
             !search_ranges_by_line.is_empty() || !active_search_ranges_by_line.is_empty();
@@ -1211,7 +1207,6 @@ impl NyaTermApp {
                 let decoration_sources =
                     crate::features::terminal::terminal_surface::TerminalDecorationSources {
                         selection: terminal_selection,
-                        selection_viewport_anchor_row,
                         search_ranges_by_line: &search_ranges_by_line,
                         active_search_ranges_by_line: &active_search_ranges_by_line,
                         frame_action_links: &frame_action_links,

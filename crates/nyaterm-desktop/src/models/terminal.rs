@@ -2569,60 +2569,55 @@ impl TerminalCellPos {
     }
 }
 
-/// Visible-grid text selection (start/end are inclusive cell positions).
+/// Absolute-buffer text selection (start/end are inclusive cell positions).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct TerminalBufferCellPos {
+    pub(crate) line: usize,
+    pub(crate) col: usize,
+}
+
+impl TerminalBufferCellPos {
+    pub(crate) fn new(line: usize, col: usize) -> Self {
+        Self { line, col }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct TerminalSelection {
-    pub(crate) anchor: TerminalCellPos,
-    pub(crate) head: TerminalCellPos,
-    pub(crate) display_offset: usize,
-    pub(crate) viewport_anchor_row: usize,
+    pub(crate) anchor: TerminalBufferCellPos,
+    pub(crate) head: TerminalBufferCellPos,
     pub(crate) all_buffer: bool,
 }
 
 impl TerminalSelection {
-    pub(crate) fn with_viewport(
-        anchor: TerminalCellPos,
-        display_offset: usize,
-        viewport_anchor_row: usize,
-    ) -> Self {
+    pub(crate) fn with_anchor(anchor: TerminalBufferCellPos) -> Self {
         Self {
             anchor,
             head: anchor,
-            display_offset,
-            viewport_anchor_row,
             all_buffer: false,
         }
     }
 
-    pub(crate) fn from_range(
-        anchor: TerminalCellPos,
-        head: TerminalCellPos,
-        display_offset: usize,
-        viewport_anchor_row: usize,
-    ) -> Self {
+    pub(crate) fn from_range(anchor: TerminalBufferCellPos, head: TerminalBufferCellPos) -> Self {
         Self {
             anchor,
             head,
-            display_offset,
-            viewport_anchor_row,
             all_buffer: false,
         }
     }
 
     pub(crate) fn all_buffer(cols: usize) -> Self {
         Self {
-            anchor: TerminalCellPos::new(0, 0),
-            head: TerminalCellPos::new(0, cols.saturating_sub(1)),
-            display_offset: 0,
-            viewport_anchor_row: 0,
+            anchor: TerminalBufferCellPos::new(0, 0),
+            head: TerminalBufferCellPos::new(0, cols.saturating_sub(1)),
             all_buffer: true,
         }
     }
 
-    pub(crate) fn ordered(&self) -> (TerminalCellPos, TerminalCellPos) {
+    pub(crate) fn ordered(&self) -> (TerminalBufferCellPos, TerminalBufferCellPos) {
         let a = self.anchor;
         let b = self.head;
-        if (a.row, a.col) <= (b.row, b.col) {
+        if (a.line, a.col) <= (b.line, b.col) {
             (a, b)
         } else {
             (b, a)
@@ -2635,7 +2630,7 @@ impl TerminalSelection {
 
     /// Column range [start, end) for a painted line, if any cells are selected.
     /// Endpoints are inclusive cell positions; returned range is half-open for slicing.
-    pub(crate) fn cols_for_row(&self, row: usize) -> Option<(usize, usize)> {
+    pub(crate) fn cols_for_absolute_line(&self, line: usize) -> Option<(usize, usize)> {
         if self.all_buffer {
             return Some((0, usize::MAX));
         }
@@ -2643,16 +2638,16 @@ impl TerminalSelection {
             return None;
         }
         let (start, end) = self.ordered();
-        if row < start.row || row > end.row {
+        if line < start.line || line > end.line {
             return None;
         }
-        if start.row == end.row {
+        if start.line == end.line {
             return Some((start.col, end.col.saturating_add(1)));
         }
-        if row == start.row {
+        if line == start.line {
             return Some((start.col, usize::MAX));
         }
-        if row == end.row {
+        if line == end.line {
             return Some((0, end.col.saturating_add(1)));
         }
         Some((0, usize::MAX))
@@ -2668,7 +2663,10 @@ mod terminal_selection_tests {
         let selection = TerminalSelection::all_buffer(80);
 
         assert!(!selection.is_empty());
-        assert_eq!(selection.cols_for_row(0), Some((0, usize::MAX)));
-        assert_eq!(selection.cols_for_row(10_000), Some((0, usize::MAX)));
+        assert_eq!(selection.cols_for_absolute_line(0), Some((0, usize::MAX)));
+        assert_eq!(
+            selection.cols_for_absolute_line(10_000),
+            Some((0, usize::MAX))
+        );
     }
 }

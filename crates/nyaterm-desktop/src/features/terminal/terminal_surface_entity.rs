@@ -137,6 +137,18 @@ pub(in crate::features) struct TerminalSurfaceHitTestScrollGeometry {
     pub(in crate::features) viewport_anchor_row: usize,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(in crate::features) struct TerminalPaintedHitTestGeometry {
+    pub(in crate::features) display_offset: usize,
+    pub(in crate::features) viewport_anchor_row: usize,
+    pub(in crate::features) snapshot_rows: usize,
+    pub(in crate::features) viewport_rows: usize,
+    pub(in crate::features) visual_y_offset: f32,
+    pub(in crate::features) cell_width: f32,
+    pub(in crate::features) cell_height: f32,
+    pub(in crate::features) revision: u64,
+}
+
 pub(in crate::features) struct TerminalSurfacePaintChrome {
     pub palette: ThemePalette,
     pub font_family: String,
@@ -278,6 +290,7 @@ pub(in crate::features) struct TerminalSurface {
     revision: u64,
     scroll_snapshot_pending_since: Option<Instant>,
     last_scroll_snapshot_pending_warn_at: Option<Instant>,
+    painted_hit_test_geometry: Option<TerminalPaintedHitTestGeometry>,
 }
 
 impl TerminalSurface {
@@ -335,6 +348,7 @@ impl TerminalSurface {
             revision: 0,
             scroll_snapshot_pending_since: None,
             last_scroll_snapshot_pending_warn_at: None,
+            painted_hit_test_geometry: None,
         }
     }
 
@@ -358,6 +372,12 @@ impl TerminalSurface {
             snapshot_rows: snapshot.row_count(),
             viewport_anchor_row,
         })
+    }
+
+    pub(in crate::features) fn painted_hit_test_geometry(
+        &self,
+    ) -> Option<TerminalPaintedHitTestGeometry> {
+        self.painted_hit_test_geometry
     }
 
     pub(in crate::features) fn snapshot_covering_display_offset(
@@ -1513,7 +1533,7 @@ impl TerminalSurface {
             return false;
         }
 
-        let next_rows = terminal_selection_visual_row_range(selection, line_count);
+        let next_rows = terminal_selection_visual_row_range(selection, snapshot.as_ref());
         let update_rows = terminal_selection_visual_row_union(
             self.selection_visual_row_range.clone(),
             next_rows.clone(),
@@ -1542,8 +1562,12 @@ impl TerminalSurface {
         let mut changed = false;
         for line_index in update_rows {
             let selection_cols = selection.and_then(|selection| {
-                let viewport_row = line_index.checked_sub(selection.viewport_anchor_row)?;
-                let (start, end) = selection.cols_for_row(viewport_row)?;
+                let absolute_line =
+                    crate::features::terminal::terminal_surface::terminal_absolute_line_for_snapshot_row(
+                        snapshot.as_ref(),
+                        line_index,
+                    )?;
+                let (start, end) = selection.cols_for_absolute_line(absolute_line)?;
                 let start = start.min(snapshot.cols);
                 let end = end.min(snapshot.cols);
                 (end > start).then_some((start, end))
@@ -2249,9 +2273,10 @@ fn terminal_surface_visible_rows_for_viewport(
 
 fn terminal_selection_visual_row_range(
     selection: Option<TerminalSelection>,
-    line_count: usize,
+    snapshot: &TerminalSnapshot,
 ) -> Option<Range<usize>> {
     let selection = selection?;
+    let line_count = snapshot.row_count();
     if selection.all_buffer {
         return Some(0..line_count);
     }
@@ -2259,13 +2284,14 @@ fn terminal_selection_visual_row_range(
         return None;
     }
     let (start, end) = selection.ordered();
-    let start_row = selection
-        .viewport_anchor_row
-        .saturating_add(start.row)
-        .min(line_count);
-    let end_row = selection
-        .viewport_anchor_row
-        .saturating_add(end.row)
+    let (snapshot_start, snapshot_end) = terminal_snapshot_absolute_window(snapshot)?;
+    if end.line < snapshot_start || start.line >= snapshot_end {
+        return None;
+    }
+    let start_row = start.line.saturating_sub(snapshot_start).min(line_count);
+    let end_row = end
+        .line
+        .saturating_sub(snapshot_start)
         .saturating_add(1)
         .min(line_count);
     (start_row < end_row).then_some(start_row..end_row)
@@ -2342,6 +2368,16 @@ impl Render for TerminalSurface {
                 viewport_rows: self.viewport_rows,
                 cell_height: cell_h,
             }) - viewport_anchor_row as f32 * cell_h;
+        self.painted_hit_test_geometry = Some(TerminalPaintedHitTestGeometry {
+            display_offset: self.display_offset,
+            viewport_anchor_row,
+            snapshot_rows: snapshot.row_count(),
+            viewport_rows: self.viewport_rows,
+            visual_y_offset,
+            cell_width: cell_w,
+            cell_height: cell_h,
+            revision: self.revision,
+        });
         let line_count = snapshot.row_count();
         let visible_gutter_rows = terminal_surface_visible_rows_for_viewport(
             self.viewport_rows,

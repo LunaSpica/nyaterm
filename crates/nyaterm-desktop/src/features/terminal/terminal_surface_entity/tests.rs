@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crate::models::TerminalCellPos;
+use crate::models::TerminalBufferCellPos;
 use crate::models::{TerminalProtocolState, TerminalSelection};
 use crate::terminal::{
     TerminalLineDecorations, compile_terminal_keyword_highlighter, terminal_keyword_rules_key,
@@ -1308,10 +1308,8 @@ fn selection_visual_update_preserves_existing_decorations() {
 
     assert!(
         surface.set_selection_visual(Some(TerminalSelection::from_range(
-            TerminalCellPos::new(0, 2),
-            TerminalCellPos::new(1, usize::MAX),
-            0,
-            0,
+            TerminalBufferCellPos::new(0, 2),
+            TerminalBufferCellPos::new(1, usize::MAX),
         )))
     );
     assert_eq!(surface.decorations[0].link_ranges, vec![(1, 3)]);
@@ -1331,46 +1329,41 @@ fn selection_visual_update_preserves_existing_decorations() {
 }
 
 #[test]
-fn selection_visual_row_range_tracks_viewport_anchor_and_union() {
-    assert_eq!(terminal_selection_visual_row_range(None, 8), None);
+fn selection_visual_row_range_tracks_absolute_lines_and_union() {
+    let snapshot = TerminalScreen::default().viewport_snapshot(0);
+    assert_eq!(terminal_selection_visual_row_range(None, &snapshot), None);
     assert_eq!(
         terminal_selection_visual_row_range(
-            Some(TerminalSelection::with_viewport(
-                TerminalCellPos::new(2, 4),
-                0,
-                0,
-            )),
-            8
+            Some(TerminalSelection::with_anchor(TerminalBufferCellPos::new(
+                2, 4,
+            ))),
+            &snapshot
         ),
         None
     );
     assert_eq!(
-        terminal_selection_visual_row_range(Some(TerminalSelection::all_buffer(80)), 8),
-        Some(0..8)
+        terminal_selection_visual_row_range(Some(TerminalSelection::all_buffer(80)), &snapshot),
+        Some(0..snapshot.row_count())
     );
     assert_eq!(
         terminal_selection_visual_row_range(
             Some(TerminalSelection::from_range(
-                TerminalCellPos::new(2, 1),
-                TerminalCellPos::new(4, 3),
-                0,
-                3,
+                TerminalBufferCellPos::new(5, 1),
+                TerminalBufferCellPos::new(7, 3),
             )),
-            10,
+            &snapshot,
         ),
         Some(5..8)
     );
     assert_eq!(
         terminal_selection_visual_row_range(
             Some(TerminalSelection::from_range(
-                TerminalCellPos::new(0, 1),
-                TerminalCellPos::new(5, 3),
-                0,
-                8,
+                TerminalBufferCellPos::new(8, 1),
+                TerminalBufferCellPos::new(13, 3),
             )),
-            10,
+            &snapshot,
         ),
-        Some(8..10)
+        Some(8..14.min(snapshot.row_count()))
     );
     assert_eq!(
         terminal_selection_visual_row_union(Some(2..4), Some(3..6)),
@@ -1420,10 +1413,8 @@ fn selection_visual_update_replaces_only_selection_cols() {
     let revision_before = surface.revision;
     assert!(
         surface.set_selection_visual(Some(TerminalSelection::from_range(
-            TerminalCellPos::new(3, 1),
-            TerminalCellPos::new(4, 4),
-            0,
-            0,
+            TerminalBufferCellPos::new(3, 1),
+            TerminalBufferCellPos::new(4, 4),
         )))
     );
 
@@ -1441,10 +1432,8 @@ fn selection_visual_update_replaces_only_selection_cols() {
     let revision_before_same_selection = surface.revision;
     assert!(
         !surface.set_selection_visual(Some(TerminalSelection::from_range(
-            TerminalCellPos::new(3, 1),
-            TerminalCellPos::new(4, 4),
-            0,
-            0,
+            TerminalBufferCellPos::new(3, 1),
+            TerminalBufferCellPos::new(4, 4),
         )))
     );
     assert_eq!(surface.revision, revision_before_same_selection);

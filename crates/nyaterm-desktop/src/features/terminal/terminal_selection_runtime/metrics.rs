@@ -216,10 +216,30 @@ impl NyaTermApp {
         let bounds = session_id
             .and_then(|id| self.terminal.layout.session_surface_bounds.get(id).copied())
             .or(self.terminal.layout.surface_bounds)?;
-        let (cell_w, cell_h) = self.terminal_cell_size();
+        let (fallback_cell_w, fallback_cell_h) = self.terminal_cell_size();
         let insets = self.terminal_content_insets_for_bounds(session_id, bounds);
         let gutter = self.terminal_gutter_width_px_for_session(session_id);
         let (rows, cols) = self.terminal_grid_size_for_session(session_id);
+        if let Some(painted) = session_id
+            .and_then(|session_id| self.terminal.view.surfaces.get(session_id))
+            .and_then(|surface| surface.read(cx).painted_hit_test_geometry())
+        {
+            return Some(TerminalHitTestGeometry {
+                bounds,
+                cell_w: painted.cell_width,
+                cell_h: painted.cell_height,
+                padding_left: insets.left,
+                padding_top: insets.top,
+                gutter,
+                rows,
+                cols,
+                display_offset: painted.display_offset,
+                viewport_anchor_row: painted.viewport_anchor_row,
+                snapshot_rows: painted.snapshot_rows,
+                viewport_rows: painted.viewport_rows,
+                visual_y_offset: painted.visual_y_offset,
+            });
+        }
         let target_display_offset = self.terminal_display_offset_for_session(session_id);
         let snapshot = self.terminal_snapshot_for_session(session_id, target_display_offset);
         let viewport_rows = self.terminal_viewport_rows_for_session(session_id);
@@ -239,38 +259,20 @@ impl NyaTermApp {
                 snapshot_rows: snapshot.row_count(),
                 viewport_anchor_row: fallback_viewport_anchor_row,
             });
-        let (scroll_offset, residual_lines) = if let Some(session_id) = session_id {
-            self.terminal
-                .view
-                .views
-                .get(session_id)
-                .map(|view| {
-                    (
-                        view.scroll_offset,
-                        self.terminal_scroll_residual_for_session(Some(session_id)),
-                    )
-                })
-                .unwrap_or((target_display_offset, 0.0))
-        } else {
-            (
-                self.terminal.view.scroll_offset,
-                self.terminal_scroll_residual_for_session(None),
-            )
-        };
         let visual_y_offset = terminal_hit_test_visual_y_offset_px(TerminalVisualScrollGeometry {
             snapshot_pending: scroll_geometry.snapshot_pending,
-            target_offset: scroll_offset,
+            target_offset: scroll_geometry.display_offset,
             displayed_offset: scroll_geometry.display_offset,
-            residual_lines,
+            residual_lines: 0.0,
             viewport_anchor_row: scroll_geometry.viewport_anchor_row,
             snapshot_rows: scroll_geometry.snapshot_rows,
             viewport_rows,
-            cell_height: cell_h,
+            cell_height: fallback_cell_h,
         });
         Some(TerminalHitTestGeometry {
             bounds,
-            cell_w,
-            cell_h,
+            cell_w: fallback_cell_w,
+            cell_h: fallback_cell_h,
             padding_left: insets.left,
             padding_top: insets.top,
             gutter,
@@ -278,6 +280,8 @@ impl NyaTermApp {
             cols,
             display_offset: scroll_geometry.display_offset,
             viewport_anchor_row: scroll_geometry.viewport_anchor_row,
+            snapshot_rows: scroll_geometry.snapshot_rows,
+            viewport_rows,
             visual_y_offset,
         })
     }
@@ -345,6 +349,8 @@ pub(in crate::features) struct TerminalHitTestGeometry {
     pub(in crate::features) cols: usize,
     pub(in crate::features) display_offset: usize,
     pub(in crate::features) viewport_anchor_row: usize,
+    pub(in crate::features) snapshot_rows: usize,
+    pub(in crate::features) viewport_rows: usize,
     pub(in crate::features) visual_y_offset: f32,
 }
 
@@ -371,6 +377,17 @@ pub(in crate::features) fn terminal_cell_for_visual_geometry(
         row.min(geometry.rows.saturating_sub(1)),
         col.min(geometry.cols.saturating_sub(1)),
     )
+}
+
+pub(in crate::features) fn terminal_snapshot_row_for_visual_geometry(
+    position: Point<Pixels>,
+    geometry: &TerminalHitTestGeometry,
+) -> usize {
+    let cell_h = geometry.cell_h.max(1.0);
+    let local_y = f32::from(position.y - geometry.bounds.origin.y) - geometry.padding_top;
+    ((local_y - geometry.visual_y_offset) / cell_h)
+        .floor()
+        .max(0.0) as usize
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -576,6 +593,8 @@ mod tests {
             cols: 80,
             display_offset: 10,
             viewport_anchor_row: 5,
+            snapshot_rows: 40,
+            viewport_rows: 24,
             visual_y_offset: -80.0,
         };
 
@@ -612,6 +631,8 @@ mod tests {
             cols: 80,
             display_offset: 3,
             viewport_anchor_row: 5,
+            snapshot_rows: 40,
+            viewport_rows: 24,
             visual_y_offset: -72.0,
         };
 
@@ -660,6 +681,8 @@ mod tests {
             cols: 80,
             display_offset: 0,
             viewport_anchor_row,
+            snapshot_rows: 40,
+            viewport_rows: 20,
             visual_y_offset,
         };
         let viewport_row = 3;
@@ -704,6 +727,8 @@ mod tests {
                 cols: 80,
                 display_offset: 4,
                 viewport_anchor_row,
+                snapshot_rows: 40,
+                viewport_rows: 24,
                 visual_y_offset,
             };
             let cell = terminal_cell_for_visual_geometry(

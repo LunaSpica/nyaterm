@@ -8,7 +8,6 @@ use crate::terminal::TerminalLineDecorations;
 #[derive(Clone, Copy)]
 pub(in crate::features) struct TerminalDecorationSources<'a> {
     pub selection: Option<TerminalSelection>,
-    pub selection_viewport_anchor_row: usize,
     pub search_ranges_by_line: &'a HashMap<usize, Vec<(usize, usize)>>,
     pub active_search_ranges_by_line: &'a HashMap<usize, Vec<(usize, usize)>>,
     pub frame_action_links: &'a [TerminalFrameActionLinks],
@@ -25,13 +24,23 @@ pub(in crate::features) fn terminal_snapshot_absolute_range(
     (start, end)
 }
 
+pub(in crate::features) fn terminal_absolute_line_for_snapshot_row(
+    snapshot: &nyaterm_terminal::TerminalSnapshot,
+    snapshot_row: usize,
+) -> Option<usize> {
+    if snapshot_row >= snapshot.row_count() {
+        return None;
+    }
+    let (start, _) = terminal_snapshot_absolute_range(snapshot);
+    Some(start.saturating_add(snapshot_row))
+}
+
 pub(in crate::features) fn terminal_line_decorations_cache_key(
     snapshot: &nyaterm_terminal::TerminalSnapshot,
     sources: &TerminalDecorationSources<'_>,
 ) -> u64 {
     let TerminalDecorationSources {
         selection,
-        selection_viewport_anchor_row,
         search_ranges_by_line,
         active_search_ranges_by_line,
         frame_action_links,
@@ -47,7 +56,6 @@ pub(in crate::features) fn terminal_line_decorations_cache_key(
         row.signature.hash(&mut hasher);
     }
     selection.hash(&mut hasher);
-    selection_viewport_anchor_row.hash(&mut hasher);
     include_action_links.hash(&mut hasher);
     include_hyperlinks.hash(&mut hasher);
     include_command_marks.hash(&mut hasher);
@@ -211,7 +219,6 @@ pub(in crate::features) fn build_terminal_line_decorations(
 ) -> Vec<TerminalLineDecorations> {
     let TerminalDecorationSources {
         selection,
-        selection_viewport_anchor_row,
         search_ranges_by_line,
         active_search_ranges_by_line,
         frame_action_links,
@@ -223,10 +230,9 @@ pub(in crate::features) fn build_terminal_line_decorations(
     let mut line_decorations = Vec::with_capacity(line_count);
     let empty_ranges: [(usize, usize); 0] = [];
     for line_index in 0..line_count {
-        let selection_cols = line_index
-            .checked_sub(selection_viewport_anchor_row)
-            .and_then(|viewport_row| {
-                selection.and_then(|selection| selection.cols_for_row(viewport_row))
+        let selection_cols = terminal_absolute_line_for_snapshot_row(snapshot, line_index)
+            .and_then(|absolute_line| {
+                selection.and_then(|selection| selection.cols_for_absolute_line(absolute_line))
             });
         let mut link_ranges: Vec<(usize, usize)> = if include_action_links {
             terminal_action_link_ranges_for_snapshot_row(snapshot, line_index, frame_action_links)
@@ -286,7 +292,7 @@ pub(in crate::features) fn terminal_line_decorations_needed(
 mod tests {
     use std::collections::HashMap;
 
-    use crate::models::TerminalCellPos;
+    use crate::models::TerminalBufferCellPos;
     use crate::models::{TerminalFrameActionLinks, TerminalSelection, TerminalViewState};
 
     use super::{
@@ -296,20 +302,17 @@ mod tests {
     };
 
     #[test]
-    fn selection_decorations_map_viewport_rows_through_snapshot_anchor() {
+    fn selection_decorations_map_absolute_lines_through_snapshot_window() {
         let snapshot = nyaterm_terminal::TerminalScreen::default().viewport_snapshot(0);
         let selection = TerminalSelection::from_range(
-            TerminalCellPos::new(0, 2),
-            TerminalCellPos::new(1, 4),
-            0,
-            2,
+            TerminalBufferCellPos::new(2, 2),
+            TerminalBufferCellPos::new(3, 4),
         );
 
         let decorations = build_terminal_line_decorations(
             &snapshot,
             &TerminalDecorationSources {
                 selection: Some(selection),
-                selection_viewport_anchor_row: 2,
                 search_ranges_by_line: &HashMap::new(),
                 active_search_ranges_by_line: &HashMap::new(),
                 frame_action_links: &[],
@@ -346,7 +349,6 @@ mod tests {
             &snapshot,
             &TerminalDecorationSources {
                 selection: None,
-                selection_viewport_anchor_row: 0,
                 search_ranges_by_line: &HashMap::new(),
                 active_search_ranges_by_line: &HashMap::new(),
                 frame_action_links: std::slice::from_ref(&links),
@@ -381,7 +383,6 @@ mod tests {
             &snapshot,
             &TerminalDecorationSources {
                 selection: None,
-                selection_viewport_anchor_row: 0,
                 search_ranges_by_line: &HashMap::new(),
                 active_search_ranges_by_line: &HashMap::new(),
                 frame_action_links: std::slice::from_ref(&links),
@@ -428,7 +429,6 @@ mod tests {
             &snapshot,
             &TerminalDecorationSources {
                 selection: None,
-                selection_viewport_anchor_row: 0,
                 search_ranges_by_line: &HashMap::new(),
                 active_search_ranges_by_line: &HashMap::new(),
                 frame_action_links: &[top_links, bottom_links],
@@ -463,7 +463,6 @@ mod tests {
             &snapshot,
             &TerminalDecorationSources {
                 selection: None,
-                selection_viewport_anchor_row: 0,
                 search_ranges_by_line: &HashMap::new(),
                 active_search_ranges_by_line: &HashMap::new(),
                 frame_action_links: &[links],
@@ -515,7 +514,6 @@ mod tests {
             &snapshot,
             &TerminalDecorationSources {
                 selection: None,
-                selection_viewport_anchor_row: 0,
                 search_ranges_by_line: &HashMap::new(),
                 active_search_ranges_by_line: &HashMap::new(),
                 frame_action_links: &sources,
@@ -529,15 +527,14 @@ mod tests {
     }
 
     #[test]
-    fn decoration_cache_key_tracks_selection_viewport_anchor() {
+    fn decoration_cache_key_tracks_selection_absolute_line() {
         let snapshot = nyaterm_terminal::TerminalScreen::default().viewport_snapshot(0);
-        let selection = TerminalSelection::with_viewport(TerminalCellPos::new(0, 2), 0, 0);
+        let selection = TerminalSelection::with_anchor(TerminalBufferCellPos::new(0, 2));
 
         let first = terminal_line_decorations_cache_key(
             &snapshot,
             &TerminalDecorationSources {
                 selection: Some(selection),
-                selection_viewport_anchor_row: 0,
                 search_ranges_by_line: &HashMap::new(),
                 active_search_ranges_by_line: &HashMap::new(),
                 frame_action_links: &[],
@@ -549,8 +546,9 @@ mod tests {
         let second = terminal_line_decorations_cache_key(
             &snapshot,
             &TerminalDecorationSources {
-                selection: Some(selection),
-                selection_viewport_anchor_row: 1,
+                selection: Some(TerminalSelection::with_anchor(TerminalBufferCellPos::new(
+                    1, 2,
+                ))),
                 search_ranges_by_line: &HashMap::new(),
                 active_search_ranges_by_line: &HashMap::new(),
                 frame_action_links: &[],

@@ -395,9 +395,6 @@ impl NyaTermApp {
             } else {
                 None
             };
-            let selection_viewport_anchor_row = terminal_selection
-                .map(|selection| selection.viewport_anchor_row)
-                .unwrap_or(0);
             let has_selection = terminal_selection.is_some();
             let has_search_decorations =
                 !search_ranges_by_line.is_empty() || !active_search_ranges_by_line.is_empty();
@@ -422,7 +419,6 @@ impl NyaTermApp {
                 let include_hyperlinks = action_links_enabled;
                 let decoration_sources = TerminalDecorationSources {
                     selection: terminal_selection,
-                    selection_viewport_anchor_row,
                     search_ranges_by_line: &search_ranges_by_line,
                     active_search_ranges_by_line: &active_search_ranges_by_line,
                     frame_action_links: &frame_action_links,
@@ -1387,7 +1383,7 @@ mod tests {
     use nyaterm_terminal::TerminalScreen;
 
     use crate::models::TerminalPerformanceMode;
-    use crate::models::{TerminalCellPos, TerminalFrameActionLinks, TerminalSelection};
+    use crate::models::{TerminalBufferCellPos, TerminalFrameActionLinks, TerminalSelection};
 
     use super::super::decorations::{
         TerminalDecorationSources, terminal_line_decorations_cache_key,
@@ -1466,7 +1462,6 @@ mod tests {
             &snapshot,
             &TerminalDecorationSources {
                 selection: None,
-                selection_viewport_anchor_row: 0,
                 search_ranges_by_line: &search,
                 active_search_ranges_by_line: &active,
                 frame_action_links: &[],
@@ -1479,12 +1474,9 @@ mod tests {
             &snapshot,
             &TerminalDecorationSources {
                 selection: Some(TerminalSelection::from_range(
-                    TerminalCellPos::new(0, 1),
-                    TerminalCellPos::new(0, 3),
-                    0,
-                    0,
+                    TerminalBufferCellPos::new(0, 1),
+                    TerminalBufferCellPos::new(0, 3),
                 )),
-                selection_viewport_anchor_row: 0,
                 search_ranges_by_line: &search,
                 active_search_ranges_by_line: &active,
                 frame_action_links: &[],
@@ -1515,7 +1507,6 @@ mod tests {
             &snapshot,
             &TerminalDecorationSources {
                 selection: None,
-                selection_viewport_anchor_row: 0,
                 search_ranges_by_line: &search,
                 active_search_ranges_by_line: &active,
                 frame_action_links: std::slice::from_ref(&links),
@@ -1529,7 +1520,6 @@ mod tests {
             &snapshot,
             &TerminalDecorationSources {
                 selection: None,
-                selection_viewport_anchor_row: 0,
                 search_ranges_by_line: &search,
                 active_search_ranges_by_line: &active,
                 frame_action_links: std::slice::from_ref(&links),
@@ -1551,7 +1541,6 @@ mod tests {
             &snapshot,
             &TerminalDecorationSources {
                 selection: None,
-                selection_viewport_anchor_row: 0,
                 search_ranges_by_line: &search,
                 active_search_ranges_by_line: &active,
                 frame_action_links: &[],
@@ -1564,7 +1553,6 @@ mod tests {
             &snapshot,
             &TerminalDecorationSources {
                 selection: None,
-                selection_viewport_anchor_row: 0,
                 search_ranges_by_line: &search,
                 active_search_ranges_by_line: &active,
                 frame_action_links: &[],

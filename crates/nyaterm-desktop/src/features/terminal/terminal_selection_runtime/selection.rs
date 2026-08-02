@@ -5,12 +5,16 @@ use nyaterm_terminal::TerminalSnapshot;
 
 use crate::features::NyaTermApp;
 use crate::features::terminal::terminal_runtime::TerminalMouseReportRequest;
-use crate::models::{TerminalCellPos, TerminalSelection};
+use crate::features::terminal::terminal_surface::terminal_absolute_line_for_snapshot_row;
+use crate::models::{TerminalBufferCellPos, TerminalCellPos, TerminalSelection};
 use crate::terminal::{
     TerminalTextCell, terminal_is_zero_width_mark, terminal_text_cell_slice, terminal_text_cells,
 };
 
-use super::metrics::terminal_cell_for_visual_geometry;
+use super::metrics::{
+    TerminalHitTestGeometry, terminal_cell_for_visual_geometry,
+    terminal_snapshot_row_for_visual_geometry,
+};
 
 const TERMINAL_SELECTION_DRAG_NOTIFY_DELAY: Duration = Duration::from_millis(8);
 
@@ -94,20 +98,16 @@ impl NyaTermApp {
                 .unwrap_or_else(|| self.terminal.view.screen.all_lines());
             return terminal_all_lines_text(lines);
         }
-        let offset = selection.display_offset;
-        let snapshot = self.terminal_snapshot_for_session(session_id, offset);
         let (start, end) = selection.ordered();
+        let lines = session_id
+            .and_then(|session_id| self.terminal.view.views.get(session_id))
+            .map(|view| view.screen.all_lines())
+            .unwrap_or_else(|| self.terminal.view.screen.all_lines());
         let mut parts = Vec::new();
-        for row in start.row..=end.row {
-            let snapshot_row = selection
-                .viewport_anchor_row
-                .checked_add(row)
-                .filter(|row| *row < snapshot.row_count());
-            let line = snapshot_row
-                .and_then(|row| snapshot.line(row))
-                .unwrap_or("");
+        for line_index in start.line..=end.line {
+            let line = lines.get(line_index).map(String::as_str).unwrap_or("");
             let cells = terminal_text_cells(line);
-            let (col_start, col_end_excl) = selection.cols_for_row(row)?;
+            let (col_start, col_end_excl) = selection.cols_for_absolute_line(line_index)?;
             let col_end = col_end_excl.min(cells.len().max(col_start));
             let col_start = col_start.min(col_end);
             let slice = terminal_text_cell_slice(&cells, col_start, col_end);
@@ -163,6 +163,13 @@ impl NyaTermApp {
             return;
         };
         let cell = terminal_cell_for_visual_geometry(event.position, &geometry);
+        let Some(buffer_cell) = self.terminal_buffer_cell_for_visual_geometry(
+            selection_session_id.as_deref(),
+            event.position,
+            &geometry,
+        ) else {
+            return;
+        };
         // Applications with mouse tracking (vim/less/tmux) consume left presses.
         if let Some(session_id) = selection_session_id.as_deref()
             && self.maybe_send_mouse_report_for_session(
@@ -187,7 +194,7 @@ impl NyaTermApp {
             && event.click_count <= 1
             && let Some(selection) = self.terminal.selection.selection.as_mut()
         {
-            selection.head = cell;
+            selection.head = buffer_cell;
             if self.terminal.selection.session_id.is_none() {
                 self.terminal.selection.session_id = selection_session_id;
             }
@@ -198,10 +205,8 @@ impl NyaTermApp {
         }
         if event.click_count >= 3 {
             self.terminal.selection.selection = Some(TerminalSelection::from_range(
-                TerminalCellPos::new(cell.row, 0),
-                TerminalCellPos::new(cell.row, cols.saturating_sub(1)),
-                geometry.display_offset,
-                geometry.viewport_anchor_row,
+                TerminalBufferCellPos::new(buffer_cell.line, 0),
+                TerminalBufferCellPos::new(buffer_cell.line, cols.saturating_sub(1)),
             ));
             self.terminal.selection.session_id = selection_session_id;
             self.terminal.selection.dragging = false;
@@ -220,10 +225,8 @@ impl NyaTermApp {
                 geometry.viewport_anchor_row,
             );
             self.terminal.selection.selection = Some(TerminalSelection::from_range(
-                TerminalCellPos::new(cell.row, word.0),
-                TerminalCellPos::new(cell.row, word.1.saturating_sub(1).max(word.0)),
-                geometry.display_offset,
-                geometry.viewport_anchor_row,
+                TerminalBufferCellPos::new(buffer_cell.line, word.0),
+                TerminalBufferCellPos::new(buffer_cell.line, word.1.saturating_sub(1).max(word.0)),
             ));
             self.terminal.selection.session_id = selection_session_id;
             self.terminal.selection.dragging = false;
@@ -232,11 +235,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        self.terminal.selection.selection = Some(TerminalSelection::with_viewport(
-            cell,
-            geometry.display_offset,
-            geometry.viewport_anchor_row,
-        ));
+        self.terminal.selection.selection = Some(TerminalSelection::with_anchor(buffer_cell));
         self.terminal.selection.session_id = selection_session_id;
         self.terminal.selection.dragging = true;
         let _ = rows;
@@ -291,11 +290,17 @@ impl NyaTermApp {
         else {
             return;
         };
-        let cell = terminal_cell_for_visual_geometry(event.position, &geometry);
+        let Some(buffer_cell) = self.terminal_buffer_cell_for_visual_geometry(
+            selection_session_id,
+            event.position,
+            &geometry,
+        ) else {
+            return;
+        };
         if let Some(selection) = self.terminal.selection.selection.as_mut()
-            && selection.head != cell
+            && selection.head != buffer_cell
         {
-            selection.head = cell;
+            selection.head = buffer_cell;
             if self.terminal.selection.session_id.is_none() {
                 self.terminal.selection.session_id = selection_session_id.map(str::to_string);
             }
@@ -333,9 +338,15 @@ impl NyaTermApp {
         if let Some(geometry) =
             self.terminal_hit_test_geometry_for_session(selection_session_id, cx)
         {
-            let cell = terminal_cell_for_visual_geometry(event.position, &geometry);
+            let buffer_cell = self.terminal_buffer_cell_for_visual_geometry(
+                selection_session_id,
+                event.position,
+                &geometry,
+            );
             if let Some(selection) = self.terminal.selection.selection.as_mut() {
-                selection.head = cell;
+                if let Some(buffer_cell) = buffer_cell {
+                    selection.head = buffer_cell;
+                }
             }
         }
         self.terminal.selection.dragging = false;
@@ -450,6 +461,21 @@ impl NyaTermApp {
             end += 1;
         }
         (start, end)
+    }
+
+    fn terminal_buffer_cell_for_visual_geometry(
+        &self,
+        session_id: Option<&str>,
+        position: gpui::Point<gpui::Pixels>,
+        geometry: &TerminalHitTestGeometry,
+    ) -> Option<TerminalBufferCellPos> {
+        let snapshot_row = terminal_snapshot_row_for_visual_geometry(position, geometry)
+            .min(geometry.snapshot_rows.saturating_sub(1));
+        let snapshot = self.terminal_snapshot_for_session(session_id, geometry.display_offset);
+        let absolute_line =
+            terminal_absolute_line_for_snapshot_row(snapshot.as_ref(), snapshot_row)?;
+        let viewport_cell = terminal_cell_for_visual_geometry(position, geometry);
+        Some(TerminalBufferCellPos::new(absolute_line, viewport_cell.col))
     }
 }
 

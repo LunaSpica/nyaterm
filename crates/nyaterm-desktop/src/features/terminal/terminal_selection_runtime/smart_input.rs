@@ -138,7 +138,7 @@ impl NyaTermApp {
         }
         // Only single-row selections can map to a single-line tracked input.
         let (start, end) = selection.ordered();
-        if start.row != end.row {
+        if start.line != end.line {
             return None;
         }
 
@@ -149,19 +149,20 @@ impl NyaTermApp {
         }
         let snapshot = self.terminal_snapshot_for_session(self.session.active_id(), 0);
 
-        let snapshot_row = self.terminal_snapshot_row_for_session_viewport_row(
-            self.session.active_id(),
-            snapshot.as_ref(),
-            0,
-            start.row,
-        )?;
+        let snapshot_row =
+            crate::features::terminal::terminal_surface::terminal_absolute_line_for_snapshot_row(
+                snapshot.as_ref(),
+                snapshot.cursor.row,
+            )
+            .filter(|line| *line == start.line)
+            .map(|_| snapshot.cursor.row)?;
         if snapshot_row != snapshot.cursor.row {
             return None;
         }
 
         let line = snapshot.line(snapshot_row).unwrap_or("");
         let line_cells = smart_input_cells(line);
-        let (col_start, col_end_excl) = selection.cols_for_row(start.row)?;
+        let (col_start, col_end_excl) = selection.cols_for_absolute_line(start.line)?;
         let col_end = col_end_excl.min(line_cells.len().max(col_start));
         let col_start = col_start.min(col_end);
         if col_end <= col_start {
