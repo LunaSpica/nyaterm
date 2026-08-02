@@ -846,6 +846,7 @@ impl NyaTermApp {
                 snapshot_ms = snapshot_duration.as_millis(),
                 snapshot_reused_rows = snapshot_stats.reused_rows,
                 snapshot_rebuilt_rows = snapshot_stats.rebuilt_rows,
+                snapshot_inspected_rows = snapshot_stats.inspected_rows,
                 process_ms = process_duration.as_millis(),
                 "slow terminal frame processing"
             );
@@ -857,6 +858,7 @@ impl NyaTermApp {
                 snapshot_us = snapshot_duration.as_micros(),
                 snapshot_reused_rows = snapshot_stats.reused_rows,
                 snapshot_rebuilt_rows = snapshot_stats.rebuilt_rows,
+                snapshot_inspected_rows = snapshot_stats.inspected_rows,
                 "terminal frame snapshot row reuse"
             );
         }
@@ -960,6 +962,7 @@ impl NyaTermApp {
                 snapshot_ms = frame.snapshot_duration.as_millis(),
                 snapshot_reused_rows = frame.snapshot_stats.reused_rows,
                 snapshot_rebuilt_rows = frame.snapshot_stats.rebuilt_rows,
+                snapshot_inspected_rows = frame.snapshot_stats.inspected_rows,
                 process_ms = frame.process_duration.as_millis(),
                 "slow terminal frame snapshot"
             );
@@ -971,6 +974,7 @@ impl NyaTermApp {
             snapshot_us = frame.snapshot_duration.as_micros(),
             snapshot_reused_rows = frame.snapshot_stats.reused_rows,
             snapshot_rebuilt_rows = frame.snapshot_stats.rebuilt_rows,
+            snapshot_inspected_rows = frame.snapshot_stats.inspected_rows,
             "terminal frame snapshot row reuse"
         );
         // Snapshot applies only dirties the surface, not chrome.
@@ -1799,6 +1803,7 @@ mod frame_event_queue_tests {
             snapshot_stats: nyaterm_terminal::TerminalSnapshotBuildStats {
                 reused_rows: revision as usize,
                 rebuilt_rows: revision.saturating_add(1) as usize,
+                inspected_rows: revision.saturating_add(1) as usize,
             },
             process_duration: Duration::ZERO,
         })

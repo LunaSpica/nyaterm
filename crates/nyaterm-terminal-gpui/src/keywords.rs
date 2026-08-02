@@ -4,6 +4,7 @@ use std::ops::Range;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use aho_corasick::{AhoCorasick, AhoCorasickBuilder, MatchKind};
 use nyaterm_core::ResolvedKeywordHighlightRule;
 use nyaterm_terminal::{TerminalSnapshot, terminal_cell_col_for_byte_index};
 
@@ -19,9 +20,18 @@ pub(super) struct CompiledKeywordRule {
     pub(super) priority: usize,
 }
 
+#[derive(Debug, Clone)]
+struct CompiledLiteralKeywordRule {
+    pattern: String,
+    color: u32,
+    priority: usize,
+}
+
 pub struct TerminalKeywordHighlighter {
     rules_key: u64,
-    compiled: CompiledKeywordRules,
+    regex_rules: CompiledKeywordRules,
+    literal_rules: Vec<CompiledLiteralKeywordRule>,
+    literal_automaton: Option<AhoCorasick>,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -36,16 +46,15 @@ pub struct TerminalKeywordHighlightPrecomputeStats {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum TerminalKeywordRowReuseKey {
-    Single { signature: u64 },
+    Single { revision: u64 },
     Wrapped { group_key: u64, row_offset: usize },
 }
 
 /// Immutable keyword data prepared away from GPUI's paint path.
 pub struct TerminalKeywordHighlightSnapshot {
     rules_key: u64,
-    palette_key: u64,
     display_offset: usize,
-    line_signatures: Vec<u64>,
+    row_revisions: Vec<u64>,
     wrapped_flags: Vec<bool>,
     row_reuse_keys: Vec<Option<TerminalKeywordRowReuseKey>>,
     known_rows: Vec<bool>,
@@ -90,21 +99,18 @@ impl TerminalKeywordHighlightSnapshot {
     pub fn matches_snapshot(
         &self,
         snapshot: &TerminalSnapshot,
-        palette: nyaterm_ui::ThemePalette,
+        _palette: nyaterm_ui::ThemePalette,
     ) -> bool {
-        self.matches_snapshot_rows(snapshot, palette, 0..snapshot.row_count())
+        self.matches_snapshot_rows(snapshot, _palette, 0..snapshot.row_count())
     }
 
     pub fn matches_snapshot_rows(
         &self,
         snapshot: &TerminalSnapshot,
-        palette: nyaterm_ui::ThemePalette,
+        _palette: nyaterm_ui::ThemePalette,
         rows: Range<usize>,
     ) -> bool {
         if self.display_offset != snapshot.display_offset {
-            return false;
-        }
-        if self.palette_key != terminal_keyword_palette_key(palette) {
             return false;
         }
         let start = rows.start.min(snapshot.row_count());
@@ -135,7 +141,7 @@ impl TerminalKeywordHighlightSnapshot {
         snapshot: &TerminalSnapshot,
     ) -> Option<TerminalKeywordHighlightLookup<'_>> {
         if self.display_offset != snapshot.display_offset
-            || self.line_signatures.len() != snapshot.row_count()
+            || self.row_revisions.len() != snapshot.row_count()
         {
             return None;
         }
@@ -153,7 +159,7 @@ impl TerminalKeywordHighlightSnapshot {
             return false;
         };
         self.known_rows.get(row).copied().unwrap_or(false)
-            && self.line_signatures.get(row).copied() == Some(snapshot_row.signature)
+            && self.row_revisions.get(row).copied() == Some(snapshot_row.revision)
             && self.wrapped_flags.get(row).copied() == Some(snapshot_row.wrapped)
             && self.row_reuse_keys.get(row).and_then(|key| *key)
                 == terminal_keyword_row_reuse_key(snapshot, row)
@@ -224,10 +230,8 @@ pub fn precompute_terminal_keyword_highlights_for_rows_with_stats(
     TerminalKeywordHighlightSnapshot,
     TerminalKeywordHighlightPrecomputeStats,
 ) {
-    let palette_key = terminal_keyword_palette_key(palette);
-    let previous = previous.filter(|previous| {
-        previous.rules_key == highlighter.rules_key && previous.palette_key == palette_key
-    });
+    let _ = palette;
+    let previous = previous.filter(|previous| previous.rules_key == highlighter.rules_key);
     let requested_rows = terminal_keyword_highlight_expanded_rows(snapshot, requested_rows);
     let mut stats = TerminalKeywordHighlightPrecomputeStats {
         requested_rows: requested_rows.len(),
@@ -283,9 +287,8 @@ pub fn precompute_terminal_keyword_highlights_for_rows_with_stats(
         .collect();
     let snapshot = TerminalKeywordHighlightSnapshot {
         rules_key: highlighter.rules_key,
-        palette_key,
         display_offset: snapshot.display_offset,
-        line_signatures: snapshot.rows().iter().map(|row| row.signature).collect(),
+        row_revisions: snapshot.rows().iter().map(|row| row.revision).collect(),
         wrapped_flags: snapshot.rows().iter().map(|row| row.wrapped).collect(),
         row_reuse_keys,
         known_rows,
@@ -308,6 +311,8 @@ struct TerminalKeywordByteCell {
     row: usize,
     start_col: usize,
     end_col: usize,
+    start_byte: usize,
+    end_byte: usize,
 }
 
 fn terminal_keyword_wrapped_group_bounds(
@@ -334,7 +339,7 @@ fn terminal_keyword_row_reuse_key(
         return snapshot
             .row(row)
             .map(|row| TerminalKeywordRowReuseKey::Single {
-                signature: row.signature,
+                revision: row.revision,
             });
     }
 
@@ -342,6 +347,7 @@ fn terminal_keyword_row_reuse_key(
     (group.start..group.end).for_each(|idx| {
         if let Some(row) = snapshot.row(idx) {
             row.signature.hash(&mut hasher);
+            row.revision.hash(&mut hasher);
             row.wrapped.hash(&mut hasher);
         }
     });
@@ -362,7 +368,7 @@ fn terminal_keyword_row_reuse_keys(
             keys[row] = snapshot
                 .row(row)
                 .map(|row| TerminalKeywordRowReuseKey::Single {
-                    signature: row.signature,
+                    revision: row.revision,
                 });
             row = group.end;
             continue;
@@ -372,6 +378,7 @@ fn terminal_keyword_row_reuse_keys(
         for idx in group.start..group.end {
             if let Some(row) = snapshot.row(idx) {
                 row.signature.hash(&mut hasher);
+                row.revision.hash(&mut hasher);
                 row.wrapped.hash(&mut hasher);
             }
         }
@@ -401,7 +408,8 @@ fn terminal_keyword_ranges_for_wrapped_group(
     let range_build_started = Instant::now();
     let row_count = rows.end.saturating_sub(rows.start);
     let mut row_ranges = vec![Vec::new(); row_count];
-    if highlighter.compiled.is_empty() || row_count == 0 {
+    if highlighter.regex_rules.is_empty() && highlighter.literal_rules.is_empty() || row_count == 0
+    {
         return row_ranges;
     }
 
@@ -418,17 +426,21 @@ fn terminal_keyword_ranges_for_wrapped_group(
             let text = if cell.text.is_empty() {
                 " "
             } else {
-                cell.text.as_str()
+                cell.text()
             };
             let width = usize::from(cell.width).max(1);
             let start_col = col;
             let end_col = col.saturating_add(width);
+            let start_byte = line.len();
             line.push_str(text);
-            byte_cells.extend((0..text.len()).map(|_| TerminalKeywordByteCell {
+            let end_byte = line.len();
+            byte_cells.push(TerminalKeywordByteCell {
                 row,
                 start_col,
                 end_col,
-            }));
+                start_byte,
+                end_byte,
+            });
         }
     }
     let line_build_duration = range_build_started.elapsed();
@@ -442,14 +454,18 @@ fn terminal_keyword_ranges_for_wrapped_group(
     }
 
     let match_started = Instant::now();
-    let matches = keyword_matches_compiled(&line, &highlighter.compiled);
+    let matches = keyword_matches_highlighter(&line, highlighter);
     let match_duration = match_started.elapsed();
     let range_map_started = Instant::now();
     for (start, end, color) in matches {
-        if start >= end || end > byte_cells.len() {
+        if start >= end || end > line.len() {
             continue;
         }
-        for cell in &byte_cells[start..end] {
+        let start_idx = byte_cells.partition_point(|cell| cell.end_byte <= start);
+        for cell in byte_cells[start_idx..]
+            .iter()
+            .take_while(|cell| cell.start_byte < end)
+        {
             let row_idx = cell.row.saturating_sub(rows.start);
             if let Some(ranges) = row_ranges.get_mut(row_idx) {
                 if let Some(previous) = ranges.last_mut()
@@ -482,6 +498,91 @@ fn terminal_keyword_ranges_for_wrapped_group(
 
 fn duration_micros_u64(duration: Duration) -> u64 {
     duration.as_micros().min(u128::from(u64::MAX)) as u64
+}
+
+fn keyword_matches_highlighter(
+    line: &str,
+    highlighter: &TerminalKeywordHighlighter,
+) -> Vec<(usize, usize, u32)> {
+    if line.is_empty()
+        || (highlighter.regex_rules.is_empty() && highlighter.literal_rules.is_empty())
+    {
+        return Vec::new();
+    }
+
+    let mut candidates = Vec::new();
+    for rule in &highlighter.regex_rules {
+        let mut cursor = 0;
+        while cursor < line.len() {
+            let Some((start, end)) = find_next_non_empty_match(&rule.regex, line, cursor) else {
+                break;
+            };
+            candidates.push(PendingKeywordMatch {
+                start,
+                end,
+                color: rule.color,
+                priority: rule.priority,
+            });
+            cursor = end.max(next_char_boundary(line, cursor).unwrap_or(line.len()));
+        }
+    }
+
+    if let Some(automaton) = highlighter.literal_automaton.as_ref() {
+        for found in automaton.find_overlapping_iter(line) {
+            let pattern = found.pattern().as_usize();
+            let Some(rule) = highlighter.literal_rules.get(pattern) else {
+                continue;
+            };
+            if found.end() > found.start() {
+                candidates.push(PendingKeywordMatch {
+                    start: found.start(),
+                    end: found.end(),
+                    color: rule.color,
+                    priority: rule.priority,
+                });
+            }
+        }
+    }
+
+    keyword_matches_from_candidates(candidates)
+}
+
+fn keyword_matches_from_candidates(
+    mut candidates: Vec<PendingKeywordMatch>,
+) -> Vec<(usize, usize, u32)> {
+    candidates.sort_unstable_by(|left, right| {
+        left.start
+            .cmp(&right.start)
+            .then_with(|| right.end.cmp(&left.end))
+            .then_with(|| left.priority.cmp(&right.priority))
+    });
+
+    let mut matches = Vec::new();
+    let mut cursor = 0usize;
+    loop {
+        let Some(first_index) = candidates
+            .iter()
+            .position(|candidate| candidate.end > cursor && candidate.start >= cursor)
+        else {
+            break;
+        };
+        let start = candidates[first_index].start;
+        let best = candidates[first_index..]
+            .iter()
+            .take_while(|candidate| candidate.start == start)
+            .copied()
+            .reduce(|current, candidate| {
+                if keyword_match_is_better(candidate, current) {
+                    candidate
+                } else {
+                    current
+                }
+            })
+            .unwrap_or(candidates[first_index]);
+        matches.push((best.start, best.end, best.color));
+        cursor = best.end;
+    }
+    matches
 }
 
 pub(super) fn keyword_matches_compiled(
@@ -594,9 +695,12 @@ fn next_char_boundary(line: &str, start: usize) -> Option<usize> {
 pub fn compile_terminal_keyword_highlighter(
     rules: &[ResolvedKeywordHighlightRule],
 ) -> TerminalKeywordHighlighter {
+    let (regex_rules, literal_rules, literal_automaton) = compile_keyword_rule_sets(rules);
     TerminalKeywordHighlighter {
         rules_key: terminal_keyword_rules_key(rules),
-        compiled: compile_keyword_rules(rules),
+        regex_rules,
+        literal_rules,
+        literal_automaton,
     }
 }
 
@@ -609,18 +713,6 @@ pub fn terminal_keyword_rules_key(rules: &[ResolvedKeywordHighlightRule]) -> u64
         rule.color.hash(&mut hasher);
         rule.enabled.hash(&mut hasher);
     }
-    hasher.finish()
-}
-
-pub(super) fn terminal_keyword_palette_key(palette: nyaterm_ui::ThemePalette) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    palette.bg.hash(&mut hasher);
-    palette.surface.hash(&mut hasher);
-    palette.accent.hash(&mut hasher);
-    palette.warning.hash(&mut hasher);
-    palette.terminal_fg.hash(&mut hasher);
-    palette.terminal_bg.hash(&mut hasher);
-    palette.terminal_ansi.hash(&mut hasher);
     hasher.finish()
 }
 
@@ -700,6 +792,64 @@ pub(super) fn keyword_highlight_spans_compiled(
 pub(super) fn compile_keyword_rules(
     rules: &[ResolvedKeywordHighlightRule],
 ) -> CompiledKeywordRules {
+    compile_keyword_rules_with_filter(rules, |_| true)
+}
+
+fn compile_keyword_rule_sets(
+    rules: &[ResolvedKeywordHighlightRule],
+) -> (
+    CompiledKeywordRules,
+    Vec<CompiledLiteralKeywordRule>,
+    Option<AhoCorasick>,
+) {
+    let mut regex_rules = Vec::new();
+    let mut literal_rules = Vec::new();
+    for rule in rules.iter().filter(|rule| rule.enabled) {
+        let color = parse_hex_rgb(&rule.color).unwrap_or(0x79c0ff);
+        let alts = rule
+            .patterns
+            .iter()
+            .map(|p| p.trim())
+            .filter(|p| !p.is_empty())
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
+        if alts.is_empty() {
+            continue;
+        }
+        let priority = regex_rules.len().saturating_add(literal_rules.len());
+        if alts
+            .iter()
+            .all(|pattern| is_literal_keyword_pattern(pattern))
+        {
+            literal_rules.extend(alts.into_iter().map(|pattern| CompiledLiteralKeywordRule {
+                pattern,
+                color,
+                priority,
+            }));
+            continue;
+        }
+        compile_keyword_regex_alternatives(alts, color, priority, &mut regex_rules);
+    }
+    let patterns = literal_rules
+        .iter()
+        .map(|rule| rule.pattern.as_str())
+        .collect::<Vec<_>>();
+    let literal_automaton = (!patterns.is_empty())
+        .then(|| {
+            AhoCorasickBuilder::new()
+                .ascii_case_insensitive(true)
+                .match_kind(MatchKind::Standard)
+                .build(patterns)
+                .ok()
+        })
+        .flatten();
+    (regex_rules, literal_rules, literal_automaton)
+}
+
+fn compile_keyword_rules_with_filter(
+    rules: &[ResolvedKeywordHighlightRule],
+    include: impl Fn(&[String]) -> bool,
+) -> CompiledKeywordRules {
     let mut compiled = Vec::new();
     for rule in rules.iter().filter(|rule| rule.enabled) {
         let color = parse_hex_rgb(&rule.color).unwrap_or(0x79c0ff);
@@ -713,36 +863,60 @@ pub(super) fn compile_keyword_rules(
         if alts.is_empty() {
             continue;
         }
-        let combined = if alts.len() == 1 {
-            alts[0].clone()
-        } else {
-            alts.iter()
-                .map(|p| format!("(?:{p})"))
-                .collect::<Vec<_>>()
-                .join("|")
-        };
-        let pattern = keyword_pattern_with_default_case(&combined);
-        match regex::Regex::new(&pattern) {
-            Ok(regex) => compiled.push(CompiledKeywordRule {
-                regex,
-                color,
-                priority: compiled.len(),
-            }),
-            Err(_) => {
-                for alt in alts {
-                    let pattern = keyword_pattern_with_default_case(&alt);
-                    if let Ok(regex) = regex::Regex::new(&pattern) {
-                        compiled.push(CompiledKeywordRule {
-                            regex,
-                            color,
-                            priority: compiled.len(),
-                        });
-                    }
+        if !include(&alts) {
+            continue;
+        }
+        let priority = compiled.len();
+        compile_keyword_regex_alternatives(alts, color, priority, &mut compiled);
+    }
+    compiled
+}
+
+fn compile_keyword_regex_alternatives(
+    alts: Vec<String>,
+    color: u32,
+    priority: usize,
+    out: &mut CompiledKeywordRules,
+) {
+    let combined = if alts.len() == 1 {
+        alts[0].clone()
+    } else {
+        alts.iter()
+            .map(|p| format!("(?:{p})"))
+            .collect::<Vec<_>>()
+            .join("|")
+    };
+    let pattern = keyword_pattern_with_default_case(&combined);
+    match regex::Regex::new(&pattern) {
+        Ok(regex) => out.push(CompiledKeywordRule {
+            regex,
+            color,
+            priority,
+        }),
+        Err(_) => {
+            for alt in alts {
+                let pattern = keyword_pattern_with_default_case(&alt);
+                if let Ok(regex) = regex::Regex::new(&pattern) {
+                    let priority = out.len();
+                    out.push(CompiledKeywordRule {
+                        regex,
+                        color,
+                        priority,
+                    });
                 }
             }
         }
     }
-    compiled
+}
+
+fn is_literal_keyword_pattern(pattern: &str) -> bool {
+    !pattern.is_empty()
+        && !pattern.chars().any(|ch| {
+            matches!(
+                ch,
+                '\\' | '.' | '^' | '$' | '|' | '?' | '*' | '+' | '(' | ')' | '[' | ']' | '{' | '}'
+            )
+        })
 }
 
 fn keyword_pattern_with_default_case(pattern: &str) -> String {
@@ -857,8 +1031,8 @@ mod tests {
     use super::{
         CompiledKeywordRule, TerminalKeywordHighlightLookup, compile_keyword_rules,
         compile_terminal_keyword_highlighter, keyword_highlight_spans_compiled,
-        keyword_matches_compiled, precompute_terminal_keyword_highlights,
-        precompute_terminal_keyword_highlights_for_rows,
+        keyword_matches_compiled, keyword_matches_highlighter,
+        precompute_terminal_keyword_highlights, precompute_terminal_keyword_highlights_for_rows,
         precompute_terminal_keyword_highlights_for_rows_with_stats, terminal_buffer_matches,
         terminal_keyword_row_reuse_keys,
     };
@@ -883,6 +1057,7 @@ mod tests {
         .into_boxed_slice();
         row.cells = cells.into_boxed_slice();
         row.signature = signature;
+        row.revision = signature;
     }
 
     fn set_snapshot_row_wrapped(
@@ -913,7 +1088,7 @@ mod tests {
         }]
         .into_boxed_slice();
         for col in start_col..end_col.min(row.cells.len()) {
-            row.cells[col].hyperlink = Some(uri.to_string());
+            row.cells[col].hyperlink = Some(Arc::from(uri));
         }
     }
 
@@ -923,19 +1098,21 @@ mod tests {
             if terminal_is_zero_width_mark(ch)
                 && let Some(previous) = cells.last_mut()
             {
-                previous.text.push(ch);
+                let mut text = previous.text.to_string();
+                text.push(ch);
+                previous.text = text.into();
                 continue;
             }
             let width = terminal_char_cell_width(ch);
             cells.push(nyaterm_terminal::RenderCell {
-                text: ch.to_string(),
+                text: ch.to_string().into(),
                 style: nyaterm_terminal::CellStyle::default(),
                 width: width as u8,
                 hyperlink: None,
             });
             for _ in 1..width {
                 cells.push(nyaterm_terminal::RenderCell {
-                    text: String::new(),
+                    text: Arc::from(""),
                     style: nyaterm_terminal::CellStyle::default(),
                     width: 0,
                     hyperlink: None,
@@ -944,7 +1121,7 @@ mod tests {
         }
         while cells.len() < cols {
             cells.push(nyaterm_terminal::RenderCell {
-                text: String::new(),
+                text: Arc::from(""),
                 style: nyaterm_terminal::CellStyle::default(),
                 width: 1,
                 hyperlink: None,
@@ -1146,6 +1323,39 @@ mod tests {
     }
 
     #[test]
+    fn keyword_highlighter_literal_automaton_preserves_priority_and_longest_match() {
+        let rules = vec![
+            ResolvedKeywordHighlightRule {
+                id: "short".to_string(),
+                name: "Short".to_string(),
+                patterns: vec!["ERR".to_string()],
+                color: "#111111".to_string(),
+                enabled: true,
+            },
+            ResolvedKeywordHighlightRule {
+                id: "long".to_string(),
+                name: "Long".to_string(),
+                patterns: vec!["ERROR".to_string()],
+                color: "#222222".to_string(),
+                enabled: true,
+            },
+            ResolvedKeywordHighlightRule {
+                id: "regex".to_string(),
+                name: "Regex".to_string(),
+                patterns: vec![r"WARN\d+".to_string()],
+                color: "#333333".to_string(),
+                enabled: true,
+            },
+        ];
+        let highlighter = compile_terminal_keyword_highlighter(&rules);
+
+        assert_eq!(
+            keyword_matches_highlighter("error WARN42 ERR", &highlighter),
+            vec![(0, 5, 0x222222), (6, 12, 0x333333), (13, 16, 0x111111)]
+        );
+    }
+
+    #[test]
     fn compile_keyword_rules_skips_invalid_patterns_without_dropping_rule() {
         let rules = vec![ResolvedKeywordHighlightRule {
             id: "mixed".to_string(),
@@ -1271,7 +1481,7 @@ mod tests {
     }
 
     #[test]
-    fn precomputed_keyword_snapshot_checks_line_signatures() {
+    fn precomputed_keyword_snapshot_checks_row_revisions() {
         let mut snapshot = TerminalScreen::default().snapshot();
         set_snapshot_row(&mut snapshot, 0, "prefix ERROR suffix", 41);
         let rules = vec![ResolvedKeywordHighlightRule {
@@ -1293,12 +1503,12 @@ mod tests {
                 .and_then(|row| row.ranges())
                 .is_some()
         );
-        let mut changed_signature = snapshot.clone();
+        let mut changed_revision = snapshot.clone();
         {
-            let rows = Arc::make_mut(&mut changed_signature.row_data);
-            Arc::make_mut(&mut rows[0]).signature = 42;
+            let rows = Arc::make_mut(&mut changed_revision.row_data);
+            Arc::make_mut(&mut rows[0]).revision = 42;
         }
-        assert!(highlights.lookup(0, &changed_signature).is_none());
+        assert!(highlights.lookup(0, &changed_revision).is_none());
         assert!(matches!(
             highlights.lookup(0, &snapshot),
             Some(TerminalKeywordHighlightLookup::Current(_))
@@ -1309,7 +1519,7 @@ mod tests {
                 .and_then(|row| row.ranges())
                 .is_some()
         );
-        assert!(highlights.stale_lookup(0, &changed_signature).is_none());
+        assert!(highlights.stale_lookup(0, &changed_revision).is_none());
         assert!(highlights.stale_lookup(usize::MAX, &snapshot).is_none());
         assert!(
             highlights
@@ -1320,9 +1530,7 @@ mod tests {
         let mut shifted_snapshot = snapshot.clone();
         shifted_snapshot.display_offset = shifted_snapshot.display_offset.saturating_add(1);
         assert!(!highlights.matches_snapshot(&shifted_snapshot, palette));
-        assert!(
-            !highlights.matches_snapshot(&snapshot, nyaterm_ui::theme_palette("github-light"),)
-        );
+        assert!(highlights.matches_snapshot(&snapshot, nyaterm_ui::theme_palette("github-light"),));
         assert!(highlights.rows.iter().skip(1).all(Option::is_none));
     }
 
@@ -1548,7 +1756,7 @@ mod tests {
     }
 
     #[test]
-    fn precomputed_keyword_snapshot_reuses_previous_rows_by_signature() {
+    fn precomputed_keyword_snapshot_reuses_previous_rows_by_revision() {
         let mut first_snapshot = TerminalScreen::default().snapshot();
         set_snapshot_row(&mut first_snapshot, 0, "prefix ERROR suffix", 41);
         let mut second_snapshot = TerminalScreen::default().snapshot();

@@ -296,11 +296,11 @@ fn row_layout_key_falls_back_to_styled_spans_without_signature() {
 }
 
 #[test]
-fn row_layout_key_uses_authoritative_line_signature() {
+fn row_layout_key_uses_authoritative_row_revision() {
     let mut first_snapshot = TerminalScreen::default().snapshot();
-    edit_snapshot_row(&mut first_snapshot, 0, |row| row.signature = 7);
+    edit_snapshot_row(&mut first_snapshot, 0, |row| row.revision = 7);
     let mut second_snapshot = first_snapshot.clone();
-    edit_snapshot_row(&mut second_snapshot, 0, |row| row.signature = 8);
+    edit_snapshot_row(&mut second_snapshot, 0, |row| row.revision = 8);
     let make_element = |snapshot| {
         NyaTerminalElement::new(
             Arc::new(snapshot),
@@ -328,9 +328,9 @@ fn row_layout_key_uses_authoritative_line_signature() {
 }
 
 #[test]
-fn row_layout_key_tracks_display_text_even_with_signature() {
+fn row_layout_key_uses_revision_instead_of_hashing_display_text() {
     let mut snapshot = TerminalScreen::default().snapshot();
-    edit_snapshot_row(&mut snapshot, 0, |row| row.signature = 7);
+    edit_snapshot_row(&mut snapshot, 0, |row| row.revision = 7);
     let element = NyaTerminalElement::new(
         Arc::new(snapshot),
         Arc::new(Vec::new()),
@@ -347,7 +347,7 @@ fn row_layout_key_tracks_display_text_even_with_signature() {
     );
     let decorations = TerminalLineDecorations::default();
 
-    assert_ne!(
+    assert_eq!(
         element.row_layout_key(
             0,
             "Management: https://landscape.canonical.com",
@@ -928,7 +928,7 @@ fn precomputed_keyword_match_does_not_reuse_plain_pending_row() {
         }]
         .into_boxed_slice();
         for (idx, ch) in "ERROR".chars().enumerate() {
-            row.cells[idx].text = ch.to_string();
+            row.cells[idx].text = ch.to_string().into();
             row.cells[idx].width = 1;
         }
         row.signature = 7;

@@ -12,7 +12,8 @@ fn placement(line: i32, col: usize, width_cells: usize, height_cells: usize) -> 
         col,
         width_cells,
         height_cells,
-        data: b"image".to_vec(),
+        data: b"image".to_vec().into(),
+        content_id: 1,
         name: None,
         kitty_id: None,
         placement_id: None,
@@ -424,7 +425,7 @@ fn assembles_kitty_multi_chunk_payload() {
     );
     let images = state.viewport_images(0, 24, 80);
     assert_eq!(images.len(), 1);
-    assert_eq!(images[0].data, b"ABCD");
+    assert_eq!(images[0].data.as_ref(), b"ABCD");
     assert_eq!(images[0].width_cells, 4);
     assert_eq!(images[0].height_cells, 2);
     assert_eq!(images[0].col, 1);
@@ -490,7 +491,7 @@ fn place_only_reuses_stored_kitty_image() {
     );
     let images = state.viewport_images(0, 24, 80);
     assert_eq!(images.len(), 1);
-    assert_eq!(images[0].data, b"XY");
+    assert_eq!(images[0].data.as_ref(), b"XY");
     assert_eq!(images[0].col, 5);
     assert_eq!(images[0].row, 2);
     assert!(images[0].above_text);
@@ -826,7 +827,7 @@ fn delete_image_without_free_keeps_store_for_replace() {
     );
     let images = state.viewport_images(0, 24, 80);
     assert_eq!(images.len(), 1);
-    assert_eq!(images[0].data, b"XY");
+    assert_eq!(images[0].data.as_ref(), b"XY");
     assert_eq!(images[0].col, 3);
 }
 

@@ -460,7 +460,7 @@ impl NyaTerminalElement {
         );
         let paint_style_key = self.paint_style_key(effective_keyword_rules_key);
         terminal_row_layout_key(
-            self.snapshot.row(row).map(|row| row.signature),
+            self.snapshot.row(row).map(|row| row.revision),
             display_line,
             ansi_spans,
             decorations,
@@ -510,7 +510,7 @@ impl NyaTerminalElement {
         let line = snapshot_row.map(|row| row.text.as_str()).unwrap_or("");
         let display_line = if line.is_empty() { " " } else { line };
         let ansi = snapshot_row.map(|row| row.styled_spans.as_ref());
-        let line_signature = snapshot_row.map(|row| row.signature);
+        let row_revision = snapshot_row.map(|row| row.revision);
         let keyword_lookup = self.keyword_highlights.as_ref().and_then(|highlights| {
             highlights
                 .lookup(row, self.snapshot.as_ref())
@@ -547,7 +547,7 @@ impl NyaTerminalElement {
                 &[]
             };
             terminal_row_layout_key(
-                line_signature,
+                row_revision,
                 display_line,
                 ansi,
                 decorations,
@@ -618,7 +618,7 @@ fn terminal_glyph_decorations_needed(decorations: &TerminalLineDecorations) -> b
 }
 
 fn terminal_row_layout_key(
-    line_signature: Option<u64>,
+    row_revision: Option<u64>,
     display_line: &str,
     ansi_spans: Option<&[nyaterm_terminal::StyledSpan]>,
     decorations: &TerminalLineDecorations,
@@ -627,9 +627,11 @@ fn terminal_row_layout_key(
     paint_style_key: u64,
 ) -> u64 {
     let mut hasher = DefaultHasher::new();
-    line_signature.hash(&mut hasher);
-    display_line.hash(&mut hasher);
-    hash_styled_spans(ansi_spans, &mut hasher);
+    row_revision.hash(&mut hasher);
+    if row_revision.is_none() {
+        display_line.hash(&mut hasher);
+        hash_styled_spans(ansi_spans, &mut hasher);
+    }
     hash_stable_glyph_decorations(decorations, &mut hasher);
     keyword_excluded_ranges.hash(&mut hasher);
     keyword_spans_present.hash(&mut hasher);
@@ -920,6 +922,29 @@ fn push_dynamic_decoration_backgrounds(
     }
 }
 
+fn push_terminal_image_placeholder(
+    rect: Bounds<Pixels>,
+    x: Pixels,
+    y: Pixels,
+    w: Pixels,
+    above_text: bool,
+    palette: nyaterm_ui::ThemePalette,
+    plan: &mut NyaTerminalPaintPlan,
+) {
+    let mut wash = rgb(palette.accent);
+    wash.a = 0.18;
+    let bar = Bounds::new(point(x, y), size(w, px(2.)));
+    let mut bar_color = rgb(palette.accent);
+    bar_color.a = 0.55;
+    if above_text {
+        plan.placeholders_above.push(fill(rect, wash));
+        plan.placeholders_above.push(fill(bar, bar_color));
+    } else {
+        plan.placeholders_under.push(fill(rect, wash));
+        plan.placeholders_under.push(fill(bar, bar_color));
+    }
+}
+
 impl IntoElement for NyaTerminalElement {
     type Element = Self;
 
@@ -1053,7 +1078,7 @@ impl Element for NyaTerminalElement {
             let line = snapshot_row.map(|row| row.text.as_str()).unwrap_or("");
             let display_line = if line.is_empty() { " " } else { line };
             let ansi = snapshot_row.map(|row| row.styled_spans.as_ref());
-            let line_signature = snapshot_row.map(|row| row.signature);
+            let row_revision = snapshot_row.map(|row| row.revision);
             let keyword_lookup = self.keyword_highlights.as_ref().and_then(|highlights| {
                 highlights
                     .lookup(row, self.snapshot.as_ref())
@@ -1137,7 +1162,7 @@ impl Element for NyaTerminalElement {
                     &[]
                 };
                 terminal_row_layout_key(
-                    line_signature,
+                    row_revision,
                     display_line,
                     ansi,
                     decorations,
@@ -1340,9 +1365,6 @@ impl Element for NyaTerminalElement {
             }
         }
         drop(layout_cache);
-        if prefetch_row.is_some() {
-            window.refresh();
-        }
 
         // Graphics protocol placements (Kitty / iTerm2 / Sixel).
         // Kitty z>0 places above text; everything else stays under the glyph layer.
@@ -1362,29 +1384,44 @@ impl Element for NyaTerminalElement {
             let w = px(image.image_width_cells as f32 * cell_w);
             let h = px(image.image_height_cells as f32 * cell_h);
             let rect = Bounds::new(point(x, y), size(w, h));
-            if let Some(decoded) = crate::images::cached_render_image(image.id, &image.data) {
-                let paint = TerminalImagePaint {
-                    bounds: rect,
-                    image: decoded,
-                };
-                if image.above_text {
-                    plan.images_above.push(paint);
-                } else {
-                    plan.images_under.push(paint);
+            match crate::images::cached_render_image(
+                image.id,
+                image.content_id,
+                Arc::clone(&image.data),
+            ) {
+                crate::images::CachedRenderImage::Ready(decoded) => {
+                    let paint = TerminalImagePaint {
+                        bounds: rect,
+                        image: decoded,
+                    };
+                    if image.above_text {
+                        plan.images_above.push(paint);
+                    } else {
+                        plan.images_under.push(paint);
+                    }
                 }
-            } else {
-                // Dim accent wash when payload is missing/undecodable (e.g. raw Sixel).
-                let mut wash = rgb(self.palette.accent);
-                wash.a = 0.18;
-                let bar = Bounds::new(point(x, y), size(w, px(2.)));
-                let mut bar_color = rgb(self.palette.accent);
-                bar_color.a = 0.55;
-                if image.above_text {
-                    plan.placeholders_above.push(fill(rect, wash));
-                    plan.placeholders_above.push(fill(bar, bar_color));
-                } else {
-                    plan.placeholders_under.push(fill(rect, wash));
-                    plan.placeholders_under.push(fill(bar, bar_color));
+                crate::images::CachedRenderImage::Pending => {
+                    window.refresh();
+                    push_terminal_image_placeholder(
+                        rect,
+                        x,
+                        y,
+                        w,
+                        image.above_text,
+                        self.palette,
+                        &mut plan,
+                    );
+                }
+                crate::images::CachedRenderImage::Failed => {
+                    push_terminal_image_placeholder(
+                        rect,
+                        x,
+                        y,
+                        w,
+                        image.above_text,
+                        self.palette,
+                        &mut plan,
+                    );
                 }
             }
         }

@@ -212,6 +212,15 @@ fn osc8_hyperlink_spans() {
     assert_eq!(spans[0].uri, "https://example.com");
     assert_eq!(spans[0].start_col, 0);
     assert_eq!(spans[0].end_col, 4);
+    let first_link = snap
+        .cell(0, 0)
+        .and_then(|cell| cell.hyperlink.as_ref())
+        .expect("first link cell");
+    let second_link = snap
+        .cell(0, 1)
+        .and_then(|cell| cell.hyperlink.as_ref())
+        .expect("second link cell");
+    assert!(Arc::ptr_eq(first_link, second_link));
 }
 
 #[test]
@@ -325,6 +334,7 @@ fn snapshot_includes_row_signatures() {
     let snap = screen.viewport_snapshot(0);
 
     assert!(snap.rows().iter().any(|row| row.signature != 0));
+    assert!(snap.rows().iter().any(|row| row.revision != 0));
     for row in snap.rows() {
         assert_eq!(row.signature, render_row_signature(&row.cells));
     }
@@ -350,7 +360,7 @@ fn consecutive_snapshots_share_unchanged_rows() {
             .rows()
             .iter()
             .zip(second.rows())
-            .all(|(left, right)| Arc::ptr_eq(left, right))
+            .all(|(left, right)| Arc::ptr_eq(left, right) && left.revision == right.revision)
     );
 }
 
@@ -371,6 +381,13 @@ fn single_line_input_rebuilds_only_damaged_snapshot_row() {
 
     assert_eq!(stats.rebuilt_rows, 1);
     assert!(shared >= second.row_count().saturating_sub(1));
+    assert!(
+        first
+            .rows()
+            .iter()
+            .zip(second.rows())
+            .any(|(left, right)| left.revision != right.revision)
+    );
 }
 
 #[test]
@@ -391,17 +408,18 @@ fn adjacent_snapshot_windows_share_overlapping_rows() {
 }
 
 #[test]
-fn snapshot_row_cache_rejects_signature_collision_with_different_cells() {
+fn snapshot_row_cache_uses_revision_as_authoritative_invalidation() {
     let mut screen = TerminalScreen::new(8, 1);
     screen.advance(b"alpha");
     let first = screen.viewport_snapshot(0);
     let original = first.rows()[0].clone();
     let mut conflicting = (*original).clone();
-    conflicting.cells[0].text = "z".to_string();
+    conflicting.cells[0].text = Arc::from("z");
     conflicting.text = "zlpha".to_string();
     let conflicting = Arc::new(conflicting);
     let key = TerminalSnapshotRowCacheKey {
         cols: screen.cols(),
+        revision: original.revision,
         signature: original.signature,
         timestamp_ms: original.timestamp_ms,
         wrapped: original.wrapped,
@@ -414,12 +432,14 @@ fn snapshot_row_cache_rejects_signature_collision_with_different_cells() {
             last_used: 0,
         },
     );
+    screen.advance(b"!");
 
     let (next, stats) = screen.viewport_snapshot_with_stats(0);
 
-    assert_eq!(next.row(0).map(|row| row.text.as_str()), Some("alpha"));
+    assert_eq!(next.row(0).map(|row| row.text.as_str()), Some("alpha!"));
     assert!(!Arc::ptr_eq(&next.rows()[0], &conflicting));
     assert_eq!(stats.rebuilt_rows, 1);
+    assert_ne!(next.rows()[0].revision, original.revision);
 }
 
 #[test]
@@ -429,6 +449,7 @@ fn snapshot_row_cache_prunes_to_limit() {
         cache.entries.insert(
             TerminalSnapshotRowCacheKey {
                 cols: 1,
+                revision: signature,
                 signature,
                 timestamp_ms: None,
                 wrapped: false,
@@ -457,6 +478,14 @@ fn snapshot_keeps_blank_cell_storage_allocation_free() {
             .iter()
             .flat_map(|row| row.cells.iter())
             .all(|cell| cell.text.is_empty())
+    );
+    let first_empty_text = snapshot.cell(0, 0).expect("first blank cell").text.clone();
+    assert!(
+        snapshot
+            .rows()
+            .iter()
+            .flat_map(|row| row.cells.iter())
+            .all(|cell| Arc::ptr_eq(&cell.text, &first_empty_text))
     );
     assert!(snapshot.rows().iter().all(|row| row.text.is_empty()));
     assert!(snapshot.rows().iter().all(|row| {
@@ -921,7 +950,7 @@ fn graphics_iterm2_does_not_pollute_grid() {
     assert_eq!(snap.images[0].width_cells, 3);
     assert_eq!(snap.images[0].height_cells, 2);
     assert_eq!(snap.images[0].protocol, GraphicsProtocol::ITerm2);
-    assert_eq!(snap.images[0].data, b"PNG");
+    assert_eq!(snap.images[0].data.as_ref(), b"PNG");
 }
 
 #[test]
@@ -948,7 +977,7 @@ fn graphics_kitty_placement_appears_in_snapshot() {
     assert_eq!(snap.images[0].protocol, GraphicsProtocol::Kitty);
     assert_eq!(snap.images[0].width_cells, 5);
     assert_eq!(snap.images[0].height_cells, 3);
-    assert_eq!(snap.images[0].data, b"ABC");
+    assert_eq!(snap.images[0].data.as_ref(), b"ABC");
 }
 
 #[test]
@@ -970,9 +999,22 @@ fn graphics_kitty_multi_chunk_via_advance() {
     screen.advance(b"\x1b_Ga=T,i=11,m=0;Q0Q=\x1b\\");
     let snap = screen.snapshot();
     assert_eq!(snap.images.len(), 1);
-    assert_eq!(snap.images[0].data, b"ABCD");
+    assert_eq!(snap.images[0].data.as_ref(), b"ABCD");
     assert_eq!(snap.images[0].width_cells, 3);
     assert_eq!(snap.images[0].height_cells, 2);
+}
+
+#[test]
+fn graphics_same_payload_shares_content_id_across_placements() {
+    let mut screen = TerminalScreen::new(40, 8);
+    screen.advance(b"\x1b_Ga=T,i=7,p=1,c=2,r=1;QUJD\x1b\\");
+    screen.advance(b"\x1b_Ga=T,i=8,p=2,c=2,r=1;QUJD\x1b\\");
+    let snap = screen.snapshot();
+
+    assert_eq!(snap.images.len(), 2);
+    assert_ne!(snap.images[0].id, snap.images[1].id);
+    assert_eq!(snap.images[0].content_id, snap.images[1].content_id);
+    assert_eq!(snap.images[0].data.as_ref(), snap.images[1].data.as_ref());
 }
 
 #[test]

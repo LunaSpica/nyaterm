@@ -1,7 +1,8 @@
 //! Decode terminal graphics payloads into GPUI `RenderImage`s.
 use std::collections::{HashMap, VecDeque};
 use std::io::Cursor;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
+use std::thread;
 
 use gpui::RenderImage;
 use image::{Frame, ImageReader, Limits};
@@ -15,32 +16,94 @@ const MAX_DECODE_CACHE_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_DECODED_IMAGE_DIMENSION: u32 = 4096;
 const MAX_DECODED_IMAGE_BYTES: u64 = 4 * 1024 * 1024;
 
-#[derive(Default)]
 struct DecodeCache {
-    entries: HashMap<u64, CachedDecode>,
-    lru: VecDeque<u64>,
+    entries: HashMap<DecodeCacheKey, CachedDecode>,
+    lru: VecDeque<DecodeCacheKey>,
     decoded_bytes: u64,
+    completed_tx: mpsc::Sender<CompletedDecode>,
+    completed_rx: mpsc::Receiver<CompletedDecode>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct DecodeCacheKey {
+    placement_id: u64,
+    content_id: u64,
 }
 
 struct CachedDecode {
-    image: Option<Arc<RenderImage>>,
+    state: DecodeCacheEntryState,
     decoded_bytes: u64,
 }
 
+enum DecodeCacheEntryState {
+    Pending,
+    Ready(Option<Arc<RenderImage>>),
+}
+
+struct CompletedDecode {
+    key: DecodeCacheKey,
+    image: Option<Arc<RenderImage>>,
+}
+
+#[derive(Clone)]
+pub enum CachedRenderImage {
+    Ready(Arc<RenderImage>),
+    Pending,
+    Failed,
+}
+
+impl Default for DecodeCache {
+    fn default() -> Self {
+        let (completed_tx, completed_rx) = mpsc::channel();
+        Self {
+            entries: HashMap::new(),
+            lru: VecDeque::new(),
+            decoded_bytes: 0,
+            completed_tx,
+            completed_rx,
+        }
+    }
+}
+
 impl DecodeCache {
-    fn get(&mut self, key: u64) -> Option<Option<Arc<RenderImage>>> {
-        let image = self.entries.get(&key)?.image.clone();
+    fn pump_completed(&mut self) {
+        while let Ok(completed) = self.completed_rx.try_recv() {
+            self.insert_ready(completed.key, completed.image);
+        }
+    }
+
+    fn get(&mut self, key: DecodeCacheKey) -> Option<CachedRenderImage> {
+        self.pump_completed();
+        let state = match &self.entries.get(&key)?.state {
+            DecodeCacheEntryState::Pending => CachedRenderImage::Pending,
+            DecodeCacheEntryState::Ready(Some(image)) => CachedRenderImage::Ready(image.clone()),
+            DecodeCacheEntryState::Ready(None) => CachedRenderImage::Failed,
+        };
         self.touch(key);
-        Some(image)
+        Some(state)
     }
 
-    fn insert(&mut self, key: u64, image: Option<Arc<RenderImage>>) {
-        self.insert_with_limits(key, image, MAX_DECODE_CACHE_ENTRIES, MAX_DECODE_CACHE_BYTES);
+    fn insert_pending(&mut self, key: DecodeCacheKey) {
+        if self.entries.contains_key(&key) {
+            return;
+        }
+        self.entries.insert(
+            key,
+            CachedDecode {
+                state: DecodeCacheEntryState::Pending,
+                decoded_bytes: 0,
+            },
+        );
+        self.touch(key);
     }
 
-    fn insert_with_limits(
+    fn insert_ready(&mut self, key: DecodeCacheKey, image: Option<Arc<RenderImage>>) {
+        self.insert_ready_with_limits(key, image, MAX_DECODE_CACHE_ENTRIES, MAX_DECODE_CACHE_BYTES);
+    }
+
+    fn insert_ready_with_limits(
         &mut self,
-        key: u64,
+        key: DecodeCacheKey,
         image: Option<Arc<RenderImage>>,
         max_entries: usize,
         max_bytes: u64,
@@ -52,7 +115,7 @@ impl DecodeCache {
         if let Some(replaced) = self.entries.insert(
             key,
             CachedDecode {
-                image,
+                state: DecodeCacheEntryState::Ready(image),
                 decoded_bytes,
             },
         ) {
@@ -71,9 +134,13 @@ impl DecodeCache {
         }
     }
 
-    fn touch(&mut self, key: u64) {
+    fn touch(&mut self, key: DecodeCacheKey) {
         self.lru.retain(|candidate| *candidate != key);
         self.lru.push_back(key);
+    }
+
+    fn completed_sender(&self) -> mpsc::Sender<CompletedDecode> {
+        self.completed_tx.clone()
     }
 }
 
@@ -90,15 +157,11 @@ fn cache() -> std::sync::MutexGuard<'static, Option<DecodeCache>> {
     DECODE_CACHE.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-fn fingerprint(data: &[u8]) -> u64 {
-    use std::hash::{Hash, Hasher};
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    data.hash(&mut hasher);
-    hasher.finish()
-}
-
-fn cache_key(placement_id: u64, data: &[u8]) -> u64 {
-    placement_id ^ fingerprint(data).rotate_left(17)
+fn cache_key(placement_id: u64, content_id: u64) -> DecodeCacheKey {
+    DecodeCacheKey {
+        placement_id,
+        content_id,
+    }
 }
 
 /// Decode encoded image bytes (NYAR RGBA / PNG/JPEG/GIF/BMP) into a BGRA `RenderImage`.
@@ -168,12 +231,38 @@ fn unpack_nyar(data: &[u8]) -> Option<(u32, u32, Vec<u8>)> {
     Some((width, height, data[12..12 + need].to_vec()))
 }
 
-/// Cached decode for a placement. Returns `None` when payload is not a raster image.
-pub fn cached_render_image(placement_id: u64, data: &[u8]) -> Option<Arc<RenderImage>> {
+/// Cached decode for a placement. First access schedules decode work and returns
+/// pending; later accesses return ready or failed state.
+pub fn cached_render_image(
+    placement_id: u64,
+    content_id: u64,
+    data: Arc<[u8]>,
+) -> CachedRenderImage {
     if data.is_empty() {
-        return None;
+        return CachedRenderImage::Failed;
     }
-    let key = cache_key(placement_id, data);
+    let key = cache_key(placement_id, content_id);
+    let sender = {
+        let mut guard = cache();
+        let cache = guard.get_or_insert_with(DecodeCache::default);
+        if let Some(hit) = cache.get(key) {
+            return hit;
+        }
+        cache.insert_pending(key);
+        cache.completed_sender()
+    };
+
+    thread::spawn(move || {
+        let image = decode_render_image(&data);
+        let _ = sender.send(CompletedDecode { key, image });
+    });
+
+    CachedRenderImage::Pending
+}
+
+#[cfg(test)]
+fn cached_render_image_poll(placement_id: u64, content_id: u64) -> CachedRenderImage {
+    let key = cache_key(placement_id, content_id);
     {
         let mut guard = cache();
         let cache = guard.get_or_insert_with(DecodeCache::default);
@@ -181,21 +270,21 @@ pub fn cached_render_image(placement_id: u64, data: &[u8]) -> Option<Arc<RenderI
             return hit;
         }
     }
-    let decoded = decode_render_image(data);
-    let mut guard = cache();
-    let cache = guard.get_or_insert_with(DecodeCache::default);
-    cache.insert(key, decoded.clone());
-    decoded
+    CachedRenderImage::Pending
 }
 
 #[cfg(test)]
 mod tests {
+    use gpui::RenderImage;
+
     use super::{
-        DecodeCache, MAX_DECODE_CACHE_ENTRIES, MAX_DECODED_IMAGE_BYTES, cache, cache_key,
-        cached_render_image, decode_render_image, decoded_rgba_bytes,
+        CachedRenderImage, DecodeCache, MAX_DECODE_CACHE_ENTRIES, MAX_DECODED_IMAGE_BYTES, cache,
+        cache_key, cached_render_image, cached_render_image_poll, decode_render_image,
+        decoded_rgba_bytes,
     };
     use std::sync::Arc;
     use std::sync::Mutex;
+    use std::time::{Duration, Instant};
 
     static TEST_CACHE_LOCK: Mutex<()> = Mutex::new(());
 
@@ -224,6 +313,57 @@ mod tests {
             .write_to(&mut cursor, image::ImageFormat::Png)
             .expect("encode png");
         bytes
+    }
+
+    fn content_id(data: &[u8]) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        data.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    fn arc_payload(data: &[u8]) -> Arc<[u8]> {
+        Arc::from(data.to_vec())
+    }
+
+    fn wait_ready(placement_id: u64, data: &[u8]) -> Arc<RenderImage> {
+        let id = content_id(data);
+        match cached_render_image(placement_id, id, arc_payload(data)) {
+            CachedRenderImage::Ready(image) => return image,
+            CachedRenderImage::Pending => {}
+            CachedRenderImage::Failed => panic!("decode failed before pending"),
+        }
+        let started = Instant::now();
+        loop {
+            match cached_render_image_poll(placement_id, id) {
+                CachedRenderImage::Ready(image) => return image,
+                CachedRenderImage::Pending if started.elapsed() < Duration::from_secs(2) => {
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+                CachedRenderImage::Pending => panic!("decode did not complete"),
+                CachedRenderImage::Failed => panic!("decode failed"),
+            }
+        }
+    }
+
+    fn wait_failed(placement_id: u64, data: &[u8]) {
+        let id = content_id(data);
+        match cached_render_image(placement_id, id, arc_payload(data)) {
+            CachedRenderImage::Failed => return,
+            CachedRenderImage::Pending => {}
+            CachedRenderImage::Ready(_) => panic!("invalid payload decoded"),
+        }
+        let started = Instant::now();
+        loop {
+            match cached_render_image_poll(placement_id, id) {
+                CachedRenderImage::Failed => return,
+                CachedRenderImage::Pending if started.elapsed() < Duration::from_secs(2) => {
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+                CachedRenderImage::Pending => panic!("decode failure did not complete"),
+                CachedRenderImage::Ready(_) => panic!("invalid payload decoded"),
+            }
+        }
     }
 
     #[test]
@@ -261,9 +401,16 @@ mod tests {
         let _guard = TEST_CACHE_LOCK.lock().unwrap();
         clear_cache();
         let png = tiny_png();
-        let a = cached_render_image(42, &png).expect("a");
-        let b = cached_render_image(42, &png).expect("b");
+        let a = wait_ready(42, &png);
+        let b = wait_ready(42, &png);
         assert!(Arc::ptr_eq(&a, &b));
+    }
+
+    #[test]
+    fn cache_key_uses_placement_and_content_ids() {
+        assert_eq!(cache_key(42, 7), cache_key(42, 7));
+        assert_ne!(cache_key(42, 7), cache_key(43, 7));
+        assert_ne!(cache_key(42, 7), cache_key(42, 8));
     }
 
     #[test]
@@ -271,44 +418,48 @@ mod tests {
         let _guard = TEST_CACHE_LOCK.lock().unwrap();
         clear_cache();
         let first = tiny_nyar([0, 0, 0, 255]);
-        let first_image = cached_render_image(1, &first).expect("first");
+        let first_image = wait_ready(1, &first);
         let mut second_image = None;
         for placement_id in 2..=MAX_DECODE_CACHE_ENTRIES as u64 {
             let value = placement_id as u8;
             let payload = tiny_nyar([value, 0, 0, 255]);
-            let image = cached_render_image(placement_id, &payload).expect("fill");
+            let image = wait_ready(placement_id, &payload);
             if placement_id == 2 {
                 second_image = Some(image);
             }
         }
-        assert!(Arc::ptr_eq(
-            &first_image,
-            &cached_render_image(1, &first).expect("first still cached")
-        ));
+        assert!(Arc::ptr_eq(&first_image, &wait_ready(1, &first)));
 
         let second = tiny_nyar([2, 0, 0, 255]);
         let second_image = second_image.expect("second before eviction");
         let overflow = tiny_nyar([255, 0, 0, 255]);
-        cached_render_image(999, &overflow).expect("overflow");
+        wait_ready(999, &overflow);
 
-        assert!(Arc::ptr_eq(
-            &first_image,
-            &cached_render_image(1, &first).expect("recent first kept")
-        ));
-        assert!(!Arc::ptr_eq(
-            &second_image,
-            &cached_render_image(2, &second).expect("old second decoded again")
-        ));
+        assert!(Arc::ptr_eq(&first_image, &wait_ready(1, &first)));
+        assert!(!Arc::ptr_eq(&second_image, &wait_ready(2, &second)));
     }
 
     #[test]
-    fn cache_key_uses_entire_payload() {
+    fn different_content_ids_do_not_share_cache_entries() {
+        let _guard = TEST_CACHE_LOCK.lock().unwrap();
+        clear_cache();
         let mut a = vec![0u8; 192];
         let mut b = vec![0u8; 192];
         a[96] = 1;
         b[96] = 2;
 
-        assert_ne!(cache_key(42, &a), cache_key(42, &b));
+        assert!(matches!(
+            cached_render_image(42, content_id(&a), arc_payload(&a)),
+            CachedRenderImage::Pending
+        ));
+        assert!(matches!(
+            cached_render_image(42, content_id(&b), arc_payload(&b)),
+            CachedRenderImage::Pending
+        ));
+        let mut guard = cache();
+        let cache = guard.as_mut().expect("cache exists");
+        assert!(cache.entries.contains_key(&cache_key(42, content_id(&a))));
+        assert!(cache.entries.contains_key(&cache_key(42, content_id(&b))));
     }
 
     #[test]
@@ -316,15 +467,15 @@ mod tests {
         let _guard = TEST_CACHE_LOCK.lock().unwrap();
         clear_cache();
         let invalid = b"not an image";
-        let key = cache_key(42, invalid);
+        let key = cache_key(42, content_id(invalid));
 
-        assert!(cached_render_image(42, invalid).is_none());
+        wait_failed(42, invalid);
         let mut guard = cache();
         let cached = guard
             .as_mut()
             .and_then(|cache| cache.get(key))
             .expect("cached failure entry");
-        assert!(cached.is_none());
+        assert!(matches!(cached, CachedRenderImage::Failed));
     }
 
     #[test]
@@ -333,11 +484,11 @@ mod tests {
         let second = decode_render_image(&tiny_nyar([2, 0, 0, 255])).expect("second");
         let mut cache = DecodeCache::default();
 
-        cache.insert_with_limits(1, Some(first), 10, 4);
-        cache.insert_with_limits(2, Some(second), 10, 4);
+        cache.insert_ready_with_limits(cache_key(1, 1), Some(first), 10, 4);
+        cache.insert_ready_with_limits(cache_key(2, 2), Some(second), 10, 4);
 
-        assert!(!cache.entries.contains_key(&1));
-        assert!(cache.entries.contains_key(&2));
+        assert!(!cache.entries.contains_key(&cache_key(1, 1)));
+        assert!(cache.entries.contains_key(&cache_key(2, 2)));
         assert_eq!(cache.decoded_bytes, 4);
     }
 

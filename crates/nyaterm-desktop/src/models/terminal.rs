@@ -1759,28 +1759,18 @@ impl TerminalFrameSession {
         encoding: &str,
         scrollback_limit: usize,
         recording_writer: &RecordingWriteHandle,
-    ) -> TerminalFrameOutputChunk {
+    ) -> TerminalAdvanceResult {
         self.set_encoding_and_limit(encoding, scrollback_limit);
-        let recording_text = self.recording_decoder.decode_output_text(data);
-        let recording_text_bytes = recording_text.len();
-        recording_writer.write_output(session_id.to_string(), recording_text);
-        let (feed, skipped_output_bytes) =
-            protect_terminal_output_burst(&mut self.screen, &mut self.output_decoder, data);
-        self.screen.advance(feed);
-        // Only the tail is ever kept, so cap inside the decoder rather than
-        // building a whole burst's worth of text and draining it back down.
-        let visible_text = self
-            .output_decoder
-            .decode_output_text_tail(feed, TERMINAL_FRAME_VISIBLE_TEXT_TAIL_CAP);
+        let result = terminal_advance_result(
+            &mut self.screen,
+            &mut self.output_decoder,
+            &mut self.recording_decoder,
+            session_id,
+            data,
+            recording_writer,
+        );
         self.revision = self.revision.saturating_add(1);
-        let effects = self.screen.take_effects();
-        TerminalFrameOutputChunk {
-            visible_text,
-            recording_text_bytes,
-            effects,
-            accepted_bytes: feed.len(),
-            skipped_output_bytes,
-        }
+        result
     }
 
     fn output_event_from_batch(
@@ -1889,7 +1879,7 @@ impl TerminalFrameSession {
 }
 
 #[derive(Debug)]
-struct TerminalFrameOutputChunk {
+struct TerminalAdvanceResult {
     visible_text: String,
     recording_text_bytes: usize,
     effects: TerminalEffects,
@@ -1907,7 +1897,7 @@ struct TerminalFrameOutputBatch {
 }
 
 impl TerminalFrameOutputBatch {
-    fn absorb(&mut self, chunk: TerminalFrameOutputChunk) {
+    fn absorb(&mut self, chunk: TerminalAdvanceResult) {
         append_terminal_frame_visible_tail(&mut self.visible_text, &chunk.visible_text);
         self.recording_text_bytes = self
             .recording_text_bytes
@@ -1917,6 +1907,33 @@ impl TerminalFrameOutputBatch {
             .skipped_output_bytes
             .saturating_add(chunk.skipped_output_bytes);
         merge_terminal_effects(&mut self.effects, chunk.effects);
+    }
+}
+
+fn terminal_advance_result(
+    screen: &mut TerminalScreen,
+    output_decoder: &mut TerminalOutputDecoder,
+    recording_decoder: &mut TerminalOutputDecoder,
+    session_id: &str,
+    data: &[u8],
+    recording_writer: &RecordingWriteHandle,
+) -> TerminalAdvanceResult {
+    let recording_text = recording_decoder.decode_output_text(data);
+    let recording_text_bytes = recording_text.len();
+    recording_writer.write_output(session_id.to_string(), recording_text);
+    let (feed, skipped_output_bytes) = protect_terminal_output_burst(screen, output_decoder, data);
+    screen.advance(feed);
+    // Only the tail is ever kept, so cap inside the decoder rather than
+    // building a whole burst's worth of text and draining it back down.
+    let visible_text =
+        output_decoder.decode_output_text_tail(feed, TERMINAL_FRAME_VISIBLE_TEXT_TAIL_CAP);
+    let effects = screen.take_effects();
+    TerminalAdvanceResult {
+        visible_text,
+        recording_text_bytes,
+        effects,
+        accepted_bytes: feed.len(),
+        skipped_output_bytes,
     }
 }
 

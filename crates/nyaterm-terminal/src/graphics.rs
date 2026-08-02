@@ -6,6 +6,7 @@
 
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 /// Which protocol produced a graphics payload.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -723,7 +724,8 @@ pub struct GraphicsPlacement {
     pub col: usize,
     pub width_cells: usize,
     pub height_cells: usize,
-    pub data: Vec<u8>,
+    pub data: Arc<[u8]>,
+    pub content_id: u64,
     pub name: Option<String>,
     /// Kitty image number used for delete / place-only reuse.
     pub kitty_id: Option<u32>,
@@ -756,7 +758,8 @@ pub struct GraphicsImageSnapshot {
     pub source_row_cells: usize,
     /// Cell offset into the source image for the visible left column.
     pub source_col_cells: usize,
-    pub data: Vec<u8>,
+    pub data: Arc<[u8]>,
+    pub content_id: u64,
     pub name: Option<String>,
     pub above_text: bool,
 }
@@ -816,7 +819,7 @@ struct PendingKittyTransfer {
 
 #[derive(Debug, Clone, Default)]
 struct StoredKittyImage {
-    data: Vec<u8>,
+    data: Arc<[u8]>,
     width_cells: Option<u16>,
     height_cells: Option<u16>,
     name: Option<String>,
@@ -1151,7 +1154,7 @@ impl TerminalGraphicsState {
                 placement_id,
                 width_cells.or(stored.width_cells),
                 height_cells.or(stored.height_cells),
-                stored.data,
+                stored.data.to_vec(),
                 name.or(stored.name),
                 cursor_line,
                 cursor_col,
@@ -1237,7 +1240,7 @@ impl TerminalGraphicsState {
         if let Some(kitty_id) = id
             && !data.is_empty()
         {
-            let data = clamp_image_data(data.clone());
+            let data = clamp_image_data_arc(data.clone());
             let last_used = self.next_store_generation();
             self.kitty_store.insert(
                 kitty_id,
@@ -1253,7 +1256,7 @@ impl TerminalGraphicsState {
 
         if place {
             let data = if data.is_empty() {
-                id.and_then(|k| self.get_stored_kitty_image(k).map(|s| s.data))
+                id.and_then(|k| self.get_stored_kitty_image(k).map(|s| s.data.to_vec()))
                     .unwrap_or_default()
             } else {
                 data
@@ -1384,7 +1387,8 @@ impl TerminalGraphicsState {
             .clamp(1, 256);
         let internal = self.next_id;
         self.next_id = self.next_id.saturating_add(1);
-        let data = clamp_image_data(data);
+        let content_id = image_content_id(&data);
+        let data = clamp_image_data_arc(data);
         let col = cursor_col.min(screen_cols.saturating_sub(1));
         self.placements.push(GraphicsPlacement {
             id: internal,
@@ -1394,6 +1398,7 @@ impl TerminalGraphicsState {
             width_cells: width,
             height_cells: height,
             data,
+            content_id,
             name,
             kitty_id,
             placement_id,
@@ -1485,7 +1490,8 @@ impl TerminalGraphicsState {
                 image_height_cells: placement.height_cells,
                 source_row_cells,
                 source_col_cells: 0,
-                data: placement.data.clone(),
+                data: Arc::clone(&placement.data),
+                content_id: placement.content_id,
                 name: placement.name.clone(),
                 above_text: placement.above_text,
             });
@@ -1534,12 +1540,19 @@ fn kitty_graphics_reply(image_id: Option<u32>, placement_id: Option<u32>, ok: bo
     out
 }
 
-fn clamp_image_data(data: Vec<u8>) -> Vec<u8> {
+fn clamp_image_data_arc(data: Vec<u8>) -> Arc<[u8]> {
     if data.len() > MAX_IMAGE_BYTES {
-        data[..MAX_IMAGE_BYTES].to_vec()
+        Arc::from(&data[..MAX_IMAGE_BYTES])
     } else {
-        data
+        Arc::from(data)
     }
+}
+
+fn image_content_id(data: &[u8]) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    data.hash(&mut hasher);
+    hasher.finish()
 }
 
 fn placement_intersects_cell(p: &GraphicsPlacement, line: i32, col: usize) -> bool {

@@ -1026,7 +1026,7 @@ fn terminal_view_filtered_visible_text_can_reenter_byte_parser() {
         .rows()
         .iter()
         .flat_map(|row| row.cells.iter())
-        .find(|cell| cell.text == "r")
+        .find(|cell| cell.text() == "r")
         .expect("styled red cell");
     assert_eq!(red_cell.style.fg, Some(1));
 }
