@@ -5,12 +5,18 @@ use gpui::{
 use nyaterm_core::truncate_preview;
 use nyaterm_ui::NyaInput;
 
-use crate::features::terminal::terminal_runtime::terminal_scroll_track_ratio;
 use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::TerminalSearchMode;
 use crate::theme::ThemePalette;
 
-use super::TERMINAL_SCROLLBAR_COLUMN_WIDTH;
+use super::{
+    TERMINAL_SCROLLBAR_COLUMN_WIDTH, TERMINAL_SCROLLBAR_MIN_THUMB_HEIGHT,
+    TERMINAL_SCROLLBAR_THUMB_ACTIVE_WIDTH, TERMINAL_SCROLLBAR_THUMB_WIDTH,
+    TERMINAL_SCROLLBAR_TRACK_PADDING_RIGHT, TERMINAL_SCROLLBAR_TRACK_PADDING_Y,
+    TerminalScrollbarInput, terminal_scroll_offset_from_pointer,
+    terminal_scrollbar_grab_offset_for_pointer, terminal_scrollbar_metrics,
+    terminal_scrollbar_thumb_color, terminal_scrollbar_track_bounds_tracker, track_height,
+};
 
 impl NyaTermApp {
     pub(in crate::features) fn terminal_scrollbar_element(
@@ -20,7 +26,6 @@ impl NyaTermApp {
         scroll_offset: usize,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        use gpui::relative;
         let palette = self.theme_palette();
         let max = self
             .terminal
@@ -46,20 +51,31 @@ impl NyaTermApp {
             })
             .unwrap_or_else(|| self.active_terminal_page_rows().max(1));
         let show = max > 0;
-        let thumb_ratio = if max == 0 {
-            1.0
-        } else {
-            let viewport = viewport_rows as f32;
-            (viewport / (viewport + max as f32)).clamp(0.12, 1.0)
-        };
-        let travel = (1.0 - thumb_ratio).max(0.0);
-        let thumb_top_ratio = if max == 0 {
-            0.0
-        } else {
-            travel * (1.0 - (scroll_offset as f32 / max as f32).clamp(0.0, 1.0))
-        };
+        let drag_active = self
+            .terminal
+            .view
+            .scrollbar_drag
+            .as_ref()
+            .is_some_and(|drag| drag.session_id.as_deref().unwrap_or("") == session_id);
+        let track_bounds = self.terminal_scrollbar_track_bounds_for_session(
+            (!session_id.is_empty()).then_some(session_id),
+        );
+        let track_height = track_bounds.map(track_height).unwrap_or(1.0);
+        let metrics = terminal_scrollbar_metrics(TerminalScrollbarInput {
+            viewport_rows,
+            scrollback_rows: max,
+            scroll_offset,
+            track_height,
+            min_thumb_height: TERMINAL_SCROLLBAR_MIN_THUMB_HEIGHT,
+        });
         let track_id = format!("terminal-scrollbar-track-{session_id}");
         let thumb_id = format!("terminal-scrollbar-thumb-{session_id}");
+        let thumb_color = terminal_scrollbar_thumb_color(palette, is_active);
+        let thumb_width = if drag_active {
+            TERMINAL_SCROLLBAR_THUMB_ACTIVE_WIDTH
+        } else {
+            TERMINAL_SCROLLBAR_THUMB_WIDTH
+        };
 
         div()
             .id(SharedString::from(format!(
@@ -68,8 +84,8 @@ impl NyaTermApp {
             .w(px(TERMINAL_SCROLLBAR_COLUMN_WIDTH))
             .flex_none()
             .h_full()
-            .py(px(2.))
-            .pr(px(2.))
+            .py(px(TERMINAL_SCROLLBAR_TRACK_PADDING_Y))
+            .pr(px(TERMINAL_SCROLLBAR_TRACK_PADDING_RIGHT))
             .opacity(if show { 1.0 } else { 0.35 })
             .child(
                 div()
@@ -77,7 +93,6 @@ impl NyaTermApp {
                     .relative()
                     .size_full()
                     .rounded_full()
-                    .bg(rgb(palette.border))
                     .cursor_pointer()
                     .on_mouse_down(MouseButton::Left, {
                         let session_id = session_id.to_string();
@@ -87,45 +102,70 @@ impl NyaTermApp {
                             }
                             let drag_session_id =
                                 (!session_id.is_empty()).then_some(session_id.clone());
-                            this.begin_terminal_scrollbar_drag(drag_session_id.clone(), cx);
-                            let Some(bounds) = (if session_id.is_empty() {
-                                this.terminal.layout.surface_bounds
-                            } else {
-                                this.terminal
-                                    .layout
-                                    .session_surface_bounds
-                                    .get(&session_id)
-                                    .copied()
-                                    .or(this.terminal.layout.surface_bounds)
-                            }) else {
+                            let Some(bounds) = this.terminal_scrollbar_track_bounds_for_session(
+                                drag_session_id.as_deref(),
+                            ) else {
                                 return;
                             };
-                            let ratio = terminal_scroll_track_ratio(bounds, event.position.y);
-                            this.set_terminal_scroll_from_track_ratio_for_session(
+                            let max =
+                                this.terminal_scroll_max_for_session(drag_session_id.as_deref());
+                            let metrics = this.terminal_scrollbar_metrics_for_session(
                                 drag_session_id.as_deref(),
-                                ratio,
+                                bounds,
+                            );
+                            let grab_offset_y = terminal_scrollbar_grab_offset_for_pointer(
+                                f32::from(event.position.y),
+                                f32::from(bounds.origin.y),
+                                metrics,
+                            );
+                            this.begin_terminal_scrollbar_drag(
+                                drag_session_id.clone(),
+                                grab_offset_y,
                                 cx,
                             );
+                            let offset = terminal_scroll_offset_from_pointer(
+                                f32::from(event.position.y),
+                                f32::from(bounds.origin.y),
+                                metrics,
+                                grab_offset_y,
+                                max,
+                            );
+                            let repaint_session_id = this
+                                .set_terminal_scroll_offset_for_session_state_only(
+                                    drag_session_id.as_deref(),
+                                    offset,
+                                );
+                            if repaint_session_id.is_some() {
+                                this.notify_terminal_scroll_after_state_change(
+                                    repaint_session_id.as_deref(),
+                                    cx,
+                                );
+                            }
                             cx.stop_propagation();
                         })
                     })
+                    .child(terminal_scrollbar_track_bounds_tracker(
+                        cx.entity(),
+                        (!session_id.is_empty()).then_some(session_id.to_string()),
+                    ))
                     .when(show, |this| {
                         this.child(
                             div()
                                 .id(SharedString::from(thumb_id))
                                 .absolute()
-                                .left(px(1.))
                                 .right(px(1.))
-                                .top(relative(thumb_top_ratio))
-                                .h(relative(thumb_ratio))
-                                .min_h(px(18.))
+                                .top(px(metrics.thumb_top))
+                                .w(px(thumb_width))
+                                .h(px(metrics.thumb_height))
                                 .rounded_full()
-                                .bg(rgb(if is_active {
-                                    palette.link
-                                } else {
-                                    palette.text_muted
-                                }))
-                                .opacity(0.85),
+                                .bg(rgba(
+                                    (thumb_color << 8)
+                                        | if drag_active || is_active { 0xb8 } else { 0x70 },
+                                ))
+                                .hover(move |this| {
+                                    this.w(px(TERMINAL_SCROLLBAR_THUMB_ACTIVE_WIDTH))
+                                        .bg(rgba((thumb_color << 8) | 0xc8))
+                                }),
                         )
                     }),
             )

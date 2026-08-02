@@ -1,5 +1,3 @@
-pub(in crate::features) const TERMINAL_SCROLLBAR_COLUMN_WIDTH: f32 = 10.0;
-
 mod decorations;
 mod helpers;
 pub(in crate::features) use decorations::{
@@ -8,6 +6,17 @@ pub(in crate::features) use decorations::{
     terminal_action_links_for_paint_snapshot, terminal_action_links_have_ranges_for_snapshot,
     terminal_action_links_overlap_snapshot, terminal_line_decorations_cache_key,
     terminal_line_decorations_needed, terminal_snapshot_absolute_range,
+};
+
+mod scrollbar;
+pub(in crate::features) use scrollbar::{
+    TERMINAL_SCROLLBAR_COLUMN_WIDTH, TERMINAL_SCROLLBAR_MIN_THUMB_HEIGHT,
+    TERMINAL_SCROLLBAR_THUMB_ACTIVE_WIDTH, TERMINAL_SCROLLBAR_THUMB_WIDTH,
+    TERMINAL_SCROLLBAR_TRACK_PADDING_RIGHT, TERMINAL_SCROLLBAR_TRACK_PADDING_Y,
+    TerminalScrollbarDragState, TerminalScrollbarInput, TerminalScrollbarMetrics,
+    terminal_scroll_offset_from_pointer, terminal_scrollbar_grab_offset_for_pointer,
+    terminal_scrollbar_metrics, terminal_scrollbar_thumb_color,
+    terminal_scrollbar_track_bounds_tracker, track_height,
 };
 
 mod canvas;

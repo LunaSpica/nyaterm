@@ -334,7 +334,7 @@ mod tests {
             terminal_visible_surface_bounds(bounds, content_mask),
             Some(Bounds::new(
                 gpui::point(px(10.), px(20.)),
-                gpui::size(px(600.), px(400.))
+                gpui::size(px(text_width), px(400.))
             ))
         );
     }

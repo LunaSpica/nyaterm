@@ -14,6 +14,7 @@ use nyaterm_core::ResolvedKeywordHighlightRule;
 use nyaterm_terminal::{TerminalOutputDecoder, TerminalScreen};
 
 use super::assist_state::TerminalAssistState;
+use super::terminal_surface::TerminalScrollbarDragState;
 use super::terminal_surface_entity::TerminalSurface;
 use super::window_state::TerminalWindowState;
 use crate::models::{
@@ -69,8 +70,7 @@ pub(super) struct TerminalViewRuntimeState {
     pub live_prefetch_task: Option<gpui::Task<()>>,
     pub scroll_offset: usize,
     pub scroll_delta_residuals: HashMap<String, f32>,
-    pub scrollbar_dragging: bool,
-    pub scrollbar_drag_session_id: Option<String>,
+    pub scrollbar_drag: Option<TerminalScrollbarDragState>,
     pub pending_frame_events: VecDeque<TerminalFrameEvent>,
 }
 
@@ -111,6 +111,8 @@ pub(super) struct TerminalLayoutState {
     /// Last painted bounds of the active terminal text area (window coords).
     pub(super) surface_bounds: Option<gpui::Bounds<gpui::Pixels>>,
     pub(super) session_surface_bounds: HashMap<String, gpui::Bounds<gpui::Pixels>>,
+    pub(super) scrollbar_track_bounds: Option<gpui::Bounds<gpui::Pixels>>,
+    pub(super) session_scrollbar_track_bounds: HashMap<String, gpui::Bounds<gpui::Pixels>>,
     pub(super) scale_factor: f32,
     pub(super) cell_metrics: Option<(f32, f32)>,
 }
@@ -180,8 +182,7 @@ impl TerminalFeatureState {
                 live_prefetch_task: None,
                 scroll_offset: 0,
                 scroll_delta_residuals: HashMap::new(),
-                scrollbar_dragging: false,
-                scrollbar_drag_session_id: None,
+                scrollbar_drag: None,
                 pending_frame_events: VecDeque::new(),
             },
             input: TerminalInputState {
@@ -204,6 +205,8 @@ impl TerminalFeatureState {
             layout: TerminalLayoutState {
                 surface_bounds: None,
                 session_surface_bounds: HashMap::new(),
+                scrollbar_track_bounds: None,
+                session_scrollbar_track_bounds: HashMap::new(),
                 scale_factor,
                 cell_metrics: None,
             },
@@ -296,12 +299,22 @@ impl TerminalFeatureState {
 
     pub(in crate::features) fn move_session_surface_bounds(&mut self, from: &str, to: String) {
         if let Some(bounds) = self.layout.session_surface_bounds.remove(from) {
-            self.layout.session_surface_bounds.insert(to, bounds);
+            self.layout
+                .session_surface_bounds
+                .insert(to.clone(), bounds);
+        }
+        if let Some(bounds) = self.layout.session_scrollbar_track_bounds.remove(from) {
+            self.layout
+                .session_scrollbar_track_bounds
+                .insert(to, bounds);
         }
     }
 
     pub(in crate::features) fn remove_session_surface_bounds(&mut self, session_id: &str) {
         self.layout.session_surface_bounds.remove(session_id);
+        self.layout
+            .session_scrollbar_track_bounds
+            .remove(session_id);
     }
 
     pub(in crate::features) fn cached_keyword_highlight_rules(

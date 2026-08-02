@@ -8,18 +8,13 @@ use nyaterm_core::{
 use nyaterm_transport::SessionKind;
 
 use crate::features::NyaTermApp;
+use crate::features::terminal::terminal_surface::{
+    TERMINAL_SCROLLBAR_MIN_THUMB_HEIGHT, TerminalScrollbarDragState, TerminalScrollbarInput,
+    terminal_scroll_offset_from_pointer, terminal_scrollbar_metrics, track_height,
+};
 use crate::models::TerminalPerformanceOverlay;
 
 use super::view_io::{TerminalMouseReportRequest, terminal_visual_display_offset};
-
-pub(in crate::features) fn terminal_scroll_track_ratio(
-    bounds: gpui::Bounds<gpui::Pixels>,
-    pointer_y: gpui::Pixels,
-) -> f32 {
-    let height = f32::from(bounds.size.height).max(1.0);
-    let local_y = f32::from(pointer_y - bounds.origin.y);
-    (local_y / height).clamp(0.0, 1.0)
-}
 
 pub(in crate::features) fn terminal_scroll_delta_lines_from_raw(
     residual: &mut f32,
@@ -1166,51 +1161,30 @@ impl NyaTermApp {
         self.session.active_id_owned()
     }
 
-    /// Map a vertical pointer position (0..=1 top→bottom of track) to scroll_offset.
-    /// Top of track = oldest history (max offset); bottom = live (0).
-    pub(in crate::features) fn set_terminal_scroll_from_track_ratio_for_session(
-        &mut self,
-        session_id: Option<&str>,
-        ratio: f32,
-        cx: &mut Context<Self>,
-    ) {
-        let repaint_session_id =
-            self.set_terminal_scroll_from_track_ratio_for_session_state_only(session_id, ratio);
-        if repaint_session_id.is_some() {
-            self.notify_terminal_scroll_after_state_change(repaint_session_id.as_deref(), cx);
-        }
-    }
-
-    pub(in crate::features) fn set_terminal_scroll_from_track_ratio_for_session_state_only(
-        &mut self,
-        session_id: Option<&str>,
-        ratio: f32,
-    ) -> Option<String> {
-        let max = self.terminal_scroll_max_for_session(session_id);
-        if max == 0 {
-            return self.set_terminal_scroll_offset_for_session_state_only(session_id, 0);
-        }
-        let ratio = ratio.clamp(0.0, 1.0);
-        // ratio 0 (top) -> max, ratio 1 (bottom) -> 0
-        let offset = ((1.0 - ratio) * max as f32).round() as usize;
-        self.set_terminal_scroll_offset_for_session_state_only(session_id, offset.min(max))
-    }
-
     pub(in crate::features) fn begin_terminal_scrollbar_drag(
         &mut self,
         session_id: Option<String>,
+        grab_offset_y: f32,
         cx: &mut Context<Self>,
     ) {
-        let repaint_session_id = self.begin_terminal_scrollbar_drag_state_only(session_id);
+        let repaint_session_id =
+            self.begin_terminal_scrollbar_drag_state_only(session_id, grab_offset_y);
         self.notify_terminal_surface_only(repaint_session_id.as_deref(), cx);
     }
 
     pub(in crate::features) fn begin_terminal_scrollbar_drag_state_only(
         &mut self,
         session_id: Option<String>,
+        grab_offset_y: f32,
     ) -> Option<String> {
-        self.terminal.view.scrollbar_dragging = true;
-        self.terminal.view.scrollbar_drag_session_id = session_id.clone();
+        self.terminal.view.scrollbar_drag = Some(TerminalScrollbarDragState {
+            session_id: session_id.clone(),
+            grab_offset_y: if grab_offset_y.is_finite() {
+                grab_offset_y.max(0.0)
+            } else {
+                0.0
+            },
+        });
         session_id.or_else(|| self.session.active_id_owned())
     }
 
@@ -1219,29 +1193,34 @@ impl NyaTermApp {
         event: &gpui::MouseMoveEvent,
         cx: &mut Context<Self>,
     ) {
-        if !self.terminal.view.scrollbar_dragging {
-            return;
-        }
-        let drag_session_id = self.terminal.view.scrollbar_drag_session_id.as_deref();
-        let Some(bounds) = self.terminal_surface_bounds_for_session(drag_session_id) else {
+        let Some(drag) = self.terminal.view.scrollbar_drag.clone() else {
             return;
         };
-        let ratio = terminal_scroll_track_ratio(bounds, event.position.y);
-        let drag_session_id = self.terminal.view.scrollbar_drag_session_id.clone();
-        let repaint_session_id = self.set_terminal_scroll_from_track_ratio_for_session_state_only(
-            drag_session_id.as_deref(),
-            ratio,
+        let Some(bounds) =
+            self.terminal_scrollbar_track_bounds_for_session(drag.session_id.as_deref())
+        else {
+            return;
+        };
+        let max = self.terminal_scroll_max_for_session(drag.session_id.as_deref());
+        let metrics =
+            self.terminal_scrollbar_metrics_for_session(drag.session_id.as_deref(), bounds);
+        let offset = terminal_scroll_offset_from_pointer(
+            f32::from(event.position.y),
+            f32::from(bounds.origin.y),
+            metrics,
+            drag.grab_offset_y,
+            max,
         );
+        let repaint_session_id = self
+            .set_terminal_scroll_offset_for_session_state_only(drag.session_id.as_deref(), offset);
         if repaint_session_id.is_some() {
             self.queue_terminal_scrollbar_drag_visual_notify(repaint_session_id.as_deref(), cx);
         }
     }
 
     pub(in crate::features) fn finish_terminal_scrollbar_drag(&mut self, cx: &mut Context<Self>) {
-        if self.terminal.view.scrollbar_dragging {
-            let session_id = self.terminal.view.scrollbar_drag_session_id.clone();
-            self.terminal.view.scrollbar_dragging = false;
-            self.terminal.view.scrollbar_drag_session_id = None;
+        if let Some(drag) = self.terminal.view.scrollbar_drag.take() {
+            let session_id = drag.session_id;
             self.notify_terminal_surface_only(session_id.as_deref(), cx);
         }
     }
@@ -1297,6 +1276,70 @@ impl NyaTermApp {
         } else {
             self.terminal.layout.surface_bounds
         }
+    }
+
+    pub(in crate::features) fn remember_terminal_scrollbar_track_bounds_for_session(
+        &mut self,
+        session_id: Option<&str>,
+        bounds: gpui::Bounds<gpui::Pixels>,
+    ) {
+        if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
+            self.terminal
+                .layout
+                .session_scrollbar_track_bounds
+                .insert(session_id.to_string(), bounds);
+            if self.session.active_id() == Some(session_id) {
+                self.terminal.layout.scrollbar_track_bounds = Some(bounds);
+            }
+        } else {
+            self.terminal.layout.scrollbar_track_bounds = Some(bounds);
+        }
+    }
+
+    pub(in crate::features) fn terminal_scrollbar_track_bounds_for_session(
+        &self,
+        session_id: Option<&str>,
+    ) -> Option<gpui::Bounds<gpui::Pixels>> {
+        if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
+            self.terminal
+                .layout
+                .session_scrollbar_track_bounds
+                .get(session_id)
+                .copied()
+                .or(self.terminal.layout.scrollbar_track_bounds)
+        } else {
+            self.terminal.layout.scrollbar_track_bounds
+        }
+    }
+
+    pub(in crate::features) fn terminal_scrollbar_metrics_for_session(
+        &self,
+        session_id: Option<&str>,
+        bounds: gpui::Bounds<gpui::Pixels>,
+    ) -> crate::features::terminal::terminal_surface::TerminalScrollbarMetrics {
+        let viewport_rows = self.terminal_viewport_rows_for_session(session_id);
+        let scrollback_rows = self.terminal_scroll_max_for_session(session_id);
+        let scroll_offset = self.terminal_scroll_offset_for_session(session_id);
+        terminal_scrollbar_metrics(TerminalScrollbarInput {
+            viewport_rows,
+            scrollback_rows,
+            scroll_offset,
+            track_height: track_height(bounds),
+            min_thumb_height: TERMINAL_SCROLLBAR_MIN_THUMB_HEIGHT,
+        })
+    }
+
+    fn terminal_scroll_offset_for_session(&self, session_id: Option<&str>) -> usize {
+        if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
+            return self
+                .terminal
+                .view
+                .views
+                .get(session_id)
+                .map(|view| view.scroll_offset)
+                .unwrap_or(0);
+        }
+        self.terminal.view.scroll_offset
     }
 
     pub(in crate::features) fn active_terminal_page_rows(&self) -> usize {
@@ -1565,9 +1608,8 @@ mod tests {
         terminal_scroll_offset_state_needs_update, terminal_scroll_predictive_prefetch_offset,
         terminal_scroll_residual_clamped_for_offset, terminal_scroll_should_consume_raw_lines,
         terminal_scroll_should_request_immediate_text_snapshot,
-        terminal_scroll_to_bottom_state_needs_update, terminal_scroll_track_ratio,
-        terminal_should_apply_session_cwd, terminal_user_scroll_idle_remaining_delay,
-        terminal_visual_scroll_active_for_state,
+        terminal_scroll_to_bottom_state_needs_update, terminal_should_apply_session_cwd,
+        terminal_user_scroll_idle_remaining_delay, terminal_visual_scroll_active_for_state,
     };
 
     fn terminal_resize_geometry_for_bounds(
@@ -1631,17 +1673,6 @@ mod tests {
             true,
             "/home/nya"
         ));
-    }
-
-    #[test]
-    fn terminal_scroll_track_ratio_uses_bounds_origin_and_clamps() {
-        let bounds = Bounds::new(point(px(10.), px(100.)), size(px(12.), px(200.)));
-
-        assert_eq!(terminal_scroll_track_ratio(bounds, px(100.)), 0.0);
-        assert_eq!(terminal_scroll_track_ratio(bounds, px(200.)), 0.5);
-        assert_eq!(terminal_scroll_track_ratio(bounds, px(300.)), 1.0);
-        assert_eq!(terminal_scroll_track_ratio(bounds, px(50.)), 0.0);
-        assert_eq!(terminal_scroll_track_ratio(bounds, px(350.)), 1.0);
     }
 
     #[test]

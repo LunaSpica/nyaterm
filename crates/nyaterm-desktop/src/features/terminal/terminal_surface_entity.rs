@@ -9,12 +9,19 @@ use crate::features::formatting::format_terminal_line_timestamp_ms;
 use crate::features::terminal::terminal_runtime::{
     TerminalScrollVisualState, terminal_display_offset_from_state,
     terminal_local_scroll_delta_lines_from_state, terminal_scroll_needs_text_first_repaint,
-    terminal_scroll_track_ratio, terminal_visual_scroll_active_for_state,
+    terminal_visual_scroll_active_for_state,
 };
 use crate::features::terminal::terminal_selection_runtime::{
     terminal_bounds_tracker, terminal_gutter_metrics, terminal_line_number_digits,
 };
-use crate::features::terminal::terminal_surface::TERMINAL_SCROLLBAR_COLUMN_WIDTH;
+use crate::features::terminal::terminal_surface::{
+    TERMINAL_SCROLLBAR_COLUMN_WIDTH, TERMINAL_SCROLLBAR_MIN_THUMB_HEIGHT,
+    TERMINAL_SCROLLBAR_THUMB_ACTIVE_WIDTH, TERMINAL_SCROLLBAR_THUMB_WIDTH,
+    TERMINAL_SCROLLBAR_TRACK_PADDING_RIGHT, TERMINAL_SCROLLBAR_TRACK_PADDING_Y,
+    TerminalScrollbarInput, terminal_scroll_offset_from_pointer,
+    terminal_scrollbar_grab_offset_for_pointer, terminal_scrollbar_metrics,
+    terminal_scrollbar_thumb_color, terminal_scrollbar_track_bounds_tracker, track_height,
+};
 use crate::models::{TerminalPerformanceOverlay, TerminalProtocolState, TerminalSelection};
 use crate::terminal::{
     NyaTerminalElement, NyaTerminalLayoutCache, TerminalKeywordHighlightSnapshot,
@@ -1948,7 +1955,6 @@ impl TerminalSurface {
     }
 
     fn scrollbar_element(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        use gpui::relative;
         let palette = self.palette;
         let session_id = self.session_id.clone();
         let is_active = self.is_active;
@@ -1956,21 +1962,21 @@ impl TerminalSurface {
         let max = self.scrollback_len;
         let viewport_rows = self.viewport_rows.max(1);
         let show = max > 0;
-        let thumb_ratio = if max == 0 {
-            1.0
-        } else {
-            let viewport = viewport_rows as f32;
-            (viewport / (viewport + max as f32)).clamp(0.12, 1.0)
-        };
-        let travel = (1.0 - thumb_ratio).max(0.0);
-        let thumb_top_ratio = if max == 0 {
-            0.0
-        } else {
-            travel * (1.0 - (scroll_offset as f32 / max as f32).clamp(0.0, 1.0))
-        };
         let app = self.app.clone();
+        let track_bounds = app.as_ref().and_then(|app| {
+            app.read(cx)
+                .terminal_scrollbar_track_bounds_for_session(Some(session_id.as_str()))
+        });
+        let metrics = terminal_scrollbar_metrics(TerminalScrollbarInput {
+            viewport_rows,
+            scrollback_rows: max,
+            scroll_offset,
+            track_height: track_bounds.map(track_height).unwrap_or(1.0),
+            min_thumb_height: TERMINAL_SCROLLBAR_MIN_THUMB_HEIGHT,
+        });
         let track_id = format!("terminal-scrollbar-track-{session_id}");
         let thumb_id = format!("terminal-scrollbar-thumb-{session_id}");
+        let thumb_color = terminal_scrollbar_thumb_color(palette, is_active);
 
         div()
             .id(SharedString::from(format!(
@@ -1979,8 +1985,8 @@ impl TerminalSurface {
             .w(px(TERMINAL_SCROLLBAR_COLUMN_WIDTH))
             .flex_none()
             .h_full()
-            .py(px(2.))
-            .pr(px(2.))
+            .py(px(TERMINAL_SCROLLBAR_TRACK_PADDING_Y))
+            .pr(px(TERMINAL_SCROLLBAR_TRACK_PADDING_RIGHT))
             .opacity(if show { 1.0 } else { 0.35 })
             .child(
                 div()
@@ -1988,7 +1994,6 @@ impl TerminalSurface {
                     .relative()
                     .size_full()
                     .rounded_full()
-                    .bg(rgb(palette.border))
                     .cursor_pointer()
                     .on_mouse_down(MouseButton::Left, {
                         let session_id = session_id.clone();
@@ -2003,27 +2008,40 @@ impl TerminalSurface {
                                 }
                                 let drag_session_id =
                                     (!session_id.is_empty()).then_some(session_id.clone());
+                                let Some(bounds) = this
+                                    .terminal_scrollbar_track_bounds_for_session(
+                                        drag_session_id.as_deref(),
+                                    )
+                                else {
+                                    return None;
+                                };
+                                let metrics = this.terminal_scrollbar_metrics_for_session(
+                                    drag_session_id.as_deref(),
+                                    bounds,
+                                );
+                                let grab_offset_y = terminal_scrollbar_grab_offset_for_pointer(
+                                    f32::from(event.position.y),
+                                    f32::from(bounds.origin.y),
+                                    metrics,
+                                );
                                 let mut repaint_session_id = this
                                     .begin_terminal_scrollbar_drag_state_only(
                                         drag_session_id.clone(),
+                                        grab_offset_y,
                                     );
-                                let Some(bounds) = (if session_id.is_empty() {
-                                    this.terminal.layout.surface_bounds
-                                } else {
-                                    this.terminal
-                                        .layout
-                                        .session_surface_bounds
-                                        .get(&session_id)
-                                        .copied()
-                                        .or(this.terminal.layout.surface_bounds)
-                                }) else {
-                                    return repaint_session_id;
-                                };
-                                let ratio = terminal_scroll_track_ratio(bounds, event.position.y);
-                                repaint_session_id = this
-                                    .set_terminal_scroll_from_track_ratio_for_session_state_only(
+                                let offset = terminal_scroll_offset_from_pointer(
+                                    f32::from(event.position.y),
+                                    f32::from(bounds.origin.y),
+                                    metrics,
+                                    grab_offset_y,
+                                    this.terminal_scroll_max_for_session(
                                         drag_session_id.as_deref(),
-                                        ratio,
+                                    ),
+                                );
+                                repaint_session_id = this
+                                    .set_terminal_scroll_offset_for_session_state_only(
+                                        drag_session_id.as_deref(),
+                                        offset,
                                     )
                                     .or(repaint_session_id);
                                 repaint_session_id
@@ -2032,23 +2050,29 @@ impl TerminalSurface {
                             cx.stop_propagation();
                         })
                     })
+                    .when_some(app.clone(), |this, app| {
+                        this.child(terminal_scrollbar_track_bounds_tracker(
+                            app,
+                            Some(session_id.clone()),
+                        ))
+                    })
                     .when(show, |this| {
                         this.child(
                             div()
                                 .id(SharedString::from(thumb_id))
                                 .absolute()
-                                .left(px(1.))
                                 .right(px(1.))
-                                .top(relative(thumb_top_ratio))
-                                .h(relative(thumb_ratio))
-                                .min_h(px(18.))
+                                .top(px(metrics.thumb_top))
+                                .w(px(TERMINAL_SCROLLBAR_THUMB_WIDTH))
+                                .h(px(metrics.thumb_height))
                                 .rounded_full()
-                                .bg(rgb(if is_active {
-                                    palette.link
-                                } else {
-                                    palette.text_muted
-                                }))
-                                .opacity(0.85),
+                                .bg(rgba(
+                                    (thumb_color << 8) | if is_active { 0xb8 } else { 0x70 },
+                                ))
+                                .hover(move |this| {
+                                    this.w(px(TERMINAL_SCROLLBAR_THUMB_ACTIVE_WIDTH))
+                                        .bg(rgba((thumb_color << 8) | 0xc8))
+                                }),
                         )
                     }),
             )
