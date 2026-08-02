@@ -2,9 +2,10 @@ use std::sync::{Arc, Weak};
 
 use super::{
     CursorShape, GraphicsProtocol, ShellCommandMark, TERMINAL_SNAPSHOT_ROW_CACHE_LIMIT,
-    TerminalOutputDecoder, TerminalScreen, TerminalSnapshot, TerminalSnapshotRowCache,
-    TerminalSnapshotRowCacheEntry, TerminalSnapshotRowCacheKey, alternate_scroll_key_bytes,
-    encode_mouse_report, encode_mouse_report_with_modifiers, render_row_signature,
+    TerminalOutputDecoder, TerminalScreen, TerminalSearchDirection, TerminalSearchQuery,
+    TerminalSnapshot, TerminalSnapshotRowCache, TerminalSnapshotRowCacheEntry,
+    TerminalSnapshotRowCacheKey, alternate_scroll_key_bytes, encode_mouse_report,
+    encode_mouse_report_with_modifiers, render_row_signature,
 };
 
 fn snapshot_text(snapshot: &TerminalSnapshot) -> String {
@@ -13,6 +14,66 @@ fn snapshot_text(snapshot: &TerminalSnapshot) -> String {
         .iter()
         .map(|row| row.text.as_str())
         .collect()
+}
+
+fn search_query(pattern: &str) -> TerminalSearchQuery {
+    TerminalSearchQuery {
+        pattern: pattern.to_string(),
+        regex: false,
+        case_sensitive: true,
+        whole_word: false,
+        direction: TerminalSearchDirection::Forward,
+        limit: 100,
+    }
+}
+
+#[test]
+fn grid_search_returns_absolute_buffer_rows_without_flattening() {
+    let mut screen = TerminalScreen::new(20, 3);
+    screen.advance(b"alpha\r\nbeta\r\nneedle-one\r\nneedle-two");
+
+    let matches = screen.search_grid(&search_query("needle")).unwrap();
+
+    assert_eq!(matches.len(), 2);
+    assert_eq!(matches[0].line_index, 2);
+    assert_eq!(matches[0].start_col, 0);
+    assert_eq!(matches[0].end_col, 6);
+    assert_eq!(matches[1].line_index, 3);
+}
+
+#[test]
+fn grid_search_honors_case_and_whole_word_flags() {
+    let mut screen = TerminalScreen::new(40, 3);
+    screen.advance(b"cat scatter CAT cat_ cat");
+
+    let mut query = search_query("cat");
+    query.case_sensitive = false;
+    query.whole_word = true;
+    let matches = screen.search_grid(&query).unwrap();
+
+    assert_eq!(
+        matches
+            .iter()
+            .map(|m| (m.line_index, m.start_col, m.end_col))
+            .collect::<Vec<_>>(),
+        vec![(0, 0, 3), (0, 12, 15), (0, 21, 24)]
+    );
+}
+
+#[test]
+fn grid_search_splits_soft_wrapped_match_into_row_segments() {
+    let mut screen = TerminalScreen::new(5, 3);
+    screen.advance(b"abcde12345");
+
+    let matches = screen.search_grid(&search_query("de12")).unwrap();
+
+    assert_eq!(
+        matches
+            .iter()
+            .map(|m| (m.line_index, m.start_col, m.end_col))
+            .collect::<Vec<_>>(),
+        vec![(0, 3, 5), (1, 0, 2)]
+    );
 }
 
 #[test]

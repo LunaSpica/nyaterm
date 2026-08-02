@@ -4959,6 +4959,7 @@ dependencies = [
  "encoding_rs",
  "flate2",
  "memchr",
+ "regex",
  "unicode-width",
 ]
 

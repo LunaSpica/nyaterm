@@ -101,6 +101,13 @@ pub enum GraphicsSegment {
     Event(GraphicsEvent),
 }
 
+/// Borrowed ordered stream segments from the ingress scanner.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GraphicsSegmentRef<'a> {
+    Terminal(&'a [u8]),
+    Event(GraphicsEvent),
+}
+
 /// Maximum incomplete graphics sequence retained across output chunks.
 const GRAPHICS_PENDING_LIMIT: usize = 8 * 1024 * 1024;
 const MAX_KITTY_PENDING_BYTES: usize = 8 * 1024 * 1024;
@@ -128,8 +135,40 @@ impl GraphicsIngress {
     /// CSI sequences still leaves here as a single [`GraphicsSegment::Terminal`]
     /// instead of hundreds of one-per-escape allocations.
     pub fn advance(&mut self, input: &[u8]) -> Vec<GraphicsSegment> {
+        let mut out = Vec::new();
+        self.advance_segments(input, |segment| match segment {
+            GraphicsSegmentRef::Terminal(bytes) => {
+                out.push(GraphicsSegment::Terminal(bytes.to_vec()));
+            }
+            GraphicsSegmentRef::Event(event) => out.push(GraphicsSegment::Event(event)),
+        });
+        out
+    }
+
+    /// Feed raw session output and visit ordered terminal / graphics segments.
+    ///
+    /// Ordinary terminal bytes are borrowed from the caller's input in the
+    /// common case. Bytes are copied only when an incomplete graphics sequence
+    /// from a prior chunk must be spliced with the new input.
+    pub fn advance_with<T, G>(&mut self, input: &[u8], mut on_terminal: T, mut on_graphics: G)
+    where
+        T: FnMut(&[u8]),
+        G: FnMut(GraphicsEvent),
+    {
+        self.advance_segments(input, |segment| match segment {
+            GraphicsSegmentRef::Terminal(bytes) => on_terminal(bytes),
+            GraphicsSegmentRef::Event(event) => on_graphics(event),
+        });
+    }
+
+    /// Feed raw session output and visit borrowed ordered segments.
+    pub fn advance_segments(
+        &mut self,
+        input: &[u8],
+        mut on_segment: impl FnMut(GraphicsSegmentRef<'_>),
+    ) {
         if input.is_empty() && self.pending.is_empty() {
-            return Vec::new();
+            return;
         }
         // Splice only when a prior chunk left an unfinished sequence behind;
         // the common case borrows the caller's bytes and copies nothing.
@@ -141,7 +180,6 @@ impl GraphicsIngress {
             Cow::Owned(spliced)
         };
         let buf: &[u8] = &buf;
-        let mut out = Vec::new();
         let mut i = 0usize;
         let mut terminal_start = 0usize;
 
@@ -156,16 +194,16 @@ impl GraphicsIngress {
                         // Oversized unfinished sequence: give up on it and hand
                         // everything still unflushed to the terminal parser.
                         if terminal_start < buf.len() {
-                            out.push(GraphicsSegment::Terminal(buf[terminal_start..].to_vec()));
+                            on_segment(GraphicsSegmentRef::Terminal(&buf[terminal_start..]));
                         }
                         self.pending.clear();
-                        return out;
+                        return;
                     }
                     if i > terminal_start {
-                        out.push(GraphicsSegment::Terminal(buf[terminal_start..i].to_vec()));
+                        on_segment(GraphicsSegmentRef::Terminal(&buf[terminal_start..i]));
                     }
                     self.pending = buf[i..].to_vec();
-                    return out;
+                    return;
                 }
                 SequenceClass::NotGraphics => {
                     // Leave ESC to the terminal parser, inside the current run.
@@ -175,10 +213,10 @@ impl GraphicsIngress {
                     // A graphics sequence does split the stream: flush the plain
                     // terminal bytes ahead of it first.
                     if i > terminal_start {
-                        out.push(GraphicsSegment::Terminal(buf[terminal_start..i].to_vec()));
+                        on_segment(GraphicsSegmentRef::Terminal(&buf[terminal_start..i]));
                     }
                     if let Some(event) = event {
-                        out.push(GraphicsSegment::Event(event));
+                        on_segment(GraphicsSegmentRef::Event(event));
                     }
                     i = end;
                     terminal_start = i;
@@ -187,9 +225,8 @@ impl GraphicsIngress {
         }
 
         if terminal_start < buf.len() {
-            out.push(GraphicsSegment::Terminal(buf[terminal_start..].to_vec()));
+            on_segment(GraphicsSegmentRef::Terminal(&buf[terminal_start..]));
         }
-        out
     }
 }
 

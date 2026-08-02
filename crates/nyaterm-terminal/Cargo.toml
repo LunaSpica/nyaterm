@@ -11,4 +11,5 @@ alacritty_terminal.workspace = true
 encoding_rs.workspace = true
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 memchr = "2"
+regex.workspace = true
 unicode-width = "0.2"

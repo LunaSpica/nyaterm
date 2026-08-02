@@ -3,8 +3,9 @@ use nyaterm_core::{
     ActionLinksMatcherSettings, TerminalBackendResize, terminal_backend_resize_changed,
 };
 use nyaterm_terminal::{
-    TerminalEffects, TerminalOutputDecoder, TerminalScreen, TerminalSnapshot,
-    TerminalSnapshotBuildStats, terminal_cell_col_for_byte_index,
+    TerminalEffects, TerminalOutputDecoder, TerminalScreen, TerminalSearchDirection,
+    TerminalSearchQuery, TerminalSnapshot, TerminalSnapshotBuildStats,
+    terminal_cell_col_for_byte_index,
 };
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::{Hash, Hasher};
@@ -16,8 +17,8 @@ use std::time::{Duration, Instant};
 use crate::{
     action_links::{ActionLinkMatch, find_action_links},
     terminal::{
-        NyaTerminalLayoutCache, TerminalBufferMatch, TerminalLineDecorations, TerminalSearchFlags,
-        terminal_buffer_matches, terminal_screen_from_output,
+        NyaTerminalLayoutCache, TerminalBufferMatch, TerminalLineDecorations,
+        terminal_screen_from_output,
     },
 };
 
@@ -109,16 +110,6 @@ pub(crate) struct TerminalFrameSearchKey {
     pub(crate) regex: bool,
     pub(crate) whole_word: bool,
     pub(crate) limit: usize,
-}
-
-impl TerminalFrameSearchKey {
-    pub(crate) fn flags(&self) -> TerminalSearchFlags {
-        TerminalSearchFlags {
-            case_sensitive: self.case_sensitive,
-            regex: self.regex,
-            whole_word: self.whole_word,
-        }
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -1858,14 +1849,33 @@ impl TerminalFrameSession {
     }
 
     fn search_event(
-        &self,
+        &mut self,
         session_id: String,
         key: TerminalFrameSearchKey,
     ) -> TerminalFrameSearchEvent {
         let started_at = Instant::now();
-        let flags = key.flags();
-        let buffer_text = self.screen.all_lines().join("\n");
-        let matches = terminal_buffer_matches(&buffer_text, &key.query, &flags, key.limit);
+        let query = TerminalSearchQuery {
+            pattern: key.query.clone(),
+            regex: key.regex,
+            case_sensitive: key.case_sensitive,
+            whole_word: key.whole_word,
+            direction: TerminalSearchDirection::Forward,
+            limit: key.limit,
+        };
+        let matches = self
+            .screen
+            .search_grid(&query)
+            .map(|matches| {
+                matches
+                    .into_iter()
+                    .map(|m| TerminalBufferMatch {
+                        line_index: m.line_index,
+                        start_col: m.start_col,
+                        end_col: m.end_col,
+                    })
+                    .collect()
+            })
+            .map_err(|error| error.to_string());
         TerminalFrameSearchEvent {
             session_id,
             result: TerminalFrameSearchResult {
@@ -2335,7 +2345,7 @@ fn run_terminal_frame_processor(
                 }
             }
             TerminalFrameCommand::RequestSearch { session_id, key } => {
-                if let Some(session) = sessions.get(&session_id) {
+                if let Some(session) = sessions.get_mut(&session_id) {
                     let event = session.search_event(session_id, key);
                     event_queue.push(TerminalFrameEvent::Search(event));
                 }

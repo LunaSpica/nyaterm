@@ -5,8 +5,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use alacritty_terminal::event::{Event, EventListener};
 use alacritty_terminal::grid::Dimensions;
-use alacritty_terminal::index::{Column, Line};
+use alacritty_terminal::index::{Boundary, Column, Direction, Line, Point};
 use alacritty_terminal::term::cell::{Cell, Flags};
+use alacritty_terminal::term::search::{RegexIter, RegexSearch};
 use alacritty_terminal::term::{Config, Term, TermDamage, TermMode};
 use alacritty_terminal::vte::ansi;
 use alacritty_terminal::vte::ansi::{Color, NamedColor, Rgb};
@@ -39,7 +40,7 @@ pub enum ShellCommandMark {
 
 pub use graphics::{
     GraphicsEvent, GraphicsImageSnapshot, GraphicsIngress, GraphicsPlacement, GraphicsProtocol,
-    GraphicsSegment, KittyDeleteMode, TerminalGraphicsState,
+    GraphicsSegment, GraphicsSegmentRef, KittyDeleteMode, TerminalGraphicsState,
 };
 
 const DEFAULT_COLS: u16 = 80;
@@ -85,6 +86,46 @@ pub enum CursorShape {
     Beam,
     Hidden,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TerminalSearchDirection {
+    Forward,
+    Backward,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct TerminalSearchQuery {
+    pub pattern: String,
+    pub regex: bool,
+    pub case_sensitive: bool,
+    pub whole_word: bool,
+    pub direction: TerminalSearchDirection,
+    pub limit: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TerminalGridMatch {
+    /// Absolute row in scrollback + live screen coordinates.
+    pub line_index: usize,
+    /// Half-open terminal cell column range for this row.
+    pub start_col: usize,
+    pub end_col: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TerminalSearchError {
+    InvalidRegex(String),
+}
+
+impl std::fmt::Display for TerminalSearchError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InvalidRegex(error) => write!(f, "{error}"),
+        }
+    }
+}
+
+impl std::error::Error for TerminalSearchError {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CursorSnapshot {
@@ -310,6 +351,44 @@ impl TerminalSnapshotRowCache {
     }
 }
 
+const TERMINAL_SEARCH_CACHE_LIMIT: usize = 16;
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct TerminalSearchCacheKey {
+    pattern: String,
+    regex: bool,
+    case_sensitive: bool,
+    whole_word: bool,
+}
+
+#[derive(Debug, Default)]
+struct TerminalSearchCache {
+    entries: HashMap<TerminalSearchCacheKey, RegexSearch>,
+}
+
+impl TerminalSearchCache {
+    fn regex_for(
+        &mut self,
+        key: TerminalSearchCacheKey,
+    ) -> Result<&mut RegexSearch, TerminalSearchError> {
+        if self.entries.len() >= TERMINAL_SEARCH_CACHE_LIMIT && !self.entries.contains_key(&key) {
+            if let Some(old_key) = self.entries.keys().next().cloned() {
+                self.entries.remove(&old_key);
+            }
+        }
+        if !self.entries.contains_key(&key) {
+            let pattern = terminal_search_regex_pattern(&key);
+            let regex = RegexSearch::new(&pattern)
+                .map_err(|error| TerminalSearchError::InvalidRegex(error.to_string()))?;
+            self.entries.insert(key.clone(), regex);
+        }
+        Ok(self
+            .entries
+            .get_mut(&key)
+            .expect("search cache entry inserted or already present"))
+    }
+}
+
 impl Dimensions for TermSize {
     fn total_lines(&self) -> usize {
         self.rows
@@ -334,6 +413,7 @@ pub struct TerminalCore {
     line_timestamps_ms: HashMap<i32, u64>,
     line_signatures: HashMap<i32, u64>,
     snapshot_row_cache: Mutex<TerminalSnapshotRowCache>,
+    search_cache: Mutex<TerminalSearchCache>,
     signature_damage_lines: Vec<i32>,
     /// Absolute Alacritty line → OSC 133 shell mark.
     command_marks: HashMap<i32, ShellCommandMark>,
@@ -396,11 +476,11 @@ impl TerminalOutputDecoder {
     /// Decode terminal-text segments to text, skipping graphics payloads.
     pub fn decode_output_text(&mut self, bytes: &[u8]) -> String {
         let mut out = String::new();
-        for segment in self.graphics_ingress.advance(bytes) {
-            if let GraphicsSegment::Terminal(data) = segment {
-                out.push_str(&self.session_encoding.decode_output_text(&data));
-            }
-        }
+        self.graphics_ingress.advance_with(
+            bytes,
+            |data| out.push_str(&self.session_encoding.decode_output_text(data)),
+            |_| {},
+        );
         out
     }
 
@@ -413,16 +493,17 @@ impl TerminalOutputDecoder {
     /// it back off again.
     pub fn decode_output_text_tail(&mut self, bytes: &[u8], max_bytes: usize) -> String {
         let mut out = String::new();
-        for segment in self.graphics_ingress.advance(bytes) {
-            let GraphicsSegment::Terminal(data) = segment else {
-                continue;
-            };
-            let decoded = self.session_encoding.decode_output_bytes(&data);
-            out.push_str(&String::from_utf8_lossy(utf8_tail_bytes(
-                &decoded, max_bytes,
-            )));
-            truncate_text_to_tail(&mut out, max_bytes);
-        }
+        self.graphics_ingress.advance_with(
+            bytes,
+            |data| {
+                let decoded = self.session_encoding.decode_output_bytes(data);
+                out.push_str(&String::from_utf8_lossy(utf8_tail_bytes(
+                    &decoded, max_bytes,
+                )));
+                truncate_text_to_tail(&mut out, max_bytes);
+            },
+            |_| {},
+        );
         out
     }
 
@@ -492,6 +573,7 @@ impl TerminalCore {
             line_timestamps_ms: HashMap::new(),
             line_signatures: HashMap::new(),
             snapshot_row_cache: Mutex::new(TerminalSnapshotRowCache::default()),
+            search_cache: Mutex::new(TerminalSearchCache::default()),
             signature_damage_lines: Vec::with_capacity(rows),
             command_marks: HashMap::new(),
             rows,
@@ -773,19 +855,19 @@ impl TerminalCore {
     pub fn advance(&mut self, bytes: &[u8]) {
         let mut line_history_marker = self.term.grid().history_size();
         let mut graphics_history_marker = line_history_marker;
-        let segments = self.graphics_ingress.advance(bytes);
-        for segment in segments {
+        let mut graphics_ingress = std::mem::take(&mut self.graphics_ingress);
+        graphics_ingress.advance_segments(bytes, |segment| {
             match segment {
-                GraphicsSegment::Terminal(data) => {
+                GraphicsSegmentRef::Terminal(data) => {
                     if data.is_empty() {
-                        continue;
+                        return;
                     }
                     // Charset conversion after graphics split, before ANSI/grid.
                     // Borrows straight through for valid UTF-8, which is the
                     // default charset and so the overwhelming majority.
-                    let data = self.session_encoding.decode_output_bytes(&data);
+                    let data = self.session_encoding.decode_output_bytes(data);
                     if data.is_empty() {
-                        continue;
+                        return;
                     }
                     self.sidecar.advance(&data);
                     self.parser.advance(&mut self.term, &data);
@@ -793,13 +875,13 @@ impl TerminalCore {
                     self.record_shell_command_marks();
                     self.shift_graphics_for_history_delta(&mut graphics_history_marker);
                 }
-                GraphicsSegment::Event(event) => {
+                GraphicsSegmentRef::Event(event) => {
                     if event == GraphicsEvent::ClearScrollback {
                         self.clear_scrollback();
                         let history_size = self.term.grid().history_size();
                         line_history_marker = history_size;
                         graphics_history_marker = history_size;
-                        continue;
+                        return;
                     }
                     let point = self.term.renderable_content().cursor.point;
                     let result = self.graphics.handle(
@@ -823,7 +905,8 @@ impl TerminalCore {
                     }
                 }
             }
-        }
+        });
+        self.graphics_ingress = graphics_ingress;
         self.stamp_changed_lines(line_history_marker);
     }
 
@@ -963,6 +1046,58 @@ impl TerminalCore {
             out.extend(snap.rows().iter().map(|row| row.text.clone()));
         }
         dedup_overlapping_viewports(out, self.rows)
+    }
+
+    pub fn search_grid(
+        &self,
+        query: &TerminalSearchQuery,
+    ) -> Result<Vec<TerminalGridMatch>, TerminalSearchError> {
+        if query.pattern.trim().is_empty() || query.limit == 0 {
+            return Ok(Vec::new());
+        }
+
+        let key = TerminalSearchCacheKey {
+            pattern: query.pattern.clone(),
+            regex: query.regex,
+            case_sensitive: query.case_sensitive,
+            whole_word: query.whole_word,
+        };
+        let mut cache = self
+            .search_cache
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let regex = cache.regex_for(key)?;
+        let topmost = self.term.topmost_line();
+        let bottommost = self.term.bottommost_line();
+        if bottommost < topmost {
+            return Ok(Vec::new());
+        }
+
+        let start = Point::new(topmost, Column(0));
+        let end = Point::new(bottommost, self.term.grid().last_column());
+        let mut out = Vec::new();
+        for found in RegexIter::new(start, end, Direction::Right, &self.term, regex) {
+            if query.whole_word && !terminal_grid_match_is_whole_word(&self.term, &found) {
+                continue;
+            }
+            push_terminal_grid_match_segments(
+                &self.term,
+                found,
+                query.limit,
+                query.direction,
+                &mut out,
+            );
+            if out.len() >= query.limit {
+                break;
+            }
+        }
+        out.sort_unstable_by_key(|m| (m.line_index, m.start_col, m.end_col));
+        out.dedup_by_key(|m| (m.line_index, m.start_col, m.end_col));
+        if query.direction == TerminalSearchDirection::Backward {
+            out.reverse();
+        }
+        out.truncate(query.limit);
+        Ok(out)
     }
 
     pub fn viewport_absolute_range(&self, offset: usize) -> (usize, usize) {
@@ -1451,6 +1586,104 @@ fn line_signature(term: &Term<NyaTermEventProxy>, line: Line, cols: usize) -> u6
         }
     }
     hasher.finish()
+}
+
+fn terminal_search_regex_pattern(key: &TerminalSearchCacheKey) -> String {
+    let pattern = if key.regex {
+        key.pattern.clone()
+    } else {
+        regex::escape(&key.pattern)
+    };
+    if key.case_sensitive {
+        format!("(?-i:{pattern})")
+    } else {
+        format!("(?i:{pattern})")
+    }
+}
+
+fn push_terminal_grid_match_segments(
+    term: &Term<NyaTermEventProxy>,
+    found: alacritty_terminal::term::search::Match,
+    limit: usize,
+    direction: TerminalSearchDirection,
+    out: &mut Vec<TerminalGridMatch>,
+) {
+    let (start, end) = terminal_ordered_match_points(found);
+    let cols = term.columns();
+    let history = term.grid().history_size();
+    let lines: Box<dyn Iterator<Item = i32>> = match direction {
+        TerminalSearchDirection::Forward => Box::new(start.line.0..=end.line.0),
+        TerminalSearchDirection::Backward => Box::new((start.line.0..=end.line.0).rev()),
+    };
+    for line_index in lines {
+        if out.len() >= limit {
+            break;
+        }
+        let line = Line(line_index);
+        let start_col = if line == start.line {
+            start.column.0
+        } else {
+            0
+        };
+        let end_col = if line == end.line {
+            end.column.0.saturating_add(1).min(cols)
+        } else {
+            cols
+        };
+        if start_col >= end_col {
+            continue;
+        }
+        let absolute = i64::try_from(history)
+            .unwrap_or(i64::MAX)
+            .saturating_add(i64::from(line.0));
+        let Ok(line_index) = usize::try_from(absolute) else {
+            continue;
+        };
+        out.push(TerminalGridMatch {
+            line_index,
+            start_col,
+            end_col,
+        });
+    }
+}
+
+fn terminal_ordered_match_points(found: alacritty_terminal::term::search::Match) -> (Point, Point) {
+    let start = *found.start();
+    let end = *found.end();
+    if start.line < end.line || (start.line == end.line && start.column <= end.column) {
+        (start, end)
+    } else {
+        (end, start)
+    }
+}
+
+fn terminal_grid_match_is_whole_word(
+    term: &Term<NyaTermEventProxy>,
+    found: &alacritty_terminal::term::search::Match,
+) -> bool {
+    let (start, end) = terminal_ordered_match_points(found.clone());
+    let before = start.sub(term, Boundary::Grid, 1);
+    let after = end.add(term, Boundary::Grid, 1);
+    let before = (before != start)
+        .then(|| terminal_word_char_at(term, before))
+        .flatten();
+    let after = (after != end)
+        .then(|| terminal_word_char_at(term, after))
+        .flatten();
+    !before.is_some_and(terminal_search_is_word_char)
+        && !after.is_some_and(terminal_search_is_word_char)
+}
+
+fn terminal_word_char_at(term: &Term<NyaTermEventProxy>, point: Point) -> Option<char> {
+    if point.line < term.topmost_line() || point.line > term.bottommost_line() {
+        return None;
+    }
+    let cell = &term.grid()[point.line][point.column];
+    (!cell_text_is_blank(cell)).then_some(cell.c)
+}
+
+fn terminal_search_is_word_char(ch: char) -> bool {
+    ch.is_ascii_alphanumeric() || ch == '_'
 }
 
 #[cfg(test)]

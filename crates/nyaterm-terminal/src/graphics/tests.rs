@@ -58,6 +58,23 @@ fn plain_csi_escapes_do_not_split_the_stream() {
     );
 }
 
+#[test]
+fn advance_with_borrows_plain_terminal_input() {
+    let mut ingress = GraphicsIngress::new();
+    let seq = b"\x1b[31mred\x1b[0m plain text";
+    let mut terminal_segments = Vec::new();
+    let mut events = 0;
+
+    ingress.advance_with(
+        seq,
+        |bytes| terminal_segments.push(bytes.as_ptr()),
+        |_| events += 1,
+    );
+
+    assert_eq!(events, 0);
+    assert_eq!(terminal_segments, vec![seq.as_ptr()]);
+}
+
 /// Graphics sequences still split, and the plain bytes on either side —
 /// escapes included — coalesce into one segment each.
 #[test]
