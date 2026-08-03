@@ -1168,6 +1168,7 @@ fn dynamic_decoration_backgrounds_include_plain_selection_and_search() {
     let bounds = Bounds::new(point(px(0.), px(0.)), size(px(120.), px(40.)));
     let mut out = Vec::new();
     let decorations = TerminalLineDecorations {
+        selected_occurrence_ranges: vec![(0, 6)],
         search_ranges: vec![(0, 2)],
         active_search_ranges: vec![(2, 4)],
         selection_cols: Some((4, 6)),
@@ -1180,14 +1181,23 @@ fn dynamic_decoration_backgrounds_include_plain_selection_and_search() {
         palette,
         TerminalPaintGeometry {
             bounds,
-            visual_y_offset: 0.0,
+            visual_y_offset: -8.0,
             cell_width: 8.0,
             cell_height: 16.0,
         },
         &mut out,
     );
 
-    assert_eq!(out.len(), 3);
+    assert_eq!(out.len(), 4);
+    assert!(out.iter().all(|quad| quad.bounds.origin.y == px(-8.0)));
+    assert_eq!(
+        out[0].background,
+        gpui::rgba((palette.text_muted << 8) | 0x38).into()
+    );
+    assert_eq!(
+        out[3].background,
+        gpui::rgb(palette.terminal_selection).into()
+    );
 }
 
 #[test]

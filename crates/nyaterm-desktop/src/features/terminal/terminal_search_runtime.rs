@@ -76,6 +76,7 @@ impl NyaTermApp {
             regex: self.terminal.search.regex,
             whole_word: self.terminal.search.whole_word,
             limit: 1000,
+            request_generation: 0,
         })
     }
 
@@ -149,6 +150,7 @@ impl NyaTermApp {
             regex: false,
             whole_word: false,
             limit: 2000,
+            request_generation: self.terminal.selection.selected_occurrence.generation,
         };
         view.selected_occurrence_result
             .as_ref()
@@ -228,17 +230,80 @@ impl NyaTermApp {
         self.terminal.search.active_index.hash(&mut hasher);
         self.terminal.search.open.hash(&mut hasher);
         self.terminal.search.mode.hash(&mut hasher);
+        let mut has_markers = false;
         if let Some(view) = self.terminal.view.views.get(session_id) {
-            view.screen_revision.hash(&mut hasher);
-            view.search_result
+            let selected_key = self
+                .terminal
+                .selection
+                .selected_occurrence
+                .query
                 .as_ref()
-                .map(|result| &result.key)
-                .hash(&mut hasher);
-            view.selected_occurrence_result
-                .as_ref()
-                .map(|result| &result.key)
-                .hash(&mut hasher);
-            view.screen.total_rows().hash(&mut hasher);
+                .map(|query| TerminalFrameSearchKey {
+                    query: query.clone(),
+                    case_sensitive: true,
+                    regex: false,
+                    whole_word: false,
+                    limit: 2000,
+                    request_generation: self.terminal.selection.selected_occurrence.generation,
+                });
+            let selected_result = view.selected_occurrence_result.as_ref();
+            let selected_is_current = selected_key.as_ref().is_some_and(|key| {
+                selected_result.is_some_and(|result| {
+                    self.terminal
+                        .selection
+                        .selected_occurrence
+                        .session_id
+                        .as_deref()
+                        == Some(session_id)
+                        && terminal_frame_search_result_is_current(
+                            result,
+                            key,
+                            view.screen_revision,
+                        )
+                })
+            });
+            selected_is_current.hash(&mut hasher);
+            if selected_is_current && let Some(result) = selected_result {
+                result.key.hash(&mut hasher);
+                result.revision.hash(&mut hasher);
+                let non_empty = result
+                    .matches
+                    .as_ref()
+                    .is_ok_and(|matches| !matches.is_empty());
+                non_empty.hash(&mut hasher);
+                has_markers |= non_empty;
+            }
+
+            let active_buffer_search = self.session.active_id() == Some(session_id)
+                && self.terminal.search.open
+                && self.terminal.search.mode == TerminalSearchMode::Buffer;
+            active_buffer_search.hash(&mut hasher);
+            if active_buffer_search {
+                let search_key = self.terminal_search_key();
+                search_key.hash(&mut hasher);
+                let search_result = view.search_result.as_ref();
+                let search_is_current = search_key.as_ref().is_some_and(|key| {
+                    search_result.is_some_and(|result| {
+                        terminal_frame_search_result_is_current(result, key, view.screen_revision)
+                    })
+                });
+                search_is_current.hash(&mut hasher);
+                if search_is_current && let Some(result) = search_result {
+                    result.key.hash(&mut hasher);
+                    result.revision.hash(&mut hasher);
+                    let non_empty = result
+                        .matches
+                        .as_ref()
+                        .is_ok_and(|matches| !matches.is_empty());
+                    non_empty.hash(&mut hasher);
+                    has_markers |= non_empty;
+                }
+            }
+            if has_markers {
+                view.screen.total_rows().hash(&mut hasher);
+            } else {
+                0usize.hash(&mut hasher);
+            }
         }
         hasher.finish()
     }

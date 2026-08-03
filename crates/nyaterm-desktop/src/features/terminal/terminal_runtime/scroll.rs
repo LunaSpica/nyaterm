@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 use gpui::{Context, KeyDownEvent};
@@ -200,6 +201,18 @@ fn terminal_scroll_should_request_immediate_text_snapshot(
 
 fn terminal_scroll_should_consume_raw_lines(raw_lines: f32) -> bool {
     raw_lines != 0.0 && raw_lines.is_finite()
+}
+
+fn terminal_scrollbar_track_bounds_for_session_state(
+    session_bounds: &HashMap<String, gpui::Bounds<gpui::Pixels>>,
+    fallback_bounds: Option<gpui::Bounds<gpui::Pixels>>,
+    session_id: Option<&str>,
+) -> Option<gpui::Bounds<gpui::Pixels>> {
+    if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
+        session_bounds.get(session_id).copied()
+    } else {
+        fallback_bounds
+    }
 }
 
 pub(in crate::features) fn terminal_scroll_needs_text_first_repaint(
@@ -1300,16 +1313,11 @@ impl NyaTermApp {
         &self,
         session_id: Option<&str>,
     ) -> Option<gpui::Bounds<gpui::Pixels>> {
-        if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
-            self.terminal
-                .layout
-                .session_scrollbar_track_bounds
-                .get(session_id)
-                .copied()
-                .or(self.terminal.layout.scrollbar_track_bounds)
-        } else {
-            self.terminal.layout.scrollbar_track_bounds
-        }
+        terminal_scrollbar_track_bounds_for_session_state(
+            &self.terminal.layout.session_scrollbar_track_bounds,
+            self.terminal.layout.scrollbar_track_bounds,
+            session_id,
+        )
     }
 
     pub(in crate::features) fn terminal_scrollbar_metrics_for_session(
@@ -1608,7 +1616,8 @@ mod tests {
         terminal_scroll_offset_state_needs_update, terminal_scroll_predictive_prefetch_offset,
         terminal_scroll_residual_clamped_for_offset, terminal_scroll_should_consume_raw_lines,
         terminal_scroll_should_request_immediate_text_snapshot,
-        terminal_scroll_to_bottom_state_needs_update, terminal_should_apply_session_cwd,
+        terminal_scroll_to_bottom_state_needs_update,
+        terminal_scrollbar_track_bounds_for_session_state, terminal_should_apply_session_cwd,
         terminal_user_scroll_idle_remaining_delay, terminal_visual_scroll_active_for_state,
     };
 
@@ -1996,5 +2005,37 @@ mod tests {
         assert_eq!(geometry.rows, 4);
         assert_eq!(geometry.pixel_width, 200);
         assert_eq!(geometry.pixel_height, 80);
+    }
+
+    #[test]
+    fn terminal_scrollbar_track_bounds_never_fall_back_across_split_sessions() {
+        let fallback = Bounds::new(point(px(1.), px(2.)), size(px(8.), px(120.)));
+        let left = Bounds::new(point(px(101.), px(22.)), size(px(8.), px(80.)));
+        let session_bounds = std::collections::HashMap::from([("left".to_string(), left)]);
+
+        assert_eq!(
+            terminal_scrollbar_track_bounds_for_session_state(
+                &session_bounds,
+                Some(fallback),
+                Some("left")
+            ),
+            Some(left)
+        );
+        assert_eq!(
+            terminal_scrollbar_track_bounds_for_session_state(
+                &session_bounds,
+                Some(fallback),
+                Some("right")
+            ),
+            None
+        );
+        assert_eq!(
+            terminal_scrollbar_track_bounds_for_session_state(
+                &session_bounds,
+                Some(fallback),
+                None
+            ),
+            Some(fallback)
+        );
     }
 }

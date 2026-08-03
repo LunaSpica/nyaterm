@@ -15,6 +15,7 @@ pub(super) fn flush_bg(
     pending: Option<(u32, usize, usize)>,
     row: usize,
     bounds: Bounds<Pixels>,
+    visual_y_offset: f32,
     cell_w: f32,
     cell_h: f32,
     out: &mut Vec<PaintQuad>,
@@ -26,9 +27,9 @@ pub(super) fn flush_bg(
         return;
     }
     let left = (f32::from(bounds.left()) + start as f32 * cell_w).floor();
-    let top = (f32::from(bounds.top()) + row as f32 * cell_h).floor();
+    let top = (f32::from(bounds.top()) + visual_y_offset + row as f32 * cell_h).floor();
     let right = (f32::from(bounds.left()) + end as f32 * cell_w).ceil();
-    let bottom = (f32::from(bounds.top()) + (row + 1) as f32 * cell_h).ceil();
+    let bottom = (f32::from(bounds.top()) + visual_y_offset + (row + 1) as f32 * cell_h).ceil();
     out.push(fill(
         Bounds::new(
             point(px(left), px(top)),
@@ -53,6 +54,7 @@ pub(super) fn push_col_range_bg(
         Some((color, start, end)),
         row,
         geometry.bounds,
+        geometry.visual_y_offset,
         geometry.cell_width,
         geometry.cell_height,
         out,

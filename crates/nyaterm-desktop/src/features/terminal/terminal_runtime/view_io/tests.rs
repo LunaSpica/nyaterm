@@ -4,7 +4,9 @@ use gpui::KeyDownEvent;
 use nyaterm_terminal::TerminalScreen;
 
 use crate::features::terminal::terminal_surface_entity::terminal_snapshot_anchor_row_for_display_offset;
-use crate::models::{TerminalFrameActionLinks, TerminalViewState};
+use crate::models::{
+    TerminalBufferCellPos, TerminalFrameActionLinks, TerminalSelection, TerminalViewState,
+};
 use crate::terminal::{TerminalBufferMatch, TerminalKeyMode};
 
 use super::{
@@ -14,11 +16,33 @@ use super::{
     terminal_paint_snapshot_for_view, terminal_paint_window_snapshot_for_view,
     terminal_retained_snapshot_matches_view, terminal_scroll_retained_window_extra_rows,
     terminal_scroll_snapshot_request_offset, terminal_scroll_text_first_decorations,
-    terminal_session_write_failure_log, terminal_should_defer_key_text_to_input_handler_for_state,
+    terminal_selection_for_session, terminal_session_write_failure_log,
+    terminal_should_defer_key_text_to_input_handler_for_state,
     terminal_should_track_command_suggestion_input, terminal_snapshot_covers_display_offset,
     terminal_snapshot_with_newer_edge_row, terminal_snapshot_with_retained_scroll_window,
     terminal_status_changed, terminal_user_scroll_active, terminal_visual_display_offset,
 };
+
+#[test]
+fn terminal_selection_visual_is_isolated_to_its_owner_session() {
+    let selection = TerminalSelection::from_range(
+        TerminalBufferCellPos::new(10, 2),
+        TerminalBufferCellPos::new(11, 4),
+    );
+
+    assert_eq!(
+        terminal_selection_for_session(Some(selection), Some("left"), Some("right"), "left"),
+        Some(selection)
+    );
+    assert_eq!(
+        terminal_selection_for_session(Some(selection), Some("left"), Some("right"), "right"),
+        None
+    );
+    assert_eq!(
+        terminal_selection_for_session(Some(selection), None, Some("right"), "right"),
+        Some(selection)
+    );
+}
 
 fn key_event(key: &str, key_char: Option<&str>, modifiers: gpui::Modifiers) -> KeyDownEvent {
     KeyDownEvent {

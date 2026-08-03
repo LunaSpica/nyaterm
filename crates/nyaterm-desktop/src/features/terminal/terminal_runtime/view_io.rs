@@ -3,8 +3,8 @@ use std::time::{Duration, Instant};
 
 use crate::models::{
     EffectiveTerminalPaintPolicy, TerminalFrameActionLinks, TerminalPerformanceMode,
-    TerminalProtocolState, TerminalSearchMode, TerminalViewState, terminal_action_link_matcher_key,
-    terminal_snapshot_matches_grid_geometry,
+    TerminalProtocolState, TerminalSearchMode, TerminalSelection, TerminalViewState,
+    terminal_action_link_matcher_key, terminal_snapshot_matches_grid_geometry,
 };
 use gpui::{AppContext, ClipboardItem, Context, Entity, Window};
 #[cfg(test)]
@@ -428,6 +428,16 @@ fn terminal_keyword_highlight_updates_allowed(is_active: bool) -> bool {
     is_active
 }
 
+fn terminal_selection_for_session(
+    selection: Option<TerminalSelection>,
+    selection_session_id: Option<&str>,
+    active_session_id: Option<&str>,
+    session_id: &str,
+) -> Option<TerminalSelection> {
+    let owner = selection_session_id.or(active_session_id);
+    (owner == Some(session_id)).then_some(selection).flatten()
+}
+
 fn terminal_user_scroll_active(
     display_offset: usize,
     session_has_recent_user_scroll: bool,
@@ -740,6 +750,12 @@ impl NyaTermApp {
             .cell_metrics
             .unwrap_or(((font_size * 0.6).max(6.0), (font_size * 1.35).max(12.0)));
         let is_active = self.session.active_id() == Some(session_id);
+        let terminal_selection = terminal_selection_for_session(
+            self.terminal.selection.selection,
+            self.terminal.selection.session_id.as_deref(),
+            self.session.active_id(),
+            session_id,
+        );
         let layout_cache = view.render_cache.layout_cache.clone();
         let render_degraded =
             view.render_degraded || self.settings.summary().terminal_low_latency_mode;
@@ -859,6 +875,7 @@ impl NyaTermApp {
                     true,
                 )
             };
+            let selection_changed = surface.set_selection_visual(terminal_selection);
             if frame_applied || paint_details_changed {
                 surface.schedule_keyword_highlights(
                     clear_keyword_highlights,
@@ -866,7 +883,12 @@ impl NyaTermApp {
                     cx,
                 );
             }
-            if changed || frame_applied || paint_details_changed || had_pending_local_scroll_sync {
+            if changed
+                || frame_applied
+                || paint_details_changed
+                || selection_changed
+                || had_pending_local_scroll_sync
+            {
                 cx.notify();
             }
         });
@@ -1198,9 +1220,12 @@ impl NyaTermApp {
 
         // The actual selection is always painted, even while degraded. Only
         // weak occurrence/search overlays may be omitted under output pressure.
-        let terminal_selection = is_active
-            .then_some(self.terminal.selection.selection)
-            .flatten();
+        let terminal_selection = terminal_selection_for_session(
+            self.terminal.selection.selection,
+            self.terminal.selection.session_id.as_deref(),
+            self.session.active_id(),
+            session_id,
+        );
         let has_selection = terminal_selection.is_some();
         let has_search_decorations =
             !search_ranges_by_line.is_empty() || !active_search_ranges_by_line.is_empty();
@@ -1366,6 +1391,7 @@ impl NyaTermApp {
                     true,
                 )
             };
+            let selection_changed = surface.set_selection_visual(terminal_selection);
             if frame_applied || paint_details_changed {
                 surface.schedule_keyword_highlights(
                     clear_keyword_highlights,
@@ -1373,7 +1399,12 @@ impl NyaTermApp {
                     cx,
                 );
             }
-            if changed || frame_applied || paint_details_changed || had_pending_local_scroll_sync {
+            if changed
+                || frame_applied
+                || paint_details_changed
+                || selection_changed
+                || had_pending_local_scroll_sync
+            {
                 cx.notify();
             }
         });

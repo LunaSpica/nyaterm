@@ -1813,6 +1813,93 @@ fn local_surface_scroll_state_promotes_retained_snapshot_window() {
 }
 
 #[test]
+fn retained_snapshot_promotion_remaps_absolute_selection_rows() {
+    let mut screen = TerminalScreen::default();
+    screen.advance_decoded_text(&terminal_test_output_lines(120));
+    let live_snapshot = Arc::new(screen.viewport_snapshot(0));
+    let history_offset = 8;
+    let history_snapshot = Arc::new(screen.viewport_snapshot(history_offset));
+    let rows = live_snapshot.row_count().max(1);
+    let scrollback_len = live_snapshot.scrollback_len;
+    let live_start = live_snapshot
+        .total_rows
+        .saturating_sub(live_snapshot.display_offset)
+        .saturating_sub(live_snapshot.row_count());
+    let selected_line = live_start.saturating_add(2);
+    let history_start = history_snapshot
+        .total_rows
+        .saturating_sub(history_snapshot.display_offset)
+        .saturating_sub(history_snapshot.row_count());
+    let live_row = selected_line.saturating_sub(live_start);
+    let history_row = selected_line.saturating_sub(history_start);
+    assert_ne!(live_row, history_row);
+    assert!(history_row < history_snapshot.row_count());
+
+    let mut surface = TerminalSurface::new("session");
+    apply_test_frame_snapshot!(
+        surface,
+        history_snapshot.clone(),
+        history_offset,
+        0.0,
+        history_offset,
+        scrollback_len,
+        rows,
+        false,
+        None,
+        0,
+        false,
+        false,
+        "block",
+    );
+    apply_test_frame_snapshot!(
+        surface,
+        live_snapshot,
+        0,
+        0.0,
+        0,
+        scrollback_len,
+        rows,
+        false,
+        None,
+        0,
+        false,
+        false,
+        "block",
+    );
+    let selection = TerminalSelection::from_range(
+        TerminalBufferCellPos::new(selected_line, 2),
+        TerminalBufferCellPos::new(selected_line, 5),
+    );
+    assert!(surface.set_selection_visual(Some(selection)));
+    assert_eq!(surface.decorations[live_row].selection_cols, Some((2, 6)));
+
+    assert!(
+        surface.apply_scroll_visual_state(TerminalScrollVisualState {
+            session_id: "session".to_string(),
+            scroll_offset: history_offset,
+            scroll_residual_lines: 0.0,
+            display_offset: history_offset,
+            scrollback_len,
+            viewport_rows: rows,
+            has_new_while_scrolled: false,
+            performance_overlay: None,
+            skipped_output_chars: 0,
+        })
+    );
+
+    assert!(Arc::ptr_eq(
+        surface.snapshot.as_ref().unwrap(),
+        &history_snapshot
+    ));
+    assert_eq!(surface.decorations[live_row].selection_cols, None);
+    assert_eq!(
+        surface.decorations[history_row].selection_cols,
+        Some((2, 6))
+    );
+    assert_eq!(surface.selection_visual, Some(selection));
+}
+
+#[test]
 fn prefetched_snapshot_is_retained_without_changing_current_paint() {
     let mut screen = TerminalScreen::default();
     screen.advance_decoded_text(&terminal_test_output_lines(160));

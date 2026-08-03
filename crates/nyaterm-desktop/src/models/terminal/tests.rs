@@ -1093,6 +1093,7 @@ fn terminal_frame_search_result_current_requires_matching_revision() {
         regex: false,
         whole_word: false,
         limit: 100,
+        request_generation: 0,
     };
     let result = TerminalFrameSearchResult {
         key: key.clone(),
@@ -1103,11 +1104,20 @@ fn terminal_frame_search_result_current_requires_matching_revision() {
         query: "beta".to_string(),
         ..key.clone()
     };
+    let newer_generation = TerminalFrameSearchKey {
+        request_generation: 1,
+        ..key.clone()
+    };
 
     assert!(terminal_frame_search_result_is_current(&result, &key, 7));
     assert!(!terminal_frame_search_result_is_current(&result, &key, 8));
     assert!(!terminal_frame_search_result_is_current(
         &result, &other_key, 7
+    ));
+    assert!(!terminal_frame_search_result_is_current(
+        &result,
+        &newer_generation,
+        7,
     ));
 }
 
@@ -1122,6 +1132,7 @@ fn terminal_frame_search_event_carries_current_session_revision() {
         regex: false,
         whole_word: false,
         limit: 100,
+        request_generation: 0,
     };
 
     let event = session.search_event(
@@ -1872,6 +1883,7 @@ fn terminal_frame_command_queue_keeps_latest_search_per_session() {
             regex: false,
             whole_word: false,
             limit: 100,
+            request_generation: 0,
         },
     }));
     assert!(tx.send(TerminalFrameCommand::RequestSearch {
@@ -1883,6 +1895,7 @@ fn terminal_frame_command_queue_keeps_latest_search_per_session() {
             regex: false,
             whole_word: false,
             limit: 2000,
+            request_generation: 1,
         },
     }));
     assert!(tx.send(TerminalFrameCommand::RequestSearch {
@@ -1894,6 +1907,7 @@ fn terminal_frame_command_queue_keeps_latest_search_per_session() {
             regex: false,
             whole_word: false,
             limit: 100,
+            request_generation: 0,
         },
     }));
 
@@ -2053,6 +2067,7 @@ fn terminal_frame_command_queue_prioritizes_user_scroll_snapshot() {
             regex: false,
             whole_word: false,
             limit: 100,
+            request_generation: 0,
         },
     }));
     assert!(tx.send(TerminalFrameCommand::RequestSnapshot {

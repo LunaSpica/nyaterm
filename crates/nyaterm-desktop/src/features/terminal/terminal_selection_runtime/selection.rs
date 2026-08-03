@@ -7,8 +7,7 @@ use crate::features::NyaTermApp;
 use crate::features::terminal::terminal_runtime::TerminalMouseReportRequest;
 use crate::features::terminal::terminal_surface::terminal_absolute_line_for_snapshot_row;
 use crate::models::{
-    TerminalBufferCellPos, TerminalCellPos, TerminalFrameSearchKey, TerminalFrameSearchPurpose,
-    TerminalSelection,
+    TerminalBufferCellPos, TerminalFrameSearchKey, TerminalFrameSearchPurpose, TerminalSelection,
 };
 use crate::terminal::{
     TerminalTextCell, terminal_is_zero_width_mark, terminal_text_cell_slice, terminal_text_cells,
@@ -175,6 +174,15 @@ impl NyaTermApp {
         else {
             return;
         };
+        let previous_selection_session_id = self.terminal.selection.session_id.clone();
+        if self.terminal.selection.selection.is_some()
+            && previous_selection_session_id.as_deref() != selection_session_id.as_deref()
+        {
+            self.terminal.selection.selection = None;
+            self.terminal.selection.session_id = None;
+            self.terminal.selection.dragging = false;
+            self.notify_terminal_surface_only(previous_selection_session_id.as_deref(), cx);
+        }
         // A new selection invalidates the previous occurrence query immediately,
         // including while a double/triple-click selection is being formed.
         self.clear_terminal_selected_occurrence(cx);
@@ -202,7 +210,7 @@ impl NyaTermApp {
             self.clear_terminal_selection(cx);
             return;
         }
-        let (rows, cols) = self.terminal_grid_size_for_session(selection_session_id.as_deref());
+        let cols = geometry.cols;
         // Shift+click extends the existing selection from its anchor (xterm-style).
         if event.modifiers.shift
             && event.click_count <= 1
@@ -232,7 +240,7 @@ impl NyaTermApp {
             return;
         }
         if event.click_count == 2 {
-            let word = self.word_bounds_at_for_visual_geometry(cell, &geometry);
+            let word = self.word_bounds_at_for_visual_geometry(event.position, &geometry);
             self.terminal.selection.selection = Some(TerminalSelection::from_range(
                 TerminalBufferCellPos::new(buffer_cell.line, word.0),
                 TerminalBufferCellPos::new(buffer_cell.line, word.1.saturating_sub(1).max(word.0)),
@@ -247,7 +255,6 @@ impl NyaTermApp {
         self.terminal.selection.selection = Some(TerminalSelection::with_anchor(buffer_cell));
         self.terminal.selection.session_id = selection_session_id;
         self.terminal.selection.dragging = true;
-        let _ = rows;
         self.notify_terminal_selection_owner_surface(cx);
     }
 
@@ -411,10 +418,10 @@ impl NyaTermApp {
         {
             let buffer_cell =
                 Self::terminal_buffer_cell_for_visual_geometry(event.position, &geometry);
-            if let Some(selection) = self.terminal.selection.selection.as_mut() {
-                if let Some(buffer_cell) = buffer_cell {
-                    selection.head = buffer_cell;
-                }
+            if let Some(selection) = self.terminal.selection.selection.as_mut()
+                && let Some(buffer_cell) = buffer_cell
+            {
+                selection.head = buffer_cell;
             }
         }
         self.terminal.selection.dragging = false;
@@ -505,6 +512,7 @@ impl NyaTermApp {
                     regex: false,
                     whole_word: false,
                     limit: TERMINAL_SELECTED_OCCURRENCE_LIMIT,
+                    request_generation: generation,
                 };
                 let _ = this.request_terminal_frame_search(
                     &session_id,
@@ -552,48 +560,14 @@ impl NyaTermApp {
 
     fn word_bounds_at_for_visual_geometry(
         &self,
-        cell: TerminalCellPos,
+        position: gpui::Point<gpui::Pixels>,
         geometry: &TerminalHitTestGeometry,
     ) -> (usize, usize) {
-        self.word_bounds_at_for_snapshot(
-            cell,
-            geometry.snapshot.as_ref(),
-            geometry.viewport_anchor_row,
+        terminal_word_bounds_for_visual_geometry(
+            position,
+            geometry,
+            self.settings.summary().interaction_word_separators.as_str(),
         )
-    }
-
-    fn word_bounds_at_for_snapshot(
-        &self,
-        cell: TerminalCellPos,
-        snapshot: &TerminalSnapshot,
-        viewport_anchor_row: usize,
-    ) -> (usize, usize) {
-        let snapshot_row = viewport_anchor_row
-            .checked_add(cell.row)
-            .filter(|row| *row < snapshot.row_count());
-        let line = snapshot_row
-            .and_then(|row| snapshot.line(row))
-            .unwrap_or("");
-        let cells = terminal_text_cells(line);
-        if cells.is_empty() {
-            return (cell.col, cell.col.saturating_add(1));
-        }
-        let idx = cell.col.min(cells.len().saturating_sub(1));
-        // xterm wordSeparator semantics: characters listed are separators, not word body.
-        let separators = self.settings.summary().interaction_word_separators.as_str();
-        let is_word = |cell: &TerminalTextCell| terminal_text_cell_is_word(cell, separators);
-        if !is_word(&cells[idx]) {
-            return (idx, idx.saturating_add(1));
-        }
-        let mut start = idx;
-        while start > 0 && is_word(&cells[start - 1]) {
-            start -= 1;
-        }
-        let mut end = idx + 1;
-        while end < cells.len() && is_word(&cells[end]) {
-            end += 1;
-        }
-        (start, end)
     }
 
     fn terminal_buffer_cell_for_visual_geometry(
@@ -607,6 +581,45 @@ impl NyaTermApp {
         let viewport_cell = terminal_cell_for_visual_geometry(position, geometry);
         Some(TerminalBufferCellPos::new(absolute_line, viewport_cell.col))
     }
+}
+
+fn terminal_word_bounds_for_visual_geometry(
+    position: gpui::Point<gpui::Pixels>,
+    geometry: &TerminalHitTestGeometry,
+    separators: &str,
+) -> (usize, usize) {
+    let snapshot_row = terminal_snapshot_row_for_visual_geometry(position, geometry)
+        .min(geometry.snapshot_rows.saturating_sub(1));
+    let col = terminal_cell_for_visual_geometry(position, geometry).col;
+    terminal_word_bounds_at_snapshot_row(col, geometry.snapshot.as_ref(), snapshot_row, separators)
+}
+
+fn terminal_word_bounds_at_snapshot_row(
+    col: usize,
+    snapshot: &TerminalSnapshot,
+    snapshot_row: usize,
+    separators: &str,
+) -> (usize, usize) {
+    let line = snapshot.line(snapshot_row).unwrap_or("");
+    let cells = terminal_text_cells(line);
+    if cells.is_empty() {
+        return (col, col.saturating_add(1));
+    }
+    let idx = col.min(cells.len().saturating_sub(1));
+    // xterm wordSeparator semantics: characters listed are separators, not word body.
+    let is_word = |cell: &TerminalTextCell| terminal_text_cell_is_word(cell, separators);
+    if !is_word(&cells[idx]) {
+        return (idx, idx.saturating_add(1));
+    }
+    let mut start = idx;
+    while start > 0 && is_word(&cells[start - 1]) {
+        start -= 1;
+    }
+    let mut end = idx + 1;
+    while end < cells.len() && is_word(&cells[end]) {
+        end += 1;
+    }
+    (start, end)
 }
 
 fn terminal_text_cell_is_word(cell: &TerminalTextCell, separators: &str) -> bool {
@@ -627,26 +640,31 @@ fn terminal_all_lines_text(lines: Vec<String>) -> Option<String> {
 }
 
 fn terminal_selected_occurrence_query(text: &str) -> Option<String> {
-    let trimmed = text.trim();
-    if trimmed.is_empty() || trimmed.contains('\n') {
+    if text.trim().is_empty() || text.contains('\n') {
         return None;
     }
-    let char_count = trimmed.chars().count();
+    let char_count = text.chars().count();
     if !(2..=TERMINAL_SELECTED_OCCURRENCE_MAX_CHARS).contains(&char_count) {
         return None;
     }
-    Some(trimmed.to_string())
+    Some(text.to_string())
 }
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
     use std::time::Duration;
 
+    use gpui::{Point, Size, px};
+    use nyaterm_terminal::TerminalScreen;
+
+    use super::super::metrics::TerminalHitTestGeometry;
     use crate::terminal::{TerminalTextCell, terminal_text_cell_slice, terminal_text_cells};
 
     use super::{
         TERMINAL_SELECTED_OCCURRENCE_MAX_CHARS, TERMINAL_SELECTION_DRAG_NOTIFY_DELAY,
         terminal_all_lines_text, terminal_selected_occurrence_query, terminal_text_cell_is_word,
+        terminal_word_bounds_for_visual_geometry,
     };
 
     #[test]
@@ -687,6 +705,47 @@ mod tests {
         assert!(terminal_text_cell_is_word(&cells[0], "/"));
         assert!(!terminal_text_cell_is_word(&cells[1], "/"));
         assert!(terminal_text_cell_is_word(&cells[2], "/"));
+    }
+
+    #[test]
+    fn double_click_word_bounds_use_the_fractionally_painted_snapshot_row() {
+        let mut screen = TerminalScreen::new(20, 3);
+        screen.advance(b"wrong\r\ntarget word");
+        let snapshot = Arc::new(screen.viewport_snapshot(0));
+        let geometry = TerminalHitTestGeometry {
+            bounds: gpui::bounds(
+                Point {
+                    x: px(0.0),
+                    y: px(0.0),
+                },
+                Size {
+                    width: px(160.0),
+                    height: px(48.0),
+                },
+            ),
+            snapshot: snapshot.clone(),
+            cell_w: 8.0,
+            cell_h: 16.0,
+            padding_left: 0.0,
+            padding_top: 0.0,
+            gutter: 0.0,
+            rows: 3,
+            cols: snapshot.cols,
+            display_offset: 0,
+            viewport_anchor_row: 0,
+            snapshot_rows: snapshot.row_count(),
+            viewport_rows: 3,
+            visual_y_offset: -8.0,
+        };
+        let position = Point {
+            x: px(2.5 * geometry.cell_w),
+            y: px(geometry.visual_y_offset + geometry.cell_h * 1.5),
+        };
+
+        assert_eq!(
+            terminal_word_bounds_for_visual_geometry(position, &geometry, " /"),
+            (0, 6)
+        );
     }
 
     #[test]
@@ -747,7 +806,7 @@ mod tests {
     fn terminal_selected_occurrence_query_filters_short_multiline_and_long_text() {
         assert_eq!(
             terminal_selected_occurrence_query(" ab "),
-            Some("ab".to_string())
+            Some(" ab ".to_string())
         );
         assert_eq!(terminal_selected_occurrence_query("a"), None);
         assert_eq!(terminal_selected_occurrence_query("a\nb"), None);

@@ -110,6 +110,7 @@ pub(crate) struct TerminalFrameSearchKey {
     pub(crate) regex: bool,
     pub(crate) whole_word: bool,
     pub(crate) limit: usize,
+    pub(crate) request_generation: u64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -2682,7 +2683,7 @@ impl TerminalSelection {
 
 #[cfg(test)]
 mod terminal_selection_tests {
-    use super::TerminalSelection;
+    use super::{TerminalBufferCellPos, TerminalSelection};
 
     #[test]
     fn all_buffer_selection_covers_every_viewport_row() {
@@ -2694,5 +2695,26 @@ mod terminal_selection_tests {
             selection.cols_for_absolute_line(10_000),
             Some((0, usize::MAX))
         );
+    }
+
+    #[test]
+    fn reverse_multiline_selection_keeps_half_open_absolute_line_ranges() {
+        let selection = TerminalSelection::from_range(
+            TerminalBufferCellPos::new(12, 4),
+            TerminalBufferCellPos::new(10, 2),
+        );
+
+        assert_eq!(
+            selection.ordered(),
+            (
+                TerminalBufferCellPos::new(10, 2),
+                TerminalBufferCellPos::new(12, 4)
+            )
+        );
+        assert_eq!(selection.cols_for_absolute_line(9), None);
+        assert_eq!(selection.cols_for_absolute_line(10), Some((2, usize::MAX)));
+        assert_eq!(selection.cols_for_absolute_line(11), Some((0, usize::MAX)));
+        assert_eq!(selection.cols_for_absolute_line(12), Some((0, 5)));
+        assert_eq!(selection.cols_for_absolute_line(13), None);
     }
 }

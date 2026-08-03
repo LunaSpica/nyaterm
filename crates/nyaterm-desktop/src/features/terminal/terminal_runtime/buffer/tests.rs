@@ -1,5 +1,8 @@
 use crate::models::WorkspaceSplitDirection;
-use crate::models::{TerminalFrameSearchKey, TerminalSearchMode, TerminalWindowNode};
+use crate::models::{
+    TerminalFrameSearchKey, TerminalFrameSearchPurpose, TerminalFrameSearchResult,
+    TerminalSearchMode, TerminalViewState, TerminalWindowNode,
+};
 use nyaterm_terminal::{TerminalClipboardLoad, TerminalEffects};
 use std::sync::Arc;
 
@@ -8,7 +11,8 @@ use super::{
     TERMINAL_FRAME_EVENT_DRAIN_WALL_BUDGET, TERMINAL_FRAME_INPUT_WAKE_EVENT_DRAIN_BATCH,
     TERMINAL_FRAME_INPUT_WAKE_EVENT_DRAIN_WALL_BUDGET, TerminalFrameSearchKeys,
     TerminalSurfaceFrameNotify, limit_osc52_clipboard_reply_text,
-    queue_osc52_clipboard_load_replies, terminal_effects_need_ui_apply, terminal_local_log_text,
+    queue_osc52_clipboard_load_replies, terminal_apply_search_result_to_view,
+    terminal_effects_need_ui_apply, terminal_local_log_text,
     terminal_output_frame_needs_chrome_notify, terminal_output_frame_surface_notify,
     terminal_search_frame_apply_result, terminal_selected_occurrence_frame_is_current,
     terminal_window_node_visible_tab_ids,
@@ -21,6 +25,7 @@ fn search_key(query: &str) -> TerminalFrameSearchKey {
         regex: false,
         whole_word: false,
         limit: 1000,
+        request_generation: 0,
     }
 }
 
@@ -200,6 +205,10 @@ fn terminal_search_frame_notify_ignores_non_visible_or_stale_queries() {
 #[test]
 fn selected_occurrence_frames_are_rejected_after_selection_clear() {
     let key = search_key("needle");
+    let next_generation = TerminalFrameSearchKey {
+        request_generation: 1,
+        ..key.clone()
+    };
 
     assert!(terminal_selected_occurrence_frame_is_current(
         Some("session"),
@@ -225,6 +234,106 @@ fn selected_occurrence_frames_are_rejected_after_selection_clear() {
         "session",
         &key,
     ));
+    assert!(!terminal_selected_occurrence_frame_is_current(
+        Some("session"),
+        Some("needle"),
+        Some(&next_generation),
+        "session",
+        &key,
+    ));
+}
+
+#[test]
+fn terminal_search_results_keep_find_and_selected_occurrence_slots_independent() {
+    let mut view = TerminalViewState::new();
+    view.screen_revision = 7;
+    let find = TerminalFrameSearchResult {
+        key: search_key("find"),
+        revision: 7,
+        matches: Ok(Vec::new()),
+    };
+    let selected = TerminalFrameSearchResult {
+        key: TerminalFrameSearchKey {
+            request_generation: 3,
+            ..search_key("selected")
+        },
+        revision: 7,
+        matches: Ok(Vec::new()),
+    };
+
+    assert!(terminal_apply_search_result_to_view(
+        &mut view,
+        TerminalFrameSearchPurpose::Find,
+        &find,
+        false,
+    ));
+    assert!(terminal_apply_search_result_to_view(
+        &mut view,
+        TerminalFrameSearchPurpose::SelectedOccurrence,
+        &selected,
+        true,
+    ));
+    assert_eq!(
+        view.search_result.as_ref().map(|result| &result.key),
+        Some(&find.key)
+    );
+    assert_eq!(
+        view.selected_occurrence_result
+            .as_ref()
+            .map(|result| &result.key),
+        Some(&selected.key)
+    );
+
+    let replacement_find = TerminalFrameSearchResult {
+        key: search_key("replacement"),
+        ..find.clone()
+    };
+    assert!(terminal_apply_search_result_to_view(
+        &mut view,
+        TerminalFrameSearchPurpose::Find,
+        &replacement_find,
+        false,
+    ));
+    assert_eq!(
+        view.selected_occurrence_result
+            .as_ref()
+            .map(|result| &result.key),
+        Some(&selected.key)
+    );
+}
+
+#[test]
+fn terminal_search_results_reject_stale_revision_and_occurrence_generation() {
+    let mut view = TerminalViewState::new();
+    view.screen_revision = 9;
+    let stale_revision = TerminalFrameSearchResult {
+        key: search_key("find"),
+        revision: 8,
+        matches: Ok(Vec::new()),
+    };
+    let stale_generation = TerminalFrameSearchResult {
+        key: TerminalFrameSearchKey {
+            request_generation: 1,
+            ..search_key("selected")
+        },
+        revision: 9,
+        matches: Ok(Vec::new()),
+    };
+
+    assert!(!terminal_apply_search_result_to_view(
+        &mut view,
+        TerminalFrameSearchPurpose::Find,
+        &stale_revision,
+        false,
+    ));
+    assert!(!terminal_apply_search_result_to_view(
+        &mut view,
+        TerminalFrameSearchPurpose::SelectedOccurrence,
+        &stale_generation,
+        false,
+    ));
+    assert!(view.search_result.is_none());
+    assert!(view.selected_occurrence_result.is_none());
 }
 
 #[test]

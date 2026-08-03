@@ -6,7 +6,7 @@ use std::time::Instant;
 use gpui::{
     App, Bounds, ContentMask, Element, ElementId, Font, FontFallbacks, GlobalElementId,
     InspectorElementId, IntoElement, LayoutId, PaintQuad, Pixels, ShapedLine, SharedString, Style,
-    TextRun, Window, fill, font, point, px, relative, rgb, size,
+    TextRun, Window, fill, font, point, px, relative, rgb, rgba, size,
 };
 use nyaterm_core::ResolvedKeywordHighlightRule;
 use nyaterm_terminal::{
@@ -830,6 +830,7 @@ fn push_terminal_background_ranges(
             Some((range.bg, range.start, range.end)),
             row,
             geometry.bounds,
+            geometry.visual_y_offset,
             geometry.cell_width,
             geometry.cell_height,
             out,
@@ -913,14 +914,7 @@ fn push_dynamic_decoration_backgrounds(
     out: &mut Vec<PaintQuad>,
 ) {
     for &(start, end) in &decorations.selected_occurrence_ranges {
-        push_col_range_bg(
-            row,
-            start,
-            end,
-            terminal_selected_occurrence_bg(palette),
-            geometry,
-            out,
-        );
+        push_selected_occurrence_bg(row, start, end, palette, geometry, out);
     }
     for &(start, end) in &decorations.search_ranges {
         push_col_range_bg(row, start, end, palette.terminal_selection, geometry, out);
@@ -933,8 +927,34 @@ fn push_dynamic_decoration_backgrounds(
     }
 }
 
-fn terminal_selected_occurrence_bg(palette: nyaterm_ui::ThemePalette) -> u32 {
-    palette.hover
+fn push_selected_occurrence_bg(
+    row: usize,
+    start: usize,
+    end: usize,
+    palette: nyaterm_ui::ThemePalette,
+    geometry: TerminalPaintGeometry,
+    out: &mut Vec<PaintQuad>,
+) {
+    if end <= start {
+        return;
+    }
+    let left = (f32::from(geometry.bounds.left()) + start as f32 * geometry.cell_width).floor();
+    let top = (f32::from(geometry.bounds.top())
+        + geometry.visual_y_offset
+        + row as f32 * geometry.cell_height)
+        .floor();
+    let right = (f32::from(geometry.bounds.left()) + end as f32 * geometry.cell_width).ceil();
+    let bottom = (f32::from(geometry.bounds.top())
+        + geometry.visual_y_offset
+        + (row + 1) as f32 * geometry.cell_height)
+        .ceil();
+    out.push(fill(
+        Bounds::new(
+            point(px(left), px(top)),
+            size(px((right - left).max(0.0)), px((bottom - top).max(0.0))),
+        ),
+        rgba((palette.text_muted << 8) | 0x38),
+    ));
 }
 
 fn push_terminal_image_placeholder(

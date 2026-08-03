@@ -938,6 +938,7 @@ impl TerminalSurface {
             self.remember_retained_snapshot(snapshot.clone());
         }
         self.snapshot = Some(snapshot);
+        self.refresh_selection_visual_for_snapshot();
         true
     }
 
@@ -1537,6 +1538,18 @@ impl TerminalSurface {
         &mut self,
         selection: Option<TerminalSelection>,
     ) -> bool {
+        self.apply_selection_visual(selection, false)
+    }
+
+    fn refresh_selection_visual_for_snapshot(&mut self) -> bool {
+        self.apply_selection_visual(self.selection_visual, true)
+    }
+
+    fn apply_selection_visual(
+        &mut self,
+        selection: Option<TerminalSelection>,
+        force: bool,
+    ) -> bool {
         let Some(snapshot) = self.snapshot.as_ref() else {
             return false;
         };
@@ -1544,7 +1557,7 @@ impl TerminalSurface {
         if line_count == 0 {
             return false;
         }
-        if self.selection_visual == selection {
+        if !force && self.selection_visual == selection {
             return false;
         }
 
@@ -1901,7 +1914,7 @@ impl TerminalSurface {
             cx.background_executor()
                 .timer(TERMINAL_SURFACE_LOCAL_SCROLL_SYNC_DELAY)
                 .await;
-            let _ = surface.update(cx, |surface, cx| {
+            surface.update(cx, |surface, cx| {
                 surface.flush_local_scroll_app_sync(app, cx);
             });
         })
@@ -2025,13 +2038,9 @@ impl TerminalSurface {
                                 }
                                 let drag_session_id =
                                     (!session_id.is_empty()).then_some(session_id.clone());
-                                let Some(bounds) = this
-                                    .terminal_scrollbar_track_bounds_for_session(
-                                        drag_session_id.as_deref(),
-                                    )
-                                else {
-                                    return None;
-                                };
+                                let bounds = this.terminal_scrollbar_track_bounds_for_session(
+                                    drag_session_id.as_deref(),
+                                )?;
                                 let metrics = this.terminal_scrollbar_metrics_for_session(
                                     drag_session_id.as_deref(),
                                     bounds,
@@ -2405,18 +2414,18 @@ impl Render for TerminalSurface {
                 cell_height: cell_h,
             }) - viewport_anchor_row as f32 * cell_h;
         let gutter_enabled = self.show_line_numbers || self.show_timestamps;
-        let painted_gutter_width = gutter_enabled
-            .then(|| {
-                terminal_gutter_metrics(
-                    cell_w,
-                    self.show_timestamps,
-                    self.show_timestamp_ms,
-                    self.show_line_numbers,
-                    terminal_line_number_digits(snapshot.as_ref()),
-                )
-                .total_width()
-            })
-            .unwrap_or(0.0);
+        let painted_gutter_width = if gutter_enabled {
+            terminal_gutter_metrics(
+                cell_w,
+                self.show_timestamps,
+                self.show_timestamp_ms,
+                self.show_line_numbers,
+                terminal_line_number_digits(snapshot.as_ref()),
+            )
+            .total_width()
+        } else {
+            0.0
+        };
         self.painted_hit_test_geometry = Some(TerminalPaintedHitTestGeometry {
             display_offset: self.display_offset,
             viewport_anchor_row,

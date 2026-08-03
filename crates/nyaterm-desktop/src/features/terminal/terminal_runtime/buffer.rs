@@ -1076,41 +1076,20 @@ impl NyaTermApp {
             frame.session_id.as_str(),
             &frame.result.key,
         );
-        let Some((current_revision, is_current_revision)) = self
+        let Some((current_revision, result_applied)) = self
             .terminal
             .view
             .views
             .get_mut(&frame.session_id)
             .map(|view| {
-                match frame.purpose {
-                    TerminalFrameSearchPurpose::Find => {
-                        if view.pending_search_key.as_ref() == Some(&frame.result.key) {
-                            view.pending_search_key = None;
-                        }
-                    }
-                    TerminalFrameSearchPurpose::SelectedOccurrence => {
-                        if view.pending_selected_occurrence_key.as_ref() == Some(&frame.result.key)
-                        {
-                            view.pending_selected_occurrence_key = None;
-                        }
-                    }
-                }
                 let current_revision = view.screen_revision;
-                let is_current_revision = frame.result.revision == current_revision;
-                if is_current_revision
-                    && (frame.purpose != TerminalFrameSearchPurpose::SelectedOccurrence
-                        || selected_occurrence_frame_is_current)
-                {
-                    match frame.purpose {
-                        TerminalFrameSearchPurpose::Find => {
-                            view.search_result = Some(frame.result.clone());
-                        }
-                        TerminalFrameSearchPurpose::SelectedOccurrence => {
-                            view.selected_occurrence_result = Some(frame.result.clone());
-                        }
-                    }
-                }
-                (current_revision, is_current_revision)
+                let result_applied = terminal_apply_search_result_to_view(
+                    view,
+                    frame.purpose,
+                    &frame.result,
+                    selected_occurrence_frame_is_current,
+                );
+                (current_revision, result_applied)
             })
         else {
             return TerminalFrameApplyResult::default();
@@ -1130,13 +1109,13 @@ impl NyaTermApp {
                 query_len = frame.result.key.query.len(),
                 revision = frame.result.revision,
                 current_revision,
-                stale = !is_current_revision,
+                stale = !result_applied,
                 match_count,
                 process_ms = frame.process_duration.as_millis(),
                 "slow terminal frame search"
             );
         }
-        if !is_current_revision {
+        if !result_applied {
             return TerminalFrameApplyResult::default();
         }
         let is_visible = self.terminal_session_has_visible_surface(&session_id);
@@ -1880,6 +1859,7 @@ mod frame_event_queue_tests {
                     regex: false,
                     whole_word: false,
                     limit: 100,
+                    request_generation: 0,
                 },
                 revision: 1,
                 matches: Ok(Vec::new()),
@@ -2630,6 +2610,39 @@ fn terminal_selected_occurrence_frame_is_current(
     current_session_id == Some(frame_session_id)
         && current_query == Some(result_key.query.as_str())
         && pending_key == Some(result_key)
+}
+
+fn terminal_apply_search_result_to_view(
+    view: &mut TerminalViewState,
+    purpose: TerminalFrameSearchPurpose,
+    result: &crate::models::TerminalFrameSearchResult,
+    selected_occurrence_is_current: bool,
+) -> bool {
+    match purpose {
+        TerminalFrameSearchPurpose::Find => {
+            if view.pending_search_key.as_ref() == Some(&result.key) {
+                view.pending_search_key = None;
+            }
+        }
+        TerminalFrameSearchPurpose::SelectedOccurrence => {
+            if view.pending_selected_occurrence_key.as_ref() == Some(&result.key) {
+                view.pending_selected_occurrence_key = None;
+            }
+        }
+    }
+    if result.revision != view.screen_revision
+        || (purpose == TerminalFrameSearchPurpose::SelectedOccurrence
+            && !selected_occurrence_is_current)
+    {
+        return false;
+    }
+    match purpose {
+        TerminalFrameSearchPurpose::Find => view.search_result = Some(result.clone()),
+        TerminalFrameSearchPurpose::SelectedOccurrence => {
+            view.selected_occurrence_result = Some(result.clone())
+        }
+    }
+    true
 }
 
 struct TerminalFrameSearchKeys<'a> {

@@ -191,24 +191,22 @@ pub(in crate::features) fn terminal_overview_marker_buckets(
     }
     let max_line = total_rows.saturating_sub(1).max(1);
     let max_y = track_height_px.saturating_sub(TERMINAL_OVERVIEW_MARKER_HEIGHT_PX);
-    let mut buckets = Vec::<TerminalOverviewMarkerBucket>::new();
+    let mut bucket_kinds = vec![None; max_y.saturating_add(1)];
     for marker in markers {
         let line = marker.absolute_line.min(max_line);
         let ratio = line as f32 / max_line as f32;
         let y_px = (ratio * max_y as f32).round() as usize;
-        if let Some(existing) = buckets.iter_mut().find(|bucket| bucket.y_px == y_px) {
-            if marker.kind > existing.kind {
-                existing.kind = marker.kind;
-            }
-        } else {
-            buckets.push(TerminalOverviewMarkerBucket {
-                y_px,
-                kind: marker.kind,
-            });
+        if let Some(slot) = bucket_kinds.get_mut(y_px)
+            && slot.is_none_or(|kind| marker.kind > kind)
+        {
+            *slot = Some(marker.kind);
         }
     }
-    buckets.sort_unstable_by_key(|bucket| bucket.y_px);
-    buckets
+    bucket_kinds
+        .into_iter()
+        .enumerate()
+        .filter_map(|(y_px, kind)| kind.map(|kind| TerminalOverviewMarkerBucket { y_px, kind }))
+        .collect()
 }
 
 pub(in crate::features) fn terminal_overview_marker_canvas(
@@ -274,7 +272,7 @@ mod tests {
     use super::{
         TerminalOverviewMarker, TerminalOverviewMarkerKind, TerminalScrollbarInput,
         terminal_overview_marker_buckets, terminal_scroll_offset_from_pointer,
-        terminal_scrollbar_metrics,
+        terminal_scrollbar_grab_offset_for_pointer, terminal_scrollbar_metrics,
     };
 
     #[test]
@@ -359,6 +357,56 @@ mod tests {
             terminal_scroll_offset_from_pointer(100.0, 50.0, metrics, 10.0, 90),
             45
         );
+        assert_eq!(
+            terminal_scroll_offset_from_pointer(50.0, 50.0, metrics, 0.0, 90),
+            90
+        );
+        assert_eq!(
+            terminal_scroll_offset_from_pointer(150.0, 50.0, metrics, metrics.thumb_height, 90),
+            0
+        );
+    }
+
+    #[test]
+    fn terminal_scrollbar_thumb_grab_and_track_click_use_distinct_offsets() {
+        let metrics = terminal_scrollbar_metrics(TerminalScrollbarInput {
+            viewport_rows: 10,
+            scrollback_rows: 90,
+            scroll_offset: 45,
+            track_height: 100.0,
+            min_thumb_height: 20.0,
+        });
+        let track_top = 30.0;
+        let thumb_pointer = track_top + metrics.thumb_top + 3.0;
+        let thumb_grab =
+            terminal_scrollbar_grab_offset_for_pointer(thumb_pointer, track_top, metrics);
+        let track_click = terminal_scrollbar_grab_offset_for_pointer(track_top, track_top, metrics);
+
+        assert_eq!(thumb_grab, 3.0);
+        assert_eq!(track_click, metrics.thumb_height * 0.5);
+        assert_eq!(
+            terminal_scroll_offset_from_pointer(thumb_pointer, track_top, metrics, thumb_grab, 90),
+            45
+        );
+        assert_eq!(
+            terminal_scroll_offset_from_pointer(track_top, track_top, metrics, track_click, 90),
+            90
+        );
+    }
+
+    #[test]
+    fn terminal_scrollbar_metrics_handle_one_row_and_huge_scrollback() {
+        let metrics = terminal_scrollbar_metrics(TerminalScrollbarInput {
+            viewport_rows: 1,
+            scrollback_rows: 1_000_000,
+            scroll_offset: 500_000,
+            track_height: 240.0,
+            min_thumb_height: 18.0,
+        });
+
+        assert_eq!(metrics.thumb_height, 18.0);
+        assert!(metrics.thumb_top.is_finite());
+        assert!(metrics.thumb_top > 0.0 && metrics.thumb_top < metrics.thumb_travel);
     }
 
     #[test]
@@ -410,5 +458,40 @@ mod tests {
             TerminalOverviewMarkerKind::ActiveSearchMatch
         );
         assert_eq!(buckets[2].y_px, 8);
+    }
+
+    #[test]
+    fn terminal_scrollbar_marker_buckets_handle_empty_and_single_line_buffers() {
+        let marker = TerminalOverviewMarker {
+            absolute_line: 0,
+            kind: TerminalOverviewMarkerKind::SelectedOccurrence,
+        };
+
+        assert!(terminal_overview_marker_buckets(&[], 0, 120).is_empty());
+        assert!(terminal_overview_marker_buckets(&[marker], 0, 120).is_empty());
+        assert_eq!(
+            terminal_overview_marker_buckets(&[marker], 1, 120),
+            vec![super::TerminalOverviewMarkerBucket {
+                y_px: 0,
+                kind: TerminalOverviewMarkerKind::SelectedOccurrence,
+            }]
+        );
+    }
+
+    #[test]
+    fn terminal_scrollbar_marker_buckets_bound_dense_match_work_to_track_pixels() {
+        let markers = (0..2000)
+            .map(|absolute_line| TerminalOverviewMarker {
+                absolute_line,
+                kind: TerminalOverviewMarkerKind::SelectedOccurrence,
+            })
+            .collect::<Vec<_>>();
+
+        let buckets = terminal_overview_marker_buckets(&markers, 2000, 120);
+
+        assert!(buckets.len() <= 119);
+        assert_eq!(buckets.first().map(|bucket| bucket.y_px), Some(0));
+        assert_eq!(buckets.last().map(|bucket| bucket.y_px), Some(118));
+        assert!(buckets.windows(2).all(|pair| pair[0].y_px < pair[1].y_px));
     }
 }

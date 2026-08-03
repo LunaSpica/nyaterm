@@ -492,12 +492,14 @@ mod tests {
     use gpui::{Point, Size, px};
     use nyaterm_terminal::TerminalScreen;
 
+    use crate::features::terminal::terminal_surface::terminal_absolute_line_for_snapshot_row;
     use crate::models::TerminalCellPos;
 
     use super::{
         TerminalHitTestGeometry, TerminalVisualScrollGeometry, terminal_cell_for_visual_geometry,
         terminal_gutter_metrics, terminal_hit_test_visual_y_offset_px,
         terminal_line_number_digits_for_end, terminal_snapshot_row_for_viewport_row,
+        terminal_snapshot_row_for_visual_geometry,
     };
 
     fn test_hit_test_snapshot() -> Arc<nyaterm_terminal::TerminalSnapshot> {
@@ -658,6 +660,96 @@ mod tests {
         );
 
         assert_eq!(cell, TerminalCellPos::new(9, 4));
+    }
+
+    #[test]
+    fn terminal_scrolled_hit_test_maps_viewport_row_to_absolute_buffer_line() {
+        let mut screen = TerminalScreen::new(40, 6);
+        screen.advance_decoded_text(&terminal_output_lines(180));
+        let snapshot = Arc::new(screen.viewport_snapshot(100));
+        let geometry = TerminalHitTestGeometry {
+            bounds: gpui::bounds(
+                Point {
+                    x: px(0.0),
+                    y: px(0.0),
+                },
+                Size {
+                    width: px(400.0),
+                    height: px(96.0),
+                },
+            ),
+            cell_w: 8.0,
+            cell_h: 16.0,
+            padding_left: 0.0,
+            padding_top: 0.0,
+            gutter: 0.0,
+            rows: 6,
+            cols: snapshot.cols,
+            display_offset: 100,
+            viewport_anchor_row: 0,
+            snapshot_rows: snapshot.row_count(),
+            viewport_rows: 6,
+            visual_y_offset: 0.0,
+            snapshot: snapshot.clone(),
+        };
+        let viewport_row = 3;
+        let position = Point {
+            x: px(4.0),
+            y: px(viewport_row as f32 * geometry.cell_h + geometry.cell_h * 0.5),
+        };
+
+        let snapshot_row = terminal_snapshot_row_for_visual_geometry(position, &geometry);
+        let absolute_line =
+            terminal_absolute_line_for_snapshot_row(snapshot.as_ref(), snapshot_row).unwrap();
+        let expected = snapshot
+            .total_rows
+            .saturating_sub(snapshot.display_offset)
+            .saturating_sub(snapshot.row_count())
+            + viewport_row;
+
+        assert_eq!(snapshot_row, viewport_row);
+        assert_eq!(absolute_line, expected);
+    }
+
+    #[test]
+    fn terminal_hit_test_uses_painted_geometry_when_model_offset_advances() {
+        let mut geometry = TerminalHitTestGeometry {
+            bounds: gpui::bounds(
+                Point {
+                    x: px(0.0),
+                    y: px(0.0),
+                },
+                Size {
+                    width: px(400.0),
+                    height: px(300.0),
+                },
+            ),
+            snapshot: test_hit_test_snapshot(),
+            cell_w: 8.0,
+            cell_h: 16.0,
+            padding_left: 0.0,
+            padding_top: 0.0,
+            gutter: 0.0,
+            rows: 24,
+            cols: 80,
+            display_offset: 100,
+            viewport_anchor_row: 4,
+            snapshot_rows: 40,
+            viewport_rows: 24,
+            visual_y_offset: -64.0,
+        };
+        let position = Point {
+            x: px(20.0),
+            y: px(40.0),
+        };
+        let painted_cell = terminal_cell_for_visual_geometry(position, &geometry);
+
+        geometry.display_offset = 4;
+
+        assert_eq!(
+            terminal_cell_for_visual_geometry(position, &geometry),
+            painted_cell
+        );
     }
 
     #[test]
