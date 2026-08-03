@@ -127,6 +127,9 @@ impl NyaTermApp {
         self.terminal.reset_assist_for_session_switch();
         let previous_session_id = self.session.active_id_owned();
         let switching_sessions = previous_session_id.as_deref() != Some(session_id);
+        if switching_sessions && let Some(previous_session_id) = previous_session_id.as_deref() {
+            self.clear_terminal_selection_state_for_session(previous_session_id);
+        }
         if previous_session_id.as_deref() != Some(session_id)
             && let Some(previous_session_id) = previous_session_id.as_deref()
         {

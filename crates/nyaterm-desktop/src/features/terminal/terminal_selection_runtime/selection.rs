@@ -29,6 +29,9 @@ impl NyaTermApp {
         &mut self,
         session_id: &str,
     ) {
+        // Occurrence results can outlive the visible selection while a session
+        // is being closed; clear that owner independently of selection state.
+        self.clear_terminal_selected_occurrence_for_session(session_id);
         let selection_session_id = self
             .terminal
             .selection
@@ -176,11 +179,9 @@ impl NyaTermApp {
         // including while a double/triple-click selection is being formed.
         self.clear_terminal_selected_occurrence(cx);
         let cell = terminal_cell_for_visual_geometry(event.position, &geometry);
-        let Some(buffer_cell) = self.terminal_buffer_cell_for_visual_geometry(
-            selection_session_id.as_deref(),
-            event.position,
-            &geometry,
-        ) else {
+        let Some(buffer_cell) =
+            Self::terminal_buffer_cell_for_visual_geometry(event.position, &geometry)
+        else {
             return;
         };
         // Applications with mouse tracking (vim/less/tmux) consume left presses.
@@ -231,12 +232,7 @@ impl NyaTermApp {
             return;
         }
         if event.click_count == 2 {
-            let word = self.word_bounds_at_for_viewport(
-                selection_session_id.as_deref(),
-                cell,
-                geometry.display_offset,
-                geometry.viewport_anchor_row,
-            );
+            let word = self.word_bounds_at_for_visual_geometry(cell, &geometry);
             self.terminal.selection.selection = Some(TerminalSelection::from_range(
                 TerminalBufferCellPos::new(buffer_cell.line, word.0),
                 TerminalBufferCellPos::new(buffer_cell.line, word.1.saturating_sub(1).max(word.0)),
@@ -352,11 +348,9 @@ impl NyaTermApp {
         else {
             return;
         };
-        let Some(buffer_cell) = self.terminal_buffer_cell_for_visual_geometry(
-            selection_session_id,
-            event.position,
-            &geometry,
-        ) else {
+        let Some(buffer_cell) =
+            Self::terminal_buffer_cell_for_visual_geometry(event.position, &geometry)
+        else {
             return;
         };
         if let Some(selection) = self.terminal.selection.selection.as_mut()
@@ -415,11 +409,8 @@ impl NyaTermApp {
         if let Some(geometry) =
             self.terminal_hit_test_geometry_for_session(selection_session_id, cx)
         {
-            let buffer_cell = self.terminal_buffer_cell_for_visual_geometry(
-                selection_session_id,
-                event.position,
-                &geometry,
-            );
+            let buffer_cell =
+                Self::terminal_buffer_cell_for_visual_geometry(event.position, &geometry);
             if let Some(selection) = self.terminal.selection.selection.as_mut() {
                 if let Some(buffer_cell) = buffer_cell {
                     selection.head = buffer_cell;
@@ -559,15 +550,16 @@ impl NyaTermApp {
         }
     }
 
-    fn word_bounds_at_for_viewport(
+    fn word_bounds_at_for_visual_geometry(
         &self,
-        session_id: Option<&str>,
         cell: TerminalCellPos,
-        display_offset: usize,
-        viewport_anchor_row: usize,
+        geometry: &TerminalHitTestGeometry,
     ) -> (usize, usize) {
-        let snapshot = self.terminal_snapshot_for_session(session_id, display_offset);
-        self.word_bounds_at_for_snapshot(cell, snapshot.as_ref(), viewport_anchor_row)
+        self.word_bounds_at_for_snapshot(
+            cell,
+            geometry.snapshot.as_ref(),
+            geometry.viewport_anchor_row,
+        )
     }
 
     fn word_bounds_at_for_snapshot(
@@ -605,16 +597,13 @@ impl NyaTermApp {
     }
 
     fn terminal_buffer_cell_for_visual_geometry(
-        &self,
-        session_id: Option<&str>,
         position: gpui::Point<gpui::Pixels>,
         geometry: &TerminalHitTestGeometry,
     ) -> Option<TerminalBufferCellPos> {
         let snapshot_row = terminal_snapshot_row_for_visual_geometry(position, geometry)
             .min(geometry.snapshot_rows.saturating_sub(1));
-        let snapshot = self.terminal_snapshot_for_session(session_id, geometry.display_offset);
         let absolute_line =
-            terminal_absolute_line_for_snapshot_row(snapshot.as_ref(), snapshot_row)?;
+            terminal_absolute_line_for_snapshot_row(geometry.snapshot.as_ref(), snapshot_row)?;
         let viewport_cell = terminal_cell_for_visual_geometry(position, geometry);
         Some(TerminalBufferCellPos::new(absolute_line, viewport_cell.col))
     }

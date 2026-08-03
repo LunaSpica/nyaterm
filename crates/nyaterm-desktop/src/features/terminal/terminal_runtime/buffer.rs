@@ -1061,6 +1061,21 @@ impl NyaTermApp {
     ) -> TerminalFrameApplyResult {
         let session_id = frame.session_id.clone();
         let result_key = frame.result.key.clone();
+        let selected_occurrence_frame_is_current = terminal_selected_occurrence_frame_is_current(
+            self.terminal
+                .selection
+                .selected_occurrence
+                .session_id
+                .as_deref(),
+            self.terminal.selection.selected_occurrence.query.as_deref(),
+            self.terminal
+                .view
+                .views
+                .get(&frame.session_id)
+                .and_then(|view| view.pending_selected_occurrence_key.as_ref()),
+            frame.session_id.as_str(),
+            &frame.result.key,
+        );
         let Some((current_revision, is_current_revision)) = self
             .terminal
             .view
@@ -1082,7 +1097,10 @@ impl NyaTermApp {
                 }
                 let current_revision = view.screen_revision;
                 let is_current_revision = frame.result.revision == current_revision;
-                if is_current_revision {
+                if is_current_revision
+                    && (frame.purpose != TerminalFrameSearchPurpose::SelectedOccurrence
+                        || selected_occurrence_frame_is_current)
+                {
                     match frame.purpose {
                         TerminalFrameSearchPurpose::Find => {
                             view.search_result = Some(frame.result.clone());
@@ -2600,6 +2618,18 @@ fn terminal_search_frame_apply_result(
         surface_notify: updates_active_buffer_search
             .then_some(TerminalSurfaceFrameNotify::Full(session_id)),
     }
+}
+
+fn terminal_selected_occurrence_frame_is_current(
+    current_session_id: Option<&str>,
+    current_query: Option<&str>,
+    pending_key: Option<&TerminalFrameSearchKey>,
+    frame_session_id: &str,
+    result_key: &TerminalFrameSearchKey,
+) -> bool {
+    current_session_id == Some(frame_session_id)
+        && current_query == Some(result_key.query.as_str())
+        && pending_key == Some(result_key)
 }
 
 struct TerminalFrameSearchKeys<'a> {

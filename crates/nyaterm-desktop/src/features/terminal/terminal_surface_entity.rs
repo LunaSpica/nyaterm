@@ -16,11 +16,10 @@ use crate::features::terminal::terminal_selection_runtime::{
 };
 use crate::features::terminal::terminal_surface::{
     TERMINAL_SCROLLBAR_COLUMN_WIDTH, TERMINAL_SCROLLBAR_MIN_THUMB_HEIGHT,
-    TERMINAL_SCROLLBAR_THUMB_ACTIVE_WIDTH, TERMINAL_SCROLLBAR_THUMB_WIDTH,
     TERMINAL_SCROLLBAR_TRACK_PADDING_RIGHT, TERMINAL_SCROLLBAR_TRACK_PADDING_Y,
     TerminalScrollbarInput, terminal_overview_marker_canvas, terminal_scroll_offset_from_pointer,
     terminal_scrollbar_grab_offset_for_pointer, terminal_scrollbar_metrics,
-    terminal_scrollbar_thumb_color, terminal_scrollbar_track_bounds_tracker, track_height,
+    terminal_scrollbar_thumb_element, terminal_scrollbar_track_bounds_tracker, track_height,
 };
 use crate::models::{TerminalPerformanceOverlay, TerminalProtocolState, TerminalSelection};
 use crate::terminal::{
@@ -136,14 +135,6 @@ fn empty_terminal_keyword_rules() -> Arc<Vec<nyaterm_core::ResolvedKeywordHighli
     Arc::clone(RULES.get_or_init(|| Arc::new(Vec::new())))
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(in crate::features) struct TerminalSurfaceHitTestScrollGeometry {
-    pub(in crate::features) snapshot_pending: bool,
-    pub(in crate::features) display_offset: usize,
-    pub(in crate::features) snapshot_rows: usize,
-    pub(in crate::features) viewport_anchor_row: usize,
-}
-
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(in crate::features) struct TerminalPaintedHitTestGeometry {
     pub(in crate::features) display_offset: usize,
@@ -153,6 +144,7 @@ pub(in crate::features) struct TerminalPaintedHitTestGeometry {
     pub(in crate::features) visual_y_offset: f32,
     pub(in crate::features) cell_width: f32,
     pub(in crate::features) cell_height: f32,
+    pub(in crate::features) gutter_width: f32,
     pub(in crate::features) revision: u64,
 }
 
@@ -298,6 +290,10 @@ pub(in crate::features) struct TerminalSurface {
     scroll_snapshot_pending_since: Option<Instant>,
     last_scroll_snapshot_pending_warn_at: Option<Instant>,
     painted_hit_test_geometry: Option<TerminalPaintedHitTestGeometry>,
+    painted_hit_test_snapshot: Option<Arc<TerminalSnapshot>>,
+    overview_markers: Arc<[crate::features::terminal::terminal_surface::TerminalOverviewMarker]>,
+    overview_total_rows: usize,
+    overview_marker_key: u64,
 }
 
 impl TerminalSurface {
@@ -356,6 +352,10 @@ impl TerminalSurface {
             scroll_snapshot_pending_since: None,
             last_scroll_snapshot_pending_warn_at: None,
             painted_hit_test_geometry: None,
+            painted_hit_test_snapshot: None,
+            overview_markers: Arc::from([]),
+            overview_total_rows: 1,
+            overview_marker_key: 0,
         }
     }
 
@@ -363,28 +363,13 @@ impl TerminalSurface {
         self.snapshot.is_some()
     }
 
-    pub(in crate::features) fn hit_test_scroll_geometry(
+    pub(in crate::features) fn painted_hit_test_state(
         &self,
-    ) -> Option<TerminalSurfaceHitTestScrollGeometry> {
-        let snapshot = self.snapshot.as_ref()?;
-        let viewport_anchor_row = terminal_snapshot_anchor_row_for_display_offset(
-            snapshot.as_ref(),
-            self.display_offset,
-            self.viewport_rows,
-            self.scrollback_len,
-        );
-        Some(TerminalSurfaceHitTestScrollGeometry {
-            snapshot_pending: self.scroll_snapshot_pending,
-            display_offset: self.display_offset,
-            snapshot_rows: snapshot.row_count(),
-            viewport_anchor_row,
-        })
-    }
-
-    pub(in crate::features) fn painted_hit_test_geometry(
-        &self,
-    ) -> Option<TerminalPaintedHitTestGeometry> {
-        self.painted_hit_test_geometry
+    ) -> Option<(TerminalPaintedHitTestGeometry, Arc<TerminalSnapshot>)> {
+        Some((
+            self.painted_hit_test_geometry?,
+            self.painted_hit_test_snapshot.clone()?,
+        ))
     }
 
     pub(in crate::features) fn snapshot_covering_display_offset(
@@ -1245,6 +1230,29 @@ impl TerminalSurface {
         true
     }
 
+    pub(in crate::features) fn set_overview_markers(
+        &mut self,
+        markers: Arc<[crate::features::terminal::terminal_surface::TerminalOverviewMarker]>,
+        total_rows: usize,
+        key: u64,
+    ) -> bool {
+        let total_rows = total_rows.max(1);
+        if self.overview_marker_key == key
+            && self.overview_total_rows == total_rows
+            && self.overview_markers.as_ref() == markers.as_ref()
+        {
+            return false;
+        }
+        self.overview_markers = markers;
+        self.overview_total_rows = total_rows;
+        self.overview_marker_key = key;
+        true
+    }
+
+    pub(in crate::features) fn overview_marker_key(&self) -> u64 {
+        self.overview_marker_key
+    }
+
     pub(in crate::features) fn set_layout_cache(
         &mut self,
         layout_cache: Arc<Mutex<NyaTerminalLayoutCache>>,
@@ -1976,14 +1984,16 @@ impl TerminalSurface {
         });
         let track_id = format!("terminal-scrollbar-track-{session_id}");
         let thumb_id = format!("terminal-scrollbar-thumb-{session_id}");
-        let thumb_color = terminal_scrollbar_thumb_color(palette, is_active);
-        let (overview_markers, overview_total_rows) = app
-            .as_ref()
-            .map(|app| {
-                app.read(cx)
-                    .terminal_overview_markers_for_session(session_id.as_str())
-            })
-            .unwrap_or_default();
+        let drag_active = app.as_ref().is_some_and(|app| {
+            app.read(cx)
+                .terminal
+                .view
+                .scrollbar_drag
+                .as_ref()
+                .is_some_and(|drag| drag.session_id.as_deref() == Some(session_id.as_str()))
+        });
+        let overview_markers = self.overview_markers.clone();
+        let overview_total_rows = self.overview_total_rows;
 
         div()
             .id(SharedString::from(format!(
@@ -2069,23 +2079,13 @@ impl TerminalSurface {
                         palette,
                     ))
                     .when(show, |this| {
-                        this.child(
-                            div()
-                                .id(SharedString::from(thumb_id))
-                                .absolute()
-                                .right(px(1.))
-                                .top(px(metrics.thumb_top))
-                                .w(px(TERMINAL_SCROLLBAR_THUMB_WIDTH))
-                                .h(px(metrics.thumb_height))
-                                .rounded_full()
-                                .bg(rgba(
-                                    (thumb_color << 8) | if is_active { 0xb8 } else { 0x70 },
-                                ))
-                                .hover(move |this| {
-                                    this.w(px(TERMINAL_SCROLLBAR_THUMB_ACTIVE_WIDTH))
-                                        .bg(rgba((thumb_color << 8) | 0xc8))
-                                }),
-                        )
+                        this.child(terminal_scrollbar_thumb_element(
+                            SharedString::from(thumb_id),
+                            metrics,
+                            palette,
+                            is_active,
+                            drag_active,
+                        ))
                     }),
             )
     }
@@ -2404,6 +2404,19 @@ impl Render for TerminalSurface {
                 viewport_rows: self.viewport_rows,
                 cell_height: cell_h,
             }) - viewport_anchor_row as f32 * cell_h;
+        let gutter_enabled = self.show_line_numbers || self.show_timestamps;
+        let painted_gutter_width = gutter_enabled
+            .then(|| {
+                terminal_gutter_metrics(
+                    cell_w,
+                    self.show_timestamps,
+                    self.show_timestamp_ms,
+                    self.show_line_numbers,
+                    terminal_line_number_digits(snapshot.as_ref()),
+                )
+                .total_width()
+            })
+            .unwrap_or(0.0);
         self.painted_hit_test_geometry = Some(TerminalPaintedHitTestGeometry {
             display_offset: self.display_offset,
             viewport_anchor_row,
@@ -2412,8 +2425,10 @@ impl Render for TerminalSurface {
             visual_y_offset,
             cell_width: cell_w,
             cell_height: cell_h,
+            gutter_width: painted_gutter_width,
             revision: self.revision,
         });
+        self.painted_hit_test_snapshot = Some(snapshot.clone());
         let line_count = snapshot.row_count();
         let visible_gutter_rows = terminal_surface_visible_rows_for_viewport(
             self.viewport_rows,
@@ -2421,7 +2436,6 @@ impl Render for TerminalSurface {
             visual_y_offset,
             cell_h,
         );
-        let gutter_enabled = self.show_line_numbers || self.show_timestamps;
         let performance_overlay = self.performance_overlay;
         let skipped_output_chars = self.skipped_output_chars;
         let mut surface_font = font(SharedString::from(self.font_family.clone()));

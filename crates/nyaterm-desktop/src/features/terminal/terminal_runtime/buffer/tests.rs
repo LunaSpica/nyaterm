@@ -10,7 +10,8 @@ use super::{
     TerminalSurfaceFrameNotify, limit_osc52_clipboard_reply_text,
     queue_osc52_clipboard_load_replies, terminal_effects_need_ui_apply, terminal_local_log_text,
     terminal_output_frame_needs_chrome_notify, terminal_output_frame_surface_notify,
-    terminal_search_frame_apply_result, terminal_window_node_visible_tab_ids,
+    terminal_search_frame_apply_result, terminal_selected_occurrence_frame_is_current,
+    terminal_window_node_visible_tab_ids,
 };
 
 fn search_key(query: &str) -> TerminalFrameSearchKey {
@@ -194,6 +195,36 @@ fn terminal_search_frame_notify_ignores_non_visible_or_stale_queries() {
         assert!(!result.chrome_dirty);
         assert_eq!(result.surface_notify, None);
     }
+}
+
+#[test]
+fn selected_occurrence_frames_are_rejected_after_selection_clear() {
+    let key = search_key("needle");
+
+    assert!(terminal_selected_occurrence_frame_is_current(
+        Some("session"),
+        Some("needle"),
+        Some(&key),
+        "session",
+        &key,
+    ));
+    assert!(!terminal_selected_occurrence_frame_is_current(
+        None, None, None, "session", &key,
+    ));
+    assert!(!terminal_selected_occurrence_frame_is_current(
+        Some("session"),
+        Some("needle"),
+        None,
+        "session",
+        &key,
+    ));
+    assert!(!terminal_selected_occurrence_frame_is_current(
+        Some("other"),
+        Some("needle"),
+        Some(&key),
+        "session",
+        &key,
+    ));
 }
 
 #[test]

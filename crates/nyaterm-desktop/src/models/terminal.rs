@@ -103,7 +103,7 @@ impl TerminalFrameActionLinks {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct TerminalFrameSearchKey {
     pub(crate) query: String,
     pub(crate) case_sensitive: bool,

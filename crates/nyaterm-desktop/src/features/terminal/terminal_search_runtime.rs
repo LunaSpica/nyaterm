@@ -1,3 +1,5 @@
+use std::hash::{Hash, Hasher};
+
 use gpui::{Context, KeyDownEvent, Window};
 
 use crate::features::terminal::terminal_surface::{
@@ -198,6 +200,47 @@ impl NyaTermApp {
             }
         }
         (markers, total_rows)
+    }
+
+    pub(in crate::features) fn terminal_overview_marker_key_for_session(
+        &self,
+        session_id: &str,
+    ) -> u64 {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        session_id.hash(&mut hasher);
+        self.terminal
+            .selection
+            .selected_occurrence
+            .generation
+            .hash(&mut hasher);
+        self.terminal
+            .selection
+            .selected_occurrence
+            .session_id
+            .as_deref()
+            .hash(&mut hasher);
+        self.terminal
+            .selection
+            .selected_occurrence
+            .query
+            .as_deref()
+            .hash(&mut hasher);
+        self.terminal.search.active_index.hash(&mut hasher);
+        self.terminal.search.open.hash(&mut hasher);
+        self.terminal.search.mode.hash(&mut hasher);
+        if let Some(view) = self.terminal.view.views.get(session_id) {
+            view.screen_revision.hash(&mut hasher);
+            view.search_result
+                .as_ref()
+                .map(|result| &result.key)
+                .hash(&mut hasher);
+            view.selected_occurrence_result
+                .as_ref()
+                .map(|result| &result.key)
+                .hash(&mut hasher);
+            view.screen.total_rows().hash(&mut hasher);
+        }
+        hasher.finish()
     }
 
     /// Ensure the absolute buffer line is visible by adjusting scroll_offset.

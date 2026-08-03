@@ -1196,13 +1196,11 @@ impl NyaTermApp {
         }
         let search_mapping_duration = search_mapping_started_at.elapsed();
 
-        let terminal_selection = if enhanced {
-            is_active
-                .then_some(self.terminal.selection.selection)
-                .flatten()
-        } else {
-            None
-        };
+        // The actual selection is always painted, even while degraded. Only
+        // weak occurrence/search overlays may be omitted under output pressure.
+        let terminal_selection = is_active
+            .then_some(self.terminal.selection.selection)
+            .flatten();
         let has_selection = terminal_selection.is_some();
         let has_search_decorations =
             !search_ranges_by_line.is_empty() || !active_search_ranges_by_line.is_empty();
@@ -1295,9 +1293,24 @@ impl NyaTermApp {
             );
         }
 
+        let overview_marker_key = self.terminal_overview_marker_key_for_session(session_id);
+        let overview_markers_dirty = surface.read(cx).overview_marker_key() != overview_marker_key;
+        let (overview_markers, overview_total_rows) = if overview_markers_dirty {
+            let (markers, total_rows) = self.terminal_overview_markers_for_session(session_id);
+            (Some(markers.into()), total_rows)
+        } else {
+            (None, 1)
+        };
         self.remember_terminal_scroll_window_snapshot(session_id, display_offset, &snapshot);
         surface.update(cx, |surface, cx| {
             let mut changed = false;
+            if let Some(overview_markers) = overview_markers {
+                changed |= surface.set_overview_markers(
+                    overview_markers,
+                    overview_total_rows,
+                    overview_marker_key,
+                );
+            }
             changed |= surface.set_layout_cache(layout_cache);
             changed |= surface.set_background_transparent(transparent_background);
             changed |= surface.set_paint_chrome(TerminalSurfacePaintChrome {

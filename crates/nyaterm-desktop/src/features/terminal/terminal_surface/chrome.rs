@@ -11,11 +11,10 @@ use crate::theme::ThemePalette;
 
 use super::{
     TERMINAL_SCROLLBAR_COLUMN_WIDTH, TERMINAL_SCROLLBAR_MIN_THUMB_HEIGHT,
-    TERMINAL_SCROLLBAR_THUMB_ACTIVE_WIDTH, TERMINAL_SCROLLBAR_THUMB_WIDTH,
     TERMINAL_SCROLLBAR_TRACK_PADDING_RIGHT, TERMINAL_SCROLLBAR_TRACK_PADDING_Y,
     TerminalScrollbarInput, terminal_overview_marker_canvas, terminal_scroll_offset_from_pointer,
     terminal_scrollbar_grab_offset_for_pointer, terminal_scrollbar_metrics,
-    terminal_scrollbar_thumb_color, terminal_scrollbar_track_bounds_tracker, track_height,
+    terminal_scrollbar_thumb_element, terminal_scrollbar_track_bounds_tracker, track_height,
 };
 
 impl NyaTermApp {
@@ -70,14 +69,8 @@ impl NyaTermApp {
         });
         let track_id = format!("terminal-scrollbar-track-{session_id}");
         let thumb_id = format!("terminal-scrollbar-thumb-{session_id}");
-        let thumb_color = terminal_scrollbar_thumb_color(palette, is_active);
         let (overview_markers, overview_total_rows) =
             self.terminal_overview_markers_for_session(session_id);
-        let thumb_width = if drag_active {
-            TERMINAL_SCROLLBAR_THUMB_ACTIVE_WIDTH
-        } else {
-            TERMINAL_SCROLLBAR_THUMB_WIDTH
-        };
 
         div()
             .id(SharedString::from(format!(
@@ -151,29 +144,18 @@ impl NyaTermApp {
                         (!session_id.is_empty()).then_some(session_id.to_string()),
                     ))
                     .child(terminal_overview_marker_canvas(
-                        overview_markers,
+                        overview_markers.into(),
                         overview_total_rows,
                         palette,
                     ))
                     .when(show, |this| {
-                        this.child(
-                            div()
-                                .id(SharedString::from(thumb_id))
-                                .absolute()
-                                .right(px(1.))
-                                .top(px(metrics.thumb_top))
-                                .w(px(thumb_width))
-                                .h(px(metrics.thumb_height))
-                                .rounded_full()
-                                .bg(rgba(
-                                    (thumb_color << 8)
-                                        | if drag_active || is_active { 0xb8 } else { 0x70 },
-                                ))
-                                .hover(move |this| {
-                                    this.w(px(TERMINAL_SCROLLBAR_THUMB_ACTIVE_WIDTH))
-                                        .bg(rgba((thumb_color << 8) | 0xc8))
-                                }),
-                        )
+                        this.child(terminal_scrollbar_thumb_element(
+                            SharedString::from(thumb_id),
+                            metrics,
+                            palette,
+                            is_active,
+                            drag_active,
+                        ))
                     }),
             )
     }

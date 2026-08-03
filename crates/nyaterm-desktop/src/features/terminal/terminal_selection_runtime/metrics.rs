@@ -1,11 +1,14 @@
+use std::sync::Arc;
+
 use gpui::{App, Bounds, Context, Pixels, Point, px};
 
 use nyaterm_core::TerminalViewportInsets;
+use nyaterm_terminal::TerminalSnapshot;
 
 use crate::features::NyaTermApp;
 use crate::features::terminal::terminal_surface_entity::{
-    TerminalSurfaceHitTestScrollGeometry, TerminalVisualScrollGeometry,
-    terminal_effective_visual_scroll_offset_px, terminal_snapshot_anchor_row_for_display_offset,
+    TerminalVisualScrollGeometry, terminal_effective_visual_scroll_offset_px,
+    terminal_snapshot_anchor_row_for_display_offset,
 };
 use crate::models::TerminalCellPos;
 
@@ -218,20 +221,20 @@ impl NyaTermApp {
             .or(self.terminal.layout.surface_bounds)?;
         let (fallback_cell_w, fallback_cell_h) = self.terminal_cell_size();
         let insets = self.terminal_content_insets_for_bounds(session_id, bounds);
-        let gutter = self.terminal_gutter_width_px_for_session(session_id);
-        let (rows, cols) = self.terminal_grid_size_for_session(session_id);
-        if let Some(painted) = session_id
+        if let Some((painted, snapshot)) = session_id
             .and_then(|session_id| self.terminal.view.surfaces.get(session_id))
-            .and_then(|surface| surface.read(cx).painted_hit_test_geometry())
+            .and_then(|surface| surface.read(cx).painted_hit_test_state())
         {
+            let cols = snapshot.cols.max(1);
             return Some(TerminalHitTestGeometry {
                 bounds,
+                snapshot: snapshot.clone(),
                 cell_w: painted.cell_width,
                 cell_h: painted.cell_height,
                 padding_left: insets.left,
                 padding_top: insets.top,
-                gutter,
-                rows,
+                gutter: painted.gutter_width,
+                rows: painted.viewport_rows,
                 cols,
                 display_offset: painted.display_offset,
                 viewport_anchor_row: painted.viewport_anchor_row,
@@ -250,37 +253,37 @@ impl NyaTermApp {
             viewport_rows,
             scrollback_len,
         );
-        let scroll_geometry = session_id
-            .and_then(|session_id| self.terminal.view.surfaces.get(session_id))
-            .and_then(|surface| surface.read(cx).hit_test_scroll_geometry())
-            .unwrap_or(TerminalSurfaceHitTestScrollGeometry {
-                snapshot_pending: false,
-                display_offset: target_display_offset,
-                snapshot_rows: snapshot.row_count(),
-                viewport_anchor_row: fallback_viewport_anchor_row,
-            });
         let visual_y_offset = terminal_hit_test_visual_y_offset_px(TerminalVisualScrollGeometry {
-            snapshot_pending: scroll_geometry.snapshot_pending,
-            target_offset: scroll_geometry.display_offset,
-            displayed_offset: scroll_geometry.display_offset,
+            snapshot_pending: false,
+            target_offset: target_display_offset,
+            displayed_offset: target_display_offset,
             residual_lines: 0.0,
-            viewport_anchor_row: scroll_geometry.viewport_anchor_row,
-            snapshot_rows: scroll_geometry.snapshot_rows,
+            viewport_anchor_row: fallback_viewport_anchor_row,
+            snapshot_rows: snapshot.row_count(),
             viewport_rows,
             cell_height: fallback_cell_h,
         });
+        let gutter = terminal_gutter_metrics(
+            fallback_cell_w,
+            self.settings.summary().terminal_show_timestamps,
+            self.settings.summary().terminal_show_timestamp_milliseconds,
+            self.settings.summary().terminal_show_line_numbers,
+            terminal_line_number_digits(snapshot.as_ref()),
+        )
+        .total_width();
         Some(TerminalHitTestGeometry {
             bounds,
+            snapshot: snapshot.clone(),
             cell_w: fallback_cell_w,
             cell_h: fallback_cell_h,
             padding_left: insets.left,
             padding_top: insets.top,
             gutter,
-            rows,
-            cols,
-            display_offset: scroll_geometry.display_offset,
-            viewport_anchor_row: scroll_geometry.viewport_anchor_row,
-            snapshot_rows: scroll_geometry.snapshot_rows,
+            rows: viewport_rows,
+            cols: snapshot.cols.max(1),
+            display_offset: target_display_offset,
+            viewport_anchor_row: fallback_viewport_anchor_row,
+            snapshot_rows: snapshot.row_count(),
             viewport_rows,
             visual_y_offset,
         })
@@ -337,9 +340,10 @@ impl NyaTermApp {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(in crate::features) struct TerminalHitTestGeometry {
     pub(in crate::features) bounds: Bounds<Pixels>,
+    pub(in crate::features) snapshot: Arc<TerminalSnapshot>,
     pub(in crate::features) cell_w: f32,
     pub(in crate::features) cell_h: f32,
     pub(in crate::features) padding_left: f32,
@@ -483,7 +487,10 @@ pub(in crate::features) fn terminal_snapshot_row_for_viewport_row(
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use gpui::{Point, Size, px};
+    use nyaterm_terminal::TerminalScreen;
 
     use crate::models::TerminalCellPos;
 
@@ -492,6 +499,10 @@ mod tests {
         terminal_gutter_metrics, terminal_hit_test_visual_y_offset_px,
         terminal_line_number_digits_for_end, terminal_snapshot_row_for_viewport_row,
     };
+
+    fn test_hit_test_snapshot() -> Arc<nyaterm_terminal::TerminalSnapshot> {
+        Arc::new(TerminalScreen::default().viewport_snapshot(0))
+    }
 
     fn terminal_output_lines(count: usize) -> String {
         (0..count)
@@ -584,6 +595,7 @@ mod tests {
                     height: px(300.0),
                 },
             ),
+            snapshot: test_hit_test_snapshot(),
             cell_w: 8.0,
             cell_h: 16.0,
             padding_left: 4.0,
@@ -629,6 +641,7 @@ mod tests {
             gutter: 0.0,
             rows: 24,
             cols: 80,
+            snapshot: test_hit_test_snapshot(),
             display_offset: 3,
             viewport_anchor_row: 5,
             snapshot_rows: 40,
@@ -679,6 +692,7 @@ mod tests {
             gutter: 0.0,
             rows: 20,
             cols: 80,
+            snapshot: test_hit_test_snapshot(),
             display_offset: 0,
             viewport_anchor_row,
             snapshot_rows: 40,
@@ -718,6 +732,7 @@ mod tests {
                         height: px(600.0),
                     },
                 ),
+                snapshot: test_hit_test_snapshot(),
                 cell_w,
                 cell_h,
                 padding_left: 0.0,

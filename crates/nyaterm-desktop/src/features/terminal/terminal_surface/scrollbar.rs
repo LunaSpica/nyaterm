@@ -1,4 +1,8 @@
-use gpui::{Bounds, Entity, IntoElement, Pixels, fill, point, prelude::*, px, rgba, size};
+use std::sync::Arc;
+
+use gpui::{
+    Bounds, Entity, IntoElement, Pixels, SharedString, div, fill, point, prelude::*, px, rgba, size,
+};
 
 use crate::features::NyaTermApp;
 
@@ -115,13 +119,39 @@ pub(in crate::features) fn terminal_scrollbar_grab_offset_for_pointer(
 
 pub(in crate::features) fn terminal_scrollbar_thumb_color(
     palette: crate::theme::ThemePalette,
-    active: bool,
+    _active: bool,
 ) -> u32 {
-    if active {
-        palette.link
+    palette.text_muted
+}
+
+pub(in crate::features) fn terminal_scrollbar_thumb_element(
+    id: SharedString,
+    metrics: TerminalScrollbarMetrics,
+    palette: crate::theme::ThemePalette,
+    active: bool,
+    dragging: bool,
+) -> impl IntoElement {
+    let color = terminal_scrollbar_thumb_color(palette, active);
+    let width = if dragging {
+        TERMINAL_SCROLLBAR_THUMB_ACTIVE_WIDTH
     } else {
-        palette.text_muted
-    }
+        TERMINAL_SCROLLBAR_THUMB_WIDTH
+    };
+    div()
+        .id(id)
+        .absolute()
+        .right(px(1.0))
+        .top(px(metrics.thumb_top))
+        .w(px(width))
+        .h(px(metrics.thumb_height))
+        .rounded_full()
+        .bg(rgba(
+            (color << 8) | if dragging || active { 0xa8 } else { 0x68 },
+        ))
+        .hover(move |this| {
+            this.w(px(TERMINAL_SCROLLBAR_THUMB_ACTIVE_WIDTH))
+                .bg(rgba((color << 8) | 0xc0))
+        })
 }
 
 pub(in crate::features) fn terminal_scrollbar_track_bounds_tracker(
@@ -182,7 +212,7 @@ pub(in crate::features) fn terminal_overview_marker_buckets(
 }
 
 pub(in crate::features) fn terminal_overview_marker_canvas(
-    markers: Vec<TerminalOverviewMarker>,
+    markers: Arc<[TerminalOverviewMarker]>,
     total_rows: usize,
     palette: crate::theme::ThemePalette,
 ) -> impl IntoElement {
