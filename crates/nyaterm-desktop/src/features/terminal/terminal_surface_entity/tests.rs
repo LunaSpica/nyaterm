@@ -1357,6 +1357,42 @@ fn selection_visual_update_preserves_existing_decorations() {
 }
 
 #[test]
+fn empty_selection_press_and_release_preserve_action_link_decorations() {
+    let snapshot = Arc::new(TerminalScreen::default().viewport_snapshot(0));
+    let rows = snapshot.row_count();
+    let mut surface = TerminalSurface::new("session");
+
+    apply_test_frame_snapshot!(
+        surface, snapshot, 0, 0.0, 0, 10, rows, false, None, 0, true, true, "block",
+    );
+    let decorations = vec![TerminalLineDecorations {
+        selected_occurrence_ranges: vec![(0, 1)],
+        search_ranges: vec![(1, 2)],
+        active_search_ranges: vec![(2, 3)],
+        link_ranges: vec![(3, 7)],
+        command_mark: Some(nyaterm_terminal::ShellCommandMark::Prompt),
+        ..TerminalLineDecorations::default()
+    }];
+    surface.set_decorations_and_keywords(decorations.clone(), Arc::new(Vec::new()), true, "block");
+    let revision = surface.revision;
+    let anchor = TerminalSelection::with_anchor(TerminalBufferCellPos::new(0, 4));
+
+    // MouseDown records an empty anchor without changing anything that is painted.
+    assert!(!surface.set_selection_visual(Some(anchor)));
+    assert_eq!(surface.selection_visual, Some(anchor));
+    assert_eq!(surface.selection_visual_row_range, None);
+    assert_eq!(surface.decorations.as_ref(), decorations.as_slice());
+    assert_eq!(surface.revision, revision);
+
+    // MouseUp clears the empty selection and must leave the same underlines in place.
+    assert!(!surface.set_selection_visual(None));
+    assert_eq!(surface.selection_visual, None);
+    assert_eq!(surface.selection_visual_row_range, None);
+    assert_eq!(surface.decorations.as_ref(), decorations.as_slice());
+    assert_eq!(surface.revision, revision);
+}
+
+#[test]
 fn selection_visual_row_range_tracks_absolute_lines_and_union() {
     let snapshot = TerminalScreen::default().viewport_snapshot(0);
     assert_eq!(terminal_selection_visual_row_range(None, &snapshot), None);
@@ -1431,7 +1467,14 @@ fn selection_visual_update_replaces_only_selection_cols() {
     );
 
     let mut decorations = vec![TerminalLineDecorations::default(); snapshot.row_count()];
-    decorations[0].link_ranges = vec![(1, 3)];
+    decorations[0] = TerminalLineDecorations {
+        selected_occurrence_ranges: vec![(0, 1)],
+        search_ranges: vec![(1, 2)],
+        active_search_ranges: vec![(2, 3)],
+        link_ranges: vec![(3, 7)],
+        command_mark: Some(nyaterm_terminal::ShellCommandMark::Prompt),
+        ..TerminalLineDecorations::default()
+    };
     decorations[2].selection_cols = Some((3, snapshot.cols));
     decorations[3].selection_cols = Some((0, 6));
     decorations[8].search_ranges = vec![(2, 5)];
@@ -1446,7 +1489,17 @@ fn selection_visual_update_replaces_only_selection_cols() {
         )))
     );
 
-    assert_eq!(surface.decorations[0].link_ranges, vec![(1, 3)]);
+    assert_eq!(
+        surface.decorations[0].selected_occurrence_ranges,
+        vec![(0, 1)]
+    );
+    assert_eq!(surface.decorations[0].search_ranges, vec![(1, 2)]);
+    assert_eq!(surface.decorations[0].active_search_ranges, vec![(2, 3)]);
+    assert_eq!(surface.decorations[0].link_ranges, vec![(3, 7)]);
+    assert_eq!(
+        surface.decorations[0].command_mark,
+        Some(nyaterm_terminal::ShellCommandMark::Prompt)
+    );
     assert_eq!(surface.decorations[2].selection_cols, None);
     assert_eq!(
         surface.decorations[3].selection_cols,
@@ -1467,7 +1520,17 @@ fn selection_visual_update_replaces_only_selection_cols() {
     assert_eq!(surface.revision, revision_before_same_selection);
 
     assert!(surface.set_selection_visual(None));
-    assert_eq!(surface.decorations[0].link_ranges, vec![(1, 3)]);
+    assert_eq!(
+        surface.decorations[0].selected_occurrence_ranges,
+        vec![(0, 1)]
+    );
+    assert_eq!(surface.decorations[0].search_ranges, vec![(1, 2)]);
+    assert_eq!(surface.decorations[0].active_search_ranges, vec![(2, 3)]);
+    assert_eq!(surface.decorations[0].link_ranges, vec![(3, 7)]);
+    assert_eq!(
+        surface.decorations[0].command_mark,
+        Some(nyaterm_terminal::ShellCommandMark::Prompt)
+    );
     assert_eq!(surface.decorations[3].selection_cols, None);
     assert_eq!(surface.decorations[4].selection_cols, None);
     assert_eq!(surface.decorations[8].search_ranges, vec![(2, 5)]);

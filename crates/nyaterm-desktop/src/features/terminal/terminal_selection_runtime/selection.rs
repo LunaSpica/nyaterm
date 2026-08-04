@@ -54,17 +54,28 @@ impl NyaTermApp {
             .as_deref()
             .or(self.session.active_id())
             .map(str::to_string);
-        self.notify_terminal_surface_only(session_id.as_deref(), cx);
+        if let Some(session_id) = session_id.filter(|session_id| !session_id.is_empty()) {
+            self.notify_terminal_selection_visual_only(session_id.as_str(), cx);
+        }
     }
 
     pub(in crate::features) fn clear_terminal_selection(&mut self, cx: &mut Context<Self>) {
-        let previous_session_id = self.terminal.selection.session_id.clone();
+        let previous_session_id = self
+            .terminal
+            .selection
+            .session_id
+            .clone()
+            .or_else(|| self.session.active_id_owned());
         if self.terminal.selection.selection.is_some() || self.terminal.selection.dragging {
             self.terminal.selection.selection = None;
             self.terminal.selection.session_id = None;
             self.terminal.selection.dragging = false;
             self.clear_terminal_selected_occurrence(cx);
-            self.notify_terminal_surface_only(previous_session_id.as_deref(), cx);
+            if let Some(previous_session_id) =
+                previous_session_id.filter(|session_id| !session_id.is_empty())
+            {
+                self.notify_terminal_selection_visual_only(previous_session_id.as_str(), cx);
+            }
         }
     }
 
@@ -181,7 +192,14 @@ impl NyaTermApp {
             self.terminal.selection.selection = None;
             self.terminal.selection.session_id = None;
             self.terminal.selection.dragging = false;
-            self.notify_terminal_surface_only(previous_selection_session_id.as_deref(), cx);
+            if let Some(previous_selection_session_id) =
+                previous_selection_session_id.filter(|session_id| !session_id.is_empty())
+            {
+                self.notify_terminal_selection_visual_only(
+                    previous_selection_session_id.as_str(),
+                    cx,
+                );
+            }
         }
         // A new selection invalidates the previous occurrence query immediately,
         // including while a double/triple-click selection is being formed.

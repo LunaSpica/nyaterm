@@ -1603,16 +1603,9 @@ impl TerminalSurface {
             next_rows.clone(),
         );
         let Some(update_rows) = update_rows else {
-            if self.decorations.is_empty() {
-                self.selection_visual = selection;
-                self.selection_visual_row_range = None;
-                return false;
-            }
             self.selection_visual = selection;
             self.selection_visual_row_range = None;
-            self.decorations = Arc::from(Vec::<TerminalLineDecorations>::new());
-            self.revision = self.revision.saturating_add(1);
-            return true;
+            return false;
         };
 
         let mut next = if self.decorations.is_empty() {

@@ -783,6 +783,40 @@ fn dynamic_link_underlines_follow_visual_offset_and_clamp_to_text() {
 }
 
 #[test]
+fn dynamic_link_underline_count_is_stable_across_selection_changes() {
+    let palette = nyaterm_ui::theme_palette("github-dark");
+    let bounds = Bounds::new(point(px(0.0), px(0.0)), size(px(160.0), px(32.0)));
+    let geometry = TerminalPaintGeometry {
+        bounds,
+        visual_y_offset: 0.0,
+        cell_width: 8.0,
+        cell_height: 16.0,
+    };
+    let mut decorations = TerminalLineDecorations {
+        link_ranges: vec![(1, 4)],
+        ..TerminalLineDecorations::default()
+    };
+    let underline_count = |decorations: &TerminalLineDecorations| {
+        let mut underlines = Vec::new();
+        push_dynamic_link_underlines(
+            0,
+            "address",
+            decorations,
+            palette,
+            geometry,
+            &mut underlines,
+        );
+        underlines.len()
+    };
+
+    assert_eq!(underline_count(&decorations), 1);
+    decorations.selection_cols = Some((0, 7));
+    assert_eq!(underline_count(&decorations), 1);
+    decorations.selection_cols = None;
+    assert_eq!(underline_count(&decorations), 1);
+}
+
+#[test]
 fn row_layout_key_ignores_dynamic_link_underlines() {
     let mut snapshot = TerminalScreen::default().snapshot();
     edit_snapshot_row(&mut snapshot, 0, |row| {
