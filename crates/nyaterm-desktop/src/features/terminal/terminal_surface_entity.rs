@@ -138,6 +138,7 @@ fn empty_terminal_keyword_rules() -> Arc<Vec<nyaterm_core::ResolvedKeywordHighli
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(in crate::features) struct TerminalPaintedHitTestGeometry {
+    pub(in crate::features) grid_bounds: Option<gpui::Bounds<gpui::Pixels>>,
     pub(in crate::features) display_offset: usize,
     pub(in crate::features) viewport_anchor_row: usize,
     pub(in crate::features) snapshot_rows: usize,
@@ -145,8 +146,31 @@ pub(in crate::features) struct TerminalPaintedHitTestGeometry {
     pub(in crate::features) visual_y_offset: f32,
     pub(in crate::features) cell_width: f32,
     pub(in crate::features) cell_height: f32,
-    pub(in crate::features) gutter_width: f32,
     pub(in crate::features) revision: u64,
+}
+
+fn terminal_surface_grid_bounds_tracker(surface: Entity<TerminalSurface>) -> impl IntoElement {
+    let tracked_surface = surface.clone();
+    gpui::canvas(
+        move |bounds, _window, cx| {
+            let unchanged = tracked_surface
+                .read(cx)
+                .painted_hit_test_geometry
+                .is_some_and(|geometry| geometry.grid_bounds == Some(bounds));
+            if unchanged {
+                return;
+            }
+            let surface = surface.clone();
+            cx.defer(move |cx| {
+                surface.update(cx, |surface, _cx| {
+                    surface.set_painted_hit_test_grid_bounds(bounds);
+                });
+            });
+        },
+        |_bounds, _state, _window, _cx| {},
+    )
+    .absolute()
+    .size_full()
 }
 
 pub(in crate::features) struct TerminalSurfacePaintChrome {
@@ -371,6 +395,17 @@ impl TerminalSurface {
             self.painted_hit_test_geometry?,
             self.painted_hit_test_snapshot.clone()?,
         ))
+    }
+
+    fn set_painted_hit_test_grid_bounds(&mut self, bounds: gpui::Bounds<gpui::Pixels>) -> bool {
+        let Some(geometry) = self.painted_hit_test_geometry.as_mut() else {
+            return false;
+        };
+        if geometry.grid_bounds == Some(bounds) {
+            return false;
+        }
+        geometry.grid_bounds = Some(bounds);
+        true
     }
 
     pub(in crate::features) fn snapshot_covering_display_offset(
@@ -2417,19 +2452,11 @@ impl Render for TerminalSurface {
                 cell_height: cell_h,
             }) - viewport_anchor_row as f32 * cell_h;
         let gutter_enabled = self.show_line_numbers || self.show_timestamps;
-        let painted_gutter_width = if gutter_enabled {
-            terminal_gutter_metrics(
-                cell_w,
-                self.show_timestamps,
-                self.show_timestamp_ms,
-                self.show_line_numbers,
-                terminal_line_number_digits(snapshot.as_ref()),
-            )
-            .total_width()
-        } else {
-            0.0
-        };
+        let previous_grid_bounds = self
+            .painted_hit_test_geometry
+            .and_then(|geometry| geometry.grid_bounds);
         self.painted_hit_test_geometry = Some(TerminalPaintedHitTestGeometry {
+            grid_bounds: previous_grid_bounds,
             display_offset: self.display_offset,
             viewport_anchor_row,
             snapshot_rows: snapshot.row_count(),
@@ -2437,7 +2464,6 @@ impl Render for TerminalSurface {
             visual_y_offset,
             cell_width: cell_w,
             cell_height: cell_h,
-            gutter_width: painted_gutter_width,
             revision: self.revision,
         });
         self.painted_hit_test_snapshot = Some(snapshot.clone());
@@ -2453,6 +2479,7 @@ impl Render for TerminalSurface {
         let mut surface_font = font(SharedString::from(self.font_family.clone()));
         surface_font.fallbacks = self.font_fallbacks.clone();
         let app = self.app.clone();
+        let surface = cx.entity();
         let session_id = self.session_id.clone();
         let is_active = self.is_active;
         let mut grid = NyaTerminalElement::new(
@@ -2575,15 +2602,25 @@ impl Render for TerminalSurface {
                 .min_w_0()
                 .min_h_0()
                 .child(gutter)
-                .child(div().flex_1().min_w_0().min_h_0().child(grid))
+                .child(
+                    div()
+                        .relative()
+                        .flex_1()
+                        .min_w_0()
+                        .min_h_0()
+                        .child(grid)
+                        .child(terminal_surface_grid_bounds_tracker(surface.clone())),
+                )
         } else {
-            div()
-                .flex()
-                .flex_row()
-                .flex_1()
-                .min_w_0()
-                .min_h_0()
-                .child(div().flex_1().min_w_0().min_h_0().child(grid))
+            div().flex().flex_row().flex_1().min_w_0().min_h_0().child(
+                div()
+                    .relative()
+                    .flex_1()
+                    .min_w_0()
+                    .min_h_0()
+                    .child(grid)
+                    .child(terminal_surface_grid_bounds_tracker(surface)),
+            )
         };
 
         let scrollbar = self.scrollbar_element(cx).into_any_element();

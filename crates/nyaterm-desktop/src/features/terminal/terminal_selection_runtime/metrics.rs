@@ -221,19 +221,24 @@ impl NyaTermApp {
             .or(self.terminal.layout.surface_bounds)?;
         let (fallback_cell_w, fallback_cell_h) = self.terminal_cell_size();
         let insets = self.terminal_content_insets_for_bounds(session_id, bounds);
-        if let Some((painted, snapshot)) = session_id
+        if let Some((painted, snapshot, grid_bounds)) = session_id
             .and_then(|session_id| self.terminal.view.surfaces.get(session_id))
             .and_then(|surface| surface.read(cx).painted_hit_test_state())
+            .and_then(|(painted, snapshot)| {
+                painted
+                    .grid_bounds
+                    .map(|grid_bounds| (painted, snapshot, grid_bounds))
+            })
         {
             let cols = snapshot.cols.max(1);
             return Some(TerminalHitTestGeometry {
-                bounds,
+                bounds: grid_bounds,
                 snapshot: snapshot.clone(),
                 cell_w: painted.cell_width,
                 cell_h: painted.cell_height,
-                padding_left: insets.left,
-                padding_top: insets.top,
-                gutter: painted.gutter_width,
+                padding_left: 0.0,
+                padding_top: 0.0,
+                gutter: 0.0,
                 rows: painted.viewport_rows,
                 cols,
                 display_offset: painted.display_offset,
@@ -621,6 +626,53 @@ mod tests {
         );
 
         assert_eq!(cell, TerminalCellPos::new(10, 3));
+    }
+
+    #[test]
+    fn terminal_visual_hit_test_maps_address_from_the_painted_grid_origin() {
+        let geometry = TerminalHitTestGeometry {
+            bounds: gpui::bounds(
+                Point {
+                    x: px(103.0),
+                    y: px(40.0),
+                },
+                Size {
+                    width: px(320.0),
+                    height: px(96.0),
+                },
+            ),
+            snapshot: test_hit_test_snapshot(),
+            cell_w: 8.0,
+            cell_h: 16.0,
+            padding_left: 0.0,
+            padding_top: 0.0,
+            gutter: 0.0,
+            rows: 6,
+            cols: 40,
+            display_offset: 0,
+            viewport_anchor_row: 0,
+            snapshot_rows: 6,
+            viewport_rows: 6,
+            visual_y_offset: 0.0,
+        };
+
+        let address_start = terminal_cell_for_visual_geometry(
+            Point {
+                x: px(105.0),
+                y: px(48.0),
+            },
+            &geometry,
+        );
+        let first_d = terminal_cell_for_visual_geometry(
+            Point {
+                x: px(113.0),
+                y: px(48.0),
+            },
+            &geometry,
+        );
+
+        assert_eq!(address_start.col, 0);
+        assert_eq!(first_d.col, 1);
     }
 
     #[test]

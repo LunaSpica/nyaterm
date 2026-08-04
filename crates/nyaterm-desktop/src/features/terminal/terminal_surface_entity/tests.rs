@@ -6,7 +6,7 @@ use crate::models::{TerminalProtocolState, TerminalSelection};
 use crate::terminal::{
     TerminalLineDecorations, compile_terminal_keyword_highlighter, terminal_keyword_rules_key,
 };
-use gpui::{AppContext, TestAppContext};
+use gpui::{AppContext, TestAppContext, bounds, point, px, size};
 use nyaterm_terminal::{TerminalScreen, TerminalSnapshot};
 use nyaterm_terminal_gpui::precompute_terminal_keyword_highlights;
 
@@ -14,17 +14,45 @@ use super::{
     TERMINAL_KEYWORD_HIGHLIGHT_PREFETCH_VIEWPORTS,
     TERMINAL_KEYWORD_HIGHLIGHT_PRESSURE_PREFETCH_VIEWPORTS,
     TERMINAL_KEYWORD_HIGHLIGHT_PRESSURE_THROTTLE, TerminalKeywordHighlightRequestKey,
-    TerminalScrollVisualState, TerminalSurface, TerminalSurfaceFrameSnapshot,
-    TerminalSurfaceLocalScrollResult, TerminalVisualScrollGeometry, empty_terminal_keyword_rules,
-    terminal_effective_visual_scroll_offset_px, terminal_keyword_highlight_prefetch_rows,
-    terminal_keyword_highlight_prefetch_viewports, terminal_keyword_highlight_pressure_delay,
-    terminal_keyword_highlight_request_key, terminal_keyword_highlight_visible_rows,
-    terminal_selection_visual_row_range, terminal_selection_visual_row_union,
-    terminal_snapshot_anchor_row_for_display_offset, terminal_snapshot_covers_display_offset,
-    terminal_surface_fractional_prefetch_offset, terminal_surface_synthesized_window_extra_rows,
-    terminal_surface_text_first_repaint_ready, terminal_surface_visible_rows_for_viewport,
-    terminal_visual_scroll_offset_px,
+    TerminalPaintedHitTestGeometry, TerminalScrollVisualState, TerminalSurface,
+    TerminalSurfaceFrameSnapshot, TerminalSurfaceLocalScrollResult, TerminalVisualScrollGeometry,
+    empty_terminal_keyword_rules, terminal_effective_visual_scroll_offset_px,
+    terminal_keyword_highlight_prefetch_rows, terminal_keyword_highlight_prefetch_viewports,
+    terminal_keyword_highlight_pressure_delay, terminal_keyword_highlight_request_key,
+    terminal_keyword_highlight_visible_rows, terminal_selection_visual_row_range,
+    terminal_selection_visual_row_union, terminal_snapshot_anchor_row_for_display_offset,
+    terminal_snapshot_covers_display_offset, terminal_surface_fractional_prefetch_offset,
+    terminal_surface_synthesized_window_extra_rows, terminal_surface_text_first_repaint_ready,
+    terminal_surface_visible_rows_for_viewport, terminal_visual_scroll_offset_px,
 };
+
+#[test]
+fn painted_hit_test_state_uses_the_latest_grid_bounds() {
+    let mut surface = TerminalSurface::new("session");
+    let snapshot = Arc::new(TerminalScreen::default().viewport_snapshot(0));
+    surface.painted_hit_test_snapshot = Some(snapshot);
+    surface.painted_hit_test_geometry = Some(TerminalPaintedHitTestGeometry {
+        grid_bounds: None,
+        display_offset: 0,
+        viewport_anchor_row: 0,
+        snapshot_rows: 24,
+        viewport_rows: 24,
+        visual_y_offset: 0.0,
+        cell_width: 8.0,
+        cell_height: 16.0,
+        revision: 1,
+    });
+    let grid_bounds = bounds(point(px(87.0), px(31.0)), size(px(640.0), px(384.0)));
+
+    assert!(surface.set_painted_hit_test_grid_bounds(grid_bounds));
+    assert!(!surface.set_painted_hit_test_grid_bounds(grid_bounds));
+    assert_eq!(
+        surface
+            .painted_hit_test_state()
+            .map(|(geometry, _)| geometry.grid_bounds),
+        Some(Some(grid_bounds))
+    );
+}
 
 macro_rules! apply_test_frame_snapshot {
     (
