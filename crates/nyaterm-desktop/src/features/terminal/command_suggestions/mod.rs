@@ -26,6 +26,13 @@ const COMMAND_SUGGESTION_INPUT_SLOW_THRESHOLD: Duration = Duration::from_millis(
 const COMMAND_SUGGESTION_REFRESH_SLOW_THRESHOLD: Duration = Duration::from_millis(8);
 const COMMAND_SUGGESTION_REFRESH_DEBOUNCE: Duration = Duration::from_millis(80);
 const COMMAND_SUGGESTION_REFRESH_PRESSURE_RETRY: Duration = Duration::from_millis(120);
+pub(in crate::features) const SUGGESTION_OVERLAY_HEADER_HEIGHT: f32 = 24.0;
+pub(in crate::features) const SUGGESTION_OVERLAY_FOOTER_HEIGHT: f32 = 24.0;
+const SUGGESTION_OVERLAY_CHROME_HEIGHT: f32 =
+    SUGGESTION_OVERLAY_HEADER_HEIGHT + SUGGESTION_OVERLAY_FOOTER_HEIGHT;
+const SUGGESTION_OVERLAY_MAX_HEIGHT: f32 = 320.0;
+const SUGGESTION_OVERLAY_CURSOR_GAP: f32 = 4.0;
+const SUGGESTION_OVERLAY_VIEWPORT_MARGIN: f32 = 8.0;
 
 #[derive(Clone, Copy, Default)]
 struct CommandSuggestionInputTiming {
@@ -951,7 +958,7 @@ impl NyaTermApp {
             return div().into_any_element();
         }
         let menu_w = 380.0_f32;
-        let menu_h = (state.items.len() as f32 * 28.0 + 44.0).min(320.0);
+        let menu_h = suggestion_overlay_desired_height(state.items.len(), 28.0);
         let title = self.tr("suggestions.title");
         let match_label = self.tr(if state.items.len() == 1 {
             "suggestions.match"
@@ -965,7 +972,7 @@ impl NyaTermApp {
             self.tr("suggestions.fill"),
             self.tr("suggestions.dismiss")
         );
-        let Some((x, y)) = self.suggestion_overlay_position_for_session(
+        let Some(placement) = self.suggestion_overlay_position_for_session(
             Some(&state.session_id),
             state.cursor_row,
             state.cursor_col,
@@ -979,7 +986,8 @@ impl NyaTermApp {
             .id(SharedString::from("command-suggestions-list"))
             .flex()
             .flex_col()
-            .max_h(px(280.))
+            .flex_1()
+            .min_h_0()
             .overflow_y_scroll();
         for (index, item) in state.items.iter().enumerate() {
             let selected = state.selected_index == Some(index);
@@ -997,6 +1005,7 @@ impl NyaTermApp {
             let mut row = div()
                 .id(SharedString::from(format!("command-suggestion-{index}")))
                 .h(px(28.))
+                .flex_none()
                 .px_2()
                 .flex()
                 .items_center()
@@ -1085,9 +1094,12 @@ impl NyaTermApp {
         div()
             .id(SharedString::from("command-suggestions-overlay"))
             .absolute()
-            .left(px(x))
-            .top(px(y))
+            .left(px(placement.x))
+            .top(px(placement.y))
             .w(px(menu_w))
+            .h(px(placement.height))
+            .flex()
+            .flex_col()
             .rounded_lg()
             .border_1()
             .border_color(rgb(palette.border))
@@ -1096,8 +1108,9 @@ impl NyaTermApp {
             .overflow_hidden()
             .child(
                 div()
+                    .h(px(SUGGESTION_OVERLAY_HEADER_HEIGHT))
+                    .flex_none()
                     .px_2()
-                    .py_1()
                     .border_b_1()
                     .border_color(rgb(palette.border))
                     .flex()
@@ -1129,10 +1142,13 @@ impl NyaTermApp {
             .child(list)
             .child(
                 div()
+                    .h(px(SUGGESTION_OVERLAY_FOOTER_HEIGHT))
+                    .flex_none()
                     .px_2()
-                    .py_1()
                     .border_t_1()
                     .border_color(rgb(palette.border))
+                    .flex()
+                    .items_center()
                     .text_size(px(10.))
                     .text_color(rgb(palette.text_dimmed))
                     .child(footer),
@@ -1147,10 +1163,10 @@ impl NyaTermApp {
         cursor_col: usize,
         menu_w: f32,
         menu_h: f32,
-    ) -> Option<(f32, f32)> {
+    ) -> Option<SuggestionOverlayPlacement> {
         let bounds = self.terminal_surface_bounds_for_session(session_id)?;
-        let insets = self.terminal_content_insets();
-        Some(suggestion_overlay_position(
+        let insets = self.terminal_content_insets_for_bounds(session_id, bounds);
+        suggestion_overlay_position(
             SuggestionOverlayGeometry {
                 bounds,
                 cell_size: self.terminal_cell_size(),
@@ -1162,7 +1178,7 @@ impl NyaTermApp {
                 cursor: (cursor_row, cursor_col),
                 menu_size: (menu_w, menu_h),
             },
-        ))
+        )
     }
 }
 
@@ -1212,10 +1228,18 @@ fn command_suggestion_clamp_selection(current: Option<usize>, len: usize) -> Opt
     current.map(|index| index.min(len - 1))
 }
 
+pub(in crate::features) fn suggestion_overlay_desired_height(
+    item_count: usize,
+    row_height: f32,
+) -> f32 {
+    (item_count as f32 * row_height + SUGGESTION_OVERLAY_CHROME_HEIGHT)
+        .min(SUGGESTION_OVERLAY_MAX_HEIGHT)
+}
+
 pub(in crate::features) fn suggestion_overlay_position(
     geometry: SuggestionOverlayGeometry,
     target: SuggestionOverlayTarget,
-) -> (f32, f32) {
+) -> Option<SuggestionOverlayPlacement> {
     let SuggestionOverlayGeometry {
         bounds,
         cell_size,
@@ -1228,18 +1252,51 @@ pub(in crate::features) fn suggestion_overlay_position(
         menu_size: (menu_w, menu_h),
     } = target;
     let (cell_w, cell_h) = cell_size;
-    let base_x = f32::from(bounds.origin.x) + pad_left + gutter + cursor_col as f32 * cell_w;
-    let base_y = f32::from(bounds.origin.y) + pad_top + (cursor_row as f32 + 1.0) * cell_h;
+    let bounds_x = f32::from(bounds.origin.x);
+    let bounds_y = f32::from(bounds.origin.y);
+    let bounds_height = f32::from(bounds.size.height);
+    let base_x = bounds_x + pad_left + gutter + cursor_col as f32 * cell_w;
+    let cursor_top = bounds_y + pad_top + cursor_row as f32 * cell_h;
+    let cursor_bottom = cursor_top + cell_h;
     let (viewport_w, viewport_h) = viewport_size;
-    let mut x = base_x;
-    let mut y = base_y + 4.0;
-    if x + menu_w + 8.0 > viewport_w {
-        x = (viewport_w - menu_w - 8.0).max(8.0);
+    let surface_top = bounds_y.max(SUGGESTION_OVERLAY_VIEWPORT_MARGIN);
+    let surface_bottom =
+        (bounds_y + bounds_height).min(viewport_h - SUGGESTION_OVERLAY_VIEWPORT_MARGIN);
+    if surface_bottom <= surface_top || menu_h <= 0.0 {
+        return None;
     }
-    if y + menu_h + 8.0 > viewport_h {
-        y = (base_y - menu_h - 4.0).max(8.0);
+
+    let below_y = cursor_bottom + SUGGESTION_OVERLAY_CURSOR_GAP;
+    let above_bottom = cursor_top - SUGGESTION_OVERLAY_CURSOR_GAP;
+    let space_below = (surface_bottom - below_y).max(0.0);
+    let space_above = (above_bottom - surface_top).max(0.0);
+    let (y, height) = if menu_h <= space_below {
+        (below_y, menu_h)
+    } else if menu_h <= space_above {
+        (above_bottom - menu_h, menu_h)
+    } else if space_above > space_below {
+        (above_bottom - space_above, space_above)
+    } else {
+        (below_y, space_below)
+    };
+    if height <= 0.0 {
+        return None;
     }
-    (x.max(8.0), y.max(8.0))
+
+    let max_x = (viewport_w - menu_w - SUGGESTION_OVERLAY_VIEWPORT_MARGIN)
+        .max(SUGGESTION_OVERLAY_VIEWPORT_MARGIN);
+    Some(SuggestionOverlayPlacement {
+        x: base_x.clamp(SUGGESTION_OVERLAY_VIEWPORT_MARGIN, max_x),
+        y,
+        height,
+    })
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(in crate::features) struct SuggestionOverlayPlacement {
+    pub x: f32,
+    pub y: f32,
+    pub height: f32,
 }
 
 #[derive(Clone, Copy)]
@@ -1261,11 +1318,14 @@ pub(in crate::features) struct SuggestionOverlayTarget {
 mod overlay_position_tests {
     use gpui::{Bounds, point, px, size};
 
-    use super::{SuggestionOverlayGeometry, SuggestionOverlayTarget, suggestion_overlay_position};
+    use super::{
+        SuggestionOverlayGeometry, SuggestionOverlayTarget, suggestion_overlay_desired_height,
+        suggestion_overlay_position,
+    };
 
     #[test]
     fn suggestion_overlay_position_anchors_below_cursor() {
-        let (x, y) = suggestion_overlay_position(
+        let placement = suggestion_overlay_position(
             SuggestionOverlayGeometry {
                 bounds: Bounds::new(point(px(10.0), px(20.0)), size(px(800.0), px(400.0))),
                 cell_size: (8.0, 16.0),
@@ -1277,30 +1337,87 @@ mod overlay_position_tests {
                 cursor: (2, 4),
                 menu_size: (300.0, 120.0),
             },
-        );
+        )
+        .expect("surface has room below the cursor");
 
-        assert_eq!(x, 50.0);
-        assert_eq!(y, 72.0);
+        assert_eq!(placement.x, 50.0);
+        assert_eq!(placement.y, 72.0);
+        assert_eq!(placement.height, 120.0);
     }
 
     #[test]
-    fn suggestion_overlay_position_clamps_and_flips_inside_viewport() {
-        let (x, y) = suggestion_overlay_position(
+    fn suggestion_overlay_position_clamps_and_flips_above_cursor() {
+        let placement = suggestion_overlay_position(
             SuggestionOverlayGeometry {
-                bounds: Bounds::new(point(px(700.0), px(500.0)), size(px(200.0), px(160.0))),
+                bounds: Bounds::new(point(px(700.0), px(100.0)), size(px(200.0), px(500.0))),
                 cell_size: (8.0, 16.0),
                 content_origin: (8.0, 0.0),
                 gutter: 0.0,
                 viewport_size: (900.0, 620.0),
             },
             SuggestionOverlayTarget {
-                cursor: (4, 30),
+                cursor: (24, 30),
                 menu_size: (300.0, 140.0),
             },
-        );
+        )
+        .expect("surface has room above the cursor");
 
-        assert_eq!(x, 592.0);
-        assert_eq!(y, 436.0);
+        assert_eq!(placement.x, 592.0);
+        assert_eq!(placement.y, 340.0);
+        assert_eq!(placement.height, 140.0);
+        assert_eq!(placement.y + placement.height, 480.0);
+    }
+
+    #[test]
+    fn suggestion_overlay_position_limits_height_without_covering_cursor() {
+        let placement = suggestion_overlay_position(
+            SuggestionOverlayGeometry {
+                bounds: Bounds::new(point(px(20.0), px(100.0)), size(px(600.0), px(180.0))),
+                cell_size: (8.0, 16.0),
+                content_origin: (0.0, 0.0),
+                gutter: 0.0,
+                viewport_size: (1024.0, 768.0),
+            },
+            SuggestionOverlayTarget {
+                cursor: (6, 4),
+                menu_size: (300.0, 140.0),
+            },
+        )
+        .expect("surface has constrained room above the cursor");
+
+        assert_eq!(placement.y, 100.0);
+        assert_eq!(placement.height, 92.0);
+        assert_eq!(placement.y + placement.height, 192.0);
+    }
+
+    #[test]
+    fn suggestion_overlay_position_uses_terminal_surface_bottom() {
+        let placement = suggestion_overlay_position(
+            SuggestionOverlayGeometry {
+                bounds: Bounds::new(point(px(20.0), px(100.0)), size(px(600.0), px(200.0))),
+                cell_size: (8.0, 16.0),
+                content_origin: (0.0, 0.0),
+                gutter: 0.0,
+                viewport_size: (1024.0, 768.0),
+            },
+            SuggestionOverlayTarget {
+                cursor: (8, 4),
+                menu_size: (300.0, 120.0),
+            },
+        )
+        .expect("surface has room above but not below the cursor");
+
+        assert_eq!(placement.y, 104.0);
+        assert_eq!(placement.height, 120.0);
+        assert_eq!(placement.y + placement.height, 224.0);
+    }
+
+    #[test]
+    fn suggestion_overlay_height_is_content_sized_and_capped() {
+        assert_eq!(suggestion_overlay_desired_height(1, 28.0), 76.0);
+        assert_eq!(suggestion_overlay_desired_height(10, 28.0), 320.0);
+        assert_eq!(suggestion_overlay_desired_height(1, 36.0), 84.0);
+        assert_eq!(suggestion_overlay_desired_height(8, 36.0), 320.0);
     }
 }
 

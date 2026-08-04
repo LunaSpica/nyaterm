@@ -15,6 +15,11 @@ use crate::models::{
     CredentialAutofillMatchRequestKey, CredentialSuggestionState, PendingCredentialAutofill,
 };
 
+use super::command_suggestions::{
+    SUGGESTION_OVERLAY_FOOTER_HEIGHT, SUGGESTION_OVERLAY_HEADER_HEIGHT,
+    suggestion_overlay_desired_height,
+};
+
 const CREDENTIAL_AUTOFILL_INPUT_TAIL_LIMIT: usize = 4096;
 const RECENT_PROMPT_TTL_MS: u64 = 30_000;
 const PENDING_PASSWORD_TTL_MS: u64 = 60_000;
@@ -557,16 +562,16 @@ impl NyaTermApp {
         }
 
         let menu_w = 340.0_f32;
-        let menu_h = (state.matches.len() as f32 * 36.0 + 52.0).min(320.0);
-        let (x, y) = self
-            .suggestion_overlay_position_for_session(
-                Some(&state.session_id),
-                state.cursor_row,
-                state.cursor_col,
-                menu_w,
-                menu_h,
-            )
-            .unwrap_or((24.0, 120.0));
+        let menu_h = suggestion_overlay_desired_height(state.matches.len(), 36.0);
+        let Some(placement) = self.suggestion_overlay_position_for_session(
+            Some(&state.session_id),
+            state.cursor_row,
+            state.cursor_col,
+            menu_w,
+            menu_h,
+        ) else {
+            return div().into_any_element();
+        };
 
         let title = self.tr(match state.kind {
             CredentialPromptKind::Password => "credentialAutofill.passwordTitle",
@@ -587,7 +592,8 @@ impl NyaTermApp {
             .id(SharedString::from("credential-suggestions-list"))
             .flex()
             .flex_col()
-            .max_h(px(260.))
+            .flex_1()
+            .min_h_0()
             .overflow_y_scroll();
 
         for (index, credential) in state.matches.iter().enumerate() {
@@ -597,6 +603,7 @@ impl NyaTermApp {
                 div()
                     .id(SharedString::from(format!("credential-suggestion-{index}")))
                     .h(px(36.))
+                    .flex_none()
                     .px_3()
                     .flex()
                     .items_center()
@@ -665,9 +672,12 @@ impl NyaTermApp {
         div()
             .id(SharedString::from("credential-suggestions-overlay"))
             .absolute()
-            .left(px(x.max(8.0)))
-            .top(px(y.max(8.0)))
+            .left(px(placement.x))
+            .top(px(placement.y))
             .w(px(menu_w))
+            .h(px(placement.height))
+            .flex()
+            .flex_col()
             .rounded_lg()
             .border_1()
             .border_color(rgb(palette.border))
@@ -676,8 +686,9 @@ impl NyaTermApp {
             .overflow_hidden()
             .child(
                 div()
+                    .h(px(SUGGESTION_OVERLAY_HEADER_HEIGHT))
+                    .flex_none()
                     .px_2()
-                    .py_1()
                     .border_b_1()
                     .border_color(rgb(palette.border))
                     .flex()
@@ -710,10 +721,13 @@ impl NyaTermApp {
             .child(list)
             .child(
                 div()
+                    .h(px(SUGGESTION_OVERLAY_FOOTER_HEIGHT))
+                    .flex_none()
                     .px_2()
-                    .py_1()
                     .border_t_1()
                     .border_color(rgb(palette.border))
+                    .flex()
+                    .items_center()
                     .text_size(px(10.))
                     .text_color(rgb(palette.text_dimmed))
                     .child(footer),
