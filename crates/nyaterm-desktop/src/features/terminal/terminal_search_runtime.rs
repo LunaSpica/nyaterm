@@ -184,7 +184,7 @@ impl NyaTermApp {
             .view
             .views
             .get(session_id)
-            .map(|view| view.screen.total_rows())
+            .map(|view| view.total_rows_for_ui())
             .unwrap_or_else(|| self.terminal.view.screen.total_rows())
             .max(1);
         let mut markers = Vec::with_capacity(selected_matches.len());
@@ -282,7 +282,7 @@ impl NyaTermApp {
                 }
             }
             if has_markers {
-                view.screen.total_rows().hash(&mut hasher);
+                view.total_rows_for_ui().hash(&mut hasher);
             } else {
                 0usize.hash(&mut hasher);
             }

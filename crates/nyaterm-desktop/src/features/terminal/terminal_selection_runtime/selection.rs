@@ -5,9 +5,12 @@ use nyaterm_terminal::TerminalSnapshot;
 
 use crate::features::NyaTermApp;
 use crate::features::terminal::terminal_runtime::TerminalMouseReportRequest;
-use crate::features::terminal::terminal_surface::terminal_absolute_line_for_snapshot_row;
+use crate::features::terminal::terminal_surface::{
+    terminal_absolute_line_for_snapshot_row, terminal_snapshot_absolute_range,
+};
 use crate::models::{
     TerminalBufferCellPos, TerminalFrameSearchKey, TerminalFrameSearchPurpose, TerminalSelection,
+    TerminalViewState,
 };
 use crate::terminal::{
     TerminalTextCell, terminal_is_zero_width_mark, terminal_text_cell_slice, terminal_text_cells,
@@ -109,35 +112,12 @@ impl NyaTermApp {
         if selection.is_empty() {
             return None;
         }
-        if selection.all_buffer {
-            let lines = self
-                .terminal
-                .selection
-                .session_id
-                .as_deref()
-                .or(self.session.active_id())
-                .and_then(|session_id| self.terminal.view.views.get(session_id))
-                .map(|view| view.screen.all_lines())
-                .unwrap_or_else(|| self.terminal.view.screen.all_lines());
-            return terminal_all_lines_text(lines);
+        if let Some(view) =
+            session_id.and_then(|session_id| self.terminal.view.views.get(session_id))
+        {
+            return terminal_selected_text_for_view(view, *selection);
         }
-        let (start, end) = selection.ordered();
-        let lines = session_id
-            .and_then(|session_id| self.terminal.view.views.get(session_id))
-            .map(|view| view.screen.all_lines())
-            .unwrap_or_else(|| self.terminal.view.screen.all_lines());
-        let mut parts = Vec::new();
-        for line_index in start.line..=end.line {
-            let line = lines.get(line_index).map(String::as_str).unwrap_or("");
-            let cells = terminal_text_cells(line);
-            let (col_start, col_end_excl) = selection.cols_for_absolute_line(line_index)?;
-            let col_end = col_end_excl.min(cells.len().max(col_start));
-            let col_start = col_start.min(col_end);
-            let slice = terminal_text_cell_slice(&cells, col_start, col_end);
-            parts.push(slice.trim_end().to_string());
-        }
-        let text = parts.join("\n");
-        if text.is_empty() { None } else { Some(text) }
+        terminal_selected_text_from_lines(*selection, &self.terminal.view.screen.all_lines(), 0)
     }
 
     pub(in crate::features) fn copy_terminal_selection(&mut self, cx: &mut Context<Self>) -> bool {
@@ -510,12 +490,24 @@ impl NyaTermApp {
             .generation
             .saturating_add(1);
         let generation = self.terminal.selection.selected_occurrence.generation;
+        let selection = self.terminal.selection.selection;
         let (absolute_start, absolute_end) = self
             .terminal
             .view
             .views
             .get(&session_id)
-            .map(|view| view.screen.viewport_absolute_range(view.scroll_offset))
+            .and_then(|view| {
+                selection
+                    .and_then(|selection| terminal_snapshot_covering_selection(view, selection))
+                    .map(terminal_snapshot_absolute_range)
+            })
+            .or_else(|| {
+                self.terminal
+                    .view
+                    .views
+                    .get(&session_id)
+                    .map(|view| view.screen.viewport_absolute_range(view.scroll_offset))
+            })
             .unwrap_or((0, 0));
         let visible_key = TerminalFrameSearchKey {
             query: query.clone(),
@@ -628,6 +620,79 @@ impl NyaTermApp {
     }
 }
 
+fn terminal_snapshot_covering_selection(
+    view: &TerminalViewState,
+    selection: TerminalSelection,
+) -> Option<&TerminalSnapshot> {
+    if selection.all_buffer || selection.is_empty() {
+        return None;
+    }
+    let (selection_start, selection_end) = selection.ordered();
+    view.frame_snapshot
+        .iter()
+        .chain(view.scrollback_snapshots.values())
+        .map(AsRef::as_ref)
+        .filter(|snapshot| {
+            let (snapshot_start, snapshot_end) = terminal_snapshot_absolute_range(snapshot);
+            snapshot_start <= selection_start.line && selection_end.line < snapshot_end
+        })
+        .min_by_key(|snapshot| snapshot.display_offset.abs_diff(view.scroll_offset))
+}
+
+fn terminal_selected_text_for_view(
+    view: &TerminalViewState,
+    selection: TerminalSelection,
+) -> Option<String> {
+    if !selection.all_buffer
+        && let Some(snapshot) = terminal_snapshot_covering_selection(view, selection)
+    {
+        let (absolute_start, _) = terminal_snapshot_absolute_range(snapshot);
+        let lines = snapshot
+            .rows()
+            .iter()
+            .map(|row| row.text.as_str())
+            .collect::<Vec<_>>();
+        return terminal_selected_text_from_line_refs(selection, &lines, absolute_start);
+    }
+    terminal_selected_text_from_lines(selection, &view.screen.all_lines(), 0)
+}
+
+fn terminal_selected_text_from_lines(
+    selection: TerminalSelection,
+    lines: &[String],
+    absolute_start: usize,
+) -> Option<String> {
+    let lines = lines.iter().map(String::as_str).collect::<Vec<_>>();
+    terminal_selected_text_from_line_refs(selection, &lines, absolute_start)
+}
+
+fn terminal_selected_text_from_line_refs(
+    selection: TerminalSelection,
+    lines: &[&str],
+    absolute_start: usize,
+) -> Option<String> {
+    if selection.all_buffer {
+        return terminal_all_lines_text(lines.iter().map(|line| (*line).to_string()).collect());
+    }
+    let (start, end) = selection.ordered();
+    let absolute_end = absolute_start.saturating_add(lines.len());
+    if start.line < absolute_start || end.line >= absolute_end {
+        return None;
+    }
+    let mut parts = Vec::with_capacity(end.line.saturating_sub(start.line).saturating_add(1));
+    for line_index in start.line..=end.line {
+        let line = lines[line_index - absolute_start];
+        let cells = terminal_text_cells(line);
+        let (col_start, col_end_excl) = selection.cols_for_absolute_line(line_index)?;
+        let col_end = col_end_excl.min(cells.len().max(col_start));
+        let col_start = col_start.min(col_end);
+        let slice = terminal_text_cell_slice(&cells, col_start, col_end);
+        parts.push(slice.trim_end().to_string());
+    }
+    let text = parts.join("\n");
+    if text.is_empty() { None } else { Some(text) }
+}
+
 fn terminal_word_bounds_for_visual_geometry(
     position: gpui::Point<gpui::Pixels>,
     geometry: &TerminalHitTestGeometry,
@@ -705,12 +770,15 @@ mod tests {
     use nyaterm_terminal::TerminalScreen;
 
     use super::super::metrics::TerminalHitTestGeometry;
+    use crate::features::terminal::terminal_surface::terminal_snapshot_absolute_range;
+    use crate::models::{TerminalBufferCellPos, TerminalSelection, TerminalViewState};
     use crate::terminal::{TerminalTextCell, terminal_text_cell_slice, terminal_text_cells};
 
     use super::{
         TERMINAL_SELECTED_OCCURRENCE_MAX_CHARS, TERMINAL_SELECTION_DRAG_NOTIFY_DELAY,
-        terminal_all_lines_text, terminal_selected_occurrence_query, terminal_text_cell_is_word,
-        terminal_word_bounds_for_visual_geometry,
+        terminal_all_lines_text, terminal_selected_occurrence_query,
+        terminal_selected_text_for_view, terminal_snapshot_covering_selection,
+        terminal_text_cell_is_word, terminal_word_bounds_for_visual_geometry,
     };
 
     #[test]
@@ -718,6 +786,38 @@ mod tests {
         assert_eq!(
             TERMINAL_SELECTION_DRAG_NOTIFY_DELAY,
             Duration::from_millis(8)
+        );
+    }
+
+    #[test]
+    fn selected_text_uses_worker_snapshot_when_legacy_screen_has_no_output() {
+        let mut worker_screen = TerminalScreen::new(40, 3);
+        worker_screen
+            .advance(b"IPv4 address for br0\r\nIPv6 address for br0\r\nIPv6 address for br1");
+        let snapshot = Arc::new(worker_screen.viewport_snapshot(0));
+        let (absolute_start, absolute_end) = terminal_snapshot_absolute_range(&snapshot);
+        let selection = TerminalSelection::from_range(
+            TerminalBufferCellPos::new(absolute_start + 2, 5),
+            TerminalBufferCellPos::new(absolute_start + 2, 11),
+        );
+        let mut view = TerminalViewState::new();
+        view.frame_snapshot = Some(snapshot);
+
+        assert!(
+            !view
+                .screen
+                .all_lines()
+                .iter()
+                .any(|line| line.contains("address"))
+        );
+        assert_eq!(
+            terminal_selected_text_for_view(&view, selection).as_deref(),
+            Some("address")
+        );
+        assert_eq!(
+            terminal_snapshot_covering_selection(&view, selection)
+                .map(terminal_snapshot_absolute_range),
+            Some((absolute_start, absolute_end))
         );
     }
 
