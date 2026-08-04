@@ -9,23 +9,23 @@ use crate::terminal::{TerminalLineDecorations, terminal_screen_from_output};
 
 use super::{
     TERMINAL_FRAME_COMMAND_QUEUE_CAP, TERMINAL_FRAME_EVENT_WAKE_OUTPUT,
-    TERMINAL_FRAME_EVENT_WAKE_SNAPSHOT, TERMINAL_FRAME_OUTPUT_BURST_BYTE_LIMIT,
-    TERMINAL_FRAME_OUTPUT_CHUNK_SIZE, TERMINAL_FRAME_OUTPUT_COALESCE_BYTE_LIMIT,
-    TERMINAL_FRAME_VISIBLE_TEXT_TAIL_CAP, TERMINAL_OUTPUT_VISIBLE_BACKLOG_CAP,
-    TERMINAL_RENDER_DEGRADATION_RECOVERY_TICKS, TERMINAL_SCROLLBACK_SNAPSHOT_CACHE_LIMIT,
-    TERMINAL_UI_OUTPUT_TAIL_CAP, TerminalFrameActionLinks, TerminalFrameCommand,
-    TerminalFrameEvent, TerminalFrameEventQueue, TerminalFrameOutputBatch,
-    TerminalFrameOutputEvent, TerminalFrameOutputSubmission, TerminalFrameParts,
-    TerminalFrameSearchKey, TerminalFrameSearchPurpose, TerminalFrameSearchResult,
-    TerminalFrameSession, TerminalFrameSnapshotEvent, TerminalPerformanceMode,
-    TerminalPerformanceOverlay, TerminalProtocolState, TerminalRenderCache, TerminalViewState,
-    append_terminal_ui_output_tail, coalesce_terminal_frame_output_command,
-    compact_stale_terminal_frame_commands, next_terminal_frame_command,
-    prepare_terminal_frame_action_links, process_terminal_frame_output_burst,
-    protect_terminal_output_burst, terminal_expensive_interactions_enabled,
-    terminal_frame_command_channel, terminal_frame_output_commands,
-    terminal_frame_scroll_window_extra_rows, terminal_frame_search_result_is_current,
-    terminal_snapshot_matches_grid_geometry,
+    TERMINAL_FRAME_EVENT_WAKE_SEARCH, TERMINAL_FRAME_EVENT_WAKE_SNAPSHOT,
+    TERMINAL_FRAME_OUTPUT_BURST_BYTE_LIMIT, TERMINAL_FRAME_OUTPUT_CHUNK_SIZE,
+    TERMINAL_FRAME_OUTPUT_COALESCE_BYTE_LIMIT, TERMINAL_FRAME_VISIBLE_TEXT_TAIL_CAP,
+    TERMINAL_OUTPUT_VISIBLE_BACKLOG_CAP, TERMINAL_RENDER_DEGRADATION_RECOVERY_TICKS,
+    TERMINAL_SCROLLBACK_SNAPSHOT_CACHE_LIMIT, TERMINAL_UI_OUTPUT_TAIL_CAP,
+    TerminalFrameActionLinks, TerminalFrameCommand, TerminalFrameEvent, TerminalFrameEventQueue,
+    TerminalFrameOutputBatch, TerminalFrameOutputEvent, TerminalFrameOutputSubmission,
+    TerminalFrameParts, TerminalFrameSearchEvent, TerminalFrameSearchKey,
+    TerminalFrameSearchPurpose, TerminalFrameSearchResult, TerminalFrameSession,
+    TerminalFrameSnapshotEvent, TerminalPerformanceMode, TerminalPerformanceOverlay,
+    TerminalProtocolState, TerminalRenderCache, TerminalViewState, append_terminal_ui_output_tail,
+    coalesce_terminal_frame_output_command, compact_stale_terminal_frame_commands,
+    next_terminal_frame_command, prepare_terminal_frame_action_links,
+    process_terminal_frame_output_burst, protect_terminal_output_burst,
+    terminal_expensive_interactions_enabled, terminal_frame_command_channel,
+    terminal_frame_output_commands, terminal_frame_scroll_window_extra_rows,
+    terminal_frame_search_result_is_current, terminal_snapshot_matches_grid_geometry,
 };
 
 /// A submission is handed over whole. Slicing it here would only be undone
@@ -1267,6 +1267,37 @@ fn terminal_frame_event_queue_keeps_snapshot_wake_armed_across_output() {
         process_duration: Duration::ZERO,
     }));
     assert!(matches!(wake_rx.try_recv(), Ok(())));
+}
+
+#[test]
+fn terminal_frame_event_queue_wakes_search_results_when_terminal_is_quiet() {
+    let (queue, mut wake_rx) = TerminalFrameEventQueue::new_with_wake(8);
+    queue.arm_wake(TERMINAL_FRAME_EVENT_WAKE_SEARCH);
+
+    queue.push(TerminalFrameEvent::Search(TerminalFrameSearchEvent {
+        session_id: "s1".to_string(),
+        purpose: TerminalFrameSearchPurpose::SelectedOccurrence,
+        result: TerminalFrameSearchResult {
+            key: TerminalFrameSearchKey {
+                query: "term".to_string(),
+                case_sensitive: true,
+                regex: false,
+                whole_word: false,
+                limit: 8,
+                request_generation: 1,
+            },
+            revision: 1,
+            matches: Ok(Vec::new()),
+        },
+        process_duration: Duration::ZERO,
+    }));
+
+    assert!(matches!(wake_rx.try_recv(), Ok(())));
+    assert_eq!(queue.wake_count(), 1);
+    assert!(matches!(
+        queue.try_recv(),
+        Some(TerminalFrameEvent::Search(_))
+    ));
 }
 
 #[test]

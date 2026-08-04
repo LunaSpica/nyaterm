@@ -8,7 +8,8 @@ use crate::features::terminal::terminal_surface::{
 use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::{
     RecordingHistorySearchKey, RecordingWriteEvent, TerminalFrameSearchKey,
-    TerminalFrameSearchPurpose, TerminalSearchMode, terminal_frame_search_result_is_current,
+    TerminalFrameSearchPurpose, TerminalSearchMode, TerminalSelection,
+    terminal_frame_search_result_is_current,
 };
 use crate::terminal::TerminalBufferMatch;
 
@@ -152,12 +153,25 @@ impl NyaTermApp {
             limit: 2000,
             request_generation: self.terminal.selection.selected_occurrence.generation,
         };
-        view.selected_occurrence_result
-            .as_ref()
-            .filter(|result| {
-                terminal_frame_search_result_is_current(result, &key, view.screen_revision)
+        let selection = self
+            .terminal
+            .selection
+            .selection
+            .filter(|_| self.terminal.selection.session_id.as_deref() == Some(session_id));
+        let result = [
+            view.selected_occurrence_result.as_ref(),
+            view.selected_occurrence_visible_result.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        .find(|result| terminal_frame_search_result_is_current(result, &key, view.screen_revision));
+        result
+            .map(|result| {
+                result
+                    .matches
+                    .clone()
+                    .map(|matches| filter_selected_occurrence_matches(&matches, selection))
             })
-            .map(|result| result.matches.clone())
             .unwrap_or_else(|| Ok(Vec::new()))
     }
 
@@ -246,7 +260,17 @@ impl NyaTermApp {
                     limit: 2000,
                     request_generation: self.terminal.selection.selected_occurrence.generation,
                 });
-            let selected_result = view.selected_occurrence_result.as_ref();
+            let selected_result = [
+                view.selected_occurrence_result.as_ref(),
+                view.selected_occurrence_visible_result.as_ref(),
+            ]
+            .into_iter()
+            .flatten()
+            .find(|result| {
+                selected_key.as_ref().is_some_and(|key| {
+                    terminal_frame_search_result_is_current(result, key, view.screen_revision)
+                })
+            });
             let selected_is_current = selected_key.as_ref().is_some_and(|key| {
                 selected_result.is_some_and(|result| {
                     self.terminal
@@ -521,5 +545,59 @@ fn empty_terminal_history_search_response() -> nyaterm_transport::TerminalHistor
         elapsed_ms: 0,
         truncated: false,
         results: Vec::new(),
+    }
+}
+
+fn filter_selected_occurrence_matches(
+    matches: &[TerminalBufferMatch],
+    selection: Option<TerminalSelection>,
+) -> Vec<TerminalBufferMatch> {
+    matches
+        .iter()
+        .filter(|m| {
+            !selection.is_some_and(|selection| {
+                selection
+                    .cols_for_absolute_line(m.line_index)
+                    .is_some_and(|(start, end)| m.start_col >= start && m.end_col <= end)
+            })
+        })
+        .cloned()
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::filter_selected_occurrence_matches;
+    use crate::models::{TerminalBufferCellPos, TerminalSelection};
+    use crate::terminal::TerminalBufferMatch;
+
+    #[test]
+    fn selected_occurrence_filter_excludes_the_original_selection_only() {
+        let selection = TerminalSelection::from_range(
+            TerminalBufferCellPos::new(4, 2),
+            TerminalBufferCellPos::new(4, 8),
+        );
+        let matches = vec![
+            TerminalBufferMatch {
+                line_index: 4,
+                start_col: 2,
+                end_col: 9,
+            },
+            TerminalBufferMatch {
+                line_index: 4,
+                start_col: 20,
+                end_col: 27,
+            },
+            TerminalBufferMatch {
+                line_index: 5,
+                start_col: 2,
+                end_col: 9,
+            },
+        ];
+
+        let filtered = filter_selected_occurrence_matches(&matches, Some(selection));
+        assert_eq!(filtered.len(), 2);
+        assert_eq!(filtered[0].line_index, 4);
+        assert_eq!(filtered[1].line_index, 5);
     }
 }

@@ -19,7 +19,7 @@ use super::metrics::{
 };
 
 const TERMINAL_SELECTION_DRAG_NOTIFY_DELAY: Duration = Duration::from_millis(8);
-const TERMINAL_SELECTED_OCCURRENCE_DEBOUNCE: Duration = Duration::from_millis(80);
+const TERMINAL_SELECTED_OCCURRENCE_DEBOUNCE: Duration = Duration::from_millis(100);
 const TERMINAL_SELECTED_OCCURRENCE_LIMIT: usize = 2000;
 const TERMINAL_SELECTED_OCCURRENCE_MAX_CHARS: usize = 256;
 
@@ -280,6 +280,8 @@ impl NyaTermApp {
         if let Some(view) = self.terminal.view.views.get_mut(session_id) {
             view.selected_occurrence_result = None;
             view.pending_selected_occurrence_key = None;
+            view.selected_occurrence_visible_result = None;
+            view.pending_selected_occurrence_visible_key = None;
         }
     }
 
@@ -302,6 +304,8 @@ impl NyaTermApp {
             if let Some(view) = self.terminal.view.views.get_mut(&session_id) {
                 view.selected_occurrence_result = None;
                 view.pending_selected_occurrence_key = None;
+                view.selected_occurrence_visible_result = None;
+                view.pending_selected_occurrence_visible_key = None;
             }
             self.notify_terminal_surface_only(Some(session_id.as_str()), cx);
         }
@@ -488,6 +492,29 @@ impl NyaTermApp {
             .generation
             .saturating_add(1);
         let generation = self.terminal.selection.selected_occurrence.generation;
+        let (absolute_start, absolute_end) = self
+            .terminal
+            .view
+            .views
+            .get(&session_id)
+            .map(|view| view.screen.viewport_absolute_range(view.scroll_offset))
+            .unwrap_or((0, 0));
+        let visible_key = TerminalFrameSearchKey {
+            query: query.clone(),
+            case_sensitive: true,
+            regex: false,
+            whole_word: false,
+            limit: TERMINAL_SELECTED_OCCURRENCE_LIMIT,
+            request_generation: generation,
+        };
+        let _ = self.request_terminal_frame_search(
+            &session_id,
+            TerminalFrameSearchPurpose::SelectedOccurrenceVisible {
+                absolute_start,
+                absolute_end,
+            },
+            visible_key,
+        );
         cx.spawn(async move |this, cx| {
             cx.background_executor()
                 .timer(TERMINAL_SELECTED_OCCURRENCE_DEBOUNCE)

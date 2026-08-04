@@ -2024,7 +2024,8 @@ impl TerminalSurface {
                     .id(SharedString::from(track_id))
                     .relative()
                     .size_full()
-                    .rounded_full()
+                    .border_l_1()
+                    .border_color(rgb(palette.border))
                     .bg(rgba(terminal_scrollbar_track_color(palette)))
                     .cursor_pointer()
                     .on_mouse_down(MouseButton::Left, {
@@ -2084,6 +2085,11 @@ impl TerminalSurface {
                             Some(session_id.clone()),
                         ))
                     })
+                    .child(terminal_overview_marker_canvas(
+                        overview_markers,
+                        overview_total_rows,
+                        palette,
+                    ))
                     .when(show, |this| {
                         this.child(terminal_scrollbar_thumb_element(
                             SharedString::from(thumb_id),
@@ -2092,12 +2098,7 @@ impl TerminalSurface {
                             is_active,
                             drag_active,
                         ))
-                    })
-                    .child(terminal_overview_marker_canvas(
-                        overview_markers,
-                        overview_total_rows,
-                        palette,
-                    )),
+                    }),
             )
     }
 }

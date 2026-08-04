@@ -88,7 +88,8 @@ impl NyaTermApp {
                     .id(SharedString::from(track_id))
                     .relative()
                     .size_full()
-                    .rounded_full()
+                    .border_l_1()
+                    .border_color(rgb(palette.border))
                     .bg(rgba(terminal_scrollbar_track_color(palette)))
                     .cursor_pointer()
                     .on_mouse_down(MouseButton::Left, {
@@ -145,6 +146,11 @@ impl NyaTermApp {
                         cx.entity(),
                         (!session_id.is_empty()).then_some(session_id.to_string()),
                     ))
+                    .child(terminal_overview_marker_canvas(
+                        overview_markers.into(),
+                        overview_total_rows,
+                        palette,
+                    ))
                     .when(show, |this| {
                         this.child(terminal_scrollbar_thumb_element(
                             SharedString::from(thumb_id),
@@ -153,12 +159,7 @@ impl NyaTermApp {
                             is_active,
                             drag_active,
                         ))
-                    })
-                    .child(terminal_overview_marker_canvas(
-                        overview_markers.into(),
-                        overview_total_rows,
-                        palette,
-                    )),
+                    }),
             )
     }
 

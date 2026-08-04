@@ -116,6 +116,10 @@ pub(crate) struct TerminalFrameSearchKey {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum TerminalFrameSearchPurpose {
     Find,
+    SelectedOccurrenceVisible {
+        absolute_start: usize,
+        absolute_end: usize,
+    },
     SelectedOccurrence,
 }
 
@@ -507,6 +511,8 @@ pub(crate) struct TerminalViewState {
     pub(crate) pending_search_key: Option<TerminalFrameSearchKey>,
     pub(crate) selected_occurrence_result: Option<TerminalFrameSearchResult>,
     pub(crate) pending_selected_occurrence_key: Option<TerminalFrameSearchKey>,
+    pub(crate) selected_occurrence_visible_result: Option<TerminalFrameSearchResult>,
+    pub(crate) pending_selected_occurrence_visible_key: Option<TerminalFrameSearchKey>,
     pub(crate) protocol_state: TerminalProtocolState,
     pub(crate) output_decoder: TerminalOutputDecoder,
     pub(crate) recording_decoder: TerminalOutputDecoder,
@@ -560,6 +566,8 @@ impl TerminalViewState {
             pending_search_key: None,
             selected_occurrence_result: None,
             pending_selected_occurrence_key: None,
+            selected_occurrence_visible_result: None,
+            pending_selected_occurrence_visible_key: None,
             protocol_state: TerminalProtocolState::default(),
             output_decoder: TerminalOutputDecoder::default(),
             recording_decoder: TerminalOutputDecoder::default(),
@@ -596,6 +604,8 @@ impl TerminalViewState {
             pending_search_key: None,
             selected_occurrence_result: None,
             pending_selected_occurrence_key: None,
+            selected_occurrence_visible_result: None,
+            pending_selected_occurrence_visible_key: None,
             protocol_state,
             output_decoder: TerminalOutputDecoder::default(),
             recording_decoder: TerminalOutputDecoder::default(),
@@ -1041,6 +1051,8 @@ impl TerminalViewState {
         self.pending_search_key = None;
         self.selected_occurrence_result = None;
         self.pending_selected_occurrence_key = None;
+        self.selected_occurrence_visible_result = None;
+        self.pending_selected_occurrence_visible_key = None;
     }
 
     pub(crate) fn scrollback_len_for_ui(&self) -> usize {
@@ -1301,6 +1313,7 @@ impl TerminalFramePipeline {
         if key.query.trim().is_empty() || key.limit == 0 {
             return;
         }
+        self.event_queue.arm_wake(TERMINAL_FRAME_EVENT_WAKE_SEARCH);
         let _ = self.command_tx.send(TerminalFrameCommand::RequestSearch {
             session_id: session_id.into(),
             purpose,
@@ -1407,6 +1420,7 @@ struct TerminalFrameEventQueue {
 
 const TERMINAL_FRAME_EVENT_WAKE_OUTPUT: u8 = 1 << 0;
 const TERMINAL_FRAME_EVENT_WAKE_SNAPSHOT: u8 = 1 << 1;
+const TERMINAL_FRAME_EVENT_WAKE_SEARCH: u8 = 1 << 2;
 
 impl TerminalFrameEventQueue {
     #[cfg(test)]
@@ -1504,7 +1518,7 @@ fn terminal_frame_event_wake_interest(event: &TerminalFrameEvent) -> u8 {
     match event {
         TerminalFrameEvent::Output(_) => TERMINAL_FRAME_EVENT_WAKE_OUTPUT,
         TerminalFrameEvent::Snapshot(_) => TERMINAL_FRAME_EVENT_WAKE_SNAPSHOT,
-        TerminalFrameEvent::Search(_) => 0,
+        TerminalFrameEvent::Search(_) => TERMINAL_FRAME_EVENT_WAKE_SEARCH,
     }
 }
 
@@ -1872,20 +1886,28 @@ impl TerminalFrameSession {
             direction: TerminalSearchDirection::Forward,
             limit: key.limit,
         };
-        let matches = self
-            .screen
-            .search_grid(&query)
-            .map(|matches| {
-                matches
-                    .into_iter()
-                    .map(|m| TerminalBufferMatch {
-                        line_index: m.line_index,
-                        start_col: m.start_col,
-                        end_col: m.end_col,
-                    })
-                    .collect()
-            })
-            .map_err(|error| error.to_string());
+        let matches = match purpose {
+            TerminalFrameSearchPurpose::SelectedOccurrenceVisible {
+                absolute_start,
+                absolute_end,
+            } => self
+                .screen
+                .search_grid_in_absolute_range(&query, absolute_start..absolute_end),
+            TerminalFrameSearchPurpose::Find | TerminalFrameSearchPurpose::SelectedOccurrence => {
+                self.screen.search_grid(&query)
+            }
+        }
+        .map(|matches| {
+            matches
+                .into_iter()
+                .map(|m| TerminalBufferMatch {
+                    line_index: m.line_index,
+                    start_col: m.start_col,
+                    end_col: m.end_col,
+                })
+                .collect()
+        })
+        .map_err(|error| error.to_string());
         TerminalFrameSearchEvent {
             session_id,
             purpose,

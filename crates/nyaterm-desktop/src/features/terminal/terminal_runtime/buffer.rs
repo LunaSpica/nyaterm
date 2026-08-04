@@ -496,6 +496,19 @@ impl NyaTermApp {
                 }
                 view.pending_search_key = Some(key.clone());
             }
+            TerminalFrameSearchPurpose::SelectedOccurrenceVisible { .. } => {
+                if view
+                    .selected_occurrence_visible_result
+                    .as_ref()
+                    .is_some_and(|result| {
+                        terminal_frame_search_result_is_current(result, &key, view.screen_revision)
+                    })
+                    || view.pending_selected_occurrence_visible_key.as_ref() == Some(&key)
+                {
+                    return false;
+                }
+                view.pending_selected_occurrence_visible_key = Some(key.clone());
+            }
             TerminalFrameSearchPurpose::SelectedOccurrence => {
                 if view
                     .selected_occurrence_result
@@ -1073,7 +1086,13 @@ impl NyaTermApp {
                 .views
                 .get(&frame.session_id)
                 .and_then(|view| view.pending_selected_occurrence_key.as_ref()),
+            self.terminal
+                .view
+                .views
+                .get(&frame.session_id)
+                .and_then(|view| view.pending_selected_occurrence_visible_key.as_ref()),
             frame.session_id.as_str(),
+            frame.purpose,
             &frame.result.key,
         );
         let Some((current_revision, result_applied)) = self
@@ -2604,12 +2623,21 @@ fn terminal_selected_occurrence_frame_is_current(
     current_session_id: Option<&str>,
     current_query: Option<&str>,
     pending_key: Option<&TerminalFrameSearchKey>,
+    pending_visible_key: Option<&TerminalFrameSearchKey>,
     frame_session_id: &str,
+    purpose: TerminalFrameSearchPurpose,
     result_key: &TerminalFrameSearchKey,
 ) -> bool {
+    let pending_matches = match purpose {
+        TerminalFrameSearchPurpose::SelectedOccurrenceVisible { .. } => {
+            pending_visible_key == Some(result_key)
+        }
+        TerminalFrameSearchPurpose::SelectedOccurrence => pending_key == Some(result_key),
+        TerminalFrameSearchPurpose::Find => false,
+    };
     current_session_id == Some(frame_session_id)
         && current_query == Some(result_key.query.as_str())
-        && pending_key == Some(result_key)
+        && pending_matches
 }
 
 fn terminal_apply_search_result_to_view(
@@ -2624,6 +2652,11 @@ fn terminal_apply_search_result_to_view(
                 view.pending_search_key = None;
             }
         }
+        TerminalFrameSearchPurpose::SelectedOccurrenceVisible { .. } => {
+            if view.pending_selected_occurrence_visible_key.as_ref() == Some(&result.key) {
+                view.pending_selected_occurrence_visible_key = None;
+            }
+        }
         TerminalFrameSearchPurpose::SelectedOccurrence => {
             if view.pending_selected_occurrence_key.as_ref() == Some(&result.key) {
                 view.pending_selected_occurrence_key = None;
@@ -2631,13 +2664,19 @@ fn terminal_apply_search_result_to_view(
         }
     }
     if result.revision != view.screen_revision
-        || (purpose == TerminalFrameSearchPurpose::SelectedOccurrence
-            && !selected_occurrence_is_current)
+        || (matches!(
+            purpose,
+            TerminalFrameSearchPurpose::SelectedOccurrenceVisible { .. }
+                | TerminalFrameSearchPurpose::SelectedOccurrence
+        ) && !selected_occurrence_is_current)
     {
         return false;
     }
     match purpose {
         TerminalFrameSearchPurpose::Find => view.search_result = Some(result.clone()),
+        TerminalFrameSearchPurpose::SelectedOccurrenceVisible { .. } => {
+            view.selected_occurrence_visible_result = Some(result.clone())
+        }
         TerminalFrameSearchPurpose::SelectedOccurrence => {
             view.selected_occurrence_result = Some(result.clone())
         }

@@ -6,14 +6,15 @@ use gpui::{
 
 use crate::features::NyaTermApp;
 
-pub(in crate::features) const TERMINAL_SCROLLBAR_COLUMN_WIDTH: f32 = 12.0;
-pub(in crate::features) const TERMINAL_SCROLLBAR_TRACK_PADDING_Y: f32 = 2.0;
-pub(in crate::features) const TERMINAL_SCROLLBAR_TRACK_PADDING_RIGHT: f32 = 3.0;
-pub(in crate::features) const TERMINAL_SCROLLBAR_THUMB_WIDTH: f32 = 5.0;
-pub(in crate::features) const TERMINAL_SCROLLBAR_THUMB_ACTIVE_WIDTH: f32 = 7.0;
-pub(in crate::features) const TERMINAL_SCROLLBAR_MIN_THUMB_HEIGHT: f32 = 18.0;
-const TERMINAL_OVERVIEW_MARKER_WIDTH_PX: f32 = 4.0;
-const TERMINAL_OVERVIEW_MARKER_HEIGHT_PX: usize = 2;
+/// Zed's editor scrollbar reserves a substantial, stable hit target.
+pub(in crate::features) const TERMINAL_SCROLLBAR_COLUMN_WIDTH: f32 = 15.0;
+pub(in crate::features) const TERMINAL_SCROLLBAR_TRACK_PADDING_Y: f32 = 0.0;
+pub(in crate::features) const TERMINAL_SCROLLBAR_TRACK_PADDING_RIGHT: f32 = 0.0;
+pub(in crate::features) const TERMINAL_SCROLLBAR_THUMB_WIDTH: f32 = 15.0;
+pub(in crate::features) const TERMINAL_SCROLLBAR_THUMB_ACTIVE_WIDTH: f32 = 15.0;
+pub(in crate::features) const TERMINAL_SCROLLBAR_MIN_THUMB_HEIGHT: f32 = 25.0;
+const TERMINAL_OVERVIEW_RULER_COLUMNS: f32 = 3.0;
+const TERMINAL_OVERVIEW_MARKER_MIN_HEIGHT_PX: usize = 5;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(in crate::features) struct TerminalScrollbarMetrics {
@@ -141,11 +142,10 @@ pub(in crate::features) fn terminal_scrollbar_thumb_element(
     div()
         .id(id)
         .absolute()
-        .right(px(1.0))
+        .right(px(0.0))
         .top(px(metrics.thumb_top))
         .w(px(width))
         .h(px(metrics.thumb_height))
-        .rounded_full()
         .bg(rgba(
             (color << 8) | if dragging || active { 0xa8 } else { 0x68 },
         ))
@@ -197,7 +197,7 @@ pub(in crate::features) fn terminal_overview_marker_buckets(
         return Vec::new();
     }
     let max_line = total_rows.saturating_sub(1).max(1);
-    let max_y = track_height_px.saturating_sub(TERMINAL_OVERVIEW_MARKER_HEIGHT_PX);
+    let max_y = track_height_px.saturating_sub(TERMINAL_OVERVIEW_MARKER_MIN_HEIGHT_PX);
     let mut bucket_kinds = vec![None; max_y.saturating_add(1)];
     for marker in markers {
         let line = marker.absolute_line.min(max_line);
@@ -229,17 +229,24 @@ pub(in crate::features) fn terminal_overview_marker_canvas(
             if buckets.is_empty() {
                 return;
             }
-            let left = f32::from(bounds.right()) - TERMINAL_OVERVIEW_MARKER_WIDTH_PX - 1.0;
+            let border_width = 1.0_f32.min(f32::from(bounds.size.width).max(0.0));
+            let column_width = ((f32::from(bounds.size.width) - border_width).max(0.0)
+                / TERMINAL_OVERVIEW_RULER_COLUMNS)
+                .floor();
+            // Selected text/search markers occupy Zed's middle overview-ruler column.
+            let left = f32::from(bounds.left()) + border_width + column_width;
             let top = f32::from(bounds.top());
             for bucket in buckets {
                 let color = terminal_overview_marker_color(bucket.kind, palette);
+                let height = terminal_overview_marker_height_px(bucket.kind)
+                    .min(track_height_px.saturating_sub(bucket.y_px));
+                if height == 0 || column_width <= 0.0 {
+                    continue;
+                }
                 window.paint_quad(fill(
                     Bounds::new(
                         point(px(left), px(top + bucket.y_px as f32)),
-                        size(
-                            px(TERMINAL_OVERVIEW_MARKER_WIDTH_PX),
-                            px(TERMINAL_OVERVIEW_MARKER_HEIGHT_PX as f32),
-                        ),
+                        size(px(column_width), px(height as f32)),
                     ),
                     rgba(color),
                 ));
@@ -248,6 +255,14 @@ pub(in crate::features) fn terminal_overview_marker_canvas(
     )
     .absolute()
     .size_full()
+}
+
+fn terminal_overview_marker_height_px(kind: TerminalOverviewMarkerKind) -> usize {
+    match kind {
+        TerminalOverviewMarkerKind::SelectedOccurrence
+        | TerminalOverviewMarkerKind::SearchMatch
+        | TerminalOverviewMarkerKind::ActiveSearchMatch => TERMINAL_OVERVIEW_MARKER_MIN_HEIGHT_PX,
+    }
 }
 
 fn finite_non_negative(value: f32) -> f32 {
@@ -467,7 +482,7 @@ mod tests {
             buckets[1].kind,
             TerminalOverviewMarkerKind::ActiveSearchMatch
         );
-        assert_eq!(buckets[2].y_px, 8);
+        assert_eq!(buckets[2].y_px, 5);
     }
 
     #[test]
@@ -501,7 +516,7 @@ mod tests {
 
         assert!(buckets.len() <= 119);
         assert_eq!(buckets.first().map(|bucket| bucket.y_px), Some(0));
-        assert_eq!(buckets.last().map(|bucket| bucket.y_px), Some(118));
+        assert_eq!(buckets.last().map(|bucket| bucket.y_px), Some(115));
         assert!(buckets.windows(2).all(|pair| pair[0].y_px < pair[1].y_px));
     }
 }

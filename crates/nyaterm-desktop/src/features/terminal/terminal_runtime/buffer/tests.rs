@@ -214,31 +214,45 @@ fn selected_occurrence_frames_are_rejected_after_selection_clear() {
         Some("session"),
         Some("needle"),
         Some(&key),
+        None,
         "session",
+        TerminalFrameSearchPurpose::SelectedOccurrence,
         &key,
     ));
     assert!(!terminal_selected_occurrence_frame_is_current(
-        None, None, None, "session", &key,
+        None,
+        None,
+        None,
+        None,
+        "session",
+        TerminalFrameSearchPurpose::SelectedOccurrence,
+        &key,
     ));
     assert!(!terminal_selected_occurrence_frame_is_current(
         Some("session"),
         Some("needle"),
         None,
+        None,
         "session",
+        TerminalFrameSearchPurpose::SelectedOccurrence,
         &key,
     ));
     assert!(!terminal_selected_occurrence_frame_is_current(
         Some("other"),
         Some("needle"),
         Some(&key),
+        None,
         "session",
+        TerminalFrameSearchPurpose::SelectedOccurrence,
         &key,
     ));
     assert!(!terminal_selected_occurrence_frame_is_current(
         Some("session"),
         Some("needle"),
         Some(&next_generation),
+        None,
         "session",
+        TerminalFrameSearchPurpose::SelectedOccurrence,
         &key,
     ));
 }
@@ -279,6 +293,27 @@ fn terminal_search_results_keep_find_and_selected_occurrence_slots_independent()
     );
     assert_eq!(
         view.selected_occurrence_result
+            .as_ref()
+            .map(|result| &result.key),
+        Some(&selected.key)
+    );
+
+    let visible = TerminalFrameSearchResult {
+        key: selected.key.clone(),
+        revision: 7,
+        matches: Ok(Vec::new()),
+    };
+    assert!(terminal_apply_search_result_to_view(
+        &mut view,
+        TerminalFrameSearchPurpose::SelectedOccurrenceVisible {
+            absolute_start: 0,
+            absolute_end: 24,
+        },
+        &visible,
+        true,
+    ));
+    assert_eq!(
+        view.selected_occurrence_visible_result
             .as_ref()
             .map(|result| &result.key),
         Some(&selected.key)

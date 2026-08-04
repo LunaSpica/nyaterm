@@ -1,5 +1,6 @@
 use std::collections::{HashMap, hash_map::DefaultHasher};
 use std::hash::{Hash, Hasher};
+use std::ops::Range;
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -1078,7 +1079,26 @@ impl TerminalCore {
         &self,
         query: &TerminalSearchQuery,
     ) -> Result<Vec<TerminalGridMatch>, TerminalSearchError> {
+        self.search_grid_in_absolute_range(query, 0..self.total_rows())
+    }
+
+    /// Search a half-open range of absolute scrollback + live-screen rows.
+    ///
+    /// This keeps visible-selection feedback bounded to one viewport while
+    /// retaining Alacritty's wrapped-line, wide-cell and regex semantics.
+    pub fn search_grid_in_absolute_range(
+        &self,
+        query: &TerminalSearchQuery,
+        absolute_lines: Range<usize>,
+    ) -> Result<Vec<TerminalGridMatch>, TerminalSearchError> {
         if query.pattern.trim().is_empty() || query.limit == 0 {
+            return Ok(Vec::new());
+        }
+
+        let total_rows = self.total_rows();
+        let absolute_start = absolute_lines.start.min(total_rows);
+        let absolute_end = absolute_lines.end.min(total_rows);
+        if absolute_start >= absolute_end {
             return Ok(Vec::new());
         }
 
@@ -1093,8 +1113,19 @@ impl TerminalCore {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         let regex = cache.regex_for(key)?;
-        let topmost = self.term.topmost_line();
-        let bottommost = self.term.bottommost_line();
+        let history = i64::try_from(self.term.grid().history_size()).unwrap_or(i64::MAX);
+        let range_start_line = i64::try_from(absolute_start)
+            .unwrap_or(i64::MAX)
+            .saturating_sub(history);
+        let range_end_line = i64::try_from(absolute_end.saturating_sub(1))
+            .unwrap_or(i64::MAX)
+            .saturating_sub(history);
+        let topmost = self.term.topmost_line().max(Line(
+            range_start_line.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32,
+        ));
+        let bottommost = self.term.bottommost_line().min(Line(
+            range_end_line.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32,
+        ));
         if bottommost < topmost {
             return Ok(Vec::new());
         }
@@ -1119,6 +1150,7 @@ impl TerminalCore {
         }
         out.sort_unstable_by_key(|m| (m.line_index, m.start_col, m.end_col));
         out.dedup_by_key(|m| (m.line_index, m.start_col, m.end_col));
+        out.retain(|m| (absolute_start..absolute_end).contains(&m.line_index));
         if query.direction == TerminalSearchDirection::Backward {
             out.reverse();
         }

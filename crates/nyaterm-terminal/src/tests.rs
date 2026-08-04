@@ -42,6 +42,24 @@ fn grid_search_returns_absolute_buffer_rows_without_flattening() {
 }
 
 #[test]
+fn grid_search_can_limit_work_and_results_to_visible_absolute_rows() {
+    let mut screen = TerminalScreen::new(20, 3);
+    screen.advance(b"needle-zero\r\nplain\r\nneedle-two\r\nneedle-three");
+
+    let matches = screen
+        .search_grid_in_absolute_range(&search_query("needle"), 2..4)
+        .unwrap();
+
+    assert_eq!(
+        matches
+            .iter()
+            .map(|m| (m.line_index, m.start_col, m.end_col))
+            .collect::<Vec<_>>(),
+        vec![(2, 0, 6), (3, 0, 6)]
+    );
+}
+
+#[test]
 fn grid_search_honors_case_and_whole_word_flags() {
     let mut screen = TerminalScreen::new(40, 3);
     screen.advance(b"cat scatter CAT cat_ cat");
