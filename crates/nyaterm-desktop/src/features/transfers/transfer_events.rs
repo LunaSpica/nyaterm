@@ -167,6 +167,7 @@ impl NyaTermApp {
             let mut zmodem_upload_after_probe: Option<(String, Vec<PathBuf>)> = None;
             let mut open_after_create: Option<SftpFileEntry> = None;
             let mut browser_navigation_rollback = None;
+            let mut browser_listing_completed = false;
             let mut remote_path_to_set = None;
             let mut sync_properties_inputs = false;
             let mut forget_properties_inputs = false;
@@ -218,6 +219,7 @@ impl NyaTermApp {
                     job.progress = Some(progress);
                 }
                 TransferJobEvent::Finished(Ok(TransferJobOutput::Entries(entries))) => {
+                    browser_listing_completed = true;
                     let (listed_path, select_after) = match &job.kind {
                         TransferJobKind::ListDir {
                             remote_path,
@@ -917,10 +919,10 @@ impl NyaTermApp {
             {
                 self.open_transfer_default(entry, window, cx);
             }
+            if browser_listing_completed && let Some(session_id) = job_session_id.as_deref() {
+                self.cache_transfer_browser_session(session_id);
+            }
             if let Some(snapshot) = inactive_browser_snapshot {
-                if let Some(session_id) = job_session_id.as_deref() {
-                    self.cache_transfer_browser_session(session_id);
-                }
                 self.transfer.restore_browser_event_snapshot(snapshot);
             }
             if event_finished

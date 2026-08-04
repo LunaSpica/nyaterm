@@ -19,17 +19,6 @@ pub(crate) struct TransferBrowserDragSelectionState {
     pub(crate) additive: bool,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct TransferBrowserContextMenuState {
-    pub(crate) path: String,
-    pub(crate) name: String,
-    pub(crate) is_parent: bool,
-    pub(crate) is_current_directory: bool,
-    pub(crate) is_directory: bool,
-    pub(crate) x: Pixels,
-    pub(crate) y: Pixels,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct TransferBrowserFavoritesMenuState {
     pub(crate) x: Pixels,

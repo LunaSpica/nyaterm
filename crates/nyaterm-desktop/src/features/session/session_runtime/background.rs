@@ -567,6 +567,7 @@ impl NyaTermApp {
                     );
                     if should_activate {
                         self.activate_session_id(&session_id);
+                        self.load_transfer_browser_for_active_session_if_needed(cx);
                     }
                     // First connected frames often land with a login banner burst.
                     // Enter degraded paint immediately so tab-strip/status repaint

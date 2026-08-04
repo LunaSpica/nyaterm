@@ -45,7 +45,7 @@ child-module boundary:
 | `crates/nyaterm-desktop/src/features/terminal/terminal_runtime/view_io.rs` | 1606 | 869 | The 41 snapshot, scrolling, input-latency and key-encoding tests live in `view_io/tests.rs`; the 1240-line `view_io/input.rs` module owns keyboard, mouse, focus, wire-write, recording and encoding input adapters. |
 | `crates/nyaterm-desktop/src/features/terminal/terminal_runtime/buffer.rs` | 2593 | 233 | The 10 frame-budget, search-apply, OSC52 and window-tab tests live in `buffer/tests.rs`; buffer application and surface notification logic remain together. |
 | `crates/nyaterm-desktop/src/features/connections/state.rs` | 2106 | 1596 | The 60 list, editor and network owner-transition tests live in `state/tests.rs`; the focused `editor_logic`, `list_logic` and `network_logic` modules are unchanged. |
-| `crates/nyaterm-desktop/src/features/transfers/state.rs` | 1546 | 799 | The 17 browser, queue, editor and external-sync owner tests live in `state/tests.rs`; the 634-line `state/browser.rs` and 568-line `state/editor.rs` modules own their focused transitions while `TransferFeatureState` remains authoritative. |
+| `crates/nyaterm-desktop/src/features/transfers/state.rs` | 1354 | 788 | The 17 browser, queue, editor and external-sync owner tests live in `state/tests.rs`; the 621-line `state/browser.rs` and focused `state/editor.rs` module own their transitions while `TransferFeatureState` remains authoritative. |
 | `crates/nyaterm-desktop/src/features/ai/state.rs` | 1788 | 669 | The 20 chat, settings, discovery, history and agent owner-transition tests live in `state/tests.rs`; the 967-line `state/settings.rs` module owns provider settings, model catalog, credential and custom-action transitions while `AiFeatureState` remains authoritative. |
 | `crates/nyaterm-desktop/src/features/session/state.rs` | 2333 | 897 | The 16 restore, prompt, dialog and start-lifecycle owner tests live in `state/tests.rs`. |
 | `crates/nyaterm-terminal/src/lib.rs` | 1966 | 1147 | The 75 terminal state-machine and snapshot tests live in `src/tests.rs` with explicit imports. |
@@ -564,9 +564,13 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   listing, and recursive cleanup. The live GPUI pass covered session restore,
   the browser toolbar and hidden-file toggle, path/history navigation, natural
   and column sorting, column resizing, additive selection, the context menu,
-  and loading remote file properties. The transfer queue remains covered by
-  desktop state tests, while its upload/download transport path is covered by
-  the remote E2E test.
+  and loading remote file properties. The context menu now uses the
+  `nyaterm-ui` wrapper around `gpui-component` and no longer keeps a parallel
+  absolute-overlay state. Browser, file-operation, transfer and editor SFTP
+  jobs reuse the active SSH multiplex handle; a newly connected or selected
+  SSH session starts its initial listing without a manual refresh. The transfer
+  queue remains covered by desktop state tests, while its upload/download
+  transport path is covered by the remote E2E test.
 - AI state is grouped into `AiFeatureState`: provider `settings`, the `chat`
   composer and transcript, session `history`, model `discovery`, the agent
   `loop`, and `panel` chrome. All six implementation children are now visible

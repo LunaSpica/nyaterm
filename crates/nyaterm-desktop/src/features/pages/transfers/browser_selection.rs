@@ -8,12 +8,9 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use crate::features::NyaTermApp;
-use crate::models::{TransferBrowserContextMenuState, TransferBrowserDragSelectionState};
+use crate::models::TransferBrowserDragSelectionState;
 
-use super::{
-    TransferPathPart, normalized_transfer_browser_path, remote_file_name, remote_parent_path,
-    transfer_path_part_value,
-};
+use super::{TransferPathPart, remote_file_name, transfer_path_part_value};
 
 impl NyaTermApp {
     pub(in crate::features::pages::transfers) fn select_transfer_browser_entry(
@@ -226,100 +223,33 @@ impl NyaTermApp {
         self.select_transfer_browser_entry(path, cx);
     }
 
-    pub(in crate::features::pages::transfers) fn open_transfer_browser_context_menu(
+    pub(in crate::features::pages::transfers) fn prepare_transfer_browser_entry_context_menu(
         &mut self,
         path: String,
-        event: &MouseDownEvent,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         self.transfer.close_browser_path_menu();
-        self.select_transfer_browser_entry_from_context(path.clone(), window, cx);
-        let Some(entry) = self
-            .transfer
-            .browser_view()
-            .entries
-            .iter()
-            .find(|entry| entry.path == path)
-            .cloned()
-        else {
-            self.transfer.close_browser_context_menu();
-            cx.notify();
-            return;
-        };
-
-        self.transfer.open_browser_context_menu(
-            TransferBrowserContextMenuState {
-                path: entry.path,
-                name: entry.name,
-                is_parent: false,
-                is_current_directory: false,
-                is_directory: entry.file_type == SftpFileType::Directory,
-                x: event.position.x,
-                y: event.position.y,
-            },
-            "file context menu opened",
-        );
-        cx.notify();
+        self.select_transfer_browser_entry_from_context(path, window, cx);
     }
 
-    pub(in crate::features::pages::transfers) fn open_transfer_browser_parent_context_menu(
+    pub(in crate::features::pages::transfers) fn prepare_transfer_browser_parent_context_menu(
         &mut self,
-        current_path: String,
-        event: &MouseDownEvent,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         window.focus(self.transfer.browser_view().focus, cx);
         self.transfer.clear_browser_selection();
-        self.transfer.open_browser_context_menu(
-            TransferBrowserContextMenuState {
-                path: remote_parent_path(&current_path),
-                name: "..".to_string(),
-                is_parent: true,
-                is_current_directory: false,
-                is_directory: true,
-                x: event.position.x,
-                y: event.position.y,
-            },
-            "parent directory context menu opened",
-        );
         cx.notify();
     }
 
-    pub(in crate::features::pages::transfers) fn open_transfer_browser_current_context_menu(
+    pub(in crate::features::pages::transfers) fn prepare_transfer_browser_current_context_menu(
         &mut self,
-        event: &MouseDownEvent,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         window.focus(self.transfer.browser_view().focus, cx);
         self.transfer.clear_browser_selection();
-        let path = normalized_transfer_browser_path(self.transfer.browser_view().path);
-        self.transfer.open_browser_context_menu(
-            TransferBrowserContextMenuState {
-                name: if path == "/" {
-                    "/".to_string()
-                } else {
-                    remote_file_name(&path)
-                },
-                path,
-                is_parent: false,
-                is_current_directory: true,
-                is_directory: true,
-                x: event.position.x,
-                y: event.position.y,
-            },
-            "current directory context menu opened",
-        );
-        cx.notify();
-    }
-
-    pub(in crate::features) fn close_transfer_browser_context_menu(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) {
-        self.transfer.close_browser_context_menu();
         cx.notify();
     }
 

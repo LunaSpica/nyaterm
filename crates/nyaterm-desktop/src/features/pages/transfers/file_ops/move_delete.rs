@@ -1,12 +1,11 @@
-use gpui::{Context, Window};
-use nyaterm_core::truncate_preview;
-use nyaterm_transport::SftpService;
-
 use crate::features::NyaTermApp;
+use crate::features::transfers::session_sftp_service;
 use crate::models::{
     TransferJobEvent, TransferJobKind, TransferJobOutput, TransferJobResult, TransferJobState,
     TransferJobStatus, TransferMoveState,
 };
+use gpui::{Context, Window};
+use nyaterm_core::truncate_preview;
 
 use super::super::helpers::{remote_file_name, remote_parent_path};
 
@@ -106,6 +105,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
+        let multiplex = self.session.active_ssh_multiplex_handle();
         let parent_path = remote_parent_path(&old_path);
         let id = self.transfer.next_transfer_job_id("sftp-move");
         self.transfer.enqueue_transfer_job(TransferJobState {
@@ -127,10 +127,12 @@ impl NyaTermApp {
             .set_status(format!("SFTP move started: {old_path} -> {new_path}"));
         let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
-            let service = SftpService::new(config);
-            let result = service
-                .rename_path(&old_path, &new_path)
-                .and_then(|_| service.list_dir(&parent_path))
+            let result = session_sftp_service(config, multiplex)
+                .and_then(|service| {
+                    service
+                        .rename_path(&old_path, &new_path)
+                        .and_then(|_| service.list_dir(&parent_path))
+                })
                 .map(|entries| TransferJobOutput::Moved {
                     old_path,
                     new_path,
@@ -231,6 +233,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
+        let multiplex = self.session.active_ssh_multiplex_handle();
         let parent_path = remote_parent_path(&remote_path);
         let id = self.transfer.next_transfer_job_id("sftp-delete");
         self.transfer.enqueue_transfer_job(TransferJobState {
@@ -251,10 +254,12 @@ impl NyaTermApp {
             .set_status(format!("SFTP delete started: {remote_path}"));
         let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
-            let service = SftpService::new(config);
-            let result = service
-                .delete_path(&remote_path)
-                .and_then(|_| service.list_dir(&parent_path))
+            let result = session_sftp_service(config, multiplex)
+                .and_then(|service| {
+                    service
+                        .delete_path(&remote_path)
+                        .and_then(|_| service.list_dir(&parent_path))
+                })
                 .map(|entries| TransferJobOutput::Deleted {
                     remote_path,
                     parent_path,

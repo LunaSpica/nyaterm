@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::mpsc;
 
-use gpui::{TestAppContext, px};
+use gpui::{ScrollStrategy, TestAppContext, UniformListScrollHandle, px};
 use nyaterm_transport::{
     SftpDuplicatePolicy, SftpFileEntry, SftpFileProperties, SftpFileType, SftpTransferControl,
     SftpWriteTextResult,
@@ -26,7 +26,6 @@ fn transfer_focus(cx: &TestAppContext) -> TransferFeatureFocus {
         panel: cx.focus_handle(),
         queue: cx.focus_handle(),
         browser: cx.focus_handle(),
-        rename: cx.focus_handle(),
         editor: cx.focus_handle(),
         external_sync: cx.focus_handle(),
     })
@@ -136,6 +135,8 @@ fn browser_navigation_restores_the_stable_pending_snapshot() {
         .browser
         .navigation_jobs
         .insert("session-a".to_string(), "list-1".to_string());
+    let list_scroll = UniformListScrollHandle::new();
+    list_scroll.scroll_to_item_strict(3, ScrollStrategy::Top);
     let stable = TransferBrowserNavigationSnapshot {
         remote_path: "/stable".to_string(),
         browser_path: "/stable".to_string(),
@@ -148,7 +149,7 @@ fn browser_navigation_restores_the_stable_pending_snapshot() {
         visited_history: VecDeque::from(["/stable".to_string()]),
         selected_path: None,
         selected_paths: Default::default(),
-        list_offset: 3,
+        list_scroll,
     };
     transfer
         .browser
@@ -159,7 +160,7 @@ fn browser_navigation_restores_the_stable_pending_snapshot() {
 
     assert_eq!(rollback.browser_path, "/stable");
     assert_eq!(transfer.browser.path, "/stable");
-    assert_eq!(transfer.browser.list_offset, 3);
+    assert_eq!(transfer.browser.list_scroll.logical_scroll_top_index(), 3);
     assert!(!transfer.browser.navigation_jobs.contains_key("session-a"));
     assert!(!transfer.browser.pending_navigations.contains_key("list-1"));
 }
@@ -293,7 +294,7 @@ fn transfer_panel_owns_focus_height_and_resize_lifecycle() {
 }
 
 #[test]
-fn transfer_file_ops_own_rename_focus_and_creation_options() {
+fn transfer_file_ops_track_real_rename_input_focus_and_creation_options() {
     let cx = TestAppContext::single();
     let mut transfer = transfer_state(&cx);
 
@@ -306,11 +307,15 @@ fn transfer_file_ops_own_rename_focus_and_creation_options() {
     });
     transfer.schedule_rename_focus();
     assert!(transfer.rename_focus_is_pending());
-    assert!(transfer.take_pending_rename_focus().is_some());
+    assert_eq!(
+        transfer.pending_rename_input_id().as_deref(),
+        Some("transfer.rename./srv/old")
+    );
+    transfer.finish_rename_focus();
     assert!(!transfer.rename_focus_is_pending());
     transfer.schedule_rename_focus();
     transfer.close_rename_dialog();
-    assert!(transfer.take_pending_rename_focus().is_none());
+    assert!(transfer.pending_rename_input_id().is_none());
 
     transfer.open_new_folder_dialog(TransferNewFolderState {
         parent_path: "/srv".to_string(),

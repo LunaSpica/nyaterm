@@ -1,6 +1,7 @@
 use gpui::{Context, Window};
-use nyaterm_transport::{SftpService, SshSessionConfig};
+use nyaterm_transport::SshSessionConfig;
 
+use crate::features::transfers::session_sftp_service;
 use crate::features::{
     NyaTermApp, TransferEditorCloseAfterSave, TransferEditorCloseOutcome,
     TransferEditorDiscardOutcome,
@@ -135,6 +136,9 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
+        let multiplex = session_id
+            .as_deref()
+            .and_then(|id| self.session.ssh_multiplex_handle_for_session(id));
         let id = self.transfer.next_transfer_job_id("sftp-open-text");
         self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
@@ -151,8 +155,8 @@ impl NyaTermApp {
         });
         let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
-            let result = SftpService::new(config)
-                .read_text_file(&remote_path, NATIVE_EDITOR_MAX_BYTES)
+            let result = session_sftp_service(config, multiplex)
+                .and_then(|service| service.read_text_file(&remote_path, NATIVE_EDITOR_MAX_BYTES))
                 .map(|file| TransferJobOutput::EditorLoaded { remote_path, file })
                 .map_err(|error| error.to_string());
             let _ = transfer_tx.send(TransferJobResult {
@@ -264,6 +268,9 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let multiplex = session_id
+            .as_deref()
+            .and_then(|id| self.session.ssh_multiplex_handle_for_session(id));
         let id = self.transfer.next_transfer_job_id("sftp-save-text");
         self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
@@ -280,14 +287,16 @@ impl NyaTermApp {
         });
         let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
-            let result = SftpService::new(config)
-                .write_text_file(
-                    &remote_path,
-                    &content,
-                    expected_modified_at,
-                    expected_size,
-                    force,
-                )
+            let result = session_sftp_service(config, multiplex)
+                .and_then(|service| {
+                    service.write_text_file(
+                        &remote_path,
+                        &content,
+                        expected_modified_at,
+                        expected_size,
+                        force,
+                    )
+                })
                 .map(|result| TransferJobOutput::EditorSaved {
                     remote_path,
                     result,

@@ -67,16 +67,38 @@ impl NyaTermApp {
             .reset_browser_for_session(self.session.active_ssh_config().is_some());
     }
 
+    pub(in crate::features) fn load_transfer_browser_for_active_session_if_needed(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(session_id) = self.session.active_id_owned() else {
+            return;
+        };
+        if self.session.active_ssh_config().is_none()
+            || self.session.is_disconnected(&session_id)
+            || self.transfer.has_browser_session_cache(&session_id)
+            || self.transfer.browser_view().loading
+            || self
+                .transfer
+                .browser_navigation_job_running_for_session(&session_id)
+        {
+            return;
+        }
+
+        let rollback = self.prepare_transfer_browser_navigation();
+        self.transfer.begin_browser_directory_load(".".to_string());
+        self.record_transfer_browser_history(".".to_string());
+        self.start_sftp_list_job(None, rollback, cx);
+    }
+
     pub(in crate::features::pages::transfers) fn open_transfer_browser_directory(
         &mut self,
         path: String,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let rollback = self.prepare_transfer_browser_navigation();
-        self.open_transfer_browser_directory_with_history_and_rollback(
-            path, true, rollback, window, cx,
-        );
+        self.open_transfer_browser_directory_with_history_and_rollback(path, true, rollback, cx);
     }
 
     fn open_transfer_browser_directory_with_history_and_rollback(
@@ -84,7 +106,6 @@ impl NyaTermApp {
         path: String,
         record_history: bool,
         rollback: TransferBrowserNavigationSnapshot,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         self.forget_text_inputs("transfer.browser.path");
@@ -95,13 +116,13 @@ impl NyaTermApp {
         } else {
             self.record_transfer_browser_visited_history(path);
         }
-        self.start_sftp_list_job(None, rollback, window, cx);
+        self.start_sftp_list_job(None, rollback, cx);
     }
 
     pub(in crate::features) fn open_transfer_browser_history(
         &mut self,
         delta: isize,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let rollback = self.prepare_transfer_browser_navigation();
@@ -113,9 +134,7 @@ impl NyaTermApp {
                 return;
             }
         };
-        self.open_transfer_browser_directory_with_history_and_rollback(
-            path, false, rollback, window, cx,
-        );
+        self.open_transfer_browser_directory_with_history_and_rollback(path, false, rollback, cx);
     }
 
     pub(in crate::features::pages::transfers) fn record_transfer_browser_history(
@@ -235,7 +254,7 @@ impl NyaTermApp {
             self.transfer
                 .retain_browser_selection(|path| !remote_file_name(path).starts_with('.'));
         }
-        self.transfer.set_browser_list_offset(0);
+        self.transfer.scroll_browser_to_item(0);
         let status = if show_hidden_files {
             "hidden files shown".to_string()
         } else {
@@ -333,7 +352,7 @@ impl NyaTermApp {
 
     pub(in crate::features::pages::transfers) fn open_transfer_parent_directory(
         &mut self,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let rollback = self.prepare_transfer_browser_navigation();
@@ -354,7 +373,7 @@ impl NyaTermApp {
         self.transfer.set_remote_path(parent.clone());
         self.transfer.begin_browser_parent_load(parent.clone());
         self.record_transfer_browser_history(parent);
-        self.start_sftp_list_job(Some(current_path), rollback, window, cx);
+        self.start_sftp_list_job(Some(current_path), rollback, cx);
     }
 
     pub(in crate::features::pages::transfers) fn refresh_transfer_browser(

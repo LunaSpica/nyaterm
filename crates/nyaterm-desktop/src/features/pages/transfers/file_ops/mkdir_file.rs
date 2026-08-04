@@ -1,11 +1,10 @@
-use gpui::{Context, Window};
-use nyaterm_transport::SftpService;
-
 use crate::features::NyaTermApp;
+use crate::features::transfers::session_sftp_service;
 use crate::models::{
     TransferJobEvent, TransferJobKind, TransferJobOutput, TransferJobResult, TransferJobState,
     TransferJobStatus, TransferNewFileState, TransferNewFolderState,
 };
+use gpui::{Context, Window};
 
 use super::super::helpers::{remote_child_path, valid_remote_child_name};
 
@@ -116,6 +115,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
+        let multiplex = self.session.active_ssh_multiplex_handle();
         let id = self.transfer.next_transfer_job_id("sftp-mkdir");
         self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
@@ -135,15 +135,17 @@ impl NyaTermApp {
             .set_status(format!("SFTP create folder started: {remote_path}"));
         let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
-            let service = SftpService::new(config);
-            let list_path = if open_after_create {
-                remote_path.clone()
-            } else {
-                parent_path.clone()
-            };
-            let result = service
-                .create_dir_path(&remote_path, Some(mode))
-                .and_then(|_| service.list_dir(&list_path))
+            let result = session_sftp_service(config, multiplex)
+                .and_then(|service| {
+                    let list_path = if open_after_create {
+                        remote_path.clone()
+                    } else {
+                        parent_path.clone()
+                    };
+                    service
+                        .create_dir_path(&remote_path, Some(mode))
+                        .and_then(|_| service.list_dir(&list_path))
+                })
                 .map(|entries| TransferJobOutput::CreatedDirectory {
                     remote_path,
                     parent_path,
@@ -259,6 +261,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
+        let multiplex = self.session.active_ssh_multiplex_handle();
         let id = self.transfer.next_transfer_job_id("sftp-create-file");
         self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
@@ -278,10 +281,12 @@ impl NyaTermApp {
             .set_status(format!("SFTP create file started: {remote_path}"));
         let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
-            let service = SftpService::new(config);
-            let result = service
-                .create_file_path(&remote_path, Some(mode))
-                .and_then(|_| service.list_dir(&parent_path))
+            let result = session_sftp_service(config, multiplex)
+                .and_then(|service| {
+                    service
+                        .create_file_path(&remote_path, Some(mode))
+                        .and_then(|_| service.list_dir(&parent_path))
+                })
                 .map(|entries| TransferJobOutput::CreatedFile {
                     remote_path,
                     parent_path,

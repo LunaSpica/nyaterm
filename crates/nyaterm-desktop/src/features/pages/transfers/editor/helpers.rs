@@ -3,8 +3,11 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Instant, SystemTime};
 
-use nyaterm_transport::{SftpService, SftpTransferControl, SftpTransferOptions, SshSessionConfig};
+use nyaterm_transport::{
+    SftpTransferControl, SftpTransferOptions, SshMultiplexHandle, SshSessionConfig,
+};
 
+use crate::features::transfers::session_sftp_service;
 use crate::models::{TransferJobEvent, TransferJobOutput, TransferJobResult};
 
 use super::{
@@ -370,6 +373,7 @@ pub(super) fn external_editor_watch_key(remote_path: &str, local_path: &Path) ->
 
 pub(super) fn upload_external_editor_file(
     config: &SshSessionConfig,
+    multiplex: Option<SshMultiplexHandle>,
     job_id: &str,
     remote_path: &str,
     local_path: &Path,
@@ -385,19 +389,21 @@ pub(super) fn upload_external_editor_file(
     let control = SftpTransferControl::new();
     let progress_id = job_id.to_string();
     let progress_tx = transfer_tx.clone();
-    let result = SftpService::new(config.clone())
-        .upload_file_with_progress_and_control_options(
-            local_path.to_path_buf(),
-            remote_path,
-            control,
-            transfer_options,
-            move |progress| {
-                let _ = progress_tx.send(TransferJobResult {
-                    id: progress_id.clone(),
-                    event: TransferJobEvent::Progress(progress),
-                });
-            },
-        )
+    let result = session_sftp_service(config.clone(), multiplex)
+        .and_then(|service| {
+            service.upload_file_with_progress_and_control_options(
+                local_path.to_path_buf(),
+                remote_path,
+                control,
+                transfer_options,
+                move |progress| {
+                    let _ = progress_tx.send(TransferJobResult {
+                        id: progress_id.clone(),
+                        event: TransferJobEvent::Progress(progress),
+                    });
+                },
+            )
+        })
         .map(TransferJobOutput::Summary)
         .map_err(|error| error.to_string());
     let _ = transfer_tx.send(TransferJobResult {

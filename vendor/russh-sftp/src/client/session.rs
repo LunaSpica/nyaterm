@@ -162,6 +162,7 @@ impl SftpSession {
         let mut buffer = Vec::new();
 
         file.read_to_end(&mut buffer).await?;
+        file.shutdown().await?;
 
         Ok(buffer)
     }
@@ -170,6 +171,8 @@ impl SftpSession {
     pub async fn write<P: Into<String>>(&self, path: P, data: &[u8]) -> SftpResult<()> {
         let mut file = self.open_with_flags(path, OpenFlags::WRITE).await?;
         file.write_all(data).await?;
+        file.flush().await?;
+        file.shutdown().await?;
         Ok(())
     }
 

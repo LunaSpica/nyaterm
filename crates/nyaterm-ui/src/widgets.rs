@@ -2,7 +2,7 @@ use crate::button::{NyaButton, NyaButtonVariant, NyaIconButton};
 use crate::theme::ThemePalette;
 use gpui::{
     AnyElement, App, ClickEvent, FontWeight, Hsla, IntoElement, Pixels, RenderOnce, ScrollHandle,
-    SharedString, Window, div, prelude::*, px, rgb,
+    SharedString, UniformListScrollHandle, Window, div, prelude::*, px, rgb,
 };
 use gpui_component::scroll::{Scrollbar, ScrollbarShow};
 
@@ -88,6 +88,30 @@ impl RenderOnce for NyaScrollArea {
                             .scrollbar_show(ScrollbarShow::Always),
                     ),
             )
+    }
+}
+
+/// A component-themed vertical scrollbar for GPUI's virtualized uniform list.
+#[derive(IntoElement)]
+pub struct NyaUniformListScrollbar {
+    id: SharedString,
+    handle: UniformListScrollHandle,
+}
+
+impl NyaUniformListScrollbar {
+    pub fn new(id: impl Into<SharedString>, handle: &UniformListScrollHandle) -> Self {
+        Self {
+            id: id.into(),
+            handle: handle.clone(),
+        }
+    }
+}
+
+impl RenderOnce for NyaUniformListScrollbar {
+    fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
+        Scrollbar::vertical(&self.handle)
+            .id(self.id)
+            .scrollbar_show(ScrollbarShow::Always)
     }
 }
 

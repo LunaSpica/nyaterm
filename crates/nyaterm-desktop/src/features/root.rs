@@ -479,10 +479,6 @@ impl NyaTermApp {
                 this.child(self.transfer_external_sync_prompt_overlay(cx))
             })
             .when(
-                self.transfer.browser_view().context_menu.is_some(),
-                |this| this.child(self.transfer_browser_context_menu_overlay(cx)),
-            )
-            .when(
                 self.transfer.browser_view().favorites_menu.is_some(),
                 |this| this.child(self.transfer_browser_favorites_menu_overlay(cx)),
             )

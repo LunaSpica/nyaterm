@@ -26,6 +26,7 @@ pub(in crate::features::pages::transfers) fn transfer_browser_search_status(
 pub(in crate::features::pages::transfers) fn sort_header_cell(
     palette: ThemePalette,
     column: TransferBrowserSortColumn,
+    localized_label: &'static str,
     width: Pixels,
     state: TransferBrowserSortHeaderState,
     cx: &mut Context<NyaTermApp>,
@@ -35,11 +36,11 @@ pub(in crate::features::pages::transfers) fn sort_header_cell(
     let label = if is_active {
         format!(
             "{} {}",
-            column.label().to_uppercase(),
+            localized_label.to_uppercase(),
             state.direction.marker()
         )
     } else {
-        column.label().to_uppercase()
+        localized_label.to_uppercase()
     };
 
     div()

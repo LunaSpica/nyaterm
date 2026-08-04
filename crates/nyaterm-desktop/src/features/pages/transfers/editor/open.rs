@@ -3,11 +3,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use gpui::{Context, Window};
 use nyaterm_core::AiCustomActionConfig;
-use nyaterm_transport::{
-    SftpFileEntry, SftpFileType, SftpService, SftpTransferControl, SshSessionConfig,
-};
+use nyaterm_transport::{SftpFileEntry, SftpFileType, SftpTransferControl, SshSessionConfig};
 
 use crate::features::NyaTermApp;
+use crate::features::transfers::session_sftp_service;
 use crate::models::{
     NavItem, TransferEditorField, TransferEditorState, TransferJobEvent, TransferJobKind,
     TransferJobOutput, TransferJobResult, TransferJobState, TransferJobStatus,
@@ -82,6 +81,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
+        let multiplex = self.session.active_ssh_multiplex_handle();
 
         self.transfer.select_browser_path(entry.path.clone());
         self.transfer.set_remote_path(entry.path.clone());
@@ -113,8 +113,8 @@ impl NyaTermApp {
             .set_status(format!("SFTP AI file action started: {remote_path}"));
         let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
-            let result = SftpService::new(config)
-                .read_text_file(&remote_path, max_bytes)
+            let result = session_sftp_service(config, multiplex)
+                .and_then(|service| service.read_text_file(&remote_path, max_bytes))
                 .map(|file| TransferJobOutput::AiFileActionLoaded {
                     remote_path,
                     action_id,
@@ -384,6 +384,9 @@ impl NyaTermApp {
         config: SshSessionConfig,
         cx: &mut Context<Self>,
     ) {
+        let multiplex = session_id
+            .as_deref()
+            .and_then(|id| self.session.ssh_multiplex_handle_for_session(id));
         self.transfer.select_browser_path(entry.path.clone());
         self.transfer.set_remote_path(entry.path.clone());
         let remote_path = entry.path.clone();
@@ -413,19 +416,21 @@ impl NyaTermApp {
         let finished_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
             let progress_id = id.clone();
-            let result = SftpService::new(config)
-                .download_file_with_progress_and_control_options(
-                    &remote_path,
-                    local_path.clone(),
-                    control,
-                    transfer_options,
-                    move |progress| {
-                        let _ = progress_tx.send(TransferJobResult {
-                            id: progress_id.clone(),
-                            event: TransferJobEvent::Progress(progress),
-                        });
-                    },
-                )
+            let result = session_sftp_service(config, multiplex)
+                .and_then(|service| {
+                    service.download_file_with_progress_and_control_options(
+                        &remote_path,
+                        local_path.clone(),
+                        control,
+                        transfer_options,
+                        move |progress| {
+                            let _ = progress_tx.send(TransferJobResult {
+                                id: progress_id.clone(),
+                                event: TransferJobEvent::Progress(progress),
+                            });
+                        },
+                    )
+                })
                 .map_err(|error| error.to_string())
                 .and_then(|_| {
                     open_local_path_with_editor(&local_path, &default_editor).map(|_| {

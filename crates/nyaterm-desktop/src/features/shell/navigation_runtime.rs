@@ -52,6 +52,12 @@ impl NyaTermApp {
 
         if self.shell.panels.multi_open && self.panel_side_for_item(item).is_some() {
             self.open_or_toggle_panel(item, cx);
+            if item == NavItem::Transfers
+                && (self.current_left_panel() == Some(item)
+                    || self.current_right_panel() == Some(item))
+            {
+                self.load_transfer_browser_for_active_session_if_needed(cx);
+            }
             return;
         }
 
@@ -98,6 +104,11 @@ impl NyaTermApp {
         }
 
         self.persist_ui_layout();
+        if item == NavItem::Transfers
+            && (self.current_left_panel() == Some(item) || self.current_right_panel() == Some(item))
+        {
+            self.load_transfer_browser_for_active_session_if_needed(cx);
+        }
         cx.notify();
     }
 

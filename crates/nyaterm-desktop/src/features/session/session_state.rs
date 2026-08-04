@@ -188,6 +188,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let previous_session_id = self.activate_session_id(session_id);
+        self.load_transfer_browser_for_active_session_if_needed(cx);
         self.sync_terminal_activation_surfaces(previous_session_id, session_id, cx);
     }
 

@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use gpui::{
     AppContext, BoxShadow, Context, Entity, InteractiveElement as _, IntoElement,
     ParentElement as _, Rgba, SharedString, StatefulInteractiveElement as _, Styled as _,
-    Subscription, div, prelude::FluentBuilder as _, px, rgb,
+    Subscription, Window, div, prelude::FluentBuilder as _, px, rgb,
 };
 use nyaterm_ui::{
     NYA_FORM_CONTROL_HEIGHT_PX, NyaInput, NyaInputEvent, NyaInputState, NyaNumberInput,
@@ -104,6 +104,19 @@ pub(in crate::features) struct TextInputRegistry {
 }
 
 impl NyaTermApp {
+    pub(in crate::features) fn focus_text_input_if_present(
+        &mut self,
+        id: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(field) = self.text_inputs.fields.get(id).cloned() else {
+            return false;
+        };
+        window.focus(&field.read(cx).focus_handle(), cx);
+        true
+    }
+
     /// The input for `id`, created on first use and seeded with `seed`.
     ///
     /// After that the field owns its own text: `seed` is ignored, because the

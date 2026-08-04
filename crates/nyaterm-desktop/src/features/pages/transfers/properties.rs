@@ -1,8 +1,9 @@
 use gpui::{Context, Window};
 use nyaterm_core::truncate_preview;
-use nyaterm_transport::{SftpAttributeUpdate, SftpFileEntry, SftpFileType, SftpService};
+use nyaterm_transport::{SftpAttributeUpdate, SftpFileEntry, SftpFileType};
 
 use crate::features::NyaTermApp;
+use crate::features::transfers::session_sftp_service;
 use crate::models::{
     TransferJobEvent, TransferJobKind, TransferJobOutput, TransferJobResult, TransferJobState,
     TransferJobStatus, TransferPropertiesField,
@@ -163,6 +164,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
+        let multiplex = self.session.active_ssh_multiplex_handle();
         let id = self.transfer.next_transfer_job_id("sftp-properties");
         self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
@@ -181,8 +183,8 @@ impl NyaTermApp {
             .set_browser_status(format!("Loading properties for {remote_path}"));
         let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
-            let result = SftpService::new(config)
-                .file_properties(&remote_path)
+            let result = session_sftp_service(config, multiplex)
+                .and_then(|service| service.file_properties(&remote_path))
                 .map(|properties| TransferJobOutput::PropertiesLoaded {
                     remote_path,
                     properties,
@@ -276,6 +278,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
+        let multiplex = self.session.active_ssh_multiplex_handle();
         let id = self.transfer.next_transfer_job_id("sftp-update-properties");
         self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
@@ -296,7 +299,7 @@ impl NyaTermApp {
         let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
             let result = (|| {
-                let service = SftpService::new(config);
+                let service = session_sftp_service(config, multiplex)?;
                 service.update_path_attributes(&remote_path, update)?;
                 let properties = service.file_properties(&remote_path)?;
                 let entries = service.list_dir(&parent_path)?;

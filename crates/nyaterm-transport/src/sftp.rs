@@ -321,6 +321,7 @@ impl SftpService {
                 let mut file = session.sftp.open(remote_path.clone()).await?;
                 let mut bytes = Vec::with_capacity(size as usize);
                 file.read_to_end(&mut bytes).await?;
+                file.shutdown().await?;
                 ensure_remote_text_bytes(&bytes, max_bytes)?;
                 let content = String::from_utf8(bytes)
                     .map_err(|_| anyhow::anyhow!("Only UTF-8 text files are supported"))?;
@@ -369,7 +370,7 @@ impl SftpService {
                 let mut file = session.sftp.create(remote_path.clone()).await?;
                 file.write_all(content.as_bytes()).await?;
                 file.flush().await?;
-                drop(file);
+                file.shutdown().await?;
                 let attrs = session.sftp.metadata(remote_path).await?;
                 Ok(SftpWriteTextResult::Saved {
                     modified_at: u64::from(attrs.mtime.unwrap_or(0)),

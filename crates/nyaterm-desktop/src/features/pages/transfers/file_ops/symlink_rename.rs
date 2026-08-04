@@ -1,11 +1,10 @@
-use gpui::{Context, KeyDownEvent, Window};
-use nyaterm_transport::SftpService;
-
 use crate::features::NyaTermApp;
+use crate::features::transfers::session_sftp_service;
 use crate::models::{
     TransferJobEvent, TransferJobKind, TransferJobOutput, TransferJobResult, TransferJobState,
     TransferJobStatus, TransferNewSymlinkState, TransferRenameState, TransferSymlinkField,
 };
+use gpui::{Context, KeyDownEvent, Window};
 
 use super::super::helpers::{
     remote_child_path, remote_file_name, remote_parent_path, remote_sibling_path,
@@ -123,6 +122,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
+        let multiplex = self.session.active_ssh_multiplex_handle();
         let id = self.transfer.next_transfer_job_id("sftp-symlink");
         self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
@@ -143,10 +143,12 @@ impl NyaTermApp {
             .set_status(format!("SFTP symlink started: {link_path}"));
         let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
-            let service = SftpService::new(config);
-            let result = service
-                .create_symlink_path(&link_path, &target_path)
-                .and_then(|_| service.list_dir(&parent_path))
+            let result = session_sftp_service(config, multiplex)
+                .and_then(|service| {
+                    service
+                        .create_symlink_path(&link_path, &target_path)
+                        .and_then(|_| service.list_dir(&parent_path))
+                })
                 .map(|entries| TransferJobOutput::CreatedSymlink {
                     link_path,
                     target_path,
@@ -164,7 +166,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn open_transfer_rename_dialog(
         &mut self,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         self.forget_text_inputs("transfer.rename.");
@@ -178,7 +180,7 @@ impl NyaTermApp {
         if !self.open_transfer_rename_for_path(old_path, cx) {
             return;
         }
-        window.focus(self.transfer.rename_focus(), cx);
+        self.transfer.schedule_rename_focus();
         cx.notify();
     }
 
@@ -310,6 +312,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
+        let multiplex = self.session.active_ssh_multiplex_handle();
         let parent_path = remote_parent_path(&old_path);
         let id = self.transfer.next_transfer_job_id("sftp-rename");
         self.transfer.enqueue_transfer_job(TransferJobState {
@@ -331,10 +334,12 @@ impl NyaTermApp {
             .set_status(format!("SFTP rename started: {old_path} -> {new_path}"));
         let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
-            let service = SftpService::new(config);
-            let result = service
-                .rename_path(&old_path, &new_path)
-                .and_then(|_| service.list_dir(&parent_path))
+            let result = session_sftp_service(config, multiplex)
+                .and_then(|service| {
+                    service
+                        .rename_path(&old_path, &new_path)
+                        .and_then(|_| service.list_dir(&parent_path))
+                })
                 .map(|entries| TransferJobOutput::Renamed {
                     old_path,
                     new_path,

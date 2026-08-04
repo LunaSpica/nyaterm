@@ -1,9 +1,9 @@
 use std::time::{Duration, Instant};
 
 use gpui::{Context, Window};
-use nyaterm_transport::{SftpService, SshProcessService};
 
 use crate::features::NyaTermApp;
+use crate::features::transfers::{session_sftp_service, session_ssh_process_service};
 use crate::models::{
     NavItem, TransferBrowserChildrenMenuStatus, TransferBrowserNavigationSnapshot,
     TransferBrowserPathMenuKind, TransferBrowserPathMenuState, TransferJobEvent, TransferJobKind,
@@ -29,6 +29,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
+        let multiplex = self.session.active_ssh_multiplex_handle();
         let id = self.transfer.next_transfer_job_id("sftp-children");
         if let Some(TransferBrowserPathMenuState {
             kind:
@@ -64,8 +65,8 @@ impl NyaTermApp {
         });
         let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
-            let result = SftpService::new(config)
-                .list_dir(&remote_path)
+            let result = session_sftp_service(config, multiplex)
+                .and_then(|service| service.list_dir(&remote_path))
                 .map(|entries| TransferJobOutput::ChildEntries {
                     remote_path,
                     entries,
@@ -83,7 +84,6 @@ impl NyaTermApp {
         &mut self,
         select_after: Option<String>,
         rollback: TransferBrowserNavigationSnapshot,
-        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(config) = self.session.active_ssh_config_owned() else {
@@ -94,6 +94,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
+        let multiplex = self.session.active_ssh_multiplex_handle();
         let remote_path = self.transfer.normalized_remote_path();
         self.transfer.browser.path = remote_path.clone();
         self.transfer.browser.status = format!("Listing {remote_path}...");
@@ -129,8 +130,8 @@ impl NyaTermApp {
             .set_status(format!("SFTP list started for {remote_path}"));
         let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
-            let result = SftpService::new(config)
-                .list_dir(&remote_path)
+            let result = session_sftp_service(config, multiplex)
+                .and_then(|service| service.list_dir(&remote_path))
                 .map(TransferJobOutput::Entries)
                 .map_err(|error| error.to_string());
             let _ = transfer_tx.send(TransferJobResult {
@@ -158,6 +159,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
+        let multiplex = self.session.active_ssh_multiplex_handle();
         self.transfer.browser.auto_sync_cwd_last_at = Some(Instant::now());
         let id = self.transfer.next_transfer_job_id("sftp-sync-cwd");
         let job_session_id = self.session.active_id_owned();
@@ -183,7 +185,8 @@ impl NyaTermApp {
         let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
             let result = (|| {
-                let output = SshProcessService::new(config.clone())
+                let output = session_ssh_process_service(config.clone(), multiplex.clone())
+                    .map_err(|error| error.to_string())?
                     .run_command("pwd -P", Duration::from_secs(10))
                     .map_err(|error| error.to_string())?;
                 if output.exit_status.is_some_and(|status| status != 0) {
@@ -203,7 +206,8 @@ impl NyaTermApp {
                     .find(|line| line.starts_with('/'))
                     .ok_or_else(|| "remote pwd did not return an absolute path".to_string())?
                     .to_string();
-                let entries = SftpService::new(config)
+                let entries = session_sftp_service(config, multiplex)
+                    .map_err(|error| error.to_string())?
                     .list_dir(&remote_path)
                     .map_err(|error| error.to_string())?;
                 Ok(TransferJobOutput::CwdSynced {
@@ -243,6 +247,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
+        let multiplex = self.session.active_ssh_multiplex_handle();
         self.transfer.browser.home_dir_pending = true;
         let id = self.transfer.next_transfer_job_id("sftp-home");
         self.transfer.enqueue_transfer_job(TransferJobState {
@@ -260,7 +265,8 @@ impl NyaTermApp {
         let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
             let result = (|| {
-                let output = SshProcessService::new(config)
+                let output = session_ssh_process_service(config, multiplex)
+                    .map_err(|error| error.to_string())?
                     .run_command("printf '%s\\n' \"$HOME\"", Duration::from_secs(10))
                     .map_err(|error| error.to_string())?;
                 if output.exit_status.is_some_and(|status| status != 0) {

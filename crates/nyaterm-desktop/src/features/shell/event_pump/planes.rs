@@ -50,8 +50,10 @@ impl NyaTermApp {
             window.focus(self.ai.chat_focus(), cx);
             dirty = true;
         }
-        if let Some(focus) = self.transfer.take_pending_rename_focus() {
-            window.focus(&focus, cx);
+        if let Some(input_id) = self.transfer.pending_rename_input_id()
+            && self.focus_text_input_if_present(&input_id, window, cx)
+        {
+            self.transfer.finish_rename_focus();
             dirty = true;
         }
         if self.session.prompt_credential_focus_is_pending()

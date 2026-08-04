@@ -199,11 +199,15 @@ impl NyaTermApp {
                 .set_status("start an SSH session before syncing external edits".to_string());
             return;
         };
+        let multiplex = session_id
+            .as_deref()
+            .and_then(|id| self.session.ssh_multiplex_handle_for_session(id));
         let transfer_tx = self.transfer.transfer_event_sender();
         let transfer_options = self.sftp_transfer_options();
         std::thread::spawn(move || {
             upload_external_editor_file(
                 &config,
+                multiplex,
                 &job_id,
                 &remote_path,
                 &local_path,

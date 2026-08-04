@@ -679,6 +679,21 @@ impl SessionFeatureState {
         self.active_ssh_config().cloned()
     }
 
+    pub(in crate::features) fn active_ssh_multiplex_handle(
+        &mut self,
+    ) -> Option<SshMultiplexHandle> {
+        let session_id = self.active_id_owned()?;
+        self.ssh_multiplex_handle_for_session(&session_id)
+    }
+
+    pub(in crate::features) fn ssh_multiplex_handle_for_session(
+        &mut self,
+        session_id: &str,
+    ) -> Option<SshMultiplexHandle> {
+        let multiplex_key = self.metadata(session_id)?.ssh_multiplex_key.clone()?;
+        self.reusable_multiplex_handle(&multiplex_key)
+    }
+
     pub(in crate::features) fn active_ai_execution_profile(&self) -> AiExecutionProfile {
         self.active
             .id

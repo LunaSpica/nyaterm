@@ -12,12 +12,12 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::mpsc;
 use std::time::Instant;
 
-use gpui::{FocusHandle, Pixels};
+use gpui::{FocusHandle, Pixels, UniformListScrollHandle};
 use nyaterm_transport::{SftpDuplicatePolicy, SftpFileEntry, SftpFileProperties};
 use nyaterm_ui::NyaWindowHandle;
 
 use crate::models::{
-    TransferBrowserColumnResizeState, TransferBrowserColumnWidths, TransferBrowserContextMenuState,
+    TransferBrowserColumnResizeState, TransferBrowserColumnWidths,
     TransferBrowserDragSelectionState, TransferBrowserFavoritesMenuState,
     TransferBrowserNavigationSnapshot, TransferBrowserPathMenuState,
     TransferBrowserPendingRenameState, TransferBrowserSessionCacheState, TransferBrowserSortColumn,
@@ -43,7 +43,6 @@ pub(in crate::features) struct TransferFeatureFocus {
     pub panel: FocusHandle,
     pub queue: FocusHandle,
     pub browser: FocusHandle,
-    pub rename: FocusHandle,
     pub editor: FocusHandle,
     pub external_sync: FocusHandle,
 }
@@ -81,8 +80,7 @@ pub(in crate::features) struct TransferBrowserView<'a> {
     pub loading: bool,
     pub error: &'a Option<String>,
     pub search: &'a String,
-    pub list_offset: usize,
-    pub viewport_height: f32,
+    pub list_scroll: &'a UniformListScrollHandle,
     pub search_expanded: bool,
     pub history: &'a VecDeque<String>,
     pub history_index: usize,
@@ -96,7 +94,6 @@ pub(in crate::features) struct TransferBrowserView<'a> {
     pub selected_remote_paths: &'a HashSet<String>,
     pub drag_selection: &'a Option<TransferBrowserDragSelectionState>,
     pub pending_rename: &'a Option<TransferBrowserPendingRenameState>,
-    pub context_menu: &'a Option<TransferBrowserContextMenuState>,
     pub favorites_menu: &'a Option<TransferBrowserFavoritesMenuState>,
     pub path_menu: &'a Option<TransferBrowserPathMenuState>,
     pub upload_menu: &'a Option<TransferBrowserUploadMenuState>,
@@ -115,8 +112,7 @@ pub(super) struct TransferBrowserState {
     pub(super) error: Option<String>,
     pub(super) status: String,
     pub(super) search: String,
-    pub(super) list_offset: usize,
-    pub(super) viewport_height: f32,
+    pub(super) list_scroll: UniformListScrollHandle,
     pub(super) search_expanded: bool,
     pub(super) history: VecDeque<String>,
     pub(super) history_index: usize,
@@ -136,7 +132,6 @@ pub(super) struct TransferBrowserState {
     pub(super) drag_selection: Option<TransferBrowserDragSelectionState>,
     pub(super) pending_rename: Option<TransferBrowserPendingRenameState>,
     pub(super) pending_rename_token: u64,
-    pub(super) context_menu: Option<TransferBrowserContextMenuState>,
     pub(super) favorites_menu: Option<TransferBrowserFavoritesMenuState>,
     pub(super) path_menu: Option<TransferBrowserPathMenuState>,
     pub(super) upload_menu: Option<TransferBrowserUploadMenuState>,
@@ -147,7 +142,6 @@ pub(super) struct TransferBrowserState {
 struct TransferFileOpsState {
     rename: Option<TransferRenameState>,
     rename_focus_pending: bool,
-    rename_focus: FocusHandle,
     move_to: Option<TransferMoveState>,
     new_folder: Option<TransferNewFolderState>,
     new_file: Option<TransferNewFileState>,
@@ -221,7 +215,7 @@ impl TransferFeatureState {
     ) -> Self {
         let (tx, rx) = mpsc::channel();
         Self {
-            file_ops: TransferFileOpsState::new(&focus),
+            file_ops: TransferFileOpsState::new(),
             queue: TransferQueueState::new(tx, rx, focus.queue),
             paths: TransferPathState::new(remote_path, local_path, duplicate_policy),
             browser: TransferBrowserState {
@@ -235,8 +229,7 @@ impl TransferFeatureState {
                 error: None,
                 status: "List a remote directory to browse files.".to_string(),
                 search: String::new(),
-                list_offset: 0,
-                viewport_height: 0.,
+                list_scroll: UniformListScrollHandle::new(),
                 search_expanded: false,
                 history: VecDeque::new(),
                 history_index: 0,
@@ -255,7 +248,6 @@ impl TransferFeatureState {
                 drag_selection: None,
                 pending_rename: None,
                 pending_rename_token: 0,
-                context_menu: None,
                 favorites_menu: None,
                 path_menu: None,
                 upload_menu: None,
@@ -440,10 +432,6 @@ impl TransferFeatureState {
         self.file_ops.set_rename_value(value)
     }
 
-    pub(in crate::features) fn rename_focus(&self) -> &FocusHandle {
-        &self.file_ops.rename_focus
-    }
-
     pub(in crate::features) fn schedule_rename_focus(&mut self) {
         self.file_ops.schedule_rename_focus();
     }
@@ -452,8 +440,12 @@ impl TransferFeatureState {
         self.file_ops.rename_focus_pending
     }
 
-    pub(in crate::features) fn take_pending_rename_focus(&mut self) -> Option<FocusHandle> {
-        self.file_ops.take_pending_rename_focus()
+    pub(in crate::features) fn pending_rename_input_id(&self) -> Option<String> {
+        self.file_ops.pending_rename_input_id()
+    }
+
+    pub(in crate::features) fn finish_rename_focus(&mut self) {
+        self.file_ops.rename_focus_pending = false;
     }
 
     pub(in crate::features) fn move_dialog(&self) -> Option<&TransferMoveState> {
@@ -945,11 +937,10 @@ impl TransferFeatureState {
 }
 
 impl TransferFileOpsState {
-    fn new(focus: &TransferFeatureFocus) -> Self {
+    fn new() -> Self {
         Self {
             rename: None,
             rename_focus_pending: false,
-            rename_focus: focus.rename.clone(),
             move_to: None,
             new_folder: None,
             new_file: None,
@@ -985,13 +976,11 @@ impl TransferFileOpsState {
         self.rename_focus_pending = self.rename.is_some();
     }
 
-    fn take_pending_rename_focus(&mut self) -> Option<FocusHandle> {
-        if !self.rename_focus_pending || self.rename.is_none() {
-            self.rename_focus_pending = false;
-            return None;
-        }
-        self.rename_focus_pending = false;
-        Some(self.rename_focus.clone())
+    fn pending_rename_input_id(&self) -> Option<String> {
+        self.rename_focus_pending
+            .then_some(self.rename.as_ref())
+            .flatten()
+            .map(|state| format!("transfer.rename.{}", state.old_path))
     }
 
     fn properties_matches(&self, session_id: Option<&str>, remote_path: Option<&str>) -> bool {

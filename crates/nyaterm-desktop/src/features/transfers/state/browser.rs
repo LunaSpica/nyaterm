@@ -3,14 +3,13 @@
 use std::collections::{HashSet, VecDeque};
 use std::time::Instant;
 
-use gpui::Pixels;
+use gpui::{Pixels, ScrollStrategy};
 
 use crate::models::{
-    TransferBrowserColumnResizeState, TransferBrowserContextMenuState,
-    TransferBrowserDragSelectionState, TransferBrowserFavoritesMenuState,
-    TransferBrowserNavigationSnapshot, TransferBrowserPathMenuState,
-    TransferBrowserPendingRenameState, TransferBrowserSessionCacheState, TransferBrowserSortColumn,
-    TransferBrowserUploadMenuState,
+    TransferBrowserColumnResizeState, TransferBrowserDragSelectionState,
+    TransferBrowserFavoritesMenuState, TransferBrowserNavigationSnapshot,
+    TransferBrowserPathMenuState, TransferBrowserPendingRenameState,
+    TransferBrowserSessionCacheState, TransferBrowserSortColumn, TransferBrowserUploadMenuState,
 };
 
 use super::{TransferBrowserState, TransferBrowserView, TransferFeatureState};
@@ -27,8 +26,7 @@ impl TransferFeatureState {
             loading: self.browser.loading,
             error: &self.browser.error,
             search: &self.browser.search,
-            list_offset: self.browser.list_offset,
-            viewport_height: self.browser.viewport_height,
+            list_scroll: &self.browser.list_scroll,
             search_expanded: self.browser.search_expanded,
             history: &self.browser.history,
             history_index: self.browser.history_index,
@@ -42,7 +40,6 @@ impl TransferFeatureState {
             selected_remote_paths: &self.browser.selected_remote_paths,
             drag_selection: &self.browser.drag_selection,
             pending_rename: &self.browser.pending_rename,
-            context_menu: &self.browser.context_menu,
             favorites_menu: &self.browser.favorites_menu,
             path_menu: &self.browser.path_menu,
             upload_menu: &self.browser.upload_menu,
@@ -92,16 +89,17 @@ impl TransferFeatureState {
         self.browser.session_cache.contains_key(session_id)
     }
 
-    pub(in crate::features) fn set_browser_list_offset(&mut self, offset: usize) {
-        self.browser.list_offset = offset;
+    pub(in crate::features) fn browser_navigation_job_running_for_session(
+        &self,
+        session_id: &str,
+    ) -> bool {
+        self.browser.navigation_jobs.contains_key(session_id)
     }
 
-    pub(in crate::features) fn set_browser_viewport_height(&mut self, height: f32) -> bool {
-        if (self.browser.viewport_height - height).abs() < 0.5 {
-            return false;
-        }
-        self.browser.viewport_height = height;
-        true
+    pub(in crate::features) fn scroll_browser_to_item(&mut self, offset: usize) {
+        self.browser
+            .list_scroll
+            .scroll_to_item_strict(offset, ScrollStrategy::Top);
     }
 
     pub(in crate::features) fn start_browser_column_resize(
@@ -126,7 +124,9 @@ impl TransferFeatureState {
 
     pub(in crate::features) fn set_browser_search(&mut self, search: String) {
         self.browser.search = search;
-        self.browser.list_offset = 0;
+        self.browser
+            .list_scroll
+            .scroll_to_item_strict(0, ScrollStrategy::Top);
     }
 
     pub(in crate::features) fn expand_browser_search(&mut self) {
@@ -139,7 +139,9 @@ impl TransferFeatureState {
 
     pub(in crate::features) fn clear_browser_search(&mut self) {
         self.browser.search.clear();
-        self.browser.list_offset = 0;
+        self.browser
+            .list_scroll
+            .scroll_to_item_strict(0, ScrollStrategy::Top);
     }
 
     pub(in crate::features) fn toggle_browser_sort(
@@ -152,7 +154,9 @@ impl TransferFeatureState {
             self.browser.sort_column = column;
             self.browser.sort_direction = column.default_direction();
         }
-        self.browser.list_offset = 0;
+        self.browser
+            .list_scroll
+            .scroll_to_item_strict(0, ScrollStrategy::Top);
         let status = format!(
             "sorted by {} {}",
             self.browser.sort_column.label().to_lowercase(),
@@ -182,21 +186,6 @@ impl TransferFeatureState {
         self.browser.path_editing = false;
     }
 
-    pub(in crate::features) fn open_browser_context_menu(
-        &mut self,
-        menu: TransferBrowserContextMenuState,
-        status: impl Into<String>,
-    ) {
-        self.browser.path_menu = None;
-        self.browser.drag_selection = None;
-        self.browser.context_menu = Some(menu);
-        self.browser.status = status.into();
-    }
-
-    pub(in crate::features) fn close_browser_context_menu(&mut self) {
-        self.browser.context_menu = None;
-    }
-
     pub(in crate::features) fn open_browser_favorites_menu(
         &mut self,
         menu: TransferBrowserFavoritesMenuState,
@@ -204,7 +193,6 @@ impl TransferFeatureState {
     ) {
         self.browser.upload_menu = None;
         self.browser.path_menu = None;
-        self.browser.context_menu = None;
         self.browser.favorites_menu = Some(menu);
         self.browser.status = status.into();
     }
@@ -219,7 +207,6 @@ impl TransferFeatureState {
     ) {
         self.browser.favorites_menu = None;
         self.browser.path_menu = None;
-        self.browser.context_menu = None;
         self.browser.upload_menu = Some(menu);
         self.browser.status = "upload menu opened".to_string();
     }
@@ -232,7 +219,6 @@ impl TransferFeatureState {
         &mut self,
         menu: TransferBrowserPathMenuState,
     ) {
-        self.browser.context_menu = None;
         self.browser.favorites_menu = None;
         self.browser.upload_menu = None;
         self.browser.path_menu = Some(menu);
@@ -294,11 +280,12 @@ impl TransferFeatureState {
         self.browser.history.clear();
         self.browser.history_index = 0;
         self.browser.visited_history.clear();
+        self.browser.list_scroll = gpui::UniformListScrollHandle::new();
         self.browser.clear_interaction();
     }
 
     pub(in crate::features) fn begin_browser_directory_load(&mut self, path: String) {
-        self.browser.list_offset = 0;
+        self.browser.list_scroll = gpui::UniformListScrollHandle::new();
         self.browser.path = path;
         self.browser.path_draft.clear();
         self.browser.path_editing = false;
@@ -310,6 +297,7 @@ impl TransferFeatureState {
     }
 
     pub(in crate::features) fn begin_browser_parent_load(&mut self, path: String) {
+        self.browser.list_scroll = gpui::UniformListScrollHandle::new();
         self.browser.path = path;
         self.browser.selected_remote_path = None;
         self.browser.selected_remote_paths.clear();
@@ -530,7 +518,6 @@ impl TransferBrowserState {
         self.selected_remote_paths.clear();
         self.drag_selection = None;
         self.cancel_pending_rename();
-        self.context_menu = None;
         self.favorites_menu = None;
         self.path_menu = None;
         self.upload_menu = None;
@@ -568,7 +555,7 @@ impl TransferBrowserState {
             visited_history: self.visited_history.clone(),
             selected_path: self.selected_remote_path.clone(),
             selected_paths: self.selected_remote_paths.clone(),
-            list_offset: self.list_offset,
+            list_scroll: self.list_scroll.clone(),
         }
     }
 
@@ -585,7 +572,7 @@ impl TransferBrowserState {
         self.visited_history = snapshot.visited_history;
         self.selected_remote_path = snapshot.selected_path;
         self.selected_remote_paths = snapshot.selected_paths;
-        self.list_offset = snapshot.list_offset;
+        self.list_scroll = snapshot.list_scroll;
     }
 
     fn cancel_pending_rename(&mut self) -> bool {

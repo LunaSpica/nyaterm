@@ -9,6 +9,7 @@ use nyaterm_transport::{
 
 use crate::features::NyaTermApp;
 use crate::features::formatting::download_file_name_from_remote_path;
+use crate::features::transfers::SftpJobSession;
 use crate::models::{NavItem, TransferPathPromptKind, TransferPathPromptResult};
 
 struct PendingBrowserUpload {
@@ -307,8 +308,8 @@ impl NyaTermApp {
             TransferPathPromptKind::UploadDirectory => PathPromptOptions {
                 files: false,
                 directories: true,
-                multiple: false,
-                prompt: Some(SharedString::from("Select upload directory")),
+                multiple: true,
+                prompt: Some(SharedString::from("Select upload directories")),
             },
             TransferPathPromptKind::DownloadDirectory => unreachable!(),
         };
@@ -322,7 +323,7 @@ impl NyaTermApp {
         let receiver = cx.prompt_for_paths(options);
         self.shell.set_status(match kind {
             TransferPathPromptKind::UploadFile => "selecting upload file".to_string(),
-            TransferPathPromptKind::UploadDirectory => "selecting upload directory".to_string(),
+            TransferPathPromptKind::UploadDirectory => "selecting upload directories".to_string(),
             TransferPathPromptKind::DownloadDirectory => unreachable!(),
         });
         let pending = PendingBrowserUpload {
@@ -378,12 +379,19 @@ impl NyaTermApp {
                 let total = remote_paths.len();
                 self.transfer
                     .set_local_path(directory.display().to_string());
+                let multiplex = session_id.as_deref().and_then(|session_id| {
+                    self.session.ssh_multiplex_handle_for_session(session_id)
+                });
+                let session = SftpJobSession {
+                    session_id,
+                    config,
+                    multiplex,
+                };
                 for remote_path in remote_paths {
                     let local_path =
                         directory.join(download_file_name_from_remote_path(&remote_path));
                     self.enqueue_sftp_download_job_for_target(
-                        session_id.clone(),
-                        config.clone(),
+                        session.clone(),
                         remote_path,
                         local_path,
                         path_options.clone(),
@@ -441,7 +449,7 @@ impl NyaTermApp {
                     self.transfer.set_local_path(paths[0].display().to_string());
                 } else {
                     self.transfer
-                        .set_local_path(format!("{total} selected upload files"));
+                        .set_local_path(format!("{total} selected upload items"));
                 }
                 self.transfer.set_remote_path(remote_path.clone());
                 self.transfer.browser.status = if total == 1 {
@@ -452,9 +460,17 @@ impl NyaTermApp {
                     )
                 } else {
                     format!(
-                        "Uploading {total} files to {}",
+                        "Uploading {total} items to {}",
                         truncate_preview(&remote_path, 48)
                     )
+                };
+                let multiplex = session_id.as_deref().and_then(|session_id| {
+                    self.session.ssh_multiplex_handle_for_session(session_id)
+                });
+                let session = SftpJobSession {
+                    session_id,
+                    config,
+                    multiplex,
                 };
                 for path in paths {
                     let fallback = match kind {
@@ -465,8 +481,7 @@ impl NyaTermApp {
                     let upload_name = transfer_upload_local_name(&path, fallback);
                     let target_path = transfer_upload_remote_child_path(&remote_path, &upload_name);
                     self.enqueue_sftp_upload_job_for_target(
-                        session_id.clone(),
-                        config.clone(),
+                        session.clone(),
                         path,
                         target_path,
                         path_options.clone(),

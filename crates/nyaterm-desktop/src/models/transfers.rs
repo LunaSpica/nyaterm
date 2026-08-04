@@ -1,4 +1,4 @@
-use gpui::{Pixels, px};
+use gpui::{Pixels, UniformListScrollHandle, px};
 use nyaterm_transport::{
     SftpFileEntry, SftpFileProperties, SftpRemoteTextFile, SftpTransferControl,
     SftpTransferProgress, SftpTransferSummary, SftpWriteTextResult,
@@ -313,7 +313,7 @@ pub(crate) struct TransferBrowserSessionCacheState {
     pub(crate) visited_history: VecDeque<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone)]
 pub(crate) struct TransferBrowserNavigationSnapshot {
     pub(crate) remote_path: String,
     pub(crate) browser_path: String,
@@ -326,7 +326,7 @@ pub(crate) struct TransferBrowserNavigationSnapshot {
     pub(crate) visited_history: VecDeque<String>,
     pub(crate) selected_path: Option<String>,
     pub(crate) selected_paths: HashSet<String>,
-    pub(crate) list_offset: usize,
+    pub(crate) list_scroll: UniformListScrollHandle,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
