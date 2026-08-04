@@ -165,6 +165,20 @@ impl NyaTermApp {
         &self,
         session_id: &str,
     ) -> (Vec<TerminalOverviewMarker>, usize) {
+        let selected_matches = self
+            .terminal_selected_occurrence_matches_for_session(session_id)
+            .unwrap_or_default();
+        self.terminal_overview_markers_for_session_with_selected_matches(
+            session_id,
+            &selected_matches,
+        )
+    }
+
+    pub(in crate::features) fn terminal_overview_markers_for_session_with_selected_matches(
+        &self,
+        session_id: &str,
+        selected_matches: &[TerminalBufferMatch],
+    ) -> (Vec<TerminalOverviewMarker>, usize) {
         let total_rows = self
             .terminal
             .view
@@ -173,13 +187,15 @@ impl NyaTermApp {
             .map(|view| view.screen.total_rows())
             .unwrap_or_else(|| self.terminal.view.screen.total_rows())
             .max(1);
-        let mut markers = Vec::new();
-        if let Ok(matches) = self.terminal_selected_occurrence_matches_for_session(session_id) {
-            markers.extend(matches.into_iter().map(|m| TerminalOverviewMarker {
-                absolute_line: m.line_index,
-                kind: TerminalOverviewMarkerKind::SelectedOccurrence,
-            }));
-        }
+        let mut markers = Vec::with_capacity(selected_matches.len());
+        markers.extend(
+            selected_matches
+                .iter()
+                .map(|search_match| TerminalOverviewMarker {
+                    absolute_line: search_match.line_index,
+                    kind: TerminalOverviewMarkerKind::SelectedOccurrence,
+                }),
+        );
         if self.session.active_id() == Some(session_id)
             && self.terminal.search.open
             && self.terminal.search.mode == TerminalSearchMode::Buffer
@@ -204,9 +220,10 @@ impl NyaTermApp {
         (markers, total_rows)
     }
 
-    pub(in crate::features) fn terminal_overview_marker_key_for_session(
+    pub(in crate::features) fn terminal_overview_marker_key_for_session_with_selected_matches(
         &self,
         session_id: &str,
+        selected_matches: &[TerminalBufferMatch],
     ) -> u64 {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         session_id.hash(&mut hasher);
@@ -231,11 +248,8 @@ impl NyaTermApp {
         self.terminal.search.open.hash(&mut hasher);
         self.terminal.search.mode.hash(&mut hasher);
         let mut has_markers = false;
-        let selected_matches = self
-            .terminal_selected_occurrence_matches_for_session(session_id)
-            .unwrap_or_default();
         selected_matches.len().hash(&mut hasher);
-        for search_match in &selected_matches {
+        for search_match in selected_matches {
             search_match.line_index.hash(&mut hasher);
             search_match.start_col.hash(&mut hasher);
             search_match.end_col.hash(&mut hasher);

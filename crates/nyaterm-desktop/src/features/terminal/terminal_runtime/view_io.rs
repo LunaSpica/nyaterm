@@ -1153,6 +1153,12 @@ impl NyaTermApp {
         let mut active_search_ranges_by_line: HashMap<usize, Vec<(usize, usize)>> = HashMap::new();
         let mut selected_occurrence_ranges_by_line: HashMap<usize, Vec<(usize, usize)>> =
             HashMap::new();
+        let selected_occurrence_matches = if is_active {
+            self.terminal_selected_occurrence_matches_for_session(session_id)
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
         // Selected occurrences are explicit user feedback. Keep them visible
         // while optional decorations are degraded under output pressure.
         if is_active {
@@ -1160,10 +1166,7 @@ impl NyaTermApp {
                 crate::features::terminal::terminal_surface::terminal_snapshot_absolute_range(
                     &snapshot,
                 );
-            for search_match in self
-                .terminal_selected_occurrence_matches_for_session(session_id)
-                .unwrap_or_default()
-            {
+            for search_match in &selected_occurrence_matches {
                 let abs = search_match.line_index;
                 if abs < abs_start || abs >= abs_end {
                     continue;
@@ -1320,10 +1323,18 @@ impl NyaTermApp {
             );
         }
 
-        let overview_marker_key = self.terminal_overview_marker_key_for_session(session_id);
+        let overview_marker_key = self
+            .terminal_overview_marker_key_for_session_with_selected_matches(
+                session_id,
+                &selected_occurrence_matches,
+            );
         let overview_markers_dirty = surface.read(cx).overview_marker_key() != overview_marker_key;
         let (overview_markers, overview_total_rows) = if overview_markers_dirty {
-            let (markers, total_rows) = self.terminal_overview_markers_for_session(session_id);
+            let (markers, total_rows) = self
+                .terminal_overview_markers_for_session_with_selected_matches(
+                    session_id,
+                    &selected_occurrence_matches,
+                );
             (Some(markers.into()), total_rows)
         } else {
             (None, 1)
