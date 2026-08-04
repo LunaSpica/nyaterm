@@ -185,6 +185,7 @@ pub(in crate::features) fn terminal_scrollbar_track_bounds_tracker(
         |_bounds, _state, _window, _cx| {},
     )
     .absolute()
+    .inset_0()
     .size_full()
 }
 
@@ -254,6 +255,7 @@ pub(in crate::features) fn terminal_overview_marker_canvas(
         },
     )
     .absolute()
+    .inset_0()
     .size_full()
 }
 

@@ -170,6 +170,7 @@ fn terminal_surface_grid_bounds_tracker(surface: Entity<TerminalSurface>) -> imp
         |_bounds, _state, _window, _cx| {},
     )
     .absolute()
+    .inset_0()
     .size_full()
 }
 

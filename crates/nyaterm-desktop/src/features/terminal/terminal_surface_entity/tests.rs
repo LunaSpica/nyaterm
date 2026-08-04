@@ -6,7 +6,10 @@ use crate::models::{TerminalProtocolState, TerminalSelection};
 use crate::terminal::{
     TerminalLineDecorations, compile_terminal_keyword_highlighter, terminal_keyword_rules_key,
 };
-use gpui::{AppContext, TestAppContext, bounds, point, px, size};
+use gpui::prelude::*;
+use gpui::{
+    AppContext, Context, Entity, Render, TestAppContext, Window, bounds, div, point, px, size,
+};
 use nyaterm_terminal::{TerminalScreen, TerminalSnapshot};
 use nyaterm_terminal_gpui::precompute_terminal_keyword_highlights;
 
@@ -17,14 +20,97 @@ use super::{
     TerminalPaintedHitTestGeometry, TerminalScrollVisualState, TerminalSurface,
     TerminalSurfaceFrameSnapshot, TerminalSurfaceLocalScrollResult, TerminalVisualScrollGeometry,
     empty_terminal_keyword_rules, terminal_effective_visual_scroll_offset_px,
-    terminal_keyword_highlight_prefetch_rows, terminal_keyword_highlight_prefetch_viewports,
-    terminal_keyword_highlight_pressure_delay, terminal_keyword_highlight_request_key,
-    terminal_keyword_highlight_visible_rows, terminal_selection_visual_row_range,
+    terminal_gutter_metrics, terminal_keyword_highlight_prefetch_rows,
+    terminal_keyword_highlight_prefetch_viewports, terminal_keyword_highlight_pressure_delay,
+    terminal_keyword_highlight_request_key, terminal_keyword_highlight_visible_rows,
+    terminal_line_number_digits, terminal_selection_visual_row_range,
     terminal_selection_visual_row_union, terminal_snapshot_anchor_row_for_display_offset,
     terminal_snapshot_covers_display_offset, terminal_surface_fractional_prefetch_offset,
     terminal_surface_synthesized_window_extra_rows, terminal_surface_text_first_repaint_ready,
     terminal_surface_visible_rows_for_viewport, terminal_visual_scroll_offset_px,
 };
+
+struct TerminalSurfaceLayoutTestView {
+    surface: Entity<TerminalSurface>,
+}
+
+impl Render for TerminalSurfaceLayoutTestView {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .size_full()
+            .flex()
+            .min_w_0()
+            .min_h_0()
+            .child(self.surface.clone())
+    }
+}
+
+fn rendered_terminal_grid_bounds(show_line_numbers: bool) -> gpui::Bounds<gpui::Pixels> {
+    let mut cx = TestAppContext::single();
+    let surface = cx.new(|_| TerminalSurface::new("session"));
+    let snapshot = Arc::new(TerminalScreen::default().viewport_snapshot(0));
+    let rows = snapshot.row_count();
+    cx.update_entity(&surface, |surface, _cx| {
+        surface.show_line_numbers = show_line_numbers;
+        surface.apply_frame_snapshot(
+            TerminalSurfaceFrameSnapshot::new(
+                snapshot,
+                TerminalScrollVisualState {
+                    session_id: "session".to_string(),
+                    scroll_offset: 0,
+                    scroll_residual_lines: 0.0,
+                    display_offset: 0,
+                    scrollback_len: 0,
+                    viewport_rows: rows,
+                    has_new_while_scrolled: false,
+                    performance_overlay: None,
+                    skipped_output_chars: 0,
+                },
+            )
+            .with_presentation(false, true, "block"),
+        );
+    });
+    let window = cx.open_window(size(px(400.0), px(240.0)), {
+        let surface = surface.clone();
+        move |_window, _cx| TerminalSurfaceLayoutTestView { surface }
+    });
+
+    cx.update_window(window.into(), |_, window, cx| {
+        window.draw(cx).clear(cx);
+    })
+    .unwrap();
+    cx.run_until_parked();
+
+    cx.read_entity(&surface, |surface, _cx| {
+        let geometry = surface.painted_hit_test_geometry.expect("painted geometry");
+        geometry.grid_bounds.expect("painted grid bounds")
+    })
+}
+
+#[test]
+fn painted_hit_test_grid_bounds_match_the_rendered_grid_layout() {
+    let grid_bounds = rendered_terminal_grid_bounds(false);
+
+    assert_eq!(grid_bounds.origin, point(px(0.0), px(0.0)));
+    assert_eq!(grid_bounds.size.height, px(240.0));
+}
+
+#[test]
+fn painted_hit_test_grid_bounds_start_after_the_rendered_gutter() {
+    let snapshot = TerminalScreen::default().viewport_snapshot(0);
+    let expected_gutter = terminal_gutter_metrics(
+        8.0,
+        false,
+        false,
+        true,
+        terminal_line_number_digits(&snapshot),
+    )
+    .total_width();
+    let grid_bounds = rendered_terminal_grid_bounds(true);
+
+    assert_eq!(grid_bounds.origin, point(px(expected_gutter), px(0.0)));
+    assert_eq!(grid_bounds.size.height, px(240.0));
+}
 
 #[test]
 fn painted_hit_test_state_uses_the_latest_grid_bounds() {

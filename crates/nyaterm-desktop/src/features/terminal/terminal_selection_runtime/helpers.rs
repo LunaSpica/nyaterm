@@ -76,6 +76,7 @@ pub(in crate::features) fn terminal_bounds_tracker(
         },
     )
     .absolute()
+    .inset_0()
     .size_full()
 }
 
