@@ -667,7 +667,8 @@ fn terminal_all_lines_text(lines: Vec<String>) -> Option<String> {
 }
 
 fn terminal_selected_occurrence_query(text: &str) -> Option<String> {
-    if text.trim().is_empty() || text.contains('\n') {
+    let text = text.trim();
+    if text.is_empty() || text.contains('\n') {
         return None;
     }
     let char_count = text.chars().count();
@@ -833,7 +834,7 @@ mod tests {
     fn terminal_selected_occurrence_query_filters_short_multiline_and_long_text() {
         assert_eq!(
             terminal_selected_occurrence_query(" ab "),
-            Some(" ab ".to_string())
+            Some("ab".to_string())
         );
         assert_eq!(terminal_selected_occurrence_query("a"), None);
         assert_eq!(terminal_selected_occurrence_query("a\nb"), None);

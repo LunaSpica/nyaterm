@@ -158,21 +158,7 @@ impl NyaTermApp {
             .selection
             .selection
             .filter(|_| self.terminal.selection.session_id.as_deref() == Some(session_id));
-        let result = [
-            view.selected_occurrence_result.as_ref(),
-            view.selected_occurrence_visible_result.as_ref(),
-        ]
-        .into_iter()
-        .flatten()
-        .find(|result| terminal_frame_search_result_is_current(result, &key, view.screen_revision));
-        result
-            .map(|result| {
-                result
-                    .matches
-                    .clone()
-                    .map(|matches| filter_selected_occurrence_matches(&matches, selection))
-            })
-            .unwrap_or_else(|| Ok(Vec::new()))
+        current_selected_occurrence_matches(view, &key, selection)
     }
 
     pub(in crate::features) fn terminal_overview_markers_for_session(
@@ -245,59 +231,17 @@ impl NyaTermApp {
         self.terminal.search.open.hash(&mut hasher);
         self.terminal.search.mode.hash(&mut hasher);
         let mut has_markers = false;
+        let selected_matches = self
+            .terminal_selected_occurrence_matches_for_session(session_id)
+            .unwrap_or_default();
+        selected_matches.len().hash(&mut hasher);
+        for search_match in &selected_matches {
+            search_match.line_index.hash(&mut hasher);
+            search_match.start_col.hash(&mut hasher);
+            search_match.end_col.hash(&mut hasher);
+        }
+        has_markers |= !selected_matches.is_empty();
         if let Some(view) = self.terminal.view.views.get(session_id) {
-            let selected_key = self
-                .terminal
-                .selection
-                .selected_occurrence
-                .query
-                .as_ref()
-                .map(|query| TerminalFrameSearchKey {
-                    query: query.clone(),
-                    case_sensitive: true,
-                    regex: false,
-                    whole_word: false,
-                    limit: 2000,
-                    request_generation: self.terminal.selection.selected_occurrence.generation,
-                });
-            let selected_result = [
-                view.selected_occurrence_result.as_ref(),
-                view.selected_occurrence_visible_result.as_ref(),
-            ]
-            .into_iter()
-            .flatten()
-            .find(|result| {
-                selected_key.as_ref().is_some_and(|key| {
-                    terminal_frame_search_result_is_current(result, key, view.screen_revision)
-                })
-            });
-            let selected_is_current = selected_key.as_ref().is_some_and(|key| {
-                selected_result.is_some_and(|result| {
-                    self.terminal
-                        .selection
-                        .selected_occurrence
-                        .session_id
-                        .as_deref()
-                        == Some(session_id)
-                        && terminal_frame_search_result_is_current(
-                            result,
-                            key,
-                            view.screen_revision,
-                        )
-                })
-            });
-            selected_is_current.hash(&mut hasher);
-            if selected_is_current && let Some(result) = selected_result {
-                result.key.hash(&mut hasher);
-                result.revision.hash(&mut hasher);
-                let non_empty = result
-                    .matches
-                    .as_ref()
-                    .is_ok_and(|matches| !matches.is_empty());
-                non_empty.hash(&mut hasher);
-                has_markers |= non_empty;
-            }
-
             let active_buffer_search = self.session.active_id() == Some(session_id)
                 && self.terminal.search.open
                 && self.terminal.search.mode == TerminalSearchMode::Buffer;
@@ -565,10 +509,47 @@ fn filter_selected_occurrence_matches(
         .collect()
 }
 
+fn current_selected_occurrence_matches(
+    view: &crate::models::TerminalViewState,
+    key: &TerminalFrameSearchKey,
+    selection: Option<TerminalSelection>,
+) -> Result<Vec<TerminalBufferMatch>, String> {
+    // The visible result provides immediate feedback. Once the full-buffer
+    // result arrives it is authoritative for both decorations and the ruler.
+    let result = view
+        .selected_occurrence_result
+        .as_ref()
+        .filter(|result| terminal_frame_search_result_is_current(result, key, view.screen_revision))
+        .or_else(|| {
+            view.selected_occurrence_visible_result
+                .as_ref()
+                .filter(|result| {
+                    terminal_frame_search_result_is_current(result, key, view.screen_revision)
+                })
+        });
+    result
+        .map(|result| {
+            result
+                .matches
+                .clone()
+                .map(|matches| filter_selected_occurrence_matches(&matches, selection))
+        })
+        .unwrap_or_else(|| Ok(Vec::new()))
+}
+
 #[cfg(test)]
 mod tests {
-    use super::filter_selected_occurrence_matches;
-    use crate::models::{TerminalBufferCellPos, TerminalSelection};
+    use std::collections::HashMap;
+
+    use super::{current_selected_occurrence_matches, filter_selected_occurrence_matches};
+    use crate::features::terminal::terminal_surface::{
+        TerminalDecorationSources, TerminalOverviewMarker, TerminalOverviewMarkerKind,
+        build_terminal_line_decorations, terminal_snapshot_absolute_range,
+    };
+    use crate::models::{
+        TerminalBufferCellPos, TerminalFrameSearchKey, TerminalFrameSearchResult,
+        TerminalSelection, TerminalViewState,
+    };
     use crate::terminal::TerminalBufferMatch;
 
     #[test]
@@ -599,5 +580,121 @@ mod tests {
         assert_eq!(filtered.len(), 2);
         assert_eq!(filtered[0].line_index, 4);
         assert_eq!(filtered[1].line_index, 5);
+    }
+
+    #[test]
+    fn selected_occurrence_promotes_visible_result_to_full_buffer_result() {
+        let key = TerminalFrameSearchKey {
+            query: "address".to_string(),
+            case_sensitive: true,
+            regex: false,
+            whole_word: false,
+            limit: 2000,
+            request_generation: 3,
+        };
+        let mut view = TerminalViewState::new();
+        view.screen_revision = 7;
+        view.selected_occurrence_visible_result = Some(TerminalFrameSearchResult {
+            key: key.clone(),
+            revision: 7,
+            matches: Ok(vec![TerminalBufferMatch {
+                line_index: 2,
+                start_col: 5,
+                end_col: 12,
+            }]),
+        });
+
+        assert_eq!(
+            current_selected_occurrence_matches(&view, &key, None)
+                .unwrap()
+                .len(),
+            1
+        );
+
+        view.selected_occurrence_result = Some(TerminalFrameSearchResult {
+            key: key.clone(),
+            revision: 7,
+            matches: Ok((0..3)
+                .map(|line_index| TerminalBufferMatch {
+                    line_index,
+                    start_col: 5,
+                    end_col: 12,
+                })
+                .collect()),
+        });
+
+        assert_eq!(
+            current_selected_occurrence_matches(&view, &key, None)
+                .unwrap()
+                .len(),
+            3
+        );
+    }
+
+    #[test]
+    fn selected_address_pipeline_builds_two_backgrounds_and_two_markers() {
+        use nyaterm_terminal::{TerminalSearchDirection, TerminalSearchQuery};
+
+        let mut screen = nyaterm_terminal::TerminalScreen::new(40, 3);
+        screen.advance(b"IPv4 address for br0\r\nIPv6 address for br0\r\nIPv6 address for br1");
+        let snapshot = screen.viewport_snapshot(0);
+        let (absolute_start, _) = terminal_snapshot_absolute_range(&snapshot);
+        let matches = screen
+            .search_grid(&TerminalSearchQuery {
+                pattern: "address".to_string(),
+                regex: false,
+                case_sensitive: true,
+                whole_word: false,
+                direction: TerminalSearchDirection::Forward,
+                limit: 2000,
+            })
+            .unwrap()
+            .into_iter()
+            .map(|item| TerminalBufferMatch {
+                line_index: item.line_index,
+                start_col: item.start_col,
+                end_col: item.end_col,
+            })
+            .collect::<Vec<_>>();
+        let selection = TerminalSelection::from_range(
+            TerminalBufferCellPos::new(absolute_start + 2, 5),
+            TerminalBufferCellPos::new(absolute_start + 2, 11),
+        );
+        let filtered = filter_selected_occurrence_matches(&matches, Some(selection));
+        let ranges = filtered.iter().fold(HashMap::new(), |mut ranges, item| {
+            ranges
+                .entry(item.line_index - absolute_start)
+                .or_insert_with(Vec::new)
+                .push((item.start_col, item.end_col));
+            ranges
+        });
+        let decorations = build_terminal_line_decorations(
+            &snapshot,
+            &TerminalDecorationSources {
+                selection: Some(selection),
+                selected_occurrence_ranges_by_line: &ranges,
+                search_ranges_by_line: &HashMap::new(),
+                active_search_ranges_by_line: &HashMap::new(),
+                frame_action_links: &[],
+                include_action_links: false,
+                include_hyperlinks: false,
+                include_command_marks: false,
+            },
+        );
+        let markers = filtered
+            .iter()
+            .map(|item| TerminalOverviewMarker {
+                absolute_line: item.line_index,
+                kind: TerminalOverviewMarkerKind::SelectedOccurrence,
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(filtered.len(), 2);
+        assert_eq!(decorations[0].selected_occurrence_ranges, vec![(5, 12)]);
+        assert_eq!(decorations[1].selected_occurrence_ranges, vec![(5, 12)]);
+        assert!(decorations[2].selected_occurrence_ranges.is_empty());
+        assert_eq!(markers.len(), 2);
+        assert_eq!(markers[0].absolute_line, absolute_start);
+        assert_eq!(markers[1].absolute_line, absolute_start + 1);
     }
 }
