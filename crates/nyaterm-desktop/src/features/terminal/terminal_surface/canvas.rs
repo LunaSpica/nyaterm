@@ -362,7 +362,9 @@ impl NyaTermApp {
                 HashMap::new();
             let mut selected_occurrence_ranges_by_line: HashMap<usize, Vec<(usize, usize)>> =
                 HashMap::new();
-            if render_profile.enhanced_decorations_enabled() && is_active {
+            // Selected occurrences are explicit user feedback. Keep them
+            // visible while optional decorations are degraded.
+            if is_active {
                 for search_match in self
                     .terminal_selected_occurrence_matches_for_session(&session_id)
                     .unwrap_or_default()
@@ -405,13 +407,9 @@ impl NyaTermApp {
             let search_mapping_duration = search_stage_started_at.elapsed();
             let decoration_stage_started_at = Instant::now();
             let mut action_link_duration = Duration::ZERO;
-            let terminal_selection = if render_profile.enhanced_decorations_enabled() {
-                is_active
-                    .then_some(self.terminal.selection.selection)
-                    .flatten()
-            } else {
-                None
-            };
+            let terminal_selection = is_active
+                .then_some(self.terminal.selection.selection)
+                .flatten();
             let has_selection = terminal_selection.is_some();
             let has_selected_occurrences = !selected_occurrence_ranges_by_line.is_empty();
             let has_search_decorations =

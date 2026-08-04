@@ -6,12 +6,13 @@ use gpui::{
 
 use crate::features::NyaTermApp;
 
-pub(in crate::features) const TERMINAL_SCROLLBAR_COLUMN_WIDTH: f32 = 8.0;
+pub(in crate::features) const TERMINAL_SCROLLBAR_COLUMN_WIDTH: f32 = 12.0;
 pub(in crate::features) const TERMINAL_SCROLLBAR_TRACK_PADDING_Y: f32 = 2.0;
-pub(in crate::features) const TERMINAL_SCROLLBAR_TRACK_PADDING_RIGHT: f32 = 2.0;
-pub(in crate::features) const TERMINAL_SCROLLBAR_THUMB_WIDTH: f32 = 3.0;
-pub(in crate::features) const TERMINAL_SCROLLBAR_THUMB_ACTIVE_WIDTH: f32 = 5.0;
+pub(in crate::features) const TERMINAL_SCROLLBAR_TRACK_PADDING_RIGHT: f32 = 3.0;
+pub(in crate::features) const TERMINAL_SCROLLBAR_THUMB_WIDTH: f32 = 5.0;
+pub(in crate::features) const TERMINAL_SCROLLBAR_THUMB_ACTIVE_WIDTH: f32 = 7.0;
 pub(in crate::features) const TERMINAL_SCROLLBAR_MIN_THUMB_HEIGHT: f32 = 18.0;
+const TERMINAL_OVERVIEW_MARKER_WIDTH_PX: f32 = 4.0;
 const TERMINAL_OVERVIEW_MARKER_HEIGHT_PX: usize = 2;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -154,6 +155,12 @@ pub(in crate::features) fn terminal_scrollbar_thumb_element(
         })
 }
 
+pub(in crate::features) fn terminal_scrollbar_track_color(
+    palette: crate::theme::ThemePalette,
+) -> u32 {
+    (palette.border << 8) | 0x24
+}
+
 pub(in crate::features) fn terminal_scrollbar_track_bounds_tracker(
     entity: Entity<NyaTermApp>,
     session_id: Option<String>,
@@ -222,14 +229,17 @@ pub(in crate::features) fn terminal_overview_marker_canvas(
             if buckets.is_empty() {
                 return;
             }
-            let left = f32::from(bounds.right()) - 4.0;
+            let left = f32::from(bounds.right()) - TERMINAL_OVERVIEW_MARKER_WIDTH_PX - 1.0;
             let top = f32::from(bounds.top());
             for bucket in buckets {
                 let color = terminal_overview_marker_color(bucket.kind, palette);
                 window.paint_quad(fill(
                     Bounds::new(
                         point(px(left), px(top + bucket.y_px as f32)),
-                        size(px(3.0), px(TERMINAL_OVERVIEW_MARKER_HEIGHT_PX as f32)),
+                        size(
+                            px(TERMINAL_OVERVIEW_MARKER_WIDTH_PX),
+                            px(TERMINAL_OVERVIEW_MARKER_HEIGHT_PX as f32),
+                        ),
                     ),
                     rgba(color),
                 ));
@@ -261,8 +271,8 @@ fn terminal_overview_marker_color(
     palette: crate::theme::ThemePalette,
 ) -> u32 {
     match kind {
-        TerminalOverviewMarkerKind::SelectedOccurrence => (palette.text_muted << 8) | 0x80,
-        TerminalOverviewMarkerKind::SearchMatch => (palette.accent << 8) | 0x90,
+        TerminalOverviewMarkerKind::SelectedOccurrence => (palette.text_muted << 8) | 0xc0,
+        TerminalOverviewMarkerKind::SearchMatch => (palette.accent << 8) | 0xb0,
         TerminalOverviewMarkerKind::ActiveSearchMatch => (palette.warning << 8) | 0xd8,
     }
 }

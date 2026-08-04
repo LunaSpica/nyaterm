@@ -953,7 +953,7 @@ fn push_selected_occurrence_bg(
             point(px(left), px(top)),
             size(px((right - left).max(0.0)), px((bottom - top).max(0.0))),
         ),
-        rgba((palette.text_muted << 8) | 0x38),
+        rgba((palette.text_muted << 8) | 0x58),
     ));
 }
 

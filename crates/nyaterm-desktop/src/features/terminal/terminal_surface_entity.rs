@@ -19,7 +19,8 @@ use crate::features::terminal::terminal_surface::{
     TERMINAL_SCROLLBAR_TRACK_PADDING_RIGHT, TERMINAL_SCROLLBAR_TRACK_PADDING_Y,
     TerminalScrollbarInput, terminal_overview_marker_canvas, terminal_scroll_offset_from_pointer,
     terminal_scrollbar_grab_offset_for_pointer, terminal_scrollbar_metrics,
-    terminal_scrollbar_thumb_element, terminal_scrollbar_track_bounds_tracker, track_height,
+    terminal_scrollbar_thumb_element, terminal_scrollbar_track_bounds_tracker,
+    terminal_scrollbar_track_color, track_height,
 };
 use crate::models::{TerminalPerformanceOverlay, TerminalProtocolState, TerminalSelection};
 use crate::terminal::{
@@ -2024,6 +2025,7 @@ impl TerminalSurface {
                     .relative()
                     .size_full()
                     .rounded_full()
+                    .bg(rgba(terminal_scrollbar_track_color(palette)))
                     .cursor_pointer()
                     .on_mouse_down(MouseButton::Left, {
                         let session_id = session_id.clone();
@@ -2082,11 +2084,6 @@ impl TerminalSurface {
                             Some(session_id.clone()),
                         ))
                     })
-                    .child(terminal_overview_marker_canvas(
-                        overview_markers,
-                        overview_total_rows,
-                        palette,
-                    ))
                     .when(show, |this| {
                         this.child(terminal_scrollbar_thumb_element(
                             SharedString::from(thumb_id),
@@ -2095,7 +2092,12 @@ impl TerminalSurface {
                             is_active,
                             drag_active,
                         ))
-                    }),
+                    })
+                    .child(terminal_overview_marker_canvas(
+                        overview_markers,
+                        overview_total_rows,
+                        palette,
+                    )),
             )
     }
 }

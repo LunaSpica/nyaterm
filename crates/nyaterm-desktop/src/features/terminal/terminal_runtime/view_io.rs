@@ -1153,7 +1153,9 @@ impl NyaTermApp {
         let mut active_search_ranges_by_line: HashMap<usize, Vec<(usize, usize)>> = HashMap::new();
         let mut selected_occurrence_ranges_by_line: HashMap<usize, Vec<(usize, usize)>> =
             HashMap::new();
-        if enhanced && is_active {
+        // Selected occurrences are explicit user feedback. Keep them visible
+        // while optional decorations are degraded under output pressure.
+        if is_active {
             let (abs_start, abs_end) =
                 crate::features::terminal::terminal_surface::terminal_snapshot_absolute_range(
                     &snapshot,

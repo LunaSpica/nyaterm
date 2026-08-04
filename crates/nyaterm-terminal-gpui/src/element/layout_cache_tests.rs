@@ -1192,7 +1192,7 @@ fn dynamic_decoration_backgrounds_include_plain_selection_and_search() {
     assert!(out.iter().all(|quad| quad.bounds.origin.y == px(-8.0)));
     assert_eq!(
         out[0].background,
-        gpui::rgba((palette.text_muted << 8) | 0x38).into()
+        gpui::rgba((palette.text_muted << 8) | 0x58).into()
     );
     assert_eq!(
         out[3].background,

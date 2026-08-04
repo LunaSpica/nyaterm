@@ -14,7 +14,8 @@ use super::{
     TERMINAL_SCROLLBAR_TRACK_PADDING_RIGHT, TERMINAL_SCROLLBAR_TRACK_PADDING_Y,
     TerminalScrollbarInput, terminal_overview_marker_canvas, terminal_scroll_offset_from_pointer,
     terminal_scrollbar_grab_offset_for_pointer, terminal_scrollbar_metrics,
-    terminal_scrollbar_thumb_element, terminal_scrollbar_track_bounds_tracker, track_height,
+    terminal_scrollbar_thumb_element, terminal_scrollbar_track_bounds_tracker,
+    terminal_scrollbar_track_color, track_height,
 };
 
 impl NyaTermApp {
@@ -88,6 +89,7 @@ impl NyaTermApp {
                     .relative()
                     .size_full()
                     .rounded_full()
+                    .bg(rgba(terminal_scrollbar_track_color(palette)))
                     .cursor_pointer()
                     .on_mouse_down(MouseButton::Left, {
                         let session_id = session_id.to_string();
@@ -143,11 +145,6 @@ impl NyaTermApp {
                         cx.entity(),
                         (!session_id.is_empty()).then_some(session_id.to_string()),
                     ))
-                    .child(terminal_overview_marker_canvas(
-                        overview_markers.into(),
-                        overview_total_rows,
-                        palette,
-                    ))
                     .when(show, |this| {
                         this.child(terminal_scrollbar_thumb_element(
                             SharedString::from(thumb_id),
@@ -156,7 +153,12 @@ impl NyaTermApp {
                             is_active,
                             drag_active,
                         ))
-                    }),
+                    })
+                    .child(terminal_overview_marker_canvas(
+                        overview_markers.into(),
+                        overview_total_rows,
+                        palette,
+                    )),
             )
     }
 
