@@ -1295,8 +1295,17 @@ impl NyaTermApp {
         &mut self,
         session_id: Option<&str>,
         bounds: gpui::Bounds<gpui::Pixels>,
-    ) {
+    ) -> bool {
         if let Some(session_id) = session_id.filter(|id| !id.is_empty()) {
+            if self
+                .terminal
+                .layout
+                .session_scrollbar_track_bounds
+                .get(session_id)
+                .is_some_and(|previous| *previous == bounds)
+            {
+                return false;
+            }
             self.terminal
                 .layout
                 .session_scrollbar_track_bounds
@@ -1305,8 +1314,12 @@ impl NyaTermApp {
                 self.terminal.layout.scrollbar_track_bounds = Some(bounds);
             }
         } else {
+            if self.terminal.layout.scrollbar_track_bounds == Some(bounds) {
+                return false;
+            }
             self.terminal.layout.scrollbar_track_bounds = Some(bounds);
         }
+        true
     }
 
     pub(in crate::features) fn terminal_scrollbar_track_bounds_for_session(
