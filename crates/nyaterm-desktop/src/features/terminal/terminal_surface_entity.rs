@@ -17,10 +17,10 @@ use crate::features::terminal::terminal_selection_runtime::{
 use crate::features::terminal::terminal_surface::{
     TERMINAL_SCROLLBAR_COLUMN_WIDTH, TERMINAL_SCROLLBAR_MIN_THUMB_HEIGHT,
     TERMINAL_SCROLLBAR_TRACK_PADDING_RIGHT, TERMINAL_SCROLLBAR_TRACK_PADDING_Y,
-    TerminalScrollbarInput, terminal_overview_marker_canvas, terminal_scroll_offset_from_pointer,
-    terminal_scrollbar_grab_offset_for_pointer, terminal_scrollbar_metrics,
-    terminal_scrollbar_thumb_element, terminal_scrollbar_track_bounds_tracker,
-    terminal_scrollbar_track_color, track_height,
+    TerminalScrollbarInput, terminal_overview_marker_buckets, terminal_overview_marker_canvas,
+    terminal_scroll_offset_from_pointer, terminal_scrollbar_grab_offset_for_pointer,
+    terminal_scrollbar_metrics, terminal_scrollbar_thumb_element,
+    terminal_scrollbar_track_bounds_tracker, terminal_scrollbar_track_color, track_height,
 };
 use crate::models::{TerminalPerformanceOverlay, TerminalProtocolState, TerminalSelection};
 use crate::terminal::{
@@ -320,6 +320,9 @@ pub(in crate::features) struct TerminalSurface {
     overview_markers: Arc<[crate::features::terminal::terminal_surface::TerminalOverviewMarker]>,
     overview_total_rows: usize,
     overview_marker_key: u64,
+    overview_marker_bucket_key: Option<(u64, usize, usize)>,
+    overview_marker_buckets:
+        Arc<[crate::features::terminal::terminal_surface::TerminalOverviewMarkerBucket]>,
 }
 
 impl TerminalSurface {
@@ -382,6 +385,8 @@ impl TerminalSurface {
             overview_markers: Arc::from([]),
             overview_total_rows: 1,
             overview_marker_key: 0,
+            overview_marker_bucket_key: None,
+            overview_marker_buckets: Arc::from([]),
         }
     }
 
@@ -1284,11 +1289,34 @@ impl TerminalSurface {
         self.overview_markers = markers;
         self.overview_total_rows = total_rows;
         self.overview_marker_key = key;
+        self.overview_marker_bucket_key = None;
+        self.overview_marker_buckets = Arc::from([]);
         true
     }
 
     pub(in crate::features) fn overview_marker_key(&self) -> u64 {
         self.overview_marker_key
+    }
+
+    fn overview_marker_buckets_for_track_height(
+        &mut self,
+        track_height_px: usize,
+    ) -> Arc<[crate::features::terminal::terminal_surface::TerminalOverviewMarkerBucket]> {
+        let bucket_key = (
+            self.overview_marker_key,
+            self.overview_total_rows,
+            track_height_px,
+        );
+        if self.overview_marker_bucket_key != Some(bucket_key) {
+            self.overview_marker_buckets = terminal_overview_marker_buckets(
+                &self.overview_markers,
+                self.overview_total_rows,
+                track_height_px,
+            )
+            .into();
+            self.overview_marker_bucket_key = Some(bucket_key);
+        }
+        self.overview_marker_buckets.clone()
     }
 
     pub(in crate::features) fn set_layout_cache(
@@ -2005,7 +2033,7 @@ impl TerminalSurface {
         }
     }
 
-    fn scrollbar_element(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn scrollbar_element(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = self.palette;
         let session_id = self.session_id.clone();
         let is_active = self.is_active;
@@ -2037,6 +2065,10 @@ impl TerminalSurface {
         });
         let overview_markers = self.overview_markers.clone();
         let overview_total_rows = self.overview_total_rows;
+        let overview_track_height_px =
+            track_bounds.map(track_height).unwrap_or(1.0).round() as usize;
+        let overview_marker_buckets =
+            self.overview_marker_buckets_for_track_height(overview_track_height_px);
 
         div()
             .id(SharedString::from(format!(
@@ -2117,6 +2149,8 @@ impl TerminalSurface {
                     .child(terminal_overview_marker_canvas(
                         overview_markers,
                         overview_total_rows,
+                        overview_track_height_px,
+                        overview_marker_buckets,
                         palette,
                     ))
                     .when(show, |this| {

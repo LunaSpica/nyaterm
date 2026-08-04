@@ -1,6 +1,9 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use crate::features::terminal::terminal_surface::{
+    TerminalOverviewMarker, TerminalOverviewMarkerKind,
+};
 use crate::models::TerminalBufferCellPos;
 use crate::models::{TerminalProtocolState, TerminalSelection};
 use crate::terminal::{
@@ -32,6 +35,30 @@ use super::{
 
 struct TerminalSurfaceLayoutTestView {
     surface: Entity<TerminalSurface>,
+}
+
+#[test]
+fn overview_marker_buckets_reuse_arc_until_key_or_height_changes() {
+    let mut surface = TerminalSurface::new("session");
+    assert!(
+        surface.set_overview_markers(
+            vec![TerminalOverviewMarker {
+                absolute_line: 50,
+                kind: TerminalOverviewMarkerKind::SelectedOccurrence,
+            }]
+            .into(),
+            100,
+            7,
+        )
+    );
+
+    let initial = surface.overview_marker_buckets_for_track_height(200);
+    let reused = surface.overview_marker_buckets_for_track_height(200);
+    let resized = surface.overview_marker_buckets_for_track_height(240);
+
+    assert!(Arc::ptr_eq(&initial, &reused));
+    assert!(!Arc::ptr_eq(&initial, &resized));
+    assert!(!resized.is_empty());
 }
 
 impl Render for TerminalSurfaceLayoutTestView {

@@ -261,19 +261,15 @@ fn selected_occurrence_frames_are_rejected_after_selection_clear() {
 fn terminal_search_results_keep_find_and_selected_occurrence_slots_independent() {
     let mut view = TerminalViewState::new();
     view.screen_revision = 7;
-    let find = TerminalFrameSearchResult {
-        key: search_key("find"),
-        revision: 7,
-        matches: Ok(Vec::new()),
-    };
-    let selected = TerminalFrameSearchResult {
-        key: TerminalFrameSearchKey {
+    let find = TerminalFrameSearchResult::new(search_key("find"), 7, Ok(Vec::new()));
+    let selected = TerminalFrameSearchResult::new(
+        TerminalFrameSearchKey {
             request_generation: 3,
             ..search_key("selected")
         },
-        revision: 7,
-        matches: Ok(Vec::new()),
-    };
+        7,
+        Ok(Vec::new()),
+    );
 
     assert!(terminal_apply_search_result_to_view(
         &mut view,
@@ -298,11 +294,7 @@ fn terminal_search_results_keep_find_and_selected_occurrence_slots_independent()
         Some(&selected.key)
     );
 
-    let visible = TerminalFrameSearchResult {
-        key: selected.key.clone(),
-        revision: 7,
-        matches: Ok(Vec::new()),
-    };
+    let visible = TerminalFrameSearchResult::new(selected.key.clone(), 7, Ok(Vec::new()));
     assert!(terminal_apply_search_result_to_view(
         &mut view,
         TerminalFrameSearchPurpose::SelectedOccurrenceVisible {
@@ -341,19 +333,15 @@ fn terminal_search_results_keep_find_and_selected_occurrence_slots_independent()
 fn terminal_search_results_reject_stale_revision_and_occurrence_generation() {
     let mut view = TerminalViewState::new();
     view.screen_revision = 9;
-    let stale_revision = TerminalFrameSearchResult {
-        key: search_key("find"),
-        revision: 8,
-        matches: Ok(Vec::new()),
-    };
-    let stale_generation = TerminalFrameSearchResult {
-        key: TerminalFrameSearchKey {
+    let stale_revision = TerminalFrameSearchResult::new(search_key("find"), 8, Ok(Vec::new()));
+    let stale_generation = TerminalFrameSearchResult::new(
+        TerminalFrameSearchKey {
             request_generation: 1,
             ..search_key("selected")
         },
-        revision: 9,
-        matches: Ok(Vec::new()),
-    };
+        9,
+        Ok(Vec::new()),
+    );
 
     assert!(!terminal_apply_search_result_to_view(
         &mut view,

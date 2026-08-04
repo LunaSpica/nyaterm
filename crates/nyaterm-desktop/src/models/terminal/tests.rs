@@ -1095,11 +1095,7 @@ fn terminal_frame_search_result_current_requires_matching_revision() {
         limit: 100,
         request_generation: 0,
     };
-    let result = TerminalFrameSearchResult {
-        key: key.clone(),
-        revision: 7,
-        matches: Ok(Vec::new()),
-    };
+    let result = TerminalFrameSearchResult::new(key.clone(), 7, Ok(Vec::new()));
     let other_key = TerminalFrameSearchKey {
         query: "beta".to_string(),
         ..key.clone()
@@ -1277,8 +1273,8 @@ fn terminal_frame_event_queue_wakes_search_results_when_terminal_is_quiet() {
     queue.push(TerminalFrameEvent::Search(TerminalFrameSearchEvent {
         session_id: "s1".to_string(),
         purpose: TerminalFrameSearchPurpose::SelectedOccurrence,
-        result: TerminalFrameSearchResult {
-            key: TerminalFrameSearchKey {
+        result: TerminalFrameSearchResult::new(
+            TerminalFrameSearchKey {
                 query: "term".to_string(),
                 case_sensitive: true,
                 regex: false,
@@ -1286,9 +1282,9 @@ fn terminal_frame_event_queue_wakes_search_results_when_terminal_is_quiet() {
                 limit: 8,
                 request_generation: 1,
             },
-            revision: 1,
-            matches: Ok(Vec::new()),
-        },
+            1,
+            Ok(Vec::new()),
+        ),
         process_duration: Duration::ZERO,
     }));
 

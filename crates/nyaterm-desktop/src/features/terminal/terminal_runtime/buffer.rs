@@ -1871,8 +1871,8 @@ mod frame_event_queue_tests {
         TerminalFrameEvent::Search(TerminalFrameSearchEvent {
             session_id: session_id.to_string(),
             purpose: TerminalFrameSearchPurpose::Find,
-            result: TerminalFrameSearchResult {
-                key: TerminalFrameSearchKey {
+            result: TerminalFrameSearchResult::new(
+                TerminalFrameSearchKey {
                     query: "query".to_string(),
                     case_sensitive: false,
                     regex: false,
@@ -1880,9 +1880,9 @@ mod frame_event_queue_tests {
                     limit: 100,
                     request_generation: 0,
                 },
-                revision: 1,
-                matches: Ok(Vec::new()),
-            },
+                1,
+                Ok(Vec::new()),
+            ),
             process_duration: Duration::ZERO,
         })
     }

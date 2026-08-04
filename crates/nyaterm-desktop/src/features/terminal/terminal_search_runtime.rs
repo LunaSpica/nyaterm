@@ -1,4 +1,6 @@
 use std::hash::{Hash, Hasher};
+use std::ops::Range;
+use std::sync::Arc;
 
 use gpui::{Context, KeyDownEvent, Window};
 
@@ -12,6 +14,50 @@ use crate::models::{
     terminal_frame_search_result_is_current,
 };
 use crate::terminal::TerminalBufferMatch;
+
+#[derive(Clone, Debug, Default)]
+pub(in crate::features) struct TerminalSelectedOccurrenceMatches {
+    matches: Arc<[TerminalBufferMatch]>,
+    selection: Option<TerminalSelection>,
+    position_fingerprint: u64,
+    revision: u64,
+}
+
+impl TerminalSelectedOccurrenceMatches {
+    fn iter(&self) -> impl Iterator<Item = &TerminalBufferMatch> {
+        self.matches
+            .iter()
+            .filter(|search_match| !selected_occurrence_is_original(search_match, self.selection))
+    }
+
+    pub(in crate::features) fn iter_in_absolute_range(
+        &self,
+        range: Range<usize>,
+    ) -> impl Iterator<Item = &TerminalBufferMatch> {
+        let start = self
+            .matches
+            .partition_point(|search_match| search_match.line_index < range.start);
+        let end = self
+            .matches
+            .partition_point(|search_match| search_match.line_index < range.end);
+        self.matches[start..end]
+            .iter()
+            .filter(|search_match| !selected_occurrence_is_original(search_match, self.selection))
+    }
+
+    fn is_empty(&self) -> bool {
+        self.iter().next().is_none()
+    }
+}
+
+pub(in crate::features) fn terminal_matches_in_absolute_range(
+    matches: &[TerminalBufferMatch],
+    range: Range<usize>,
+) -> &[TerminalBufferMatch] {
+    let start = matches.partition_point(|search_match| search_match.line_index < range.start);
+    let end = matches.partition_point(|search_match| search_match.line_index < range.end);
+    &matches[start..end]
+}
 
 impl NyaTermApp {
     pub(in crate::features) fn open_terminal_search(
@@ -101,16 +147,16 @@ impl NyaTermApp {
 
     pub(in crate::features) fn terminal_buffer_matches(
         &self,
-    ) -> Result<Vec<TerminalBufferMatch>, String> {
+    ) -> Result<Arc<[TerminalBufferMatch]>, String> {
         let Some(key) = self.terminal_search_key() else {
-            return Ok(Vec::new());
+            return Ok(Arc::from([]));
         };
         let Some(view) = self
             .session
             .active_id()
             .and_then(|session_id| self.terminal.view.views.get(session_id))
         else {
-            return Ok(Vec::new());
+            return Ok(Arc::from([]));
         };
         view.search_result
             .as_ref()
@@ -118,13 +164,13 @@ impl NyaTermApp {
                 terminal_frame_search_result_is_current(result, &key, view.screen_revision)
             })
             .map(|result| result.matches.clone())
-            .unwrap_or_else(|| Ok(Vec::new()))
+            .unwrap_or_else(|| Ok(Arc::from([])))
     }
 
     pub(in crate::features) fn terminal_selected_occurrence_matches_for_session(
         &self,
         session_id: &str,
-    ) -> Result<Vec<TerminalBufferMatch>, String> {
+    ) -> Result<TerminalSelectedOccurrenceMatches, String> {
         let Some(query) = self
             .terminal
             .selection
@@ -140,10 +186,10 @@ impl NyaTermApp {
                     == Some(session_id)
             })
         else {
-            return Ok(Vec::new());
+            return Ok(TerminalSelectedOccurrenceMatches::default());
         };
         let Some(view) = self.terminal.view.views.get(session_id) else {
-            return Ok(Vec::new());
+            return Ok(TerminalSelectedOccurrenceMatches::default());
         };
         let key = TerminalFrameSearchKey {
             query: query.clone(),
@@ -177,7 +223,7 @@ impl NyaTermApp {
     pub(in crate::features) fn terminal_overview_markers_for_session_with_selected_matches(
         &self,
         session_id: &str,
-        selected_matches: &[TerminalBufferMatch],
+        selected_matches: &TerminalSelectedOccurrenceMatches,
     ) -> (Vec<TerminalOverviewMarker>, usize) {
         let total_rows = self
             .terminal
@@ -187,7 +233,7 @@ impl NyaTermApp {
             .map(|view| view.total_rows_for_ui())
             .unwrap_or_else(|| self.terminal.view.screen.total_rows())
             .max(1);
-        let mut markers = Vec::with_capacity(selected_matches.len());
+        let mut markers = Vec::with_capacity(selected_matches.matches.len());
         markers.extend(
             selected_matches
                 .iter()
@@ -206,7 +252,7 @@ impl NyaTermApp {
                 .search
                 .active_index
                 .min(matches.len().saturating_sub(1));
-            for (index, m) in matches.into_iter().enumerate() {
+            for (index, m) in matches.iter().enumerate() {
                 markers.push(TerminalOverviewMarker {
                     absolute_line: m.line_index,
                     kind: if index == active_index {
@@ -223,7 +269,7 @@ impl NyaTermApp {
     pub(in crate::features) fn terminal_overview_marker_key_for_session_with_selected_matches(
         &self,
         session_id: &str,
-        selected_matches: &[TerminalBufferMatch],
+        selected_matches: &TerminalSelectedOccurrenceMatches,
     ) -> u64 {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         session_id.hash(&mut hasher);
@@ -247,14 +293,10 @@ impl NyaTermApp {
         self.terminal.search.active_index.hash(&mut hasher);
         self.terminal.search.open.hash(&mut hasher);
         self.terminal.search.mode.hash(&mut hasher);
-        let mut has_markers = false;
-        selected_matches.len().hash(&mut hasher);
-        for search_match in selected_matches {
-            search_match.line_index.hash(&mut hasher);
-            search_match.start_col.hash(&mut hasher);
-            search_match.end_col.hash(&mut hasher);
-        }
-        has_markers |= !selected_matches.is_empty();
+        selected_matches.position_fingerprint.hash(&mut hasher);
+        selected_matches.revision.hash(&mut hasher);
+        selected_matches.selection.hash(&mut hasher);
+        let mut has_markers = !selected_matches.is_empty();
         if let Some(view) = self.terminal.view.views.get(session_id) {
             let active_buffer_search = self.session.active_id() == Some(session_id)
                 && self.terminal.search.open
@@ -273,6 +315,7 @@ impl NyaTermApp {
                 if search_is_current && let Some(result) = search_result {
                     result.key.hash(&mut hasher);
                     result.revision.hash(&mut hasher);
+                    result.position_fingerprint.hash(&mut hasher);
                     let non_empty = result
                         .matches
                         .as_ref()
@@ -506,28 +549,24 @@ fn empty_terminal_history_search_response() -> nyaterm_transport::TerminalHistor
     }
 }
 
-fn filter_selected_occurrence_matches(
-    matches: &[TerminalBufferMatch],
+fn selected_occurrence_is_original(
+    search_match: &TerminalBufferMatch,
     selection: Option<TerminalSelection>,
-) -> Vec<TerminalBufferMatch> {
-    matches
-        .iter()
-        .filter(|m| {
-            !selection.is_some_and(|selection| {
-                selection
-                    .cols_for_absolute_line(m.line_index)
-                    .is_some_and(|(start, end)| m.start_col >= start && m.end_col <= end)
+) -> bool {
+    selection.is_some_and(|selection| {
+        selection
+            .cols_for_absolute_line(search_match.line_index)
+            .is_some_and(|(start, end)| {
+                search_match.start_col >= start && search_match.end_col <= end
             })
-        })
-        .cloned()
-        .collect()
+    })
 }
 
 fn current_selected_occurrence_matches(
     view: &crate::models::TerminalViewState,
     key: &TerminalFrameSearchKey,
     selection: Option<TerminalSelection>,
-) -> Result<Vec<TerminalBufferMatch>, String> {
+) -> Result<TerminalSelectedOccurrenceMatches, String> {
     // The visible result provides immediate feedback. Once the full-buffer
     // result arrives it is authoritative for both decorations and the ruler.
     let result = view
@@ -546,16 +585,24 @@ fn current_selected_occurrence_matches(
             result
                 .matches
                 .clone()
-                .map(|matches| filter_selected_occurrence_matches(&matches, selection))
+                .map(|matches| TerminalSelectedOccurrenceMatches {
+                    matches,
+                    selection,
+                    position_fingerprint: result.position_fingerprint,
+                    revision: result.revision,
+                })
         })
-        .unwrap_or_else(|| Ok(Vec::new()))
+        .unwrap_or_else(|| Ok(TerminalSelectedOccurrenceMatches::default()))
 }
 
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
 
-    use super::{current_selected_occurrence_matches, filter_selected_occurrence_matches};
+    use super::{
+        TerminalSelectedOccurrenceMatches, current_selected_occurrence_matches,
+        terminal_matches_in_absolute_range,
+    };
     use crate::features::terminal::terminal_surface::{
         TerminalDecorationSources, TerminalOverviewMarker, TerminalOverviewMarkerKind,
         build_terminal_line_decorations, terminal_snapshot_absolute_range,
@@ -590,7 +637,15 @@ mod tests {
             },
         ];
 
-        let filtered = filter_selected_occurrence_matches(&matches, Some(selection));
+        let filtered = TerminalSelectedOccurrenceMatches {
+            matches: matches.into(),
+            selection: Some(selection),
+            position_fingerprint: 0,
+            revision: 0,
+        }
+        .iter()
+        .cloned()
+        .collect::<Vec<_>>();
         assert_eq!(filtered.len(), 2);
         assert_eq!(filtered[0].line_index, 4);
         assert_eq!(filtered[1].line_index, 5);
@@ -608,40 +663,67 @@ mod tests {
         };
         let mut view = TerminalViewState::new();
         view.screen_revision = 7;
-        view.selected_occurrence_visible_result = Some(TerminalFrameSearchResult {
-            key: key.clone(),
-            revision: 7,
-            matches: Ok(vec![TerminalBufferMatch {
+        view.selected_occurrence_visible_result = Some(TerminalFrameSearchResult::new(
+            key.clone(),
+            7,
+            Ok(vec![TerminalBufferMatch {
                 line_index: 2,
                 start_col: 5,
                 end_col: 12,
             }]),
-        });
+        ));
 
         assert_eq!(
             current_selected_occurrence_matches(&view, &key, None)
                 .unwrap()
-                .len(),
+                .iter()
+                .count(),
             1
         );
 
-        view.selected_occurrence_result = Some(TerminalFrameSearchResult {
-            key: key.clone(),
-            revision: 7,
-            matches: Ok((0..3)
+        view.selected_occurrence_result = Some(TerminalFrameSearchResult::new(
+            key.clone(),
+            7,
+            Ok((0..3)
                 .map(|line_index| TerminalBufferMatch {
                     line_index,
                     start_col: 5,
                     end_col: 12,
                 })
                 .collect()),
-        });
+        ));
+
+        let full = current_selected_occurrence_matches(&view, &key, None).unwrap();
+        assert_eq!(full.iter().count(), 3);
+        assert!(std::sync::Arc::ptr_eq(
+            &full.matches,
+            view.selected_occurrence_result
+                .as_ref()
+                .unwrap()
+                .matches
+                .as_ref()
+                .unwrap()
+        ));
+    }
+
+    #[test]
+    fn absolute_range_slice_uses_sorted_match_boundaries() {
+        let matches = (0..100)
+            .map(|line_index| TerminalBufferMatch {
+                line_index,
+                start_col: 1,
+                end_col: 3,
+            })
+            .collect::<Vec<_>>();
+
+        let visible = terminal_matches_in_absolute_range(&matches, 40..44);
 
         assert_eq!(
-            current_selected_occurrence_matches(&view, &key, None)
-                .unwrap()
-                .len(),
-            3
+            visible
+                .iter()
+                .map(|search_match| search_match.line_index)
+                .collect::<Vec<_>>(),
+            vec![40, 41, 42, 43]
         );
     }
 
@@ -674,7 +756,15 @@ mod tests {
             TerminalBufferCellPos::new(absolute_start + 2, 5),
             TerminalBufferCellPos::new(absolute_start + 2, 11),
         );
-        let filtered = filter_selected_occurrence_matches(&matches, Some(selection));
+        let filtered = TerminalSelectedOccurrenceMatches {
+            matches: matches.into(),
+            selection: Some(selection),
+            position_fingerprint: 0,
+            revision: 0,
+        }
+        .iter()
+        .cloned()
+        .collect::<Vec<_>>();
         let ranges = filtered.iter().fold(HashMap::new(), |mut ranges, item| {
             ranges
                 .entry(item.line_index - absolute_start)

@@ -229,13 +229,22 @@ pub(in crate::features) fn terminal_overview_marker_buckets(
 pub(in crate::features) fn terminal_overview_marker_canvas(
     markers: Arc<[TerminalOverviewMarker]>,
     total_rows: usize,
+    cached_track_height_px: usize,
+    cached_buckets: Arc<[TerminalOverviewMarkerBucket]>,
     palette: crate::theme::ThemePalette,
 ) -> impl IntoElement {
     gpui::canvas(
         |_bounds, _window, _cx| {},
         move |bounds, _state, window, _cx| {
             let track_height_px = f32::from(bounds.size.height).max(0.0).round() as usize;
-            let buckets = terminal_overview_marker_buckets(&markers, total_rows, track_height_px);
+            let fallback_buckets;
+            let buckets = if track_height_px == cached_track_height_px {
+                cached_buckets.as_ref()
+            } else {
+                fallback_buckets =
+                    terminal_overview_marker_buckets(&markers, total_rows, track_height_px);
+                fallback_buckets.as_slice()
+            };
             if buckets.is_empty() {
                 return;
             }

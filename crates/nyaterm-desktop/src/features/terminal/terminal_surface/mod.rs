@@ -12,8 +12,9 @@ mod scrollbar;
 pub(in crate::features) use scrollbar::{
     TERMINAL_SCROLLBAR_COLUMN_WIDTH, TERMINAL_SCROLLBAR_MIN_THUMB_HEIGHT,
     TERMINAL_SCROLLBAR_TRACK_PADDING_RIGHT, TERMINAL_SCROLLBAR_TRACK_PADDING_Y,
-    TerminalOverviewMarker, TerminalOverviewMarkerKind, TerminalScrollbarDragState,
-    TerminalScrollbarInput, TerminalScrollbarMetrics, terminal_overview_marker_canvas,
+    TerminalOverviewMarker, TerminalOverviewMarkerBucket, TerminalOverviewMarkerKind,
+    TerminalScrollbarDragState, TerminalScrollbarInput, TerminalScrollbarMetrics,
+    terminal_overview_marker_buckets, terminal_overview_marker_canvas,
     terminal_scroll_offset_from_pointer, terminal_scrollbar_grab_offset_for_pointer,
     terminal_scrollbar_metrics, terminal_scrollbar_thumb_element,
     terminal_scrollbar_track_bounds_tracker, terminal_scrollbar_track_color, track_height,

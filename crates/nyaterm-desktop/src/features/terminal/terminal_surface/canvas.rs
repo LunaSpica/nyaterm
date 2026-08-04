@@ -346,7 +346,7 @@ impl NyaTermApp {
             {
                 self.terminal_buffer_matches().unwrap_or_default()
             } else {
-                Vec::new()
+                std::sync::Arc::from([])
             };
             // Buffer matches use absolute history indices; map into current viewport rows.
             let active_match_abs = search_matches
@@ -365,14 +365,11 @@ impl NyaTermApp {
             // Selected occurrences are explicit user feedback. Keep them
             // visible while optional decorations are degraded.
             if is_active {
-                for search_match in self
+                let selected_matches = self
                     .terminal_selected_occurrence_matches_for_session(&session_id)
-                    .unwrap_or_default()
-                {
+                    .unwrap_or_default();
+                for search_match in selected_matches.iter_in_absolute_range(abs_start..abs_end) {
                     let abs = search_match.line_index;
-                    if abs < abs_start || abs >= abs_end {
-                        continue;
-                    }
                     selected_occurrence_ranges_by_line
                         .entry(abs - abs_start)
                         .or_default()

@@ -127,7 +127,38 @@ pub(crate) enum TerminalFrameSearchPurpose {
 pub(crate) struct TerminalFrameSearchResult {
     pub(crate) key: TerminalFrameSearchKey,
     pub(crate) revision: u64,
-    pub(crate) matches: Result<Vec<TerminalBufferMatch>, String>,
+    pub(crate) matches: Result<Arc<[TerminalBufferMatch]>, String>,
+    pub(crate) position_fingerprint: u64,
+}
+
+impl TerminalFrameSearchResult {
+    pub(crate) fn new(
+        key: TerminalFrameSearchKey,
+        revision: u64,
+        matches: Result<Vec<TerminalBufferMatch>, String>,
+    ) -> Self {
+        let position_fingerprint = matches
+            .as_deref()
+            .map(terminal_buffer_matches_position_fingerprint)
+            .unwrap_or_default();
+        Self {
+            key,
+            revision,
+            matches: matches.map(Arc::from),
+            position_fingerprint,
+        }
+    }
+}
+
+pub(crate) fn terminal_buffer_matches_position_fingerprint(matches: &[TerminalBufferMatch]) -> u64 {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    matches.len().hash(&mut hasher);
+    for search_match in matches {
+        search_match.line_index.hash(&mut hasher);
+        search_match.start_col.hash(&mut hasher);
+        search_match.end_col.hash(&mut hasher);
+    }
+    hasher.finish()
 }
 
 pub(crate) fn terminal_frame_search_result_is_current(
@@ -1911,11 +1942,7 @@ impl TerminalFrameSession {
         TerminalFrameSearchEvent {
             session_id,
             purpose,
-            result: TerminalFrameSearchResult {
-                key,
-                revision: self.revision,
-                matches,
-            },
+            result: TerminalFrameSearchResult::new(key, self.revision, matches),
             process_duration: started_at.elapsed(),
         }
     }

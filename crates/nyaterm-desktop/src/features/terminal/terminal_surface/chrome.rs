@@ -12,10 +12,10 @@ use crate::theme::ThemePalette;
 use super::{
     TERMINAL_SCROLLBAR_COLUMN_WIDTH, TERMINAL_SCROLLBAR_MIN_THUMB_HEIGHT,
     TERMINAL_SCROLLBAR_TRACK_PADDING_RIGHT, TERMINAL_SCROLLBAR_TRACK_PADDING_Y,
-    TerminalScrollbarInput, terminal_overview_marker_canvas, terminal_scroll_offset_from_pointer,
-    terminal_scrollbar_grab_offset_for_pointer, terminal_scrollbar_metrics,
-    terminal_scrollbar_thumb_element, terminal_scrollbar_track_bounds_tracker,
-    terminal_scrollbar_track_color, track_height,
+    TerminalScrollbarInput, terminal_overview_marker_buckets, terminal_overview_marker_canvas,
+    terminal_scroll_offset_from_pointer, terminal_scrollbar_grab_offset_for_pointer,
+    terminal_scrollbar_metrics, terminal_scrollbar_thumb_element,
+    terminal_scrollbar_track_bounds_tracker, terminal_scrollbar_track_color, track_height,
 };
 
 impl NyaTermApp {
@@ -72,6 +72,13 @@ impl NyaTermApp {
         let thumb_id = format!("terminal-scrollbar-thumb-{session_id}");
         let (overview_markers, overview_total_rows) =
             self.terminal_overview_markers_for_session(session_id);
+        let overview_track_height_px = track_height.max(0.0).round() as usize;
+        let overview_marker_buckets = terminal_overview_marker_buckets(
+            &overview_markers,
+            overview_total_rows,
+            overview_track_height_px,
+        )
+        .into();
 
         div()
             .id(SharedString::from(format!(
@@ -149,6 +156,8 @@ impl NyaTermApp {
                     .child(terminal_overview_marker_canvas(
                         overview_markers.into(),
                         overview_total_rows,
+                        overview_track_height_px,
+                        overview_marker_buckets,
                         palette,
                     ))
                     .when(show, |this| {

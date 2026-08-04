@@ -771,7 +771,7 @@ impl NyaTermApp {
         {
             self.terminal_buffer_matches().unwrap_or_default()
         } else {
-            Vec::new()
+            std::sync::Arc::from([])
         };
         let action_link_matcher_key = terminal_action_link_matcher_key(
             action_links_enabled,
@@ -796,7 +796,7 @@ impl NyaTermApp {
         );
         let decorations = terminal_scroll_text_first_decorations(
             snapshot.as_ref(),
-            (!search_matches.is_empty()).then_some(search_matches.as_slice()),
+            (!search_matches.is_empty()).then_some(search_matches.as_ref()),
             &frame_action_links,
             action_links_enabled,
             action_links_enabled,
@@ -1157,7 +1157,7 @@ impl NyaTermApp {
             self.terminal_selected_occurrence_matches_for_session(session_id)
                 .unwrap_or_default()
         } else {
-            Vec::new()
+            Default::default()
         };
         // Selected occurrences are explicit user feedback. Keep them visible
         // while optional decorations are degraded under output pressure.
@@ -1166,11 +1166,10 @@ impl NyaTermApp {
                 crate::features::terminal::terminal_surface::terminal_snapshot_absolute_range(
                     &snapshot,
                 );
-            for search_match in &selected_occurrence_matches {
+            for search_match in
+                selected_occurrence_matches.iter_in_absolute_range(abs_start..abs_end)
+            {
                 let abs = search_match.line_index;
-                if abs < abs_start || abs >= abs_end {
-                    continue;
-                }
                 selected_occurrence_ranges_by_line
                     .entry(abs - abs_start)
                     .or_default()
@@ -1195,11 +1194,15 @@ impl NyaTermApp {
                         .min(search_matches.len().saturating_sub(1)),
                 )
                 .map(|search_match| search_match.line_index);
-            for (match_index, search_match) in search_matches.iter().enumerate() {
+            let visible_matches = crate::features::terminal::terminal_search_runtime::terminal_matches_in_absolute_range(
+                &search_matches,
+                abs_start..abs_end,
+            );
+            let first_visible_index =
+                search_matches.partition_point(|search_match| search_match.line_index < abs_start);
+            for (visible_index, search_match) in visible_matches.iter().enumerate() {
+                let match_index = first_visible_index + visible_index;
                 let abs = search_match.line_index;
-                if abs < abs_start || abs >= abs_end {
-                    continue;
-                }
                 let view_row = abs - abs_start;
                 let range = (search_match.start_col, search_match.end_col);
                 search_ranges_by_line
