@@ -24,8 +24,9 @@ use crate::features::terminal::terminal_surface::{
 };
 use crate::models::{TerminalPerformanceOverlay, TerminalProtocolState, TerminalSelection};
 use crate::terminal::{
-    NyaTerminalElement, NyaTerminalLayoutCache, TerminalKeywordHighlightSnapshot,
-    TerminalKeywordHighlighter, TerminalLineDecorations, compile_terminal_keyword_highlighter,
+    NyaTerminalElement, NyaTerminalLayoutCache, TerminalGridSelection,
+    TerminalKeywordHighlightSnapshot, TerminalKeywordHighlighter, TerminalLineDecorations,
+    compile_terminal_keyword_highlighter,
     precompute_terminal_keyword_highlights_for_rows_with_stats,
     terminal_keyword_highlight_expanded_rows, terminal_keyword_rules_key,
 };
@@ -280,7 +281,6 @@ pub(in crate::features) struct TerminalSurface {
     keyword_highlighter: Option<Arc<TerminalKeywordHighlighter>>,
     decorations: Arc<[TerminalLineDecorations]>,
     selection_visual: Option<TerminalSelection>,
-    selection_visual_row_range: Option<Range<usize>>,
     palette: ThemePalette,
     font_family: String,
     font_fallbacks: Option<FontFallbacks>,
@@ -345,7 +345,6 @@ impl TerminalSurface {
             keyword_highlighter: None,
             decorations: Arc::from(Vec::<TerminalLineDecorations>::new()),
             selection_visual: None,
-            selection_visual_row_range: None,
             palette: crate::theme::theme_palette("github-dark"),
             font_family: "monospace".to_string(),
             font_fallbacks: None,
@@ -683,7 +682,6 @@ impl TerminalSurface {
         self.retained_rows.clear();
         self.decorations = Arc::from(Vec::<TerminalLineDecorations>::new());
         self.selection_visual = None;
-        self.selection_visual_row_range = None;
         self.has_action_link_decorations = false;
         self.scroll_snapshot_pending = false;
         self.scroll_snapshot_pending_since = None;
@@ -980,7 +978,6 @@ impl TerminalSurface {
             self.remember_retained_snapshot(snapshot.clone());
         }
         self.snapshot = Some(snapshot);
-        self.refresh_selection_visual_for_snapshot();
         true
     }
 
@@ -1371,21 +1368,15 @@ impl TerminalSurface {
         show_cursor: bool,
         cursor_style: impl Into<String>,
     ) -> bool {
-        let selection_visual_row_range =
-            terminal_selection_visual_row_range_from_decorations(&decorations);
         let show_cursor = show_cursor && !self.visual_scroll_active();
         let cursor_style = cursor_style.into();
-        let changed = self.selection_visual.is_some()
-            || self.selection_visual_row_range != selection_visual_row_range
-            || self.decorations.as_ref() != decorations.as_ref()
+        let changed = self.decorations.as_ref() != decorations.as_ref()
             || !terminal_keyword_rule_sets_equal(&self.keyword_rules, &keyword_rules)
             || self.show_cursor != show_cursor
             || self.cursor_style != cursor_style;
         if !changed {
             return false;
         }
-        self.selection_visual = None;
-        self.selection_visual_row_range = selection_visual_row_range;
         self.decorations = decorations;
         self.keyword_rules = keyword_rules;
         self.show_cursor = show_cursor;
@@ -1603,83 +1594,10 @@ impl TerminalSurface {
         &mut self,
         selection: Option<TerminalSelection>,
     ) -> bool {
-        self.apply_selection_visual(selection, false)
-    }
-
-    fn refresh_selection_visual_for_snapshot(&mut self) -> bool {
-        self.apply_selection_visual(self.selection_visual, true)
-    }
-
-    fn apply_selection_visual(
-        &mut self,
-        selection: Option<TerminalSelection>,
-        force: bool,
-    ) -> bool {
-        let Some(snapshot) = self.snapshot.as_ref() else {
-            return false;
-        };
-        let line_count = snapshot.row_count();
-        if line_count == 0 {
+        if self.selection_visual == selection {
             return false;
         }
-        if !force && self.selection_visual == selection {
-            return false;
-        }
-
-        let next_rows = terminal_selection_visual_row_range(selection, snapshot.as_ref());
-        let update_rows = terminal_selection_visual_row_union(
-            self.selection_visual_row_range.clone(),
-            next_rows.clone(),
-        );
-        let Some(update_rows) = update_rows else {
-            self.selection_visual = selection;
-            self.selection_visual_row_range = None;
-            return false;
-        };
-
-        let mut next = if self.decorations.is_empty() {
-            vec![TerminalLineDecorations::default(); line_count]
-        } else {
-            let mut decorations = self.decorations.as_ref().to_vec();
-            decorations.resize(line_count, TerminalLineDecorations::default());
-            decorations
-        };
-
-        let mut changed = false;
-        for line_index in update_rows {
-            let selection_cols = selection.and_then(|selection| {
-                let absolute_line =
-                    crate::features::terminal::terminal_surface::terminal_absolute_line_for_snapshot_row(
-                        snapshot.as_ref(),
-                        line_index,
-                    )?;
-                let (start, end) = selection.cols_for_absolute_line(absolute_line)?;
-                let start = start.min(snapshot.cols);
-                let end = end.min(snapshot.cols);
-                (end > start).then_some((start, end))
-            });
-            let decoration = &mut next[line_index];
-            if decoration.selection_cols != selection_cols {
-                decoration.selection_cols = selection_cols;
-                changed = true;
-            }
-        }
-        if !changed {
-            self.selection_visual = selection;
-            self.selection_visual_row_range = next_rows;
-            return false;
-        }
-
         self.selection_visual = selection;
-        self.selection_visual_row_range = next_rows;
-        if next
-            .iter()
-            .all(|decoration| *decoration == TerminalLineDecorations::default())
-        {
-            self.decorations = Arc::from(Vec::<TerminalLineDecorations>::new());
-        } else {
-            self.decorations = Arc::from(next);
-        }
         self.revision = self.revision.saturating_add(1);
         true
     }
@@ -2382,59 +2300,6 @@ fn terminal_surface_visible_rows_for_viewport(
     start..end
 }
 
-fn terminal_selection_visual_row_range(
-    selection: Option<TerminalSelection>,
-    snapshot: &TerminalSnapshot,
-) -> Option<Range<usize>> {
-    let selection = selection?;
-    let line_count = snapshot.row_count();
-    if selection.all_buffer {
-        return Some(0..line_count);
-    }
-    if selection.is_empty() {
-        return None;
-    }
-    let (start, end) = selection.ordered();
-    let (snapshot_start, snapshot_end) = terminal_snapshot_absolute_window(snapshot)?;
-    if end.line < snapshot_start || start.line >= snapshot_end {
-        return None;
-    }
-    let start_row = start.line.saturating_sub(snapshot_start).min(line_count);
-    let end_row = end
-        .line
-        .saturating_sub(snapshot_start)
-        .saturating_add(1)
-        .min(line_count);
-    (start_row < end_row).then_some(start_row..end_row)
-}
-
-fn terminal_selection_visual_row_union(
-    previous: Option<Range<usize>>,
-    next: Option<Range<usize>>,
-) -> Option<Range<usize>> {
-    match (previous, next) {
-        (Some(previous), Some(next)) => {
-            Some(previous.start.min(next.start)..previous.end.max(next.end))
-        }
-        (Some(previous), None) => Some(previous),
-        (None, Some(next)) => Some(next),
-        (None, None) => None,
-    }
-}
-
-fn terminal_selection_visual_row_range_from_decorations(
-    decorations: &[TerminalLineDecorations],
-) -> Option<Range<usize>> {
-    let start = decorations
-        .iter()
-        .position(|decoration| decoration.selection_cols.is_some())?;
-    let end = decorations
-        .iter()
-        .rposition(|decoration| decoration.selection_cols.is_some())?
-        .saturating_add(1);
-    Some(start..end)
-}
-
 fn terminal_surface_fractional_prefetch_offset(
     scroll_offset: usize,
     residual_lines: f32,
@@ -2525,6 +2390,15 @@ impl Render for TerminalSurface {
             self.bold_weight,
         );
         grid = grid
+            .with_selection(self.selection_visual.map(|selection| {
+                TerminalGridSelection::new(
+                    selection.anchor.line,
+                    selection.anchor.col,
+                    selection.head.line,
+                    selection.head.col,
+                    selection.all_buffer,
+                )
+            }))
             .with_font_fallbacks(self.font_fallbacks.clone())
             .with_layout_cache(self.layout_cache.clone())
             .with_layout_rows(self.viewport_rows)

@@ -44,10 +44,75 @@ pub struct TerminalLineDecorations {
     pub selected_occurrence_ranges: Vec<(usize, usize)>,
     pub search_ranges: Vec<(usize, usize)>,
     pub active_search_ranges: Vec<(usize, usize)>,
-    pub selection_cols: Option<(usize, usize)>,
     pub link_ranges: Vec<(usize, usize)>,
     /// OSC 133 shell-integration mark for this viewport row.
     pub command_mark: Option<nyaterm_terminal::ShellCommandMark>,
+}
+
+/// Dynamic absolute-buffer selection. Endpoints are inclusive terminal cells.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TerminalGridSelection {
+    pub anchor_line: usize,
+    pub anchor_col: usize,
+    pub head_line: usize,
+    pub head_col: usize,
+    pub all_buffer: bool,
+}
+
+impl TerminalGridSelection {
+    pub fn new(
+        anchor_line: usize,
+        anchor_col: usize,
+        head_line: usize,
+        head_col: usize,
+        all_buffer: bool,
+    ) -> Self {
+        Self {
+            anchor_line,
+            anchor_col,
+            head_line,
+            head_col,
+            all_buffer,
+        }
+    }
+
+    fn cols_for_absolute_line(self, line: usize) -> Option<(usize, usize)> {
+        if self.all_buffer {
+            return Some((0, usize::MAX));
+        }
+        if (self.anchor_line, self.anchor_col) == (self.head_line, self.head_col) {
+            return None;
+        }
+        let (start_line, start_col, end_line, end_col) =
+            if (self.anchor_line, self.anchor_col) <= (self.head_line, self.head_col) {
+                (
+                    self.anchor_line,
+                    self.anchor_col,
+                    self.head_line,
+                    self.head_col,
+                )
+            } else {
+                (
+                    self.head_line,
+                    self.head_col,
+                    self.anchor_line,
+                    self.anchor_col,
+                )
+            };
+        if line < start_line || line > end_line {
+            return None;
+        }
+        if start_line == end_line {
+            return Some((start_col, end_col.saturating_add(1)));
+        }
+        if line == start_line {
+            return Some((start_col, usize::MAX));
+        }
+        if line == end_line {
+            return Some((0, end_col.saturating_add(1)));
+        }
+        Some((0, usize::MAX))
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -274,6 +339,7 @@ pub struct NyaTerminalElement {
     keyword_rules: Arc<Vec<ResolvedKeywordHighlightRule>>,
     keyword_highlights: Option<Arc<TerminalKeywordHighlightSnapshot>>,
     decorations: Arc<[TerminalLineDecorations]>,
+    selection: Option<TerminalGridSelection>,
     layout_cache: Option<Arc<Mutex<NyaTerminalLayoutCache>>>,
     show_cursor: bool,
     cursor_style: String,
@@ -353,6 +419,7 @@ impl NyaTerminalElement {
             keyword_rules,
             keyword_highlights: None,
             decorations: decorations.into(),
+            selection: None,
             layout_cache: None,
             show_cursor,
             cursor_style: cursor_style.into(),
@@ -372,6 +439,11 @@ impl NyaTerminalElement {
 
     pub fn with_layout_cache(mut self, cache: Arc<Mutex<NyaTerminalLayoutCache>>) -> Self {
         self.layout_cache = Some(cache);
+        self
+    }
+
+    pub fn with_selection(mut self, selection: Option<TerminalGridSelection>) -> Self {
+        self.selection = selection;
         self
     }
 
@@ -922,9 +994,38 @@ fn push_dynamic_decoration_backgrounds(
     for &(start, end) in &decorations.active_search_ranges {
         push_col_range_bg(row, start, end, palette.warning, geometry, out);
     }
-    if let Some((start, end)) = decorations.selection_cols {
-        push_col_range_bg(row, start, end, palette.terminal_selection, geometry, out);
+}
+
+fn terminal_selection_cols_for_snapshot_row(
+    snapshot: &TerminalSnapshot,
+    row: usize,
+    selection: Option<TerminalGridSelection>,
+) -> Option<(usize, usize)> {
+    if row >= snapshot.row_count() {
+        return None;
     }
+    let absolute_end = snapshot.total_rows.saturating_sub(snapshot.display_offset);
+    let absolute_start = absolute_end.saturating_sub(snapshot.row_count());
+    let absolute_line = absolute_start.saturating_add(row);
+    let (start, end) = selection?.cols_for_absolute_line(absolute_line)?;
+    let start = start.min(snapshot.cols);
+    let end = end.min(snapshot.cols);
+    (end > start).then_some((start, end))
+}
+
+fn push_dynamic_selection_background(
+    snapshot: &TerminalSnapshot,
+    row: usize,
+    selection: Option<TerminalGridSelection>,
+    palette: nyaterm_ui::ThemePalette,
+    geometry: TerminalPaintGeometry,
+    out: &mut Vec<PaintQuad>,
+) {
+    let Some((start, end)) = terminal_selection_cols_for_snapshot_row(snapshot, row, selection)
+    else {
+        return;
+    };
+    push_col_range_bg(row, start, end, palette.terminal_selection, geometry, out);
 }
 
 fn push_selected_occurrence_bg(
@@ -1180,6 +1281,14 @@ impl Element for NyaTerminalElement {
                     paint_geometry,
                     &mut plan.decoration_backgrounds,
                 );
+                push_dynamic_selection_background(
+                    self.snapshot.as_ref(),
+                    row,
+                    self.selection,
+                    self.palette,
+                    paint_geometry,
+                    &mut plan.decoration_backgrounds,
+                );
                 push_dynamic_link_underlines(
                     row,
                     line,
@@ -1281,7 +1390,6 @@ impl Element for NyaTerminalElement {
                             &[],
                             &[],
                             &[],
-                            None,
                             &[],
                             &keyword_excluded_ranges,
                             self.palette,

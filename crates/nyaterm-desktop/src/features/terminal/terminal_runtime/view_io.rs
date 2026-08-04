@@ -396,7 +396,6 @@ fn terminal_scroll_text_first_decorations(
         include_hyperlinks && snapshot.rows().iter().any(|row| !row.hyperlinks.is_empty());
     if !crate::features::terminal::terminal_surface::terminal_line_decorations_needed(
         false,
-        false,
         has_search_decorations,
         has_frame_action_links,
         has_hyperlinks,
@@ -409,7 +408,6 @@ fn terminal_scroll_text_first_decorations(
     crate::features::terminal::terminal_surface::build_terminal_line_decorations(
         snapshot,
         &crate::features::terminal::terminal_surface::TerminalDecorationSources {
-            selection: None,
             selected_occurrence_ranges_by_line: &HashMap::new(),
             search_ranges_by_line: &search_ranges_by_line,
             active_search_ranges_by_line: &active_search_ranges_by_line,
@@ -1234,7 +1232,6 @@ impl NyaTermApp {
             self.session.active_id(),
             session_id,
         );
-        let has_selection = terminal_selection.is_some();
         let has_search_decorations =
             !search_ranges_by_line.is_empty() || !active_search_ranges_by_line.is_empty();
         let has_frame_action_links = action_links_enabled
@@ -1250,7 +1247,6 @@ impl NyaTermApp {
         let decorations_started_at = Instant::now();
         let decorations =
             if crate::features::terminal::terminal_surface::terminal_line_decorations_needed(
-                has_selection,
                 !selected_occurrence_ranges_by_line.is_empty(),
                 has_search_decorations,
                 has_frame_action_links,
@@ -1261,7 +1257,6 @@ impl NyaTermApp {
                 let include_hyperlinks = action_links_enabled;
                 let decoration_sources =
                     crate::features::terminal::terminal_surface::TerminalDecorationSources {
-                        selection: terminal_selection,
                         selected_occurrence_ranges_by_line: &selected_occurrence_ranges_by_line,
                         search_ranges_by_line: &search_ranges_by_line,
                         active_search_ranges_by_line: &active_search_ranges_by_line,

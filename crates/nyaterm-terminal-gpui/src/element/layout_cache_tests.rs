@@ -8,13 +8,15 @@ use nyaterm_terminal::{TerminalScreen, TerminalSnapshot};
 
 use super::{
     NyaTerminalElement, NyaTerminalLayoutCache, TERMINAL_LAYOUT_CACHE_ROW_CAP,
-    TerminalKeywordLayoutState, TerminalLineDecorations, TerminalRowBackgroundRange,
-    TerminalRowUnderlineRange, append_padded_wide_cells, hash_styled_spans, pad_wide_cells,
-    push_dynamic_decoration_backgrounds, push_dynamic_link_underlines,
+    TerminalGridSelection, TerminalKeywordLayoutState, TerminalLineDecorations,
+    TerminalRowBackgroundRange, TerminalRowUnderlineRange, append_padded_wide_cells,
+    hash_styled_spans, pad_wide_cells, push_dynamic_decoration_backgrounds,
+    push_dynamic_link_underlines, push_dynamic_selection_background,
     terminal_background_ranges_for_spans, terminal_cursor_cell_hidden,
     terminal_glyph_decorations_needed, terminal_layout_height_px, terminal_layout_prefetch_row,
     terminal_link_underline_color, terminal_plain_row_fast_path, terminal_row_layout_key,
-    terminal_text_run_for_span, terminal_underline_bounds, terminal_underline_ranges_for_spans,
+    terminal_selection_cols_for_snapshot_row, terminal_text_run_for_span,
+    terminal_underline_bounds, terminal_underline_ranges_for_spans,
     terminal_visible_rows_for_bounds, terminal_visible_rows_for_clipped_bounds,
 };
 use crate::keywords::{
@@ -415,7 +417,6 @@ fn row_layout_key_ignores_dynamic_overlay_decorations() {
     let base = TerminalLineDecorations::default();
     let dynamic = TerminalLineDecorations {
         search_ranges: vec![(0, 2)],
-        selection_cols: Some((1, 3)),
         command_mark: Some(nyaterm_terminal::ShellCommandMark::Prompt),
         ..TerminalLineDecorations::default()
     };
@@ -792,7 +793,7 @@ fn dynamic_link_underline_count_is_stable_across_selection_changes() {
         cell_width: 8.0,
         cell_height: 16.0,
     };
-    let mut decorations = TerminalLineDecorations {
+    let decorations = TerminalLineDecorations {
         link_ranges: vec![(1, 4)],
         ..TerminalLineDecorations::default()
     };
@@ -809,10 +810,6 @@ fn dynamic_link_underline_count_is_stable_across_selection_changes() {
         underlines.len()
     };
 
-    assert_eq!(underline_count(&decorations), 1);
-    decorations.selection_cols = Some((0, 7));
-    assert_eq!(underline_count(&decorations), 1);
-    decorations.selection_cols = None;
     assert_eq!(underline_count(&decorations), 1);
 }
 
@@ -1120,10 +1117,6 @@ fn terminal_glyph_decorations_detects_glyph_only_work() {
     assert!(!terminal_glyph_decorations_needed(&decorations));
 
     decorations.link_ranges.clear();
-    decorations.selection_cols = Some((0, 2));
-    assert!(!terminal_glyph_decorations_needed(&decorations));
-
-    decorations.selection_cols = None;
     decorations.search_ranges.push((2, 4));
     assert!(!terminal_glyph_decorations_needed(&decorations));
 
@@ -1168,10 +1161,6 @@ fn plain_row_fast_path_rejects_enhanced_rows() {
         color: "#ff0000".to_string(),
         enabled: true,
     };
-    let selection = TerminalLineDecorations {
-        selection_cols: Some((0, 2)),
-        ..TerminalLineDecorations::default()
-    };
     let command_mark = TerminalLineDecorations {
         command_mark: Some(nyaterm_terminal::ShellCommandMark::Prompt),
         ..TerminalLineDecorations::default()
@@ -1191,13 +1180,12 @@ fn plain_row_fast_path_rejects_enhanced_rows() {
         &[keyword_rule],
         &TerminalLineDecorations::default()
     ));
-    assert!(terminal_plain_row_fast_path(None, &[], &selection));
     assert!(terminal_plain_row_fast_path(None, &[], &command_mark));
     assert!(!terminal_plain_row_fast_path(None, &[], &active_search));
 }
 
 #[test]
-fn dynamic_decoration_backgrounds_include_plain_selection_and_search() {
+fn dynamic_decoration_backgrounds_include_occurrence_and_search() {
     let palette = nyaterm_ui::theme_palette("github-dark");
     let bounds = Bounds::new(point(px(0.), px(0.)), size(px(120.), px(40.)));
     let mut out = Vec::new();
@@ -1205,7 +1193,6 @@ fn dynamic_decoration_backgrounds_include_plain_selection_and_search() {
         selected_occurrence_ranges: vec![(0, 6)],
         search_ranges: vec![(0, 2)],
         active_search_ranges: vec![(2, 4)],
-        selection_cols: Some((4, 6)),
         ..TerminalLineDecorations::default()
     };
 
@@ -1222,15 +1209,101 @@ fn dynamic_decoration_backgrounds_include_plain_selection_and_search() {
         &mut out,
     );
 
-    assert_eq!(out.len(), 4);
+    assert_eq!(out.len(), 3);
     assert!(out.iter().all(|quad| quad.bounds.origin.y == px(-8.0)));
     assert_eq!(
         out[0].background,
         gpui::rgba((palette.text_muted << 8) | 0x58).into()
     );
+    assert_eq!(out[2].background, gpui::rgb(palette.warning).into());
+}
+
+#[test]
+fn grid_selection_maps_forward_reverse_multiline_and_scrolled_snapshots() {
+    let mut screen = TerminalScreen::new(8, 3);
+    screen.set_scrollback_limit(20);
+    screen.advance(b"zero\r\none\r\ntwo\r\nthree\r\nfour");
+    let snapshot = screen.viewport_snapshot(1);
+    let absolute_end = snapshot.total_rows.saturating_sub(snapshot.display_offset);
+    let absolute_start = absolute_end.saturating_sub(snapshot.row_count());
+    let forward = TerminalGridSelection::new(absolute_start, 2, absolute_start + 2, 3, false);
+    let reverse = TerminalGridSelection::new(absolute_start + 2, 3, absolute_start, 2, false);
+
+    let expected = [Some((2, 8)), Some((0, 8)), Some((0, 4))];
+    for (row, expected) in expected.into_iter().enumerate() {
+        assert_eq!(
+            terminal_selection_cols_for_snapshot_row(&snapshot, row, Some(forward)),
+            expected
+        );
+        assert_eq!(
+            terminal_selection_cols_for_snapshot_row(&snapshot, row, Some(reverse)),
+            expected
+        );
+    }
+}
+
+#[test]
+fn grid_selection_handles_empty_and_all_buffer_ranges() {
+    let snapshot = TerminalScreen::new(8, 3).viewport_snapshot(0);
+    let empty = TerminalGridSelection::new(0, 2, 0, 2, false);
+    let all = TerminalGridSelection::new(0, 0, 0, 0, true);
+
     assert_eq!(
-        out[3].background,
-        gpui::rgb(palette.terminal_selection).into()
+        terminal_selection_cols_for_snapshot_row(&snapshot, 0, Some(empty)),
+        None
+    );
+    assert_eq!(
+        terminal_selection_cols_for_snapshot_row(&snapshot, 0, Some(all)),
+        Some((0, 8))
+    );
+}
+
+#[test]
+fn grid_selection_uses_cell_columns_for_wide_characters() {
+    let mut screen = TerminalScreen::new(8, 2);
+    screen.advance("a界b".as_bytes());
+    let snapshot = screen.viewport_snapshot(0);
+    let absolute_start = snapshot
+        .total_rows
+        .saturating_sub(snapshot.display_offset)
+        .saturating_sub(snapshot.row_count());
+    let selection = TerminalGridSelection::new(absolute_start, 1, absolute_start, 2, false);
+
+    assert_eq!(
+        terminal_selection_cols_for_snapshot_row(&snapshot, 0, Some(selection)),
+        Some((1, 3))
+    );
+}
+
+#[test]
+fn grid_selection_paints_one_background_per_selected_snapshot_row() {
+    let snapshot = TerminalScreen::new(8, 4).viewport_snapshot(0);
+    let palette = nyaterm_ui::theme_palette("github-dark");
+    let geometry = TerminalPaintGeometry {
+        bounds: Bounds::new(point(px(0.), px(0.)), size(px(64.), px(64.))),
+        visual_y_offset: 0.0,
+        cell_width: 8.0,
+        cell_height: 16.0,
+    };
+    let selection = TerminalGridSelection::new(1, 2, 3, 4, false);
+    let mut backgrounds = Vec::new();
+
+    for row in 0..snapshot.row_count() {
+        push_dynamic_selection_background(
+            &snapshot,
+            row,
+            Some(selection),
+            palette,
+            geometry,
+            &mut backgrounds,
+        );
+    }
+
+    assert_eq!(backgrounds.len(), 3);
+    assert!(
+        backgrounds
+            .iter()
+            .all(|quad| quad.background == gpui::rgb(palette.terminal_selection).into())
     );
 }
 

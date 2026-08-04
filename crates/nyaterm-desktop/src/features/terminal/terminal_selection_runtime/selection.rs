@@ -647,12 +647,12 @@ fn terminal_selected_text_for_view(
         && let Some(snapshot) = terminal_snapshot_covering_selection(view, selection)
     {
         let (absolute_start, _) = terminal_snapshot_absolute_range(snapshot);
-        let lines = snapshot
-            .rows()
-            .iter()
-            .map(|row| row.text.as_str())
-            .collect::<Vec<_>>();
-        return terminal_selected_text_from_line_refs(selection, &lines, absolute_start);
+        return terminal_selected_text_from_line_source(
+            selection,
+            snapshot.row_count(),
+            absolute_start,
+            |index| snapshot.line(index),
+        );
     }
     terminal_selected_text_from_lines(selection, &view.screen.all_lines(), 0)
 }
@@ -662,34 +662,50 @@ fn terminal_selected_text_from_lines(
     lines: &[String],
     absolute_start: usize,
 ) -> Option<String> {
-    let lines = lines.iter().map(String::as_str).collect::<Vec<_>>();
-    terminal_selected_text_from_line_refs(selection, &lines, absolute_start)
+    terminal_selected_text_from_line_source(selection, lines.len(), absolute_start, |index| {
+        lines.get(index).map(String::as_str)
+    })
 }
 
-fn terminal_selected_text_from_line_refs(
+fn terminal_selected_text_from_line_source<'a>(
     selection: TerminalSelection,
-    lines: &[&str],
+    line_count: usize,
     absolute_start: usize,
+    mut line_at: impl FnMut(usize) -> Option<&'a str>,
 ) -> Option<String> {
     if selection.all_buffer {
-        return terminal_all_lines_text(lines.iter().map(|line| (*line).to_string()).collect());
+        let mut text = String::new();
+        for index in 0..line_count {
+            if index > 0 {
+                text.push('\n');
+            }
+            text.push_str(line_at(index).unwrap_or_default().trim_end());
+        }
+        while text.ends_with('\n') {
+            text.pop();
+        }
+        return (!text.is_empty()).then_some(text);
     }
     let (start, end) = selection.ordered();
-    let absolute_end = absolute_start.saturating_add(lines.len());
+    let absolute_end = absolute_start.saturating_add(line_count);
     if start.line < absolute_start || end.line >= absolute_end {
         return None;
     }
-    let mut parts = Vec::with_capacity(end.line.saturating_sub(start.line).saturating_add(1));
+    let mut text = String::new();
+    let mut first_line = true;
     for line_index in start.line..=end.line {
-        let line = lines[line_index - absolute_start];
+        let line = line_at(line_index - absolute_start)?;
         let cells = terminal_text_cells(line);
         let (col_start, col_end_excl) = selection.cols_for_absolute_line(line_index)?;
         let col_end = col_end_excl.min(cells.len().max(col_start));
         let col_start = col_start.min(col_end);
         let slice = terminal_text_cell_slice(&cells, col_start, col_end);
-        parts.push(slice.trim_end().to_string());
+        if !first_line {
+            text.push('\n');
+        }
+        first_line = false;
+        text.push_str(slice.trim_end());
     }
-    let text = parts.join("\n");
     if text.is_empty() { None } else { Some(text) }
 }
 
@@ -739,6 +755,7 @@ fn terminal_text_cell_is_word(cell: &TerminalTextCell, separators: &str) -> bool
         .is_some_and(|ch| !separators.contains(ch))
 }
 
+#[cfg(test)]
 fn terminal_all_lines_text(lines: Vec<String>) -> Option<String> {
     let text = lines
         .into_iter()

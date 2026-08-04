@@ -2,12 +2,11 @@ use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
-use crate::models::{TerminalFrameActionLinks, TerminalSelection, TerminalViewState};
+use crate::models::{TerminalFrameActionLinks, TerminalViewState};
 use crate::terminal::TerminalLineDecorations;
 
 #[derive(Clone, Copy)]
 pub(in crate::features) struct TerminalDecorationSources<'a> {
-    pub selection: Option<TerminalSelection>,
     pub selected_occurrence_ranges_by_line: &'a HashMap<usize, Vec<(usize, usize)>>,
     pub search_ranges_by_line: &'a HashMap<usize, Vec<(usize, usize)>>,
     pub active_search_ranges_by_line: &'a HashMap<usize, Vec<(usize, usize)>>,
@@ -41,7 +40,6 @@ pub(in crate::features) fn terminal_line_decorations_cache_key(
     sources: &TerminalDecorationSources<'_>,
 ) -> u64 {
     let TerminalDecorationSources {
-        selection,
         selected_occurrence_ranges_by_line,
         search_ranges_by_line,
         active_search_ranges_by_line,
@@ -57,7 +55,6 @@ pub(in crate::features) fn terminal_line_decorations_cache_key(
     for row in snapshot.rows() {
         row.signature.hash(&mut hasher);
     }
-    selection.hash(&mut hasher);
     hash_ranges_by_line(selected_occurrence_ranges_by_line, &mut hasher);
     include_action_links.hash(&mut hasher);
     include_hyperlinks.hash(&mut hasher);
@@ -221,7 +218,6 @@ pub(in crate::features) fn build_terminal_line_decorations(
     sources: &TerminalDecorationSources<'_>,
 ) -> Vec<TerminalLineDecorations> {
     let TerminalDecorationSources {
-        selection,
         selected_occurrence_ranges_by_line,
         search_ranges_by_line,
         active_search_ranges_by_line,
@@ -234,10 +230,6 @@ pub(in crate::features) fn build_terminal_line_decorations(
     let mut line_decorations = Vec::with_capacity(line_count);
     let empty_ranges: [(usize, usize); 0] = [];
     for line_index in 0..line_count {
-        let selection_cols = terminal_absolute_line_for_snapshot_row(snapshot, line_index)
-            .and_then(|absolute_line| {
-                selection.and_then(|selection| selection.cols_for_absolute_line(absolute_line))
-            });
         let mut link_ranges: Vec<(usize, usize)> = if include_action_links {
             terminal_action_link_ranges_for_snapshot_row(snapshot, line_index, frame_action_links)
                 .map(<[_]>::to_vec)
@@ -275,7 +267,6 @@ pub(in crate::features) fn build_terminal_line_decorations(
                 .to_vec(),
             search_ranges: line_search_ranges.to_vec(),
             active_search_ranges: line_active_search_ranges.to_vec(),
-            selection_cols,
             link_ranges,
             command_mark,
         });
@@ -284,15 +275,13 @@ pub(in crate::features) fn build_terminal_line_decorations(
 }
 
 pub(in crate::features) fn terminal_line_decorations_needed(
-    has_selection: bool,
     has_selected_occurrences: bool,
     has_search_decorations: bool,
     has_frame_action_links: bool,
     has_hyperlinks: bool,
     has_command_marks: bool,
 ) -> bool {
-    has_selection
-        || has_selected_occurrences
+    has_selected_occurrences
         || has_search_decorations
         || has_frame_action_links
         || has_hyperlinks
@@ -303,43 +292,12 @@ pub(in crate::features) fn terminal_line_decorations_needed(
 mod tests {
     use std::collections::HashMap;
 
-    use crate::models::TerminalBufferCellPos;
-    use crate::models::{TerminalFrameActionLinks, TerminalSelection, TerminalViewState};
+    use crate::models::{TerminalFrameActionLinks, TerminalViewState};
 
     use super::{
         TerminalDecorationSources, build_terminal_line_decorations,
-        terminal_action_links_for_paint_snapshot, terminal_line_decorations_cache_key,
-        terminal_snapshot_absolute_range,
+        terminal_action_links_for_paint_snapshot, terminal_snapshot_absolute_range,
     };
-
-    #[test]
-    fn selection_decorations_map_absolute_lines_through_snapshot_window() {
-        let snapshot = nyaterm_terminal::TerminalScreen::default().viewport_snapshot(0);
-        let selection = TerminalSelection::from_range(
-            TerminalBufferCellPos::new(2, 2),
-            TerminalBufferCellPos::new(3, 4),
-        );
-
-        let decorations = build_terminal_line_decorations(
-            &snapshot,
-            &TerminalDecorationSources {
-                selection: Some(selection),
-                selected_occurrence_ranges_by_line: &HashMap::new(),
-                search_ranges_by_line: &HashMap::new(),
-                active_search_ranges_by_line: &HashMap::new(),
-                frame_action_links: &[],
-                include_action_links: false,
-                include_hyperlinks: false,
-                include_command_marks: false,
-            },
-        );
-
-        assert_eq!(decorations[0].selection_cols, None);
-        assert_eq!(decorations[1].selection_cols, None);
-        assert_eq!(decorations[2].selection_cols, Some((2, usize::MAX)));
-        assert_eq!(decorations[3].selection_cols, Some((0, 5)));
-        assert_eq!(decorations[4].selection_cols, None);
-    }
 
     #[test]
     fn link_decorations_merge_action_links_and_hyperlinks_when_included() {
@@ -360,7 +318,6 @@ mod tests {
         let decorations = build_terminal_line_decorations(
             &snapshot,
             &TerminalDecorationSources {
-                selection: None,
                 selected_occurrence_ranges_by_line: &HashMap::new(),
                 search_ranges_by_line: &HashMap::new(),
                 active_search_ranges_by_line: &HashMap::new(),
@@ -395,7 +352,6 @@ mod tests {
         let decorations = build_terminal_line_decorations(
             &snapshot,
             &TerminalDecorationSources {
-                selection: None,
                 selected_occurrence_ranges_by_line: &HashMap::new(),
                 search_ranges_by_line: &HashMap::new(),
                 active_search_ranges_by_line: &HashMap::new(),
@@ -442,7 +398,6 @@ mod tests {
         let decorations = build_terminal_line_decorations(
             &snapshot,
             &TerminalDecorationSources {
-                selection: None,
                 selected_occurrence_ranges_by_line: &HashMap::new(),
                 search_ranges_by_line: &HashMap::new(),
                 active_search_ranges_by_line: &HashMap::new(),
@@ -477,7 +432,6 @@ mod tests {
         let decorations = build_terminal_line_decorations(
             &snapshot,
             &TerminalDecorationSources {
-                selection: None,
                 selected_occurrence_ranges_by_line: &HashMap::new(),
                 search_ranges_by_line: &HashMap::new(),
                 active_search_ranges_by_line: &HashMap::new(),
@@ -529,7 +483,6 @@ mod tests {
         let decorations = build_terminal_line_decorations(
             &snapshot,
             &TerminalDecorationSources {
-                selection: None,
                 selected_occurrence_ranges_by_line: &HashMap::new(),
                 search_ranges_by_line: &HashMap::new(),
                 active_search_ranges_by_line: &HashMap::new(),
@@ -541,42 +494,5 @@ mod tests {
         );
 
         assert_eq!(decorations[0].link_ranges, vec![(6, 24)]);
-    }
-
-    #[test]
-    fn decoration_cache_key_tracks_selection_absolute_line() {
-        let snapshot = nyaterm_terminal::TerminalScreen::default().viewport_snapshot(0);
-        let selection = TerminalSelection::with_anchor(TerminalBufferCellPos::new(0, 2));
-
-        let first = terminal_line_decorations_cache_key(
-            &snapshot,
-            &TerminalDecorationSources {
-                selection: Some(selection),
-                selected_occurrence_ranges_by_line: &HashMap::new(),
-                search_ranges_by_line: &HashMap::new(),
-                active_search_ranges_by_line: &HashMap::new(),
-                frame_action_links: &[],
-                include_action_links: false,
-                include_hyperlinks: false,
-                include_command_marks: false,
-            },
-        );
-        let second = terminal_line_decorations_cache_key(
-            &snapshot,
-            &TerminalDecorationSources {
-                selection: Some(TerminalSelection::with_anchor(TerminalBufferCellPos::new(
-                    1, 2,
-                ))),
-                selected_occurrence_ranges_by_line: &HashMap::new(),
-                search_ranges_by_line: &HashMap::new(),
-                active_search_ranges_by_line: &HashMap::new(),
-                frame_action_links: &[],
-                include_action_links: false,
-                include_hyperlinks: false,
-                include_command_marks: false,
-            },
-        );
-
-        assert_ne!(first, second);
     }
 }

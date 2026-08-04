@@ -3,9 +3,9 @@ pub(crate) use nyaterm_terminal::{
     terminal_text_cell_slice, terminal_text_cells,
 };
 pub(crate) use nyaterm_terminal_gpui::{
-    NyaTerminalElement, NyaTerminalLayoutCache, TerminalBufferMatch, TerminalKeyMode,
-    TerminalKeywordHighlightSnapshot, TerminalKeywordHighlighter, TerminalLineDecorations,
-    compile_terminal_keyword_highlighter,
+    NyaTerminalElement, NyaTerminalLayoutCache, TerminalBufferMatch, TerminalGridSelection,
+    TerminalKeyMode, TerminalKeywordHighlightSnapshot, TerminalKeywordHighlighter,
+    TerminalLineDecorations, compile_terminal_keyword_highlighter,
     precompute_terminal_keyword_highlights_for_rows_with_stats, terminal_key_bytes_with_mode,
     terminal_key_release_bytes_with_mode, terminal_keyword_highlight_expanded_rows,
     terminal_keyword_rules_key, terminal_screen_from_output,

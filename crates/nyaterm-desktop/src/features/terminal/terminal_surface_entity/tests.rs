@@ -26,8 +26,7 @@ use super::{
     terminal_gutter_metrics, terminal_keyword_highlight_prefetch_rows,
     terminal_keyword_highlight_prefetch_viewports, terminal_keyword_highlight_pressure_delay,
     terminal_keyword_highlight_request_key, terminal_keyword_highlight_visible_rows,
-    terminal_line_number_digits, terminal_selection_visual_row_range,
-    terminal_selection_visual_row_union, terminal_snapshot_anchor_row_for_display_offset,
+    terminal_line_number_digits, terminal_snapshot_anchor_row_for_display_offset,
     terminal_snapshot_covers_display_offset, terminal_surface_fractional_prefetch_offset,
     terminal_surface_synthesized_window_extra_rows, terminal_surface_text_first_repaint_ready,
     terminal_surface_visible_rows_for_viewport, terminal_visual_scroll_offset_px,
@@ -1446,27 +1445,73 @@ fn selection_visual_update_preserves_existing_decorations() {
         true,
         "block",
     );
+    let static_decorations = surface.decorations.clone();
+    let selection = TerminalSelection::from_range(
+        TerminalBufferCellPos::new(0, 2),
+        TerminalBufferCellPos::new(1, usize::MAX),
+    );
 
-    assert!(
-        surface.set_selection_visual(Some(TerminalSelection::from_range(
-            TerminalBufferCellPos::new(0, 2),
-            TerminalBufferCellPos::new(1, usize::MAX),
-        )))
-    );
+    assert!(surface.set_selection_visual(Some(selection)));
+    assert_eq!(surface.selection_visual, Some(selection));
     assert_eq!(surface.decorations[0].link_ranges, vec![(1, 3)]);
-    assert_eq!(
-        surface.decorations[0].selection_cols,
-        Some((2, snapshot.cols))
-    );
-    assert_eq!(
-        surface.decorations[1].selection_cols,
-        Some((0, snapshot.cols))
-    );
+    assert!(Arc::ptr_eq(&surface.decorations, &static_decorations));
+    assert!(!surface.set_selection_visual(Some(selection)));
 
     assert!(surface.set_selection_visual(None));
     assert_eq!(surface.decorations[0].link_ranges, vec![(1, 3)]);
-    assert_eq!(surface.decorations[0].selection_cols, None);
-    assert_eq!(surface.decorations[1].selection_cols, None);
+    assert!(Arc::ptr_eq(&surface.decorations, &static_decorations));
+}
+
+#[test]
+#[ignore = "performance benchmark; run manually with --ignored --nocapture"]
+fn dense_action_link_selection_drag_benchmark() {
+    let mut surface = TerminalSurface::new("bench");
+    let decorations = (0..5000)
+        .map(|_| TerminalLineDecorations {
+            link_ranges: vec![(1, 8), (12, 24), (30, 42)],
+            ..TerminalLineDecorations::default()
+        })
+        .collect::<Vec<_>>();
+    surface.set_decorations_and_keywords(decorations, Arc::new(Vec::new()), false, "block");
+    let static_decorations = surface.decorations.clone();
+    let started = Instant::now();
+    let mut static_arc_replacements = 0usize;
+    for col in 0..10_000 {
+        surface.set_selection_visual(Some(TerminalSelection::from_range(
+            TerminalBufferCellPos::new(2, 0),
+            TerminalBufferCellPos::new(4, col % 80),
+        )));
+        static_arc_replacements +=
+            usize::from(!Arc::ptr_eq(&surface.decorations, &static_decorations));
+    }
+    eprintln!(
+        "dense action-link drag benchmark: updates=10000 total={:?} static_arc_replacements={static_arc_replacements}",
+        started.elapsed()
+    );
+}
+
+#[test]
+#[ignore = "performance benchmark; run manually with --ignored --nocapture"]
+fn overview_marker_fast_scroll_benchmark() {
+    let mut surface = TerminalSurface::new("bench");
+    let markers = (0..2000)
+        .map(|index| TerminalOverviewMarker {
+            absolute_line: index * 50,
+            kind: TerminalOverviewMarkerKind::SelectedOccurrence,
+        })
+        .collect::<Vec<_>>();
+    surface.set_overview_markers(markers.into(), 100_000, 9);
+    let first = surface.overview_marker_buckets_for_track_height(800);
+    let started = Instant::now();
+    let mut bucket_arc_rebuilds = 0usize;
+    for _ in 0..10_000 {
+        let buckets = surface.overview_marker_buckets_for_track_height(800);
+        bucket_arc_rebuilds += usize::from(!Arc::ptr_eq(&first, &buckets));
+    }
+    eprintln!(
+        "overview marker scroll benchmark: paints=10000 total={:?} bucket_arc_rebuilds={bucket_arc_rebuilds}",
+        started.elapsed()
+    );
 }
 
 #[test]
@@ -1487,167 +1532,23 @@ fn empty_selection_press_and_release_preserve_action_link_decorations() {
         ..TerminalLineDecorations::default()
     }];
     surface.set_decorations_and_keywords(decorations.clone(), Arc::new(Vec::new()), true, "block");
+    let static_decorations = surface.decorations.clone();
     let revision = surface.revision;
     let anchor = TerminalSelection::with_anchor(TerminalBufferCellPos::new(0, 4));
 
-    // MouseDown records an empty anchor without changing anything that is painted.
-    assert!(!surface.set_selection_visual(Some(anchor)));
+    // MouseDown records an empty anchor as O(1) dynamic state.
+    assert!(surface.set_selection_visual(Some(anchor)));
     assert_eq!(surface.selection_visual, Some(anchor));
-    assert_eq!(surface.selection_visual_row_range, None);
     assert_eq!(surface.decorations.as_ref(), decorations.as_slice());
-    assert_eq!(surface.revision, revision);
+    assert!(Arc::ptr_eq(&surface.decorations, &static_decorations));
+    assert_eq!(surface.revision, revision.saturating_add(1));
 
     // MouseUp clears the empty selection and must leave the same underlines in place.
-    assert!(!surface.set_selection_visual(None));
-    assert_eq!(surface.selection_visual, None);
-    assert_eq!(surface.selection_visual_row_range, None);
-    assert_eq!(surface.decorations.as_ref(), decorations.as_slice());
-    assert_eq!(surface.revision, revision);
-}
-
-#[test]
-fn selection_visual_row_range_tracks_absolute_lines_and_union() {
-    let snapshot = TerminalScreen::default().viewport_snapshot(0);
-    assert_eq!(terminal_selection_visual_row_range(None, &snapshot), None);
-    assert_eq!(
-        terminal_selection_visual_row_range(
-            Some(TerminalSelection::with_anchor(TerminalBufferCellPos::new(
-                2, 4,
-            ))),
-            &snapshot
-        ),
-        None
-    );
-    assert_eq!(
-        terminal_selection_visual_row_range(Some(TerminalSelection::all_buffer(80)), &snapshot),
-        Some(0..snapshot.row_count())
-    );
-    assert_eq!(
-        terminal_selection_visual_row_range(
-            Some(TerminalSelection::from_range(
-                TerminalBufferCellPos::new(5, 1),
-                TerminalBufferCellPos::new(7, 3),
-            )),
-            &snapshot,
-        ),
-        Some(5..8)
-    );
-    assert_eq!(
-        terminal_selection_visual_row_range(
-            Some(TerminalSelection::from_range(
-                TerminalBufferCellPos::new(8, 1),
-                TerminalBufferCellPos::new(13, 3),
-            )),
-            &snapshot,
-        ),
-        Some(8..14.min(snapshot.row_count()))
-    );
-    assert_eq!(
-        terminal_selection_visual_row_union(Some(2..4), Some(3..6)),
-        Some(2..6)
-    );
-    assert_eq!(
-        terminal_selection_visual_row_union(Some(2..4), None),
-        Some(2..4)
-    );
-    assert_eq!(
-        terminal_selection_visual_row_union(None, Some(3..6)),
-        Some(3..6)
-    );
-    assert_eq!(terminal_selection_visual_row_union(None, None), None);
-}
-
-#[test]
-fn selection_visual_update_replaces_only_selection_cols() {
-    let snapshot = Arc::new(TerminalScreen::default().viewport_snapshot(0));
-    let rows = snapshot.row_count();
-    let mut surface = TerminalSurface::new("session");
-
-    apply_test_frame_snapshot!(
-        surface,
-        snapshot.clone(),
-        0,
-        0.0,
-        0,
-        10,
-        rows,
-        false,
-        None,
-        0,
-        false,
-        true,
-        "block",
-    );
-
-    let mut decorations = vec![TerminalLineDecorations::default(); snapshot.row_count()];
-    decorations[0] = TerminalLineDecorations {
-        selected_occurrence_ranges: vec![(0, 1)],
-        search_ranges: vec![(1, 2)],
-        active_search_ranges: vec![(2, 3)],
-        link_ranges: vec![(3, 7)],
-        command_mark: Some(nyaterm_terminal::ShellCommandMark::Prompt),
-        ..TerminalLineDecorations::default()
-    };
-    decorations[2].selection_cols = Some((3, snapshot.cols));
-    decorations[3].selection_cols = Some((0, 6));
-    decorations[8].search_ranges = vec![(2, 5)];
-    surface.set_decorations_and_keywords(decorations, Arc::new(Vec::new()), true, "block");
-
-    assert_eq!(surface.selection_visual_row_range, Some(2..4));
-    let revision_before = surface.revision;
-    assert!(
-        surface.set_selection_visual(Some(TerminalSelection::from_range(
-            TerminalBufferCellPos::new(3, 1),
-            TerminalBufferCellPos::new(4, 4),
-        )))
-    );
-
-    assert_eq!(
-        surface.decorations[0].selected_occurrence_ranges,
-        vec![(0, 1)]
-    );
-    assert_eq!(surface.decorations[0].search_ranges, vec![(1, 2)]);
-    assert_eq!(surface.decorations[0].active_search_ranges, vec![(2, 3)]);
-    assert_eq!(surface.decorations[0].link_ranges, vec![(3, 7)]);
-    assert_eq!(
-        surface.decorations[0].command_mark,
-        Some(nyaterm_terminal::ShellCommandMark::Prompt)
-    );
-    assert_eq!(surface.decorations[2].selection_cols, None);
-    assert_eq!(
-        surface.decorations[3].selection_cols,
-        Some((1, snapshot.cols))
-    );
-    assert_eq!(surface.decorations[4].selection_cols, Some((0, 5)));
-    assert_eq!(surface.decorations[8].search_ranges, vec![(2, 5)]);
-    assert_eq!(surface.selection_visual_row_range, Some(3..5));
-    assert_eq!(surface.revision, revision_before.saturating_add(1));
-
-    let revision_before_same_selection = surface.revision;
-    assert!(
-        !surface.set_selection_visual(Some(TerminalSelection::from_range(
-            TerminalBufferCellPos::new(3, 1),
-            TerminalBufferCellPos::new(4, 4),
-        )))
-    );
-    assert_eq!(surface.revision, revision_before_same_selection);
-
     assert!(surface.set_selection_visual(None));
-    assert_eq!(
-        surface.decorations[0].selected_occurrence_ranges,
-        vec![(0, 1)]
-    );
-    assert_eq!(surface.decorations[0].search_ranges, vec![(1, 2)]);
-    assert_eq!(surface.decorations[0].active_search_ranges, vec![(2, 3)]);
-    assert_eq!(surface.decorations[0].link_ranges, vec![(3, 7)]);
-    assert_eq!(
-        surface.decorations[0].command_mark,
-        Some(nyaterm_terminal::ShellCommandMark::Prompt)
-    );
-    assert_eq!(surface.decorations[3].selection_cols, None);
-    assert_eq!(surface.decorations[4].selection_cols, None);
-    assert_eq!(surface.decorations[8].search_ranges, vec![(2, 5)]);
-    assert_eq!(surface.selection_visual_row_range, None);
+    assert_eq!(surface.selection_visual, None);
+    assert_eq!(surface.decorations.as_ref(), decorations.as_slice());
+    assert!(Arc::ptr_eq(&surface.decorations, &static_decorations));
+    assert_eq!(surface.revision, revision.saturating_add(2));
 }
 
 #[test]
@@ -2017,7 +1918,7 @@ fn local_surface_scroll_state_promotes_retained_snapshot_window() {
 }
 
 #[test]
-fn retained_snapshot_promotion_remaps_absolute_selection_rows() {
+fn retained_snapshot_promotion_preserves_dynamic_absolute_selection() {
     let mut screen = TerminalScreen::default();
     screen.advance_decoded_text(&terminal_test_output_lines(120));
     let live_snapshot = Arc::new(screen.viewport_snapshot(0));
@@ -2075,7 +1976,7 @@ fn retained_snapshot_promotion_remaps_absolute_selection_rows() {
         TerminalBufferCellPos::new(selected_line, 5),
     );
     assert!(surface.set_selection_visual(Some(selection)));
-    assert_eq!(surface.decorations[live_row].selection_cols, Some((2, 6)));
+    let static_decorations = surface.decorations.clone();
 
     assert!(
         surface.apply_scroll_visual_state(TerminalScrollVisualState {
@@ -2095,11 +1996,7 @@ fn retained_snapshot_promotion_remaps_absolute_selection_rows() {
         surface.snapshot.as_ref().unwrap(),
         &history_snapshot
     ));
-    assert_eq!(surface.decorations[live_row].selection_cols, None);
-    assert_eq!(
-        surface.decorations[history_row].selection_cols,
-        Some((2, 6))
-    );
+    assert!(Arc::ptr_eq(&surface.decorations, &static_decorations));
     assert_eq!(surface.selection_visual, Some(selection));
 }
 

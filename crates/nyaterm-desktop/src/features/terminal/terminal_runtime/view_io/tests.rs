@@ -643,7 +643,6 @@ fn terminal_scroll_text_first_decorations_keep_search_overlay_without_links() {
     assert_eq!(decorations[1].search_ranges, vec![(2, 6)]);
     assert!(decorations[1].active_search_ranges.is_empty());
     assert!(decorations[1].link_ranges.is_empty());
-    assert!(decorations.iter().all(|line| line.selection_cols.is_none()));
 }
 
 #[test]
@@ -675,7 +674,6 @@ fn terminal_scroll_text_first_decorations_include_links_for_current_snapshot() {
     assert_eq!(decorations.len(), snapshot.row_count());
     assert_eq!(decorations[0].link_ranges, vec![(6, 11), (0, 5)]);
     assert!(decorations[0].search_ranges.is_empty());
-    assert!(decorations.iter().all(|line| line.selection_cols.is_none()));
 }
 
 #[test]

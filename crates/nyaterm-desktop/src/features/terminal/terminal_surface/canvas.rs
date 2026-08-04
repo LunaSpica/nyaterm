@@ -311,6 +311,9 @@ impl NyaTermApp {
         };
         let (abs_start, abs_end) = terminal_snapshot_absolute_range(&snapshot);
         let _ = abs_end;
+        let terminal_selection = is_active
+            .then_some(self.terminal.selection.selection)
+            .flatten();
         let (
             line_decorations,
             search_mapping_duration,
@@ -404,10 +407,6 @@ impl NyaTermApp {
             let search_mapping_duration = search_stage_started_at.elapsed();
             let decoration_stage_started_at = Instant::now();
             let mut action_link_duration = Duration::ZERO;
-            let terminal_selection = is_active
-                .then_some(self.terminal.selection.selection)
-                .flatten();
-            let has_selection = terminal_selection.is_some();
             let has_selected_occurrences = !selected_occurrence_ranges_by_line.is_empty();
             let has_search_decorations =
                 !search_ranges_by_line.is_empty() || !active_search_ranges_by_line.is_empty();
@@ -421,7 +420,6 @@ impl NyaTermApp {
             let has_command_marks = include_command_marks
                 && snapshot.rows().iter().any(|row| row.command_mark.is_some());
             let needs_line_decorations = terminal_line_decorations_needed(
-                has_selection,
                 has_selected_occurrences,
                 has_search_decorations,
                 has_frame_action_links,
@@ -432,7 +430,6 @@ impl NyaTermApp {
                 let include_action_links = action_links_enabled;
                 let include_hyperlinks = action_links_enabled;
                 let decoration_sources = TerminalDecorationSources {
-                    selection: terminal_selection,
                     selected_occurrence_ranges_by_line: &selected_occurrence_ranges_by_line,
                     search_ranges_by_line: &search_ranges_by_line,
                     active_search_ranges_by_line: &active_search_ranges_by_line,
@@ -611,7 +608,17 @@ impl NyaTermApp {
                 self.settings.summary().terminal_font_weight as f32,
                 self.settings.summary().terminal_font_weight_bold as f32,
             );
-            grid = grid.with_font_fallbacks(terminal_font_fallbacks.clone());
+            grid = grid
+                .with_selection(terminal_selection.map(|selection| {
+                    crate::terminal::TerminalGridSelection::new(
+                        selection.anchor.line,
+                        selection.anchor.col,
+                        selection.head.line,
+                        selection.head.col,
+                        selection.all_buffer,
+                    )
+                }))
+                .with_font_fallbacks(terminal_font_fallbacks.clone());
             if let Some(cache) = layout_cache {
                 grid = grid.with_layout_cache(cache);
             }
@@ -635,7 +642,17 @@ impl NyaTermApp {
                 self.settings.summary().terminal_font_weight as f32,
                 self.settings.summary().terminal_font_weight_bold as f32,
             );
-            grid = grid.with_font_fallbacks(terminal_font_fallbacks.clone());
+            grid = grid
+                .with_selection(terminal_selection.map(|selection| {
+                    crate::terminal::TerminalGridSelection::new(
+                        selection.anchor.line,
+                        selection.anchor.col,
+                        selection.head.line,
+                        selection.head.col,
+                        selection.all_buffer,
+                    )
+                }))
+                .with_font_fallbacks(terminal_font_fallbacks.clone());
             if let Some(cache) = layout_cache {
                 grid = grid.with_layout_cache(cache);
             }
@@ -1397,8 +1414,8 @@ mod tests {
 
     use nyaterm_terminal::TerminalScreen;
 
+    use crate::models::TerminalFrameActionLinks;
     use crate::models::TerminalPerformanceMode;
-    use crate::models::{TerminalBufferCellPos, TerminalFrameActionLinks, TerminalSelection};
 
     use super::super::decorations::{
         TerminalDecorationSources, terminal_line_decorations_cache_key,
@@ -1409,26 +1426,26 @@ mod tests {
     #[test]
     fn terminal_line_decorations_skip_plain_viewport() {
         assert!(!terminal_line_decorations_needed(
-            false, false, false, false, false, false
+            false, false, false, false, false
         ));
     }
 
     #[test]
     fn terminal_line_decorations_keep_interactive_marks() {
         assert!(terminal_line_decorations_needed(
-            true, false, false, false, false, false
+            true, false, false, false, false
         ));
         assert!(terminal_line_decorations_needed(
-            false, true, false, false, false, false
+            false, true, false, false, false
         ));
         assert!(terminal_line_decorations_needed(
-            false, false, true, false, false, false
+            false, false, true, false, false
         ));
         assert!(terminal_line_decorations_needed(
-            false, false, false, true, false, false
+            false, false, false, true, false
         ));
         assert!(terminal_line_decorations_needed(
-            false, false, false, false, false, true
+            false, false, false, false, true
         ));
     }
 
@@ -1469,44 +1486,6 @@ mod tests {
     }
 
     #[test]
-    fn terminal_line_decorations_cache_key_tracks_selection() {
-        let snapshot = TerminalScreen::default().viewport_snapshot(0);
-        let search = HashMap::new();
-        let active = HashMap::new();
-        let without_selection = terminal_line_decorations_cache_key(
-            &snapshot,
-            &TerminalDecorationSources {
-                selection: None,
-                selected_occurrence_ranges_by_line: &HashMap::new(),
-                search_ranges_by_line: &search,
-                active_search_ranges_by_line: &active,
-                frame_action_links: &[],
-                include_action_links: false,
-                include_hyperlinks: false,
-                include_command_marks: false,
-            },
-        );
-        let with_selection = terminal_line_decorations_cache_key(
-            &snapshot,
-            &TerminalDecorationSources {
-                selection: Some(TerminalSelection::from_range(
-                    TerminalBufferCellPos::new(0, 1),
-                    TerminalBufferCellPos::new(0, 3),
-                )),
-                selected_occurrence_ranges_by_line: &HashMap::new(),
-                search_ranges_by_line: &search,
-                active_search_ranges_by_line: &active,
-                frame_action_links: &[],
-                include_action_links: false,
-                include_hyperlinks: false,
-                include_command_marks: false,
-            },
-        );
-
-        assert_ne!(without_selection, with_selection);
-    }
-
-    #[test]
     fn terminal_line_decorations_cache_key_tracks_action_links() {
         let snapshot = TerminalScreen::default().viewport_snapshot(0);
         let search = HashMap::new();
@@ -1523,7 +1502,6 @@ mod tests {
         let first = terminal_line_decorations_cache_key(
             &snapshot,
             &TerminalDecorationSources {
-                selection: None,
                 selected_occurrence_ranges_by_line: &HashMap::new(),
                 search_ranges_by_line: &search,
                 active_search_ranges_by_line: &active,
@@ -1537,7 +1515,6 @@ mod tests {
         let second = terminal_line_decorations_cache_key(
             &snapshot,
             &TerminalDecorationSources {
-                selection: None,
                 selected_occurrence_ranges_by_line: &HashMap::new(),
                 search_ranges_by_line: &search,
                 active_search_ranges_by_line: &active,
@@ -1559,7 +1536,6 @@ mod tests {
         let without_marks = terminal_line_decorations_cache_key(
             &snapshot,
             &TerminalDecorationSources {
-                selection: None,
                 selected_occurrence_ranges_by_line: &HashMap::new(),
                 search_ranges_by_line: &search,
                 active_search_ranges_by_line: &active,
@@ -1572,7 +1548,6 @@ mod tests {
         let with_marks = terminal_line_decorations_cache_key(
             &snapshot,
             &TerminalDecorationSources {
-                selection: None,
                 selected_occurrence_ranges_by_line: &HashMap::new(),
                 search_ranges_by_line: &search,
                 active_search_ranges_by_line: &active,

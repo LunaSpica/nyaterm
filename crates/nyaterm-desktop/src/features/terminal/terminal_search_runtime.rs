@@ -775,7 +775,6 @@ mod tests {
         let decorations = build_terminal_line_decorations(
             &snapshot,
             &TerminalDecorationSources {
-                selection: Some(selection),
                 selected_occurrence_ranges_by_line: &ranges,
                 search_ranges_by_line: &HashMap::new(),
                 active_search_ranges_by_line: &HashMap::new(),

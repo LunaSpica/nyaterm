@@ -90,7 +90,6 @@ pub(super) fn terminal_highlight_spans_compiled(
     selected_occurrence_ranges: &[(usize, usize)],
     search_ranges: &[(usize, usize)],
     active_search_ranges: &[(usize, usize)],
-    selection_cols: Option<(usize, usize)>,
     link_ranges: &[(usize, usize)],
     keyword_excluded_ranges: &[(usize, usize)],
     palette: nyaterm_ui::ThemePalette,
@@ -141,9 +140,6 @@ pub(super) fn terminal_highlight_spans_compiled(
     if !active_search_ranges.is_empty() {
         spans = apply_search_ranges(spans, active_search_ranges, true, palette);
     }
-    if let Some((start, end)) = selection_cols {
-        spans = apply_selection_range(spans, start, end, palette);
-    }
     spans
 }
 /// Underline action-link ranges with the accent color (Tauri decoration look).
@@ -174,6 +170,7 @@ pub(super) fn apply_action_link_ranges(
     compress_flat_cells(flat)
 }
 /// Highlight a half-open [start, end) column range with the theme selection background.
+#[cfg(test)]
 pub(super) fn apply_selection_range(
     spans: Vec<TerminalHighlightSpan>,
     start: usize,
@@ -1008,7 +1005,6 @@ mod tests {
             &[],
             &[],
             &[],
-            None,
             &[],
             &[(6, 11)],
             palette,
@@ -1034,7 +1030,6 @@ mod tests {
             &[],
             &[],
             &[],
-            None,
             &link_ranges,
             &keyword_excluded_ranges,
             palette,
@@ -1077,7 +1072,6 @@ mod tests {
             &[],
             &[],
             &[],
-            None,
             &link_ranges,
             &keyword_excluded_ranges,
             palette,
