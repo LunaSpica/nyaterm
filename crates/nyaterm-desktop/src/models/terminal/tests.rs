@@ -8,6 +8,7 @@ use nyaterm_terminal::{TerminalEffects, TerminalOutputDecoder, TerminalScreen, T
 use crate::terminal::{TerminalLineDecorations, terminal_screen_from_output};
 
 use super::{
+    SELECTED_OCCURRENCE_SEARCH_CHUNK_ROWS, SelectedOccurrenceSearchJob,
     TERMINAL_FRAME_COMMAND_QUEUE_CAP, TERMINAL_FRAME_EVENT_WAKE_OUTPUT,
     TERMINAL_FRAME_EVENT_WAKE_SEARCH, TERMINAL_FRAME_EVENT_WAKE_SNAPSHOT,
     TERMINAL_FRAME_OUTPUT_BURST_BYTE_LIMIT, TERMINAL_FRAME_OUTPUT_CHUNK_SIZE,
@@ -22,11 +23,43 @@ use super::{
     TerminalProtocolState, TerminalRenderCache, TerminalViewState, append_terminal_ui_output_tail,
     coalesce_terminal_frame_output_command, compact_stale_terminal_frame_commands,
     next_terminal_frame_command, prepare_terminal_frame_action_links,
-    process_terminal_frame_output_burst, protect_terminal_output_burst,
+    process_next_selected_occurrence_search_chunk, process_terminal_frame_output_burst,
+    protect_terminal_output_burst, replace_selected_occurrence_search_job,
     terminal_expensive_interactions_enabled, terminal_frame_command_channel,
     terminal_frame_output_commands, terminal_frame_scroll_window_extra_rows,
     terminal_frame_search_result_is_current, terminal_snapshot_matches_grid_geometry,
+    try_next_terminal_frame_command,
 };
+
+fn selected_occurrence_test_key(
+    query: &str,
+    limit: usize,
+    generation: u64,
+) -> TerminalFrameSearchKey {
+    TerminalFrameSearchKey {
+        query: query.to_string(),
+        case_sensitive: true,
+        regex: false,
+        whole_word: false,
+        limit,
+        request_generation: generation,
+    }
+}
+
+fn selected_occurrence_test_session(cols: u16, lines: usize, text: &str) -> TerminalFrameSession {
+    let mut screen = TerminalScreen::new(cols, 24);
+    screen.set_scrollback_limit(lines.saturating_mul(2).max(1000));
+    let mut output = String::with_capacity(lines.saturating_mul(text.len().saturating_add(2)));
+    for _ in 0..lines {
+        output.push_str(text);
+        output.push_str("\r\n");
+    }
+    screen.advance(output.as_bytes());
+    let mut session = TerminalFrameSession::new("UTF-8", lines.saturating_mul(2).max(1000));
+    session.screen = screen;
+    session.revision = 1;
+    session
+}
 
 /// A submission is handed over whole. Slicing it here would only be undone
 /// by the enqueue-side merge and the worker's burst coalescing.
@@ -1949,6 +1982,189 @@ fn terminal_frame_command_queue_keeps_latest_search_per_session() {
             if key.query == "new" && purpose == TerminalFrameSearchPurpose::Find
     ));
     assert!(rx.try_recv().is_none());
+}
+
+#[test]
+fn selected_occurrence_search_advances_in_256_row_chunks() {
+    let session = selected_occurrence_test_session(80, 600, "needle");
+    let mut job = SelectedOccurrenceSearchJob::new(
+        "s1".to_string(),
+        selected_occurrence_test_key("needle", 2000, 1),
+        &session,
+    );
+
+    assert!(!job.process_chunk(&session).unwrap());
+    assert_eq!(job.next_absolute_row, SELECTED_OCCURRENCE_SEARCH_CHUNK_ROWS);
+    assert!(!job.process_chunk(&session).unwrap());
+    assert_eq!(
+        job.next_absolute_row,
+        SELECTED_OCCURRENCE_SEARCH_CHUNK_ROWS * 2
+    );
+    assert!(job.process_chunk(&session).unwrap());
+    assert_eq!(job.next_absolute_row, job.total_rows);
+}
+
+#[test]
+fn selected_occurrence_search_deduplicates_soft_wrap_matches_across_chunks() {
+    let mut session = selected_occurrence_test_session(4, 255, "x");
+    session.screen.advance(b"xxaddress");
+    session.revision = session.revision.saturating_add(1);
+    let key = selected_occurrence_test_key("address", 2000, 2);
+    let expected = session
+        .screen
+        .search_grid(&nyaterm_terminal::TerminalSearchQuery {
+            pattern: key.query.clone(),
+            regex: false,
+            case_sensitive: true,
+            whole_word: false,
+            direction: nyaterm_terminal::TerminalSearchDirection::Forward,
+            limit: key.limit,
+        })
+        .unwrap();
+    let mut jobs = VecDeque::from([SelectedOccurrenceSearchJob::new(
+        "s1".to_string(),
+        key,
+        &session,
+    )]);
+    let sessions = HashMap::from([("s1".to_string(), session)]);
+
+    let event = loop {
+        if let Some(event) = process_next_selected_occurrence_search_chunk(&mut jobs, &sessions) {
+            break event;
+        }
+    };
+    let matches = event.result.matches.unwrap();
+    let actual = matches
+        .iter()
+        .map(|m| (m.line_index, m.start_col, m.end_col))
+        .collect::<Vec<_>>();
+    let expected = expected
+        .iter()
+        .map(|m| (m.line_index, m.start_col, m.end_col))
+        .collect::<Vec<_>>();
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn selected_occurrence_search_stops_at_match_limit() {
+    let session = selected_occurrence_test_session(80, 2500, "needle");
+    let mut jobs = VecDeque::from([SelectedOccurrenceSearchJob::new(
+        "s1".to_string(),
+        selected_occurrence_test_key("needle", 2000, 1),
+        &session,
+    )]);
+    let sessions = HashMap::from([("s1".to_string(), session)]);
+
+    let event = loop {
+        if let Some(event) = process_next_selected_occurrence_search_chunk(&mut jobs, &sessions) {
+            break event;
+        }
+    };
+
+    assert_eq!(event.result.matches.unwrap().len(), 2000);
+}
+
+#[test]
+fn selected_occurrence_search_cancels_for_revision_and_session_removal() {
+    let mut session = selected_occurrence_test_session(80, 600, "needle");
+    let revision_job = SelectedOccurrenceSearchJob::new(
+        "s1".to_string(),
+        selected_occurrence_test_key("needle", 2000, 1),
+        &session,
+    );
+    session.revision = session.revision.saturating_add(1);
+    let mut revision_jobs = VecDeque::from([revision_job]);
+    let sessions = HashMap::from([("s1".to_string(), session)]);
+
+    let revision_event =
+        process_next_selected_occurrence_search_chunk(&mut revision_jobs, &sessions).unwrap();
+    assert!(revision_event.result.matches.is_err());
+
+    let session = selected_occurrence_test_session(80, 600, "needle");
+    let mut removed_jobs = VecDeque::from([SelectedOccurrenceSearchJob::new(
+        "removed".to_string(),
+        selected_occurrence_test_key("needle", 2000, 2),
+        &session,
+    )]);
+    let removed_event =
+        process_next_selected_occurrence_search_chunk(&mut removed_jobs, &HashMap::new()).unwrap();
+    assert!(removed_event.result.matches.is_err());
+}
+
+#[test]
+fn selected_occurrence_new_generation_replaces_pending_job() {
+    let session = selected_occurrence_test_session(80, 600, "needle");
+    let mut jobs = VecDeque::from([SelectedOccurrenceSearchJob::new(
+        "s1".to_string(),
+        selected_occurrence_test_key("needle", 2000, 1),
+        &session,
+    )]);
+    let replacement = SelectedOccurrenceSearchJob::new(
+        "s1".to_string(),
+        selected_occurrence_test_key("needle", 2000, 2),
+        &session,
+    );
+
+    let stale = replace_selected_occurrence_search_job(&mut jobs, replacement).unwrap();
+
+    assert_eq!(stale.result.key.request_generation, 1);
+    assert!(stale.result.matches.is_err());
+    assert_eq!(jobs.len(), 1);
+    assert_eq!(jobs[0].key.request_generation, 2);
+}
+
+#[test]
+fn terminal_output_command_is_taken_before_next_search_chunk() {
+    let session = selected_occurrence_test_session(80, 600, "needle");
+    let mut job = SelectedOccurrenceSearchJob::new(
+        "s1".to_string(),
+        selected_occurrence_test_key("needle", 2000, 1),
+        &session,
+    );
+    assert!(!job.process_chunk(&session).unwrap());
+    let next_row = job.next_absolute_row;
+    let (tx, rx) = terminal_frame_command_channel();
+    assert!(tx.send(TerminalFrameCommand::Output {
+        session_id: "s1".to_string(),
+        data: b"new output".to_vec(),
+        encoding: "UTF-8".to_string(),
+        scrollback_limit: 1000,
+    }));
+
+    let command = try_next_terminal_frame_command(&rx, &mut VecDeque::new());
+
+    assert!(matches!(command, Some(TerminalFrameCommand::Output { .. })));
+    assert_eq!(job.next_absolute_row, next_row);
+}
+
+#[test]
+#[ignore = "performance benchmark; run manually with --ignored --nocapture"]
+fn selected_occurrence_search_large_scrollback_benchmark() {
+    for lines in [5000, 100_000] {
+        let session = selected_occurrence_test_session(80, lines, "unique-line");
+        let mut job = SelectedOccurrenceSearchJob::new(
+            "bench".to_string(),
+            selected_occurrence_test_key("missing-needle", 2000, 1),
+            &session,
+        );
+        let started = Instant::now();
+        let mut max_chunk = Duration::ZERO;
+        let mut chunks = 0usize;
+        loop {
+            let chunk_started = Instant::now();
+            let done = job.process_chunk(&session).unwrap();
+            max_chunk = max_chunk.max(chunk_started.elapsed());
+            chunks += 1;
+            if done {
+                break;
+            }
+        }
+        eprintln!(
+            "selected occurrence benchmark: lines={lines} chunks={chunks} total={:?} max_chunk={max_chunk:?}",
+            started.elapsed()
+        );
+    }
 }
 
 #[test]

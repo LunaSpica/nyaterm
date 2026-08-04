@@ -5,7 +5,7 @@ use nyaterm_core::{
 use nyaterm_terminal::{
     TerminalEffects, TerminalOutputDecoder, TerminalScreen, TerminalSearchDirection,
     TerminalSearchQuery, TerminalSnapshot, TerminalSnapshotBuildStats,
-    terminal_cell_col_for_byte_index,
+    terminal_cell_col_for_byte_index, terminal_cell_count,
 };
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::{Hash, Hasher};
@@ -1948,6 +1948,158 @@ impl TerminalFrameSession {
     }
 }
 
+const SELECTED_OCCURRENCE_SEARCH_CHUNK_ROWS: usize = 256;
+
+#[derive(Debug)]
+struct SelectedOccurrenceSearchJob {
+    session_id: String,
+    key: TerminalFrameSearchKey,
+    query: TerminalSearchQuery,
+    revision: u64,
+    total_rows: usize,
+    overlap_rows: usize,
+    next_absolute_row: usize,
+    matches: Vec<TerminalBufferMatch>,
+    started_at: Instant,
+}
+
+impl SelectedOccurrenceSearchJob {
+    fn new(
+        session_id: String,
+        key: TerminalFrameSearchKey,
+        session: &TerminalFrameSession,
+    ) -> Self {
+        let cols = session.screen.cols().max(1);
+        let query_cell_width = terminal_cell_count(&key.query);
+        let overlap_rows = query_cell_width.saturating_add(cols.saturating_sub(1)) / cols + 1;
+        let query = TerminalSearchQuery {
+            pattern: key.query.clone(),
+            regex: false,
+            case_sensitive: true,
+            whole_word: false,
+            direction: TerminalSearchDirection::Forward,
+            limit: key.limit,
+        };
+        Self {
+            session_id,
+            key,
+            query,
+            revision: session.revision,
+            total_rows: session.screen.total_rows(),
+            overlap_rows,
+            next_absolute_row: 0,
+            matches: Vec::new(),
+            started_at: Instant::now(),
+        }
+    }
+
+    fn cancellation_event(self, message: &str) -> TerminalFrameSearchEvent {
+        let result =
+            TerminalFrameSearchResult::new(self.key, self.revision, Err(message.to_string()));
+        TerminalFrameSearchEvent {
+            session_id: self.session_id,
+            purpose: TerminalFrameSearchPurpose::SelectedOccurrence,
+            result,
+            process_duration: self.started_at.elapsed(),
+        }
+    }
+
+    fn completion_event(mut self) -> TerminalFrameSearchEvent {
+        self.matches
+            .sort_unstable_by_key(|m| (m.line_index, m.start_col, m.end_col));
+        self.matches
+            .dedup_by_key(|m| (m.line_index, m.start_col, m.end_col));
+        self.matches.truncate(self.key.limit);
+        let result = TerminalFrameSearchResult::new(self.key, self.revision, Ok(self.matches));
+        TerminalFrameSearchEvent {
+            session_id: self.session_id,
+            purpose: TerminalFrameSearchPurpose::SelectedOccurrence,
+            result,
+            process_duration: self.started_at.elapsed(),
+        }
+    }
+
+    fn process_chunk(
+        &mut self,
+        session: &TerminalFrameSession,
+    ) -> Result<bool, nyaterm_terminal::TerminalSearchError> {
+        if self.next_absolute_row >= self.total_rows || self.matches.len() >= self.key.limit {
+            return Ok(true);
+        }
+        let chunk_start = self.next_absolute_row;
+        let chunk_end = chunk_start
+            .saturating_add(SELECTED_OCCURRENCE_SEARCH_CHUNK_ROWS)
+            .min(self.total_rows);
+        let search_start = chunk_start.saturating_sub(self.overlap_rows);
+        let chunk_matches = session
+            .screen
+            .search_grid_in_absolute_range(&self.query, search_start..chunk_end)?;
+        self.matches.extend(
+            chunk_matches
+                .into_iter()
+                .map(|search_match| TerminalBufferMatch {
+                    line_index: search_match.line_index,
+                    start_col: search_match.start_col,
+                    end_col: search_match.end_col,
+                }),
+        );
+        self.matches
+            .sort_unstable_by_key(|m| (m.line_index, m.start_col, m.end_col));
+        self.matches
+            .dedup_by_key(|m| (m.line_index, m.start_col, m.end_col));
+        self.next_absolute_row = chunk_end;
+        Ok(self.next_absolute_row >= self.total_rows || self.matches.len() >= self.key.limit)
+    }
+}
+
+fn process_next_selected_occurrence_search_chunk(
+    jobs: &mut VecDeque<SelectedOccurrenceSearchJob>,
+    sessions: &HashMap<String, TerminalFrameSession>,
+) -> Option<TerminalFrameSearchEvent> {
+    let mut job = jobs.pop_front()?;
+    let Some(session) = sessions.get(&job.session_id) else {
+        return Some(job.cancellation_event("selected occurrence session was removed"));
+    };
+    if session.revision != job.revision {
+        return Some(
+            job.cancellation_event("selected occurrence search was cancelled by terminal output"),
+        );
+    }
+    match job.process_chunk(session) {
+        Ok(true) => Some(job.completion_event()),
+        Ok(false) => {
+            jobs.push_back(job);
+            None
+        }
+        Err(error) => Some(job.cancellation_event(&error.to_string())),
+    }
+}
+
+fn replace_selected_occurrence_search_job(
+    jobs: &mut VecDeque<SelectedOccurrenceSearchJob>,
+    job: SelectedOccurrenceSearchJob,
+) -> Option<TerminalFrameSearchEvent> {
+    let replaced = jobs
+        .iter()
+        .position(|pending| pending.session_id == job.session_id)
+        .and_then(|index| jobs.remove(index));
+    jobs.push_back(job);
+    replaced.map(|stale| {
+        stale.cancellation_event("selected occurrence search was replaced by a newer request")
+    })
+}
+
+fn cancel_selected_occurrence_search_job_for_session(
+    jobs: &mut VecDeque<SelectedOccurrenceSearchJob>,
+    session_id: &str,
+    message: &str,
+) -> Option<TerminalFrameSearchEvent> {
+    jobs.iter()
+        .position(|job| job.session_id == session_id)
+        .and_then(|index| jobs.remove(index))
+        .map(|job| job.cancellation_event(message))
+}
+
 #[derive(Debug)]
 struct TerminalAdvanceResult {
     visible_text: String,
@@ -2354,7 +2506,24 @@ fn run_terminal_frame_processor(
     let mut snapshot_priority: HashSet<String> = HashSet::new();
     let mut priority_initialized = false;
     let mut pending_commands = VecDeque::new();
-    while let Some(command) = next_terminal_frame_command(&command_rx, &mut pending_commands) {
+    let mut selected_occurrence_search_jobs = VecDeque::new();
+    loop {
+        let mut command = try_next_terminal_frame_command(&command_rx, &mut pending_commands);
+        if command.is_none() && selected_occurrence_search_jobs.is_empty() {
+            command = command_rx.recv();
+            if command.is_none() {
+                break;
+            }
+        }
+        let Some(command) = command else {
+            if let Some(event) = process_next_selected_occurrence_search_chunk(
+                &mut selected_occurrence_search_jobs,
+                &sessions,
+            ) {
+                event_queue.push(TerminalFrameEvent::Search(event));
+            }
+            continue;
+        };
         match command {
             TerminalFrameCommand::EnsureSession {
                 session_id,
@@ -2374,6 +2543,13 @@ fn run_terminal_frame_processor(
                 encoding,
                 scrollback_limit,
             } => {
+                if let Some(stale) = cancel_selected_occurrence_search_job_for_session(
+                    &mut selected_occurrence_search_jobs,
+                    &session_id,
+                    "selected occurrence search was cancelled by session reset",
+                ) {
+                    event_queue.push(TerminalFrameEvent::Search(stale));
+                }
                 let include = !priority_initialized || snapshot_priority.contains(&session_id);
                 let session = sessions
                     .entry(session_id.clone())
@@ -2382,6 +2558,13 @@ fn run_terminal_frame_processor(
                 session.include_live_snapshot = include;
             }
             TerminalFrameCommand::RemoveSession { session_id } => {
+                if let Some(stale) = cancel_selected_occurrence_search_job_for_session(
+                    &mut selected_occurrence_search_jobs,
+                    &session_id,
+                    "selected occurrence session was removed",
+                ) {
+                    event_queue.push(TerminalFrameEvent::Search(stale));
+                }
                 sessions.remove(&session_id);
                 snapshot_priority.remove(&session_id);
             }
@@ -2390,6 +2573,13 @@ fn run_terminal_frame_processor(
                 cols,
                 rows,
             } => {
+                if let Some(stale) = cancel_selected_occurrence_search_job_for_session(
+                    &mut selected_occurrence_search_jobs,
+                    &session_id,
+                    "selected occurrence search was cancelled by terminal resize",
+                ) {
+                    event_queue.push(TerminalFrameEvent::Search(stale));
+                }
                 if let Some(session) = sessions.get_mut(&session_id) {
                     let started_at = Instant::now();
                     session.resize(cols, rows);
@@ -2403,6 +2593,13 @@ fn run_terminal_frame_processor(
                 encoding,
                 scrollback_limit,
             } => {
+                if let Some(stale) = cancel_selected_occurrence_search_job_for_session(
+                    &mut selected_occurrence_search_jobs,
+                    &session_id,
+                    "selected occurrence search was cancelled by terminal output",
+                ) {
+                    event_queue.push(TerminalFrameEvent::Search(stale));
+                }
                 process_terminal_frame_output_burst(
                     &command_rx,
                     &mut pending_commands,
@@ -2439,8 +2636,18 @@ fn run_terminal_frame_processor(
                 key,
             } => {
                 if let Some(session) = sessions.get_mut(&session_id) {
-                    let event = session.search_event(session_id, purpose, key);
-                    event_queue.push(TerminalFrameEvent::Search(event));
+                    if purpose == TerminalFrameSearchPurpose::SelectedOccurrence {
+                        let job = SelectedOccurrenceSearchJob::new(session_id, key, session);
+                        if let Some(stale) = replace_selected_occurrence_search_job(
+                            &mut selected_occurrence_search_jobs,
+                            job,
+                        ) {
+                            event_queue.push(TerminalFrameEvent::Search(stale));
+                        }
+                    } else {
+                        let event = session.search_event(session_id, purpose, key);
+                        event_queue.push(TerminalFrameEvent::Search(event));
+                    }
                 }
             }
             TerminalFrameCommand::SetSnapshotPriority { session_ids } => {
@@ -2453,6 +2660,23 @@ fn run_terminal_frame_processor(
             }
         }
     }
+}
+
+fn try_next_terminal_frame_command(
+    command_rx: &TerminalFrameCommandReceiver,
+    pending_commands: &mut VecDeque<TerminalFrameCommand>,
+) -> Option<TerminalFrameCommand> {
+    pending_commands
+        .pop_front()
+        .or_else(|| command_rx.try_recv())
+}
+
+#[cfg(test)]
+fn next_terminal_frame_command(
+    command_rx: &TerminalFrameCommandReceiver,
+    pending_commands: &mut VecDeque<TerminalFrameCommand>,
+) -> Option<TerminalFrameCommand> {
+    pending_commands.pop_front().or_else(|| command_rx.recv())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2538,13 +2762,6 @@ fn process_terminal_frame_output_burst(
         ));
     }
     emit(session.output_event_from_batch(session_id, batch, started_at));
-}
-
-fn next_terminal_frame_command(
-    command_rx: &TerminalFrameCommandReceiver,
-    pending_commands: &mut VecDeque<TerminalFrameCommand>,
-) -> Option<TerminalFrameCommand> {
-    pending_commands.pop_front().or_else(|| command_rx.recv())
 }
 
 #[cfg(test)]
