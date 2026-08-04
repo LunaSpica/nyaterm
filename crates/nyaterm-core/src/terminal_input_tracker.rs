@@ -109,201 +109,156 @@ fn clamp_cursor(value: &str, cursor: usize) -> usize {
     cursor.min(value.len())
 }
 
-fn insert_text(state: &TerminalInputState, text: &str) -> TerminalInputState {
+fn insert_text(state: &mut TerminalInputState, text: &str) {
     if text.is_empty() {
-        return state.clone();
+        return;
     }
     let cursor = clamp_cursor(&state.value, state.cursor);
-    let mut value = String::with_capacity(state.value.len() + text.len());
-    value.push_str(&state.value[..cursor]);
-    value.push_str(text);
-    value.push_str(&state.value[cursor..]);
-    let next_cursor = cursor + text.len();
-    TerminalInputState {
-        value: value.clone(),
-        cursor: next_cursor,
-        desynced: state.desynced,
-        desync_reason: state.desync_reason,
-        line_rewrite_required: state.line_rewrite_required,
-        multiline: value.contains('\n') || value.contains('\r'),
-        paste_mode: state.paste_mode,
+    state.value.insert_str(cursor, text);
+    state.cursor = cursor + text.len();
+    state.multiline |= text.contains(['\n', '\r']);
+}
+
+fn refresh_multiline_after_delete(state: &mut TerminalInputState) {
+    if state.multiline {
+        state.multiline = state.value.contains(['\n', '\r']);
     }
 }
 
-fn delete_left(state: &TerminalInputState) -> TerminalInputState {
+fn delete_left(state: &mut TerminalInputState) {
     let cursor = clamp_cursor(&state.value, state.cursor);
     if cursor == 0 {
-        return state.clone();
+        return;
     }
-    // Delete one char before cursor.
     let prev = state.value[..cursor]
         .char_indices()
         .last()
         .map(|(i, _)| i)
         .unwrap_or(0);
-    let mut value = String::with_capacity(state.value.len());
-    value.push_str(&state.value[..prev]);
-    value.push_str(&state.value[cursor..]);
-    TerminalInputState {
-        value: value.clone(),
-        cursor: prev,
-        desynced: state.desynced,
-        desync_reason: state.desync_reason,
-        line_rewrite_required: state.line_rewrite_required,
-        multiline: value.contains('\n'),
-        paste_mode: state.paste_mode,
-    }
+    state.value.replace_range(prev..cursor, "");
+    state.cursor = prev;
+    refresh_multiline_after_delete(state);
 }
 
-fn delete_right(state: &TerminalInputState) -> TerminalInputState {
+fn delete_right(state: &mut TerminalInputState) {
     let cursor = clamp_cursor(&state.value, state.cursor);
     if cursor >= state.value.len() {
-        return state.clone();
+        return;
     }
     let next = state.value[cursor..]
         .char_indices()
         .nth(1)
         .map(|(i, _)| cursor + i)
         .unwrap_or(state.value.len());
-    let mut value = String::with_capacity(state.value.len());
-    value.push_str(&state.value[..cursor]);
-    value.push_str(&state.value[next..]);
-    TerminalInputState {
-        value: value.clone(),
-        cursor,
-        desynced: state.desynced,
-        desync_reason: state.desync_reason,
-        line_rewrite_required: state.line_rewrite_required,
-        multiline: value.contains('\n'),
-        paste_mode: state.paste_mode,
-    }
+    state.value.replace_range(cursor..next, "");
+    state.cursor = cursor;
+    refresh_multiline_after_delete(state);
 }
 
-fn delete_previous_word(state: &TerminalInputState) -> TerminalInputState {
+fn delete_previous_word(state: &mut TerminalInputState) {
     let cursor = clamp_cursor(&state.value, state.cursor);
     if cursor == 0 {
-        return state.clone();
+        return;
     }
-    let chars: Vec<(usize, char)> = state.value[..cursor].char_indices().collect();
-    let mut start_idx = chars.len();
-    while start_idx > 0 && chars[start_idx - 1].1.is_whitespace() {
-        start_idx -= 1;
+    let mut start = cursor;
+    for (index, ch) in state.value[..cursor].char_indices().rev() {
+        if ch.is_whitespace() {
+            start = index;
+        } else {
+            break;
+        }
     }
-    while start_idx > 0 && !chars[start_idx - 1].1.is_whitespace() {
-        start_idx -= 1;
+    for (index, ch) in state.value[..start].char_indices().rev() {
+        if ch.is_whitespace() {
+            break;
+        }
+        start = index;
     }
-    let start = if start_idx == 0 {
-        0
-    } else {
-        chars[start_idx].0
-    };
-    let mut value = String::with_capacity(state.value.len());
-    value.push_str(&state.value[..start]);
-    value.push_str(&state.value[cursor..]);
-    TerminalInputState {
-        value: value.clone(),
-        cursor: start,
-        desynced: state.desynced,
-        desync_reason: state.desync_reason,
-        line_rewrite_required: state.line_rewrite_required,
-        multiline: value.contains('\n'),
-        paste_mode: state.paste_mode,
-    }
+    state.value.replace_range(start..cursor, "");
+    state.cursor = start;
+    refresh_multiline_after_delete(state);
 }
 
-fn mark_desynced(
-    state: &TerminalInputState,
-    reason: &'static str,
-    multiline: bool,
-) -> TerminalInputState {
-    TerminalInputState {
-        value: state.value.clone(),
-        cursor: state.cursor,
-        desynced: true,
-        desync_reason: Some(reason),
-        line_rewrite_required: state.line_rewrite_required || reason == "tab",
-        multiline,
-        paste_mode: state.paste_mode,
-    }
+fn mark_desynced(state: &mut TerminalInputState, reason: &'static str) {
+    state.desynced = true;
+    state.desync_reason = Some(reason);
+    state.line_rewrite_required |= reason == "tab";
 }
 
-fn apply_pasted_input_data(state: &TerminalInputState, data: &str) -> TerminalInputState {
+fn apply_pasted_input_data(state: &mut TerminalInputState, data: &str) {
     let mut text = data.to_string();
-    let mut paste_mode = state.paste_mode;
     if text.contains("\u{1b}[200~") {
-        paste_mode = true;
+        state.paste_mode = true;
         text = text.replace("\u{1b}[200~", "");
     }
     if text.contains("\u{1b}[201~") {
-        paste_mode = false;
+        state.paste_mode = false;
         text = text.replace("\u{1b}[201~", "");
     }
     text = text.replace("\r\n", "\n").replace('\r', "\n");
-    let mut next = state.clone();
-    next.paste_mode = paste_mode;
     if text.is_empty() {
-        return next;
+        return;
     }
-    if next.desynced && next.desync_reason == Some("tab") {
-        next.desynced = false;
-        next.desync_reason = None;
-        next.line_rewrite_required = true;
+    if state.desynced && state.desync_reason == Some("tab") {
+        state.desynced = false;
+        state.desync_reason = None;
+        state.line_rewrite_required = true;
     }
-    insert_text(&next, &text)
+    insert_text(state, &text);
 }
 
 /// Apply a raw terminal input chunk to the local tracker.
 pub fn apply_terminal_input_data(state: &TerminalInputState, data: &str) -> TerminalInputState {
+    let mut next = state.clone();
+    apply_terminal_input_data_in_place(&mut next, data);
+    next
+}
+
+/// Apply a raw terminal input chunk without cloning the tracked command buffer.
+pub fn apply_terminal_input_data_in_place(state: &mut TerminalInputState, data: &str) {
     if data.is_empty() {
-        return state.clone();
+        return;
     }
 
     match data {
-        "\r" | "\u{0003}" => return TerminalInputState::reset(false),
+        "\r" | "\u{0003}" => {
+            *state = TerminalInputState::reset(false);
+            return;
+        }
         "\u{0001}" => {
-            return TerminalInputState {
-                cursor: 0,
-                ..state.clone()
-            };
+            state.cursor = 0;
+            return;
         }
         "\u{0005}" => {
-            return TerminalInputState {
-                cursor: state.value.len(),
-                ..state.clone()
-            };
+            state.cursor = state.value.len();
+            return;
         }
         "\u{0015}" => {
             let cursor = clamp_cursor(&state.value, state.cursor);
-            let value = state.value[cursor..].to_string();
-            return TerminalInputState {
-                value: value.clone(),
-                cursor: 0,
-                multiline: value.contains('\n'),
-                desynced: state.desynced,
-                desync_reason: state.desync_reason,
-                line_rewrite_required: state.line_rewrite_required,
-                paste_mode: state.paste_mode,
-            };
+            state.value.replace_range(..cursor, "");
+            state.cursor = 0;
+            refresh_multiline_after_delete(state);
+            return;
         }
-        "\u{0017}" => return delete_previous_word(state),
+        "\u{0017}" => {
+            delete_previous_word(state);
+            return;
+        }
         "\u{000b}" => {
             let cursor = clamp_cursor(&state.value, state.cursor);
-            let value = state.value[..cursor].to_string();
-            return TerminalInputState {
-                value: value.clone(),
-                cursor,
-                multiline: value.contains('\n'),
-                desynced: state.desynced,
-                desync_reason: state.desync_reason,
-                line_rewrite_required: state.line_rewrite_required,
-                paste_mode: state.paste_mode,
-            };
+            state.value.truncate(cursor);
+            state.cursor = cursor;
+            refresh_multiline_after_delete(state);
+            return;
         }
-        "\u{000c}" => return state.clone(),
-        "\u{007f}" | "\u{0008}" => return delete_left(state),
+        "\u{000c}" => return,
+        "\u{007f}" | "\u{0008}" => {
+            delete_left(state);
+            return;
+        }
         "\u{1b}[D" | "\u{1b}OD" => {
             let cursor = clamp_cursor(&state.value, state.cursor);
-            let prev = if cursor == 0 {
+            state.cursor = if cursor == 0 {
                 0
             } else {
                 state.value[..cursor]
@@ -312,14 +267,11 @@ pub fn apply_terminal_input_data(state: &TerminalInputState, data: &str) -> Term
                     .map(|(i, _)| i)
                     .unwrap_or(0)
             };
-            return TerminalInputState {
-                cursor: prev,
-                ..state.clone()
-            };
+            return;
         }
         "\u{1b}[C" | "\u{1b}OC" => {
             let cursor = clamp_cursor(&state.value, state.cursor);
-            let next = if cursor >= state.value.len() {
+            state.cursor = if cursor >= state.value.len() {
                 state.value.len()
             } else {
                 state.value[cursor..]
@@ -328,53 +280,54 @@ pub fn apply_terminal_input_data(state: &TerminalInputState, data: &str) -> Term
                     .map(|(i, _)| cursor + i)
                     .unwrap_or(state.value.len())
             };
-            return TerminalInputState {
-                cursor: next,
-                ..state.clone()
-            };
+            return;
         }
         "\u{1b}[H" | "\u{1b}OH" => {
-            return TerminalInputState {
-                cursor: 0,
-                ..state.clone()
-            };
+            state.cursor = 0;
+            return;
         }
         "\u{1b}[F" | "\u{1b}OF" => {
-            return TerminalInputState {
-                cursor: state.value.len(),
-                ..state.clone()
-            };
+            state.cursor = state.value.len();
+            return;
         }
-        "\u{1b}[3~" => return delete_right(state),
-        "\t" => return mark_desynced(state, "tab", state.multiline),
+        "\u{1b}[3~" => {
+            delete_right(state);
+            return;
+        }
+        "\t" => {
+            mark_desynced(state, "tab");
+            return;
+        }
         _ => {}
     }
 
     if state.paste_mode || data.contains("\u{1b}[200~") || data.contains("\u{1b}[201~") {
-        return apply_pasted_input_data(state, data);
+        apply_pasted_input_data(state, data);
+        return;
     }
 
     if (data.contains('\n') || data.contains('\r')) && data != "\r" {
-        return apply_pasted_input_data(state, data);
+        apply_pasted_input_data(state, data);
+        return;
     }
 
     if data.starts_with('\u{1b}') {
-        return mark_desynced(state, "terminal", state.multiline);
+        mark_desynced(state, "terminal");
+        return;
     }
 
     if data.chars().any(|ch| ch.is_control()) {
-        return mark_desynced(state, "terminal", state.multiline);
+        mark_desynced(state, "terminal");
+        return;
     }
 
     if state.desynced && state.desync_reason == Some("tab") {
-        let mut cleared = state.clone();
-        cleared.desynced = false;
-        cleared.desync_reason = None;
-        cleared.line_rewrite_required = true;
-        return insert_text(&cleared, data);
+        state.desynced = false;
+        state.desync_reason = None;
+        state.line_rewrite_required = true;
     }
 
-    insert_text(state, data)
+    insert_text(state, data);
 }
 
 pub fn get_tracked_command(state: &TerminalInputState) -> String {
@@ -495,18 +448,11 @@ pub fn delete_terminal_input_range(
     if to <= from {
         return state.clone();
     }
-    let mut value = String::with_capacity(length - (to - from));
-    value.push_str(&state.value[..from]);
-    value.push_str(&state.value[to..]);
-    TerminalInputState {
-        value: value.clone(),
-        cursor: from,
-        desynced: state.desynced,
-        desync_reason: state.desync_reason,
-        line_rewrite_required: state.line_rewrite_required,
-        multiline: value.contains('\n') || value.contains('\r'),
-        paste_mode: state.paste_mode,
-    }
+    let mut next = state.clone();
+    next.value.replace_range(from..to, "");
+    next.cursor = from;
+    refresh_multiline_after_delete(&mut next);
+    next
 }
 
 /// Build CSI left/right moves between two byte cursors (character steps).
@@ -650,5 +596,84 @@ mod tests {
             "\u{1b}[D\u{1b}[D"
         );
         assert_eq!(build_move_input_cursor_data(value, 2, 2), "");
+    }
+
+    #[test]
+    fn in_place_input_matches_immutable_wrapper_for_editing_sequences() {
+        let chunks = [
+            "git status",
+            "\u{1b}[D",
+            "\u{1b}[D",
+            "!",
+            "\u{007f}",
+            "\u{0017}",
+            "echo ",
+            "世界",
+            "\u{0001}",
+            "> ",
+            "\u{0005}",
+            "\u{1b}[3~",
+        ];
+        let mut immutable = TerminalInputState::new();
+        let mut in_place = TerminalInputState::new();
+
+        for chunk in chunks {
+            immutable = apply_terminal_input_data(&immutable, chunk);
+            apply_terminal_input_data_in_place(&mut in_place, chunk);
+            assert_eq!(in_place, immutable, "state differs after {chunk:?}");
+        }
+    }
+
+    #[test]
+    fn in_place_input_handles_unicode_cursor_and_deletion_boundaries() {
+        let mut state = TerminalInputState::new();
+        apply_terminal_input_data_in_place(&mut state, "a你🙂z");
+        apply_terminal_input_data_in_place(&mut state, "\u{1b}[D");
+        apply_terminal_input_data_in_place(&mut state, "\u{007f}");
+        assert_eq!(state.value, "a你z");
+        assert_eq!(state.cursor, "a你".len());
+
+        apply_terminal_input_data_in_place(&mut state, "\u{1b}[D");
+        apply_terminal_input_data_in_place(&mut state, "\u{1b}[3~");
+        assert_eq!(state.value, "az");
+        assert_eq!(state.cursor, 1);
+    }
+
+    #[test]
+    fn in_place_input_preserves_control_paste_and_reset_behavior() {
+        let mut state = TerminalInputState::new();
+        apply_terminal_input_data_in_place(&mut state, "one two");
+        apply_terminal_input_data_in_place(&mut state, "\u{0017}");
+        assert_eq!(state.value, "one ");
+        apply_terminal_input_data_in_place(&mut state, "\u{0015}");
+        assert!(state.value.is_empty());
+
+        apply_terminal_input_data_in_place(&mut state, "\u{1b}[200~a\r\nb\u{1b}[201~");
+        assert_eq!(state.value, "a\nb");
+        assert!(state.multiline);
+        assert!(!state.paste_mode);
+
+        apply_terminal_input_data_in_place(&mut state, "\t");
+        assert_eq!(state.desync_reason, Some("tab"));
+        apply_terminal_input_data_in_place(&mut state, "x");
+        assert!(!state.desynced);
+        assert!(state.line_rewrite_required);
+
+        apply_terminal_input_data_in_place(&mut state, "\u{0003}");
+        assert_eq!(state, TerminalInputState::new());
+    }
+
+    #[test]
+    #[ignore = "manual allocation and complexity regression benchmark"]
+    fn sustained_in_place_input_and_deletion() {
+        let mut state = TerminalInputState::new();
+        for _ in 0..100_000 {
+            apply_terminal_input_data_in_place(&mut state, "x");
+        }
+        assert_eq!(state.value.len(), 100_000);
+        for _ in 0..100_000 {
+            apply_terminal_input_data_in_place(&mut state, "\u{007f}");
+        }
+        assert!(state.value.is_empty());
     }
 }

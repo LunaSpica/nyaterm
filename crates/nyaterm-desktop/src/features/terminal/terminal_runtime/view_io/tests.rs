@@ -13,11 +13,11 @@ use super::{
     TERMINAL_INPUT_LATENCY_WINDOW, TERMINAL_USER_SCROLL_ACTIVE_WINDOW,
     terminal_cursor_visible_for_display_offset, terminal_input_latency_active,
     terminal_key_bytes_for_mode_and_settings, terminal_keyword_highlight_updates_allowed,
-    terminal_paint_snapshot_for_view, terminal_paint_window_snapshot_for_view,
-    terminal_retained_snapshot_matches_view, terminal_scroll_retained_window_extra_rows,
-    terminal_scroll_snapshot_request_offset, terminal_scroll_text_first_decorations,
-    terminal_selection_for_session, terminal_session_write_failure_log,
-    terminal_should_defer_key_text_to_input_handler_for_state,
+    terminal_live_action_link_enrichment_allowed, terminal_paint_snapshot_for_view,
+    terminal_paint_window_snapshot_for_view, terminal_retained_snapshot_matches_view,
+    terminal_scroll_retained_window_extra_rows, terminal_scroll_snapshot_request_offset,
+    terminal_scroll_text_first_decorations, terminal_selection_for_session,
+    terminal_session_write_failure_log, terminal_should_defer_key_text_to_input_handler_for_state,
     terminal_should_track_command_suggestion_input, terminal_snapshot_covers_display_offset,
     terminal_snapshot_with_newer_edge_row, terminal_snapshot_with_retained_scroll_window,
     terminal_status_changed, terminal_user_scroll_active, terminal_visual_display_offset,
@@ -750,12 +750,29 @@ fn terminal_scroll_text_first_decorations_keep_partially_covered_bottom_links() 
 
 #[test]
 fn terminal_keyword_highlight_updates_stay_enabled_for_active_surface() {
-    assert!(terminal_keyword_highlight_updates_allowed(true));
+    assert!(terminal_keyword_highlight_updates_allowed(true, false));
+    assert!(!terminal_keyword_highlight_updates_allowed(true, true));
 }
 
 #[test]
 fn terminal_keyword_highlight_updates_pause_for_inactive_surface() {
-    assert!(!terminal_keyword_highlight_updates_allowed(false));
+    assert!(!terminal_keyword_highlight_updates_allowed(false, false));
+}
+
+#[test]
+fn live_action_link_enrichment_waits_for_input_and_output_to_calm() {
+    assert!(terminal_live_action_link_enrichment_allowed(
+        0, true, false, false
+    ));
+    assert!(!terminal_live_action_link_enrichment_allowed(
+        0, true, true, false
+    ));
+    assert!(!terminal_live_action_link_enrichment_allowed(
+        0, true, false, true
+    ));
+    assert!(!terminal_live_action_link_enrichment_allowed(
+        1, true, false, false
+    ));
 }
 
 #[test]

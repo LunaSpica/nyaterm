@@ -66,6 +66,12 @@ pub(crate) struct TerminalFrameActionLinks {
     pub(crate) cell_ranges_by_line: Vec<Vec<(usize, usize)>>,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct TerminalActionLinkBuildStats {
+    pub(crate) reused_rows: usize,
+    pub(crate) rebuilt_rows: usize,
+}
+
 impl TerminalFrameActionLinks {
     pub(crate) fn source_index_for_snapshot_row(
         &self,
@@ -99,6 +105,21 @@ impl TerminalFrameActionLinks {
         (0..snapshot.row_count()).all(|line_index| {
             self.source_index_for_snapshot_row(snapshot, line_index)
                 .is_some()
+        })
+    }
+
+    pub(crate) fn has_matching_decorated_snapshot_rows(&self, snapshot: &TerminalSnapshot) -> bool {
+        (0..snapshot.row_count()).any(|line_index| {
+            self.source_index_for_snapshot_row(snapshot, line_index)
+                .is_some_and(|source_index| {
+                    self.matches_by_line
+                        .get(source_index)
+                        .is_some_and(|matches| !matches.is_empty())
+                        || self
+                            .cell_ranges_by_line
+                            .get(source_index)
+                            .is_some_and(|ranges| !ranges.is_empty())
+                })
         })
     }
 }
@@ -408,6 +429,18 @@ pub(crate) fn prepare_terminal_frame_action_links(
     enabled: bool,
     matchers: &ActionLinksMatcherSettings,
 ) -> Option<TerminalFrameActionLinks> {
+    prepare_terminal_frame_action_links_reusing(snapshot, enabled, matchers, None).0
+}
+
+pub(crate) fn prepare_terminal_frame_action_links_reusing(
+    snapshot: &TerminalSnapshot,
+    enabled: bool,
+    matchers: &ActionLinksMatcherSettings,
+    previous: Option<&TerminalFrameActionLinks>,
+) -> (
+    Option<TerminalFrameActionLinks>,
+    TerminalActionLinkBuildStats,
+) {
     let absolute_end_row = snapshot.total_rows.saturating_sub(snapshot.display_offset);
     let absolute_start_row = absolute_end_row.saturating_sub(snapshot.row_count());
     let row_signatures = snapshot
@@ -416,52 +449,73 @@ pub(crate) fn prepare_terminal_frame_action_links(
         .map(|row| row.signature)
         .collect::<Vec<_>>();
     if !enabled {
-        return Some(TerminalFrameActionLinks {
-            matcher_key: terminal_action_link_matcher_key(false, matchers),
+        return (
+            Some(TerminalFrameActionLinks {
+                matcher_key: terminal_action_link_matcher_key(false, matchers),
+                absolute_start_row,
+                absolute_end_row,
+                row_signatures,
+                matches_by_line: vec![Vec::new(); snapshot.row_count()],
+                cell_ranges_by_line: vec![Vec::new(); snapshot.row_count()],
+            }),
+            TerminalActionLinkBuildStats::default(),
+        );
+    }
+    let matcher_key = terminal_action_link_matcher_key(true, matchers);
+    let reusable = previous.filter(|links| links.matcher_key == matcher_key);
+    let mut matches_by_line = Vec::with_capacity(snapshot.row_count());
+    let mut cell_ranges_by_line = Vec::with_capacity(snapshot.row_count());
+    let mut stats = TerminalActionLinkBuildStats::default();
+    for (line_index, row) in snapshot.rows().iter().enumerate() {
+        let absolute_row = absolute_start_row.saturating_add(line_index);
+        let reused = reusable.and_then(|links| {
+            if absolute_row < links.absolute_start_row || absolute_row >= links.absolute_end_row {
+                return None;
+            }
+            let source_index = absolute_row - links.absolute_start_row;
+            if links.row_signatures.get(source_index) != Some(&row.signature) {
+                return None;
+            }
+            Some((
+                links.matches_by_line.get(source_index)?.clone(),
+                links.cell_ranges_by_line.get(source_index)?.clone(),
+            ))
+        });
+        if let Some((matches, cell_ranges)) = reused {
+            stats.reused_rows += 1;
+            matches_by_line.push(matches);
+            cell_ranges_by_line.push(cell_ranges);
+            continue;
+        }
+        stats.rebuilt_rows += 1;
+        let matches = if row.text.is_empty() {
+            Vec::new()
+        } else {
+            find_action_links(&row.text, matchers, true)
+        };
+        let cell_ranges = matches
+            .iter()
+            .map(|item| {
+                (
+                    terminal_cell_col_for_byte_index(&row.text, item.start),
+                    terminal_cell_col_for_byte_index(&row.text, item.end),
+                )
+            })
+            .collect();
+        matches_by_line.push(matches);
+        cell_ranges_by_line.push(cell_ranges);
+    }
+    (
+        Some(TerminalFrameActionLinks {
+            matcher_key,
             absolute_start_row,
             absolute_end_row,
             row_signatures,
-            matches_by_line: vec![Vec::new(); snapshot.row_count()],
-            cell_ranges_by_line: vec![Vec::new(); snapshot.row_count()],
-        });
-    }
-    let matches_by_line = snapshot
-        .rows()
-        .iter()
-        .map(|row| {
-            let line = &row.text;
-            if line.is_empty() {
-                Vec::new()
-            } else {
-                find_action_links(line, matchers, true)
-            }
-        })
-        .collect::<Vec<_>>();
-    let cell_ranges_by_line = snapshot
-        .rows()
-        .iter()
-        .zip(matches_by_line.iter())
-        .map(|(row, matches)| {
-            let line = &row.text;
-            matches
-                .iter()
-                .map(|item| {
-                    (
-                        terminal_cell_col_for_byte_index(line, item.start),
-                        terminal_cell_col_for_byte_index(line, item.end),
-                    )
-                })
-                .collect()
-        })
-        .collect();
-    Some(TerminalFrameActionLinks {
-        matcher_key: terminal_action_link_matcher_key(true, matchers),
-        absolute_start_row,
-        absolute_end_row,
-        row_signatures,
-        matches_by_line,
-        cell_ranges_by_line,
-    })
+            matches_by_line,
+            cell_ranges_by_line,
+        }),
+        stats,
+    )
 }
 
 pub(crate) fn protect_terminal_output_burst<'a>(
@@ -938,7 +992,7 @@ impl TerminalViewState {
         let preserved_action_links = action_links.or_else(|| {
             self.frame_action_links
                 .take()
-                .filter(|links| links.covers_all_snapshot_rows(snapshot.as_ref()))
+                .filter(|links| links.has_matching_decorated_snapshot_rows(snapshot.as_ref()))
         });
         self.frame_snapshot = Some(snapshot);
         self.frame_action_links = preserved_action_links;
@@ -966,7 +1020,7 @@ impl TerminalViewState {
         let preserved_action_links = action_links.or_else(|| {
             self.frame_action_links
                 .take()
-                .filter(|links| links.covers_all_snapshot_rows(snapshot.as_ref()))
+                .filter(|links| links.has_matching_decorated_snapshot_rows(snapshot.as_ref()))
         });
         self.frame_snapshot = Some(snapshot);
         self.frame_action_links = preserved_action_links;
@@ -1297,6 +1351,22 @@ impl TerminalFramePipeline {
             action_links_enabled,
             action_link_matchers,
             false,
+            TerminalFrameSnapshotPurpose::Paint,
+        );
+    }
+
+    pub(crate) fn request_action_link_enrichment(
+        &self,
+        session_id: impl Into<String>,
+        action_link_matchers: ActionLinksMatcherSettings,
+    ) {
+        self.request_snapshot_with_priority(
+            session_id,
+            0,
+            true,
+            action_link_matchers,
+            false,
+            TerminalFrameSnapshotPurpose::ActionLinkEnrichment,
         );
     }
 
@@ -1315,6 +1385,7 @@ impl TerminalFramePipeline {
             action_links_enabled,
             action_link_matchers,
             true,
+            TerminalFrameSnapshotPurpose::Paint,
         );
     }
 
@@ -1325,6 +1396,7 @@ impl TerminalFramePipeline {
         action_links_enabled: bool,
         action_link_matchers: ActionLinksMatcherSettings,
         priority: bool,
+        purpose: TerminalFrameSnapshotPurpose,
     ) {
         let _ = self.command_tx.send(TerminalFrameCommand::RequestSnapshot {
             session_id: session_id.into(),
@@ -1332,6 +1404,7 @@ impl TerminalFramePipeline {
             action_links_enabled,
             action_link_matchers,
             priority,
+            purpose,
         });
     }
 
@@ -1420,6 +1493,7 @@ enum TerminalFrameCommand {
         action_links_enabled: bool,
         action_link_matchers: ActionLinksMatcherSettings,
         priority: bool,
+        purpose: TerminalFrameSnapshotPurpose,
     },
     RequestSearch {
         session_id: String,
@@ -1431,6 +1505,12 @@ enum TerminalFrameCommand {
     SetSnapshotPriority {
         session_ids: Vec<String>,
     },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TerminalFrameSnapshotPurpose {
+    Paint,
+    ActionLinkEnrichment,
 }
 
 #[derive(Clone, Debug)]
@@ -1582,6 +1662,7 @@ pub(crate) struct TerminalFrameSnapshotEvent {
     pub(crate) revision: u64,
     pub(crate) snapshot_duration: Duration,
     pub(crate) snapshot_stats: TerminalSnapshotBuildStats,
+    pub(crate) action_link_stats: TerminalActionLinkBuildStats,
     pub(crate) process_duration: Duration,
 }
 
@@ -1730,6 +1811,7 @@ struct TerminalFrameSession {
     revision: u64,
     /// When false, output frames omit full viewport_snapshot (hidden tabs).
     include_live_snapshot: bool,
+    action_link_cache: Option<TerminalFrameActionLinks>,
 }
 
 impl TerminalFrameSession {
@@ -1748,6 +1830,7 @@ impl TerminalFrameSession {
             revision: 0,
             // New sessions start high-priority until UI reports visibility.
             include_live_snapshot: true,
+            action_link_cache: None,
         }
     }
 
@@ -1767,12 +1850,14 @@ impl TerminalFrameSession {
         self.recording_decoder = TerminalOutputDecoder::default();
         self.recording_decoder.set_encoding(encoding);
         self.revision = self.revision.saturating_add(1);
+        self.action_link_cache = None;
     }
 
     fn resize(&mut self, cols: u16, rows: u16) {
         if self.screen.cols() as u16 != cols || self.screen.rows() as u16 != rows {
             self.screen.resize(cols, rows);
             self.revision = self.revision.saturating_add(1);
+            self.action_link_cache = None;
         }
     }
 
@@ -1791,6 +1876,7 @@ impl TerminalFrameSession {
             revision: self.revision,
             snapshot_duration,
             snapshot_stats,
+            action_link_stats: TerminalActionLinkBuildStats::default(),
             process_duration: started_at.elapsed(),
         }
     }
@@ -1872,7 +1958,7 @@ impl TerminalFrameSession {
     }
 
     fn snapshot_event(
-        &self,
+        &mut self,
         session_id: String,
         offset: usize,
         action_links_enabled: bool,
@@ -1885,11 +1971,32 @@ impl TerminalFrameSession {
         } else {
             terminal_frame_snapshot_with_scroll_window_and_stats(&self.screen, offset, false)
         };
-        let action_links = prepare_terminal_frame_action_links(
-            &snapshot,
-            action_links_enabled,
-            &action_link_matchers,
-        );
+        let (action_links, action_link_stats) = if action_links_enabled {
+            if let Some(previous) = self.action_link_cache.as_ref() {
+                prepare_terminal_frame_action_links_reusing(
+                    &snapshot,
+                    true,
+                    &action_link_matchers,
+                    Some(previous),
+                )
+            } else {
+                (
+                    prepare_terminal_frame_action_links(&snapshot, true, &action_link_matchers),
+                    TerminalActionLinkBuildStats {
+                        reused_rows: 0,
+                        rebuilt_rows: snapshot.row_count(),
+                    },
+                )
+            }
+        } else {
+            (
+                prepare_terminal_frame_action_links(&snapshot, false, &action_link_matchers),
+                TerminalActionLinkBuildStats::default(),
+            )
+        };
+        if action_links_enabled {
+            self.action_link_cache.clone_from(&action_links);
+        }
         TerminalFrameSnapshotEvent {
             session_id,
             offset: snapshot.display_offset,
@@ -1898,6 +2005,7 @@ impl TerminalFrameSession {
             revision: self.revision,
             snapshot_duration,
             snapshot_stats,
+            action_link_stats,
             process_duration: started_at.elapsed(),
         }
     }
@@ -2371,6 +2479,7 @@ fn push_terminal_frame_command(
             action_links_enabled,
             action_link_matchers,
             priority: true,
+            purpose,
         } => {
             commands.retain(|queued| {
                 !matches!(
@@ -2394,6 +2503,7 @@ fn push_terminal_frame_command(
                     action_links_enabled,
                     action_link_matchers,
                     priority: true,
+                    purpose,
                 },
             );
         }
@@ -2618,8 +2728,9 @@ fn run_terminal_frame_processor(
                 action_links_enabled,
                 action_link_matchers,
                 priority,
+                purpose: _,
             } => {
-                if let Some(session) = sessions.get(&session_id) {
+                if let Some(session) = sessions.get_mut(&session_id) {
                     let event = session.snapshot_event(
                         session_id,
                         offset,

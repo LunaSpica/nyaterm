@@ -183,6 +183,19 @@ fn terminal_scroll_snapshot_request_action_links_enabled(
     priority && action_links_enabled && !low_latency_mode
 }
 
+fn terminal_live_action_link_enrichment_should_enqueue(
+    view: &mut TerminalViewState,
+    snapshot: &TerminalSnapshot,
+    matcher_key: u64,
+) -> bool {
+    if view.frame_action_links.as_ref().is_some_and(|links| {
+        links.matcher_key == matcher_key && links.covers_all_snapshot_rows(snapshot)
+    }) {
+        return false;
+    }
+    view.pending_snapshot_offsets.insert(0)
+}
+
 impl NyaTermApp {
     pub(in crate::features) fn terminal_scrollback_line_limit(&self) -> usize {
         self.settings
@@ -283,6 +296,40 @@ impl NyaTermApp {
 
     pub(in crate::features) fn request_terminal_live_snapshot(&mut self, session_id: &str) -> bool {
         self.request_terminal_frame_snapshot(session_id, 0)
+    }
+
+    pub(in crate::features) fn request_terminal_live_action_link_enrichment(
+        &mut self,
+        session_id: &str,
+        snapshot: &TerminalSnapshot,
+    ) -> bool {
+        if session_id.is_empty()
+            || !self.settings.summary().terminal_action_links_enabled
+            || self.settings.summary().terminal_low_latency_mode
+        {
+            return false;
+        }
+        let matcher_key = terminal_action_link_matcher_key(
+            true,
+            &self.settings.summary().terminal_action_links_matchers,
+        );
+        let Some(view) = self.terminal.view.views.get_mut(session_id) else {
+            return false;
+        };
+        if !terminal_live_action_link_enrichment_should_enqueue(view, snapshot, matcher_key) {
+            return false;
+        }
+        self.terminal
+            .view
+            .frame_pipeline
+            .request_action_link_enrichment(
+                session_id.to_string(),
+                self.settings
+                    .summary()
+                    .terminal_action_links_matchers
+                    .clone(),
+            );
+        true
     }
 
     fn request_terminal_live_scrollback_prefetch(&mut self, session_id: &str) -> bool {
@@ -994,6 +1041,8 @@ impl NyaTermApp {
                 snapshot_reused_rows = frame.snapshot_stats.reused_rows,
                 snapshot_rebuilt_rows = frame.snapshot_stats.rebuilt_rows,
                 snapshot_inspected_rows = frame.snapshot_stats.inspected_rows,
+                action_link_reused_rows = frame.action_link_stats.reused_rows,
+                action_link_rebuilt_rows = frame.action_link_stats.rebuilt_rows,
                 process_ms = frame.process_duration.as_millis(),
                 "slow terminal frame snapshot"
             );
@@ -1006,6 +1055,8 @@ impl NyaTermApp {
             snapshot_reused_rows = frame.snapshot_stats.reused_rows,
             snapshot_rebuilt_rows = frame.snapshot_stats.rebuilt_rows,
             snapshot_inspected_rows = frame.snapshot_stats.inspected_rows,
+            action_link_reused_rows = frame.action_link_stats.reused_rows,
+            action_link_rebuilt_rows = frame.action_link_stats.rebuilt_rows,
             "terminal frame snapshot row reuse"
         );
         // Snapshot applies only dirties the surface, not chrome.
@@ -1819,11 +1870,11 @@ mod frame_event_queue_tests {
 
     use nyaterm_terminal::TerminalEffects;
 
-    use crate::models::TerminalProtocolState;
     use crate::models::{
         TerminalFrameActionLinks, TerminalFrameEvent, TerminalFrameOutputEvent,
         TerminalFrameSearchEvent, TerminalFrameSearchKey, TerminalFrameSearchPurpose,
-        TerminalFrameSearchResult, TerminalFrameSnapshotEvent, TerminalViewState,
+        TerminalFrameSearchResult, TerminalFrameSnapshotEvent, TerminalProtocolState,
+        TerminalViewState, prepare_terminal_frame_action_links,
     };
     use nyaterm_core::ActionLinksMatcherSettings;
 
@@ -1832,6 +1883,7 @@ mod frame_event_queue_tests {
         push_unique_terminal_surface_notify, push_unique_terminal_surface_session,
         terminal_action_link_matcher_key, terminal_action_links_current_for_offset,
         terminal_frame_deferred_events_can_apply, terminal_frame_snapshot_request_candidates,
+        terminal_live_action_link_enrichment_should_enqueue,
         terminal_live_scrollback_prefetch_offset, terminal_live_scrollback_prefetch_request_offset,
         terminal_scroll_enrichment_should_request, terminal_scroll_snapshot_ready_margin_rows,
         terminal_scroll_snapshot_request_action_links_enabled,
@@ -1898,6 +1950,7 @@ mod frame_event_queue_tests {
             revision: 1,
             snapshot_duration: Duration::ZERO,
             snapshot_stats: Default::default(),
+            action_link_stats: Default::default(),
             process_duration: Duration::ZERO,
         })
     }
@@ -2025,6 +2078,34 @@ mod frame_event_queue_tests {
         view.frame_snapshot = Some(std::sync::Arc::new(view.screen.viewport_snapshot(0)));
         view.scroll_offset = 1;
         assert_eq!(terminal_live_scrollback_prefetch_offset(&view), None);
+    }
+
+    #[test]
+    fn terminal_live_action_link_enrichment_deduplicates_and_skips_current_links() {
+        let mut view = terminal_view_with_scrollback(0);
+        let snapshot = view.screen.viewport_snapshot(0);
+        let matchers = ActionLinksMatcherSettings::default();
+        let matcher_key = terminal_action_link_matcher_key(true, &matchers);
+
+        assert!(terminal_live_action_link_enrichment_should_enqueue(
+            &mut view,
+            &snapshot,
+            matcher_key,
+        ));
+        assert!(!terminal_live_action_link_enrichment_should_enqueue(
+            &mut view,
+            &snapshot,
+            matcher_key,
+        ));
+
+        view.pending_snapshot_offsets.clear();
+        view.frame_action_links = prepare_terminal_frame_action_links(&snapshot, true, &matchers);
+        assert!(!terminal_live_action_link_enrichment_should_enqueue(
+            &mut view,
+            &snapshot,
+            matcher_key,
+        ));
+        assert!(!view.pending_snapshot_offsets.contains(&0));
     }
 
     #[test]

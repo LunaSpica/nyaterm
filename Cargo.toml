@@ -94,3 +94,17 @@ zed_reqwest = { package = "zed-reqwest", version = "0.12.15-zed", default-featur
     "rustls-tls-native-roots",
 ] }
 zip = { version = "8.2.0", default-features = false, features = ["deflate"] }
+
+[profile.dev.package]
+alacritty_terminal = { opt-level = 1 }
+gpui = { opt-level = 1 }
+gpui_platform = { opt-level = 1 }
+regex = { opt-level = 1 }
+regex-automata = { opt-level = 1 }
+regex-syntax = { opt-level = 1 }
+rustybuzz = { opt-level = 1 }
+smol = { opt-level = 1 }
+sum_tree = { opt-level = 1 }
+swash = { opt-level = 1 }
+taffy = { opt-level = 1 }
+ttf-parser = { opt-level = 1 }

@@ -419,11 +419,22 @@ fn terminal_scroll_text_first_decorations(
     )
 }
 
-fn terminal_keyword_highlight_updates_allowed(is_active: bool) -> bool {
-    // TerminalSurface paints only precomputed keyword spans. Keeping the rule
-    // source available under transient pressure lets its background worker
-    // catch up without putting regex work back on the paint path.
-    is_active
+fn terminal_keyword_highlight_updates_allowed(is_active: bool, input_latency_active: bool) -> bool {
+    // TerminalSurface keeps the last precomputed spans while rules are withheld;
+    // the input-idle repaint restores rules and schedules one catch-up task.
+    is_active && !input_latency_active
+}
+
+fn terminal_live_action_link_enrichment_allowed(
+    display_offset: usize,
+    action_links_enabled: bool,
+    input_latency_active: bool,
+    output_or_scroll_pressure: bool,
+) -> bool {
+    display_offset == 0
+        && action_links_enabled
+        && !input_latency_active
+        && !output_or_scroll_pressure
 }
 
 fn terminal_selection_for_session(
@@ -651,40 +662,6 @@ impl NyaTermApp {
         }
     }
 
-    fn ensure_terminal_live_action_links_for_snapshot(
-        &mut self,
-        session_id: &str,
-        display_offset: usize,
-        snapshot: &std::sync::Arc<TerminalSnapshot>,
-        action_links_enabled: bool,
-    ) {
-        if display_offset != 0 || !action_links_enabled {
-            return;
-        }
-        let Some(view) = self.terminal.view.views.get(session_id) else {
-            return;
-        };
-        let matcher_key = terminal_action_link_matcher_key(
-            true,
-            &self.settings.summary().terminal_action_links_matchers,
-        );
-        if view.frame_action_links.as_ref().is_some_and(|links| {
-            links.matcher_key == matcher_key && links.covers_all_snapshot_rows(snapshot.as_ref())
-        }) {
-            return;
-        }
-        let Some(action_links) = crate::models::prepare_terminal_frame_action_links(
-            snapshot.as_ref(),
-            true,
-            &self.settings.summary().terminal_action_links_matchers,
-        ) else {
-            return;
-        };
-        if let Some(view) = self.terminal.view.views.get_mut(session_id) {
-            view.frame_action_links = Some(action_links);
-        }
-    }
-
     fn sync_terminal_scroll_text_first_surface_paint(
         &mut self,
         session_id: &str,
@@ -722,12 +699,6 @@ impl NyaTermApp {
         };
         let action_links_enabled = self.settings.summary().terminal_action_links_enabled
             && !self.settings.summary().terminal_low_latency_mode;
-        self.ensure_terminal_live_action_links_for_snapshot(
-            session_id,
-            display_offset,
-            &snapshot,
-            action_links_enabled,
-        );
         let Some(view) = self.terminal.view.views.get(session_id) else {
             return false;
         };
@@ -809,11 +780,13 @@ impl NyaTermApp {
             );
         let configured_keyword_rules = self.resolved_keyword_highlight_rules();
         let clear_keyword_highlights = configured_keyword_rules.is_empty();
-        let keyword_rules = if terminal_keyword_highlight_updates_allowed(is_active) {
-            configured_keyword_rules.clone()
-        } else {
-            std::sync::Arc::new(Vec::new())
-        };
+        let keyword_rules =
+            if terminal_keyword_highlight_updates_allowed(is_active, input_latency_active) {
+                configured_keyword_rules.clone()
+            } else {
+                std::sync::Arc::new(Vec::new())
+            };
+        let keyword_output_pressure = self.runtime_output_pressure_active();
         if needs_scroll_enrichment {
             let _ = self.request_terminal_frame_snapshot_for_scroll_enrichment(
                 session_id,
@@ -821,8 +794,16 @@ impl NyaTermApp {
                 Some(snapshot.as_ref()),
             );
         }
+        if terminal_live_action_link_enrichment_allowed(
+            display_offset,
+            action_links_enabled,
+            input_latency_active,
+            render_degraded || keyword_output_pressure || user_scroll_active,
+        ) {
+            let _ =
+                self.request_terminal_live_action_link_enrichment(session_id, snapshot.as_ref());
+        }
         self.remember_terminal_scroll_window_snapshot(session_id, display_offset, &snapshot);
-        let keyword_output_pressure = self.runtime_output_pressure_active();
         surface.update(cx, |surface, cx| {
             let mut changed = false;
             changed |= surface.set_layout_cache(layout_cache);
@@ -958,11 +939,12 @@ impl NyaTermApp {
         let render_degraded = render_degraded_view || render_pressure;
         let configured_keyword_rules = self.resolved_keyword_highlight_rules();
         let clear_keyword_highlights = configured_keyword_rules.is_empty();
-        let keyword_rules = if !terminal_keyword_highlight_updates_allowed(is_active) {
-            std::sync::Arc::new(Vec::new())
-        } else {
-            configured_keyword_rules.clone()
-        };
+        let keyword_rules =
+            if !terminal_keyword_highlight_updates_allowed(is_active, input_latency_active) {
+                std::sync::Arc::new(Vec::new())
+            } else {
+                configured_keyword_rules.clone()
+            };
         let retained_lookup_started_at = Instant::now();
         let retained_surface_snapshot = if display_offset > 0 {
             surface
@@ -1001,13 +983,20 @@ impl NyaTermApp {
         let snapshot_duration = snapshot_started_at.elapsed();
         let action_links_enabled = self.settings.summary().terminal_action_links_enabled
             && !self.settings.summary().terminal_low_latency_mode;
-        if let Some(snapshot) = snapshot.as_ref() {
-            self.ensure_terminal_live_action_links_for_snapshot(
-                session_id,
+        if let Some(snapshot) = snapshot.as_ref()
+            && terminal_live_action_link_enrichment_allowed(
                 display_offset,
-                snapshot,
                 action_links_enabled,
-            );
+                input_latency_active,
+                render_degraded_view
+                    || render_output_pressure
+                    || burst > 0
+                    || mode == TerminalPerformanceMode::Overloaded
+                    || user_scroll_active,
+            )
+        {
+            let _ =
+                self.request_terminal_live_action_link_enrichment(session_id, snapshot.as_ref());
         }
         let view = self.terminal.view.views.get(session_id);
         let palette = self.terminal_theme_palette();

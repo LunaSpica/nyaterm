@@ -292,6 +292,15 @@ impl SyncInputFeatureState {
         peers
     }
 
+    pub(in crate::features) fn may_fan_out_from(&self, session_id: &str) -> bool {
+        self.broadcast_to_all
+            || self.groups.iter().any(|group| {
+                group.enabled
+                    && group.session_ids.iter().any(|id| id == session_id)
+                    && !group.paused_session_ids.iter().any(|id| id == session_id)
+            })
+    }
+
     pub(in crate::features) fn toggle_broadcast_to_all(&mut self) -> bool {
         self.broadcast_to_all = !self.broadcast_to_all;
         self.broadcast_to_all
@@ -636,6 +645,9 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn sync_peer_session_ids(&self, session_id: &str) -> Vec<String> {
+        if !self.sync_input.may_fan_out_from(session_id) {
+            return Vec::new();
+        }
         let live_ids = self
             .session
             .metadata_entries()
@@ -811,5 +823,26 @@ mod tests {
                 "peer-b".to_string()
             ]
         );
+    }
+
+    #[test]
+    fn fan_out_fast_path_requires_an_active_unpaused_source_or_broadcast() {
+        let mut state = state();
+        assert!(!state.may_fan_out_from("primary"));
+
+        let mut sync_group = group("one", "One");
+        sync_group.session_ids = vec!["primary".to_string(), "peer".to_string()];
+        sync_group.enabled = false;
+        state.groups.push(sync_group);
+        assert!(!state.may_fan_out_from("primary"));
+
+        state.groups[0].enabled = true;
+        assert!(state.may_fan_out_from("primary"));
+        state.groups[0].paused_session_ids = vec!["primary".to_string()];
+        assert!(!state.may_fan_out_from("primary"));
+
+        assert!(state.toggle_broadcast_to_all());
+        assert!(state.may_fan_out_from("primary"));
+        assert!(state.may_fan_out_from("outside"));
     }
 }

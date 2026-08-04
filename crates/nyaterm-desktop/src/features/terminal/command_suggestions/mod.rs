@@ -7,10 +7,10 @@ use gpui::{
 };
 use nyaterm_core::{
     CommandHistoryEntry, ConnectionStore, QuickCommand, TerminalInputState,
-    apply_terminal_input_data, can_suggest_from_tracked_command,
-    command_starts_suggestion_suppressing_program, get_tracked_command,
-    get_tracked_submission_command, resync_from_terminal_line, search_command_sources,
-    terminal_input_tracker_below_min_chars,
+    apply_terminal_input_data, apply_terminal_input_data_in_place,
+    can_suggest_from_tracked_command, command_starts_suggestion_suppressing_program,
+    get_tracked_command, get_tracked_submission_command, resync_from_terminal_line,
+    search_command_sources, terminal_input_tracker_below_min_chars,
 };
 
 use crate::features::NyaTermApp;
@@ -129,17 +129,15 @@ fn command_suggestion_input_candidate_chars(state: &TerminalInputState) -> usize
     state.value.trim_start().chars().count()
 }
 
-fn command_history_input_update(
-    state: &TerminalInputState,
-    text: &str,
-) -> (TerminalInputState, Option<String>) {
+fn command_history_input_update(state: &mut TerminalInputState, text: &str) -> Option<String> {
     let submitted = if text.contains('\r') || text.contains('\n') {
         let submitted = get_tracked_submission_command(state);
         (!submitted.is_empty()).then_some(submitted)
     } else {
         None
     };
-    (apply_terminal_input_data(state, text), submitted)
+    apply_terminal_input_data_in_place(state, text);
+    submitted
 }
 
 impl NyaTermApp {
@@ -279,8 +277,7 @@ impl NyaTermApp {
         timing.resync = resync_started_at.elapsed();
 
         let apply_started_at = Instant::now();
-        self.terminal.assist.command_input_tracker =
-            apply_terminal_input_data(&self.terminal.assist.command_input_tracker, text);
+        apply_terminal_input_data_in_place(&mut self.terminal.assist.command_input_tracker, text);
         timing.apply_tracker = apply_started_at.elapsed();
 
         if self.terminal.assist.command_suggestions_suppressed {
@@ -390,15 +387,14 @@ impl NyaTermApp {
             return;
         }
 
-        let (next_state, submitted) =
-            command_history_input_update(&self.terminal.assist.command_input_tracker, text);
+        let submitted =
+            command_history_input_update(&mut self.terminal.assist.command_input_tracker, text);
         if let Some(submitted) = submitted {
             if command_starts_suggestion_suppressing_program(&submitted) {
                 self.terminal.assist.command_suggestions_suppressed = true;
             }
             self.terminal.assist.pending_command_history_entry = Some(submitted);
         }
-        self.terminal.assist.command_input_tracker = next_state;
     }
 
     pub(in crate::features) fn schedule_command_suggestion_refresh(
@@ -1580,11 +1576,11 @@ mod tests {
 
     #[test]
     fn command_history_input_update_captures_submission_before_enter_reset() {
-        let state = apply_terminal_input_data(&TerminalInputState::new(), "git status");
+        let mut state = apply_terminal_input_data(&TerminalInputState::new(), "git status");
 
-        let (next, submitted) = command_history_input_update(&state, "\r");
+        let submitted = command_history_input_update(&mut state, "\r");
 
         assert_eq!(submitted.as_deref(), Some("git status"));
-        assert!(next.value.is_empty());
+        assert!(state.value.is_empty());
     }
 }

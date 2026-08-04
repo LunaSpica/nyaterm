@@ -19,10 +19,11 @@ use super::{
     TerminalFrameOutputBatch, TerminalFrameOutputEvent, TerminalFrameOutputSubmission,
     TerminalFrameParts, TerminalFrameSearchEvent, TerminalFrameSearchKey,
     TerminalFrameSearchPurpose, TerminalFrameSearchResult, TerminalFrameSession,
-    TerminalFrameSnapshotEvent, TerminalPerformanceMode, TerminalPerformanceOverlay,
-    TerminalProtocolState, TerminalRenderCache, TerminalViewState, append_terminal_ui_output_tail,
-    coalesce_terminal_frame_output_command, compact_stale_terminal_frame_commands,
-    next_terminal_frame_command, prepare_terminal_frame_action_links,
+    TerminalFrameSnapshotEvent, TerminalFrameSnapshotPurpose, TerminalPerformanceMode,
+    TerminalPerformanceOverlay, TerminalProtocolState, TerminalRenderCache, TerminalViewState,
+    append_terminal_ui_output_tail, coalesce_terminal_frame_output_command,
+    compact_stale_terminal_frame_commands, next_terminal_frame_command,
+    prepare_terminal_frame_action_links, prepare_terminal_frame_action_links_reusing,
     process_next_selected_occurrence_search_chunk, process_terminal_frame_output_burst,
     protect_terminal_output_burst, replace_selected_occurrence_search_job,
     terminal_expensive_interactions_enabled, terminal_frame_command_channel,
@@ -1293,6 +1294,7 @@ fn terminal_frame_event_queue_keeps_snapshot_wake_armed_across_output() {
         revision: 1,
         snapshot_duration: Duration::ZERO,
         snapshot_stats: Default::default(),
+        action_link_stats: Default::default(),
         process_duration: Duration::ZERO,
     }));
     assert!(matches!(wake_rx.try_recv(), Ok(())));
@@ -1492,6 +1494,55 @@ fn terminal_frame_action_links_align_with_snapshot_lines() {
     assert!(disabled.matches_by_line.iter().all(Vec::is_empty));
     assert!(disabled.cell_ranges_by_line.iter().all(Vec::is_empty));
     assert_ne!(links.matcher_key, disabled.matcher_key);
+}
+
+#[test]
+fn terminal_frame_action_links_reuse_unchanged_rows() {
+    let mut screen = TerminalScreen::new(80, 8);
+    screen.advance_decoded_text("visit http://example.com");
+    let first_snapshot = screen.viewport_snapshot(0);
+    let matchers = ActionLinksMatcherSettings::default();
+    let first = prepare_terminal_frame_action_links(&first_snapshot, true, &matchers).unwrap();
+
+    let (_, unchanged_stats) =
+        prepare_terminal_frame_action_links_reusing(&first_snapshot, true, &matchers, Some(&first));
+    assert_eq!(unchanged_stats.reused_rows, first_snapshot.row_count());
+    assert_eq!(unchanged_stats.rebuilt_rows, 0);
+
+    screen.advance_decoded_text(" updated");
+    let changed_snapshot = screen.viewport_snapshot(0);
+    let (_, changed_stats) = prepare_terminal_frame_action_links_reusing(
+        &changed_snapshot,
+        true,
+        &matchers,
+        Some(&first),
+    );
+    assert!(changed_stats.reused_rows > 0);
+    assert!(changed_stats.rebuilt_rows > 0);
+    assert_eq!(
+        changed_stats.reused_rows + changed_stats.rebuilt_rows,
+        changed_snapshot.row_count()
+    );
+}
+
+#[test]
+fn terminal_frame_action_link_matcher_change_rebuilds_all_rows() {
+    let mut screen = TerminalScreen::new(80, 8);
+    screen.advance_decoded_text("visit http://example.com and 10.0.0.1");
+    let snapshot = screen.viewport_snapshot(0);
+    let matchers = ActionLinksMatcherSettings::default();
+    let first = prepare_terminal_frame_action_links(&snapshot, true, &matchers).unwrap();
+    let mut changed_matchers = matchers.clone();
+    changed_matchers.ipv4 = false;
+
+    let (_, stats) = prepare_terminal_frame_action_links_reusing(
+        &snapshot,
+        true,
+        &changed_matchers,
+        Some(&first),
+    );
+    assert_eq!(stats.reused_rows, 0);
+    assert_eq!(stats.rebuilt_rows, snapshot.row_count());
 }
 
 #[test]
@@ -2244,6 +2295,7 @@ fn terminal_frame_command_queue_runs_output_before_idle_snapshot() {
         action_links_enabled: false,
         action_link_matchers: ActionLinksMatcherSettings::default(),
         priority: false,
+        purpose: TerminalFrameSnapshotPurpose::ActionLinkEnrichment,
     }));
     assert!(tx.send(TerminalFrameCommand::Output {
         session_id: "s1".to_string(),
@@ -2277,6 +2329,7 @@ fn terminal_frame_command_queue_caps_rebuildable_render_requests() {
             action_links_enabled: false,
             action_link_matchers: ActionLinksMatcherSettings::default(),
             priority: false,
+            purpose: TerminalFrameSnapshotPurpose::Paint,
         }));
     }
 
@@ -2319,6 +2372,7 @@ fn terminal_frame_command_queue_prioritizes_user_scroll_snapshot() {
         action_links_enabled: false,
         action_link_matchers: ActionLinksMatcherSettings::default(),
         priority: true,
+        purpose: TerminalFrameSnapshotPurpose::Paint,
     }));
 
     assert!(matches!(
@@ -2349,6 +2403,7 @@ fn terminal_frame_command_queue_keeps_latest_user_scroll_target_per_session() {
             action_links_enabled: false,
             action_link_matchers: ActionLinksMatcherSettings::default(),
             priority: true,
+            purpose: TerminalFrameSnapshotPurpose::Paint,
         }));
     }
 
@@ -2373,6 +2428,7 @@ fn terminal_frame_command_queue_keeps_priority_snapshot_under_cap() {
         action_links_enabled: false,
         action_link_matchers: ActionLinksMatcherSettings::default(),
         priority: true,
+        purpose: TerminalFrameSnapshotPurpose::Paint,
     }));
     for offset in 0..TERMINAL_FRAME_COMMAND_QUEUE_CAP + 32 {
         assert!(tx.send(TerminalFrameCommand::RequestSnapshot {
@@ -2381,6 +2437,7 @@ fn terminal_frame_command_queue_keeps_priority_snapshot_under_cap() {
             action_links_enabled: false,
             action_link_matchers: ActionLinksMatcherSettings::default(),
             priority: false,
+            purpose: TerminalFrameSnapshotPurpose::Paint,
         }));
     }
 
