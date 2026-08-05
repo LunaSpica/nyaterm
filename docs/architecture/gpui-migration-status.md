@@ -6,7 +6,7 @@ remaining entries here describe targeted parity, compatibility, ownership, and
 cleanup work rather than a broad half-migrated application state. Keep dynamic
 counts here instead of in `AGENTS.md`.
 
-Last updated from the working tree on 2026-07-30.
+Last updated from the working tree on 2026-08-05.
 
 ## Current Metrics
 
@@ -19,8 +19,8 @@ Last updated from the working tree on 2026-07-30.
 | `use super::*` imports in terminal-GPUI | 0 | Cleared in production and test modules. The crate root is no longer a shared import bucket. |
 | `features/prelude.rs` rough exported-token count | 0 | The transitional shared prelude is removed and guarded against reintroduction. |
 | `cargo check -p nyaterm-app` desktop warnings | 0 | Cleared. The current cleanup either wired complete capabilities or removed superseded state and adapters. |
-| Desktop clippy warnings | 0 | `cargo clippy --workspace --all-targets` succeeds with no project warnings, down from 333 in the current cleanup pass and without lint allowances. Cargo still reports the upstream `proc-macro-error2 v2.0.1` future-incompatibility notice. |
-| Other workspace clippy warnings | 0 | Core, terminal, terminal-GPUI, transport, UI, OTP, store and app targets are clean across libraries, binaries and tests. |
+| Desktop clippy warnings | 5 | Stable Rust 1.97.1 reports four library warnings and one test-only warning. `cargo clippy --workspace --all-targets` still exits successfully. |
+| Other workspace clippy warnings | 17 | Stable Rust 1.97.1 reports 9 core, 2 terminal, 5 UI and 1 terminal-GPUI warnings in unchanged source. Transport, OTP, store and app are clean. Cargo also reports the upstream `proc-macro-error2 v2.0.1` future-incompatibility notice. |
 | Entity Store structs | 3 | `WindowRuntime`, `StartupRestore`, `Overlay`. Each owns state the app does not. |
 | Snapshot structs | 0 | Cleared. No store is a projection of `NyaTermApp` any more. |
 | `replace_snapshot` methods | 0 | Cleared. |
@@ -64,9 +64,11 @@ these as staged extraction candidates, not as formatting-only refactor targets.
 ## Completed
 
 - `gpui-component` infrastructure and ordinary-control migration are in place.
-  The workspace uses vendored `gpui-component` `0.5.2` and vendored Zed GPUI at
-  `vendor/zed`; dependency verification on 2026-08-01 shows a single active
-  `gpui v0.2.2` from `vendor/zed/crates/gpui`. `nyaterm-ui` owns the component
+  The workspace uses vendored `gpui-component` `0.5.2` at
+  `e1570bdc8fd2dc17d38cab09e74b1783bdf3b24b` and vendored Zed GPUI at
+  `4aad57fd1f002f9feeea2b7fb6229ccbcd576cb1`. Dependency verification on
+  2026-08-05 shows a single active path-based `gpui v0.2.2` from
+  `vendor/zed/crates/gpui`. `nyaterm-ui` owns the component
   wrappers, theme bridge, and `NyaRoot`/`NyaWindowHandle` host aliases; desktop
   feature modules must continue importing NyaTerm wrapper types rather than
   `gpui_component` directly. The main window plus settings, connection editor,

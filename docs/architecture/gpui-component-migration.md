@@ -24,8 +24,8 @@ Core component phases are in place for reusable controls:
 
 | Item | Status | Evidence |
 | --- | --- | --- |
-| Add exact `gpui-component` dependency | Done | `gpui-component` is vendored at `vendor/gpui-component/crates/ui` as `0.5.2`. |
-| Verify GPUI version consistency | Done | `cargo tree -i gpui` shows one active `gpui v0.2.2` from `vendor/zed/crates/gpui`; `gpui-component` uses that same path. |
+| Add exact `gpui-component` dependency | Done | `gpui-component` is vendored at `vendor/gpui-component/crates/ui` as `0.5.2` at `e1570bdc8fd2dc17d38cab09e74b1783bdf3b24b`. |
+| Verify GPUI version consistency | Done | `cargo tree -i gpui` shows one active `gpui v0.2.2` from Zed `4aad57fd1f002f9feeea2b7fb6229ccbcd576cb1` at `vendor/zed/crates/gpui`; `gpui-component` uses that same path. |
 | Initialize component library | Done | `gpui_component::init(cx)` runs before the main window opens. |
 | Establish `nyaterm-ui` wrappers | Done | `NyaInput`, `NyaButton`, `NyaIconButton`, `NyaSwitch`, `NyaCheckbox`, `NyaRadioGroup`, `NyaTabs`, `NyaSelect`, `NyaDialog`, `NyaConfirmDialog`, `NyaTooltip`, menu wrappers, and `NyaRoot` are exported. |
 | Theme bridge | Done for Phase 0 | `apply_component_theme(ThemePalette, &mut App)` maps NyaTerm colors into component theme colors. Startup calls `sync_component_theme` after the main window opens; user-driven appearance changes call it after updating the NyaTerm theme id; UI-triggered store reloads use `refresh_store_from_runtime_and_sync_theme`. |
@@ -177,16 +177,18 @@ component names. An architecture check rejects `gpui_component` imports under
 
 | Command | Result |
 | --- | --- |
-| `cargo tree -i gpui` | Passed on 2026-08-01; one active `gpui v0.2.2` from `vendor/zed/crates/gpui`. |
+| `cargo tree -i gpui` | Passed on 2026-08-05; one active path-based `gpui v0.2.2` from Zed `4aad57fd1f002f9feeea2b7fb6229ccbcd576cb1`. |
 | `cargo tree -d` | Completed on 2026-08-01; duplicate transitive crates remain, but no duplicate `gpui` was introduced. |
 | `cargo check -p nyaterm-ui` | Passed after wrapper scaffolding. |
-| `cargo test -p nyaterm-ui` | Passed on 2026-08-01; 15 tests. |
+| `cargo test -p nyaterm-ui` | Passed on 2026-08-05; 30 tests. |
 | `cargo check -p nyaterm-desktop` | Passed after Root handle migration, ordinary input migration, numeric input migration, and the import/translation/update dialog migration. |
-| `cargo test -p nyaterm-desktop` | Passed on 2026-08-01; 730 tests after the vendored GPUI stack upgrade. |
-| `cargo test -p nyaterm-terminal-gpui` | Passed on 2026-08-01; 101 tests after terminal paint API adaptation. |
-| `cargo check -p nyaterm-app` | Passed on 2026-08-01 after the vendored GPUI stack upgrade. |
-| `bash scripts/check-architecture-boundaries.sh` | Passed on 2026-08-01; desktop feature modules do not import `gpui_component` directly. |
-| `cargo fmt --all -- --check` | Passed after formatting; stable rustfmt reports existing warnings for unstable config options. |
-| `cargo check --workspace` | Passed. |
-| `cargo test --workspace` | Passed; SFTP service E2E remains ignored without `NYATERM_TEST_SFTP_*` variables. |
-| `cargo clippy --workspace --all-targets` | Passed. |
+| `cargo test -p nyaterm-desktop` | Passed on 2026-08-05; 812 tests. |
+| `cargo test -p nyaterm-terminal-gpui` | Passed on 2026-08-05; 124 tests passed and 1 benchmark test was ignored. |
+| `cargo test -p nyaterm-transport` | Passed on 2026-08-05; 147 tests. The SFTP service E2E remained ignored without `NYATERM_TEST_SFTP_*`. |
+| `cargo check -p nyaterm-app` | Passed on 2026-08-05 after updating the four vendored snapshots. |
+| `cargo run -p nyaterm-app --bin nyaterm` | The Linux binary started, rendered the root view, and remained running during a 10-second smoke check. Segmented tabs, inputs, and dialogs were not visually verified because no display service was available. |
+| `bash scripts/check-architecture-boundaries.sh` | Passed on 2026-08-05; desktop feature modules do not import `gpui_component` directly. |
+| `cargo fmt --all -- --check` | Failed on 2026-08-05 because stable rustfmt would reformat the fixed upstream `gpui-component` snapshot; the explicit NyaTerm workspace-package format check passed. The upstream snapshot was not rewritten. |
+| `cargo check --workspace` | Passed on 2026-08-05. |
+| `cargo test --workspace` | Passed on 2026-08-05; SFTP service E2E remains ignored without `NYATERM_TEST_SFTP_*` variables. |
+| `cargo clippy --workspace --all-targets` | Completed successfully on 2026-08-05 with 22 warnings from unchanged NyaTerm source under stable Rust 1.97.1. |
