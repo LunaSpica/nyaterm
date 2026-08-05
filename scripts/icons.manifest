@@ -8,6 +8,7 @@
 #   fa:<style>/<file>     @fortawesome/fontawesome-free svgs/  (CC BY 4.0)
 #   vsc:<file>            @vscode/codicons src/icons/ (CC BY 4.0)
 #   rmx:<dir>/<file>      remixicon icons/            (Apache-2.0)
+#   lu:<file>             lucide-static icons/        (ISC)
 #   keep                  canonical project asset already committed here
 #
 # Destination prefix encodes the render mode and is enforced by tests in
@@ -90,12 +91,17 @@ icons/fe/back.svg	md:filled/chevron_left.svg
 icons/fe/bookmark-remove.svg	md:filled/bookmark_remove.svg
 icons/fe/delete.svg	md:filled/delete.svg
 icons/fe/download.svg	md:filled/download.svg
+icons/fe/folder-off.svg	md:filled/folder_off.svg
+icons/fe/folder-sync.svg	lu:folder-sync.svg
 icons/fe/forward.svg	md:filled/keyboard_arrow_right.svg
 icons/fe/new-file.svg	md:filled/note_add.svg
 icons/fe/new-folder.svg	md:filled/create_new_folder.svg
 icons/fe/paste.svg	md:filled/content_paste.svg
 icons/fe/refresh.svg	md:filled/refresh.svg
 icons/fe/search.svg	md:filled/search.svg
+icons/fe/send-path.svg	lu:clipboard-paste.svg
+icons/fe/sort-ascending.svg	md:filled/arrow_drop_up.svg
+icons/fe/sort-descending.svg	md:filled/arrow_drop_down.svg
 icons/fe/star-outline.svg	md:filled/bookmark_border.svg
 icons/fe/star.svg	md:filled/bookmark_added.svg
 icons/fe/sync.svg	md:filled/sync_lock.svg

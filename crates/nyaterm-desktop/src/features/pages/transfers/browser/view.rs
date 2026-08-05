@@ -10,9 +10,9 @@ use crate::features::{NyaTermApp, TextInputSetup, format_file_size};
 use crate::models::TransferBrowserSortColumn;
 
 use super::super::{
-    TransferBrowserEntryRowPresentation, TransferBrowserSortHeaderState,
-    normalized_transfer_browser_path, sort_header_cell, transfer_browser_entry_row,
-    transfer_browser_parent_entry_row, transfer_browser_table_width,
+    TransferBrowserAvailability, TransferBrowserEntryRowPresentation,
+    TransferBrowserSortHeaderState, normalized_transfer_browser_path, sort_header_cell,
+    transfer_browser_entry_row, transfer_browser_parent_entry_row, transfer_browser_table_width,
 };
 use super::helpers::{
     compact_transfer_footer_button, compact_transfer_footer_button_active,
@@ -22,14 +22,70 @@ use super::helpers::{
 };
 
 impl NyaTermApp {
-    pub(in crate::features) fn transfer_browser_view(
+    pub(in crate::features::pages::transfers) fn transfer_browser_view(
         &mut self,
-        can_transfer: bool,
+        availability: TransferBrowserAvailability,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let transparent_surface = self.shell_transparent_color(palette.surface);
         let section_header = self.shell_transparent_color(palette.section_header);
+        if availability != TransferBrowserAvailability::Browsable {
+            let (title, description) = match availability {
+                TransferBrowserAvailability::UnsupportedSession => (
+                    self.tr("fileExplorer.unsupportedSession"),
+                    Some(self.tr("fileExplorer.unsupportedSessionDesc")),
+                ),
+                TransferBrowserAvailability::NoSession
+                | TransferBrowserAvailability::DisconnectedSsh => {
+                    (self.tr("fileExplorer.connectToSession"), None)
+                }
+                TransferBrowserAvailability::Browsable => unreachable!(),
+            };
+
+            return div()
+                .id(SharedString::from("transfer-browser-panel"))
+                .size_full()
+                .flex()
+                .items_center()
+                .justify_center()
+                .overflow_hidden()
+                .bg(transparent_surface)
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .items_center()
+                        .justify_center()
+                        .px_4()
+                        .gap_1()
+                        .text_center()
+                        .child(
+                            svg()
+                                .size(px(28.))
+                                .flex_none()
+                                .path("icons/fe/folder-off.svg")
+                                .text_color(rgb(palette.text_dimmed)),
+                        )
+                        .child(
+                            div()
+                                .mt_1()
+                                .text_size(px(12.))
+                                .text_color(rgb(palette.text_muted))
+                                .child(title),
+                        )
+                        .when_some(description, |this, description| {
+                            this.child(
+                                div()
+                                    .text_size(px(11.))
+                                    .text_color(rgb(palette.text_dimmed))
+                                    .child(description),
+                            )
+                        }),
+                );
+        }
+
+        let can_transfer = availability == TransferBrowserAvailability::Browsable;
         let _selected = self
             .transfer
             .browser_view()
@@ -45,6 +101,12 @@ impl NyaTermApp {
             .browser_view()
             .column_resize
             .map(|state| state.column);
+        let sort_header_state = TransferBrowserSortHeaderState {
+            header_bg: section_header,
+            active_column: self.transfer.browser_view().sort_column,
+            direction: self.transfer.browser_view().sort_direction,
+            resizing_column,
+        };
         let selected_entries = self.selected_transfer_entries();
         let selected_count = selected_entries.len();
         let total_count = self.transfer.browser_view().entries.len();
@@ -106,49 +168,7 @@ impl NyaTermApp {
             can_transfer && !self.transfer.browser_view().loading && !visible_entries.is_empty();
         let auto_sync_cwd = self.transfer_browser_auto_sync_cwd_enabled();
         let cwd_tracking_available = self.active_transfer_browser_connection_id().is_some();
-        let rows: AnyElement = if !can_transfer {
-            div()
-                .flex()
-                .flex_col()
-                .child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .items_center()
-                        .justify_center()
-                        .px_4()
-                        .py_8()
-                        .gap_1()
-                        .child(
-                            svg()
-                                .size(px(28.))
-                                .flex_none()
-                                .path("icons/conn/folder.svg")
-                                .text_color(rgb(palette.border)),
-                        )
-                        .child(
-                            div()
-                                .text_size(px(12.))
-                                .text_color(rgb(palette.text_muted))
-                                .child(if self.session.active_id().is_some() {
-                                    self.tr("fileExplorer.unsupportedSession")
-                                } else {
-                                    self.tr("fileExplorer.connectToSession")
-                                }),
-                        )
-                        .child(
-                            div()
-                                .text_size(px(11.))
-                                .text_color(rgb(palette.text_dimmed))
-                                .child(if self.session.active_id().is_some() {
-                                    self.tr("fileExplorer.unsupportedSessionDesc")
-                                } else {
-                                    self.tr("fileExplorer.connectToSession")
-                                }),
-                        ),
-                )
-                .into_any_element()
-        } else if self.transfer.browser_view().loading {
+        let rows: AnyElement = if self.transfer.browser_view().loading {
             div()
                 .flex()
                 .flex_col()
@@ -225,7 +245,7 @@ impl NyaTermApp {
             let parent_count = usize::from(has_parent_entry);
             let total_entries = visible_entries.len() + parent_count;
             let name_placeholder = self.tr("fileExplorer.name");
-            uniform_list(
+            let mut list = uniform_list(
                 "transfer-browser-rows",
                 total_entries,
                 cx.processor(move |this, range: std::ops::Range<usize>, _, cx| {
@@ -287,13 +307,14 @@ impl NyaTermApp {
                     }
                     items
                 }),
-            )
-            .h_full()
-            .min_h_0()
-            .min_w(table_width)
-            .with_horizontal_sizing_behavior(ListHorizontalSizingBehavior::FitList)
-            .track_scroll(self.transfer.browser_view().list_scroll)
-            .into_any_element()
+            );
+            list.style().restrict_scroll_to_axis = Some(true);
+            list.h_full()
+                .min_h_0()
+                .min_w(table_width)
+                .with_horizontal_sizing_behavior(ListHorizontalSizingBehavior::FitList)
+                .track_scroll(self.transfer.browser_view().list_scroll)
+                .into_any_element()
         };
 
         div()
@@ -466,13 +487,12 @@ impl NyaTermApp {
             })
             .child(NyaContextMenu::new(
                 div()
-                    .id(SharedString::from("transfer-browser-table-scroll"))
+                    .id(SharedString::from("transfer-browser-table-viewport"))
+                    .relative()
                     .flex_1()
                     .min_h_0()
                     .min_w_0()
-                    .overflow_x_scroll()
-                    .overflow_y_hidden()
-                    .scrollbar_width(px(8.))
+                    .overflow_hidden()
                     .on_mouse_down(
                         MouseButton::Right,
                         cx.listener(|this, _: &MouseDownEvent, window, cx| {
@@ -481,112 +501,90 @@ impl NyaTermApp {
                     )
                     .child(
                         div()
-                            .min_w(table_width)
-                            .h_full()
-                            .flex()
-                            .flex_col()
+                            .id(SharedString::from("transfer-browser-table-scroll"))
+                            .size_full()
+                            .min_w_0()
+                            .overflow_x_scroll()
+                            .overflow_y_hidden()
+                            .restrict_scroll_to_axis()
+                            .scrollbar_width(px(0.))
                             .child(
                                 div()
+                                    .min_w(table_width)
+                                    .h_full()
                                     .flex()
-                                    .items_center()
-                                    .gap_0()
-                                    .child(sort_header_cell(
-                                        palette,
-                                        TransferBrowserSortColumn::Name,
-                                        self.tr("fileExplorer.name"),
-                                        column_widths.name,
-                                        TransferBrowserSortHeaderState {
-                                            header_bg: section_header,
-                                            active_column: self.transfer.browser_view().sort_column,
-                                            direction: self.transfer.browser_view().sort_direction,
-                                            resizing_column,
-                                        },
-                                        cx,
-                                    ))
-                                    .child(sort_header_cell(
-                                        palette,
-                                        TransferBrowserSortColumn::Modified,
-                                        self.tr("fileExplorer.mtime"),
-                                        column_widths.modified,
-                                        TransferBrowserSortHeaderState {
-                                            header_bg: section_header,
-                                            active_column: self.transfer.browser_view().sort_column,
-                                            direction: self.transfer.browser_view().sort_direction,
-                                            resizing_column,
-                                        },
-                                        cx,
-                                    ))
-                                    .child(sort_header_cell(
-                                        palette,
-                                        TransferBrowserSortColumn::Size,
-                                        self.tr("fileExplorer.size"),
-                                        column_widths.size,
-                                        TransferBrowserSortHeaderState {
-                                            header_bg: section_header,
-                                            active_column: self.transfer.browser_view().sort_column,
-                                            direction: self.transfer.browser_view().sort_direction,
-                                            resizing_column,
-                                        },
-                                        cx,
-                                    ))
-                                    .child(sort_header_cell(
-                                        palette,
-                                        TransferBrowserSortColumn::Permissions,
-                                        self.tr("fileExplorer.permissions"),
-                                        column_widths.permissions,
-                                        TransferBrowserSortHeaderState {
-                                            header_bg: section_header,
-                                            active_column: self.transfer.browser_view().sort_column,
-                                            direction: self.transfer.browser_view().sort_direction,
-                                            resizing_column,
-                                        },
-                                        cx,
-                                    ))
-                                    .child(sort_header_cell(
-                                        palette,
-                                        TransferBrowserSortColumn::Owner,
-                                        self.tr("fileExplorer.owner"),
-                                        column_widths.owner,
-                                        TransferBrowserSortHeaderState {
-                                            header_bg: section_header,
-                                            active_column: self.transfer.browser_view().sort_column,
-                                            direction: self.transfer.browser_view().sort_direction,
-                                            resizing_column,
-                                        },
-                                        cx,
-                                    ))
-                                    .child(sort_header_cell(
-                                        palette,
-                                        TransferBrowserSortColumn::Group,
-                                        self.tr("fileExplorer.group"),
-                                        column_widths.group,
-                                        TransferBrowserSortHeaderState {
-                                            header_bg: section_header,
-                                            active_column: self.transfer.browser_view().sort_column,
-                                            direction: self.transfer.browser_view().sort_direction,
-                                            resizing_column,
-                                        },
-                                        cx,
-                                    )),
-                            )
-                            .child(div().relative().flex_1().min_h_0().child(rows).when(
-                                show_list_scrollbar,
-                                |this| {
-                                    this.child(
+                                    .flex_col()
+                                    .child(
                                         div()
-                                            .absolute()
-                                            .top_0()
-                                            .bottom_0()
-                                            .left_0()
-                                            .right_0()
-                                            .child(NyaUniformListScrollbar::new(
-                                                "transfer-browser-vertical-scrollbar",
-                                                self.transfer.browser_view().list_scroll,
+                                            .flex()
+                                            .items_center()
+                                            .gap_0()
+                                            .child(sort_header_cell(
+                                                palette,
+                                                TransferBrowserSortColumn::Name,
+                                                self.tr("fileExplorer.name"),
+                                                column_widths.name,
+                                                sort_header_state,
+                                                cx,
+                                            ))
+                                            .child(sort_header_cell(
+                                                palette,
+                                                TransferBrowserSortColumn::Modified,
+                                                self.tr("fileExplorer.mtime"),
+                                                column_widths.modified,
+                                                sort_header_state,
+                                                cx,
+                                            ))
+                                            .child(sort_header_cell(
+                                                palette,
+                                                TransferBrowserSortColumn::Size,
+                                                self.tr("fileExplorer.size"),
+                                                column_widths.size,
+                                                sort_header_state,
+                                                cx,
+                                            ))
+                                            .child(sort_header_cell(
+                                                palette,
+                                                TransferBrowserSortColumn::Permissions,
+                                                self.tr("fileExplorer.permissions"),
+                                                column_widths.permissions,
+                                                sort_header_state,
+                                                cx,
+                                            ))
+                                            .child(sort_header_cell(
+                                                palette,
+                                                TransferBrowserSortColumn::Owner,
+                                                self.tr("fileExplorer.owner"),
+                                                column_widths.owner,
+                                                sort_header_state,
+                                                cx,
+                                            ))
+                                            .child(sort_header_cell(
+                                                palette,
+                                                TransferBrowserSortColumn::Group,
+                                                self.tr("fileExplorer.group"),
+                                                column_widths.group,
+                                                sort_header_state,
+                                                cx,
                                             )),
                                     )
-                                },
-                            )),
-                    ),
+                                    .child(div().relative().flex_1().min_h_0().child(rows)),
+                            ),
+                    )
+                    .when(show_list_scrollbar, |this| {
+                        this.child(
+                            div()
+                                .absolute()
+                                .top(px(28.))
+                                .bottom_0()
+                                .right_0()
+                                .w(px(12.))
+                                .child(NyaUniformListScrollbar::new(
+                                    "transfer-browser-vertical-scrollbar",
+                                    self.transfer.browser_view().list_scroll,
+                                )),
+                        )
+                    }),
                 current_context_items,
             ))
             // Tauri FileExplorer footer: totals left, cwd sync / send icons right.
@@ -633,7 +631,7 @@ impl NyaTermApp {
                             .child(compact_transfer_footer_button(
                                 palette,
                                 "transfer-browser-footer-sync-cwd",
-                                "icons/sync.svg",
+                                "icons/fe/folder-sync.svg",
                                 if cwd_tracking_available {
                                     self.tr("fileExplorer.syncTerminalPath")
                                 } else {
@@ -647,7 +645,7 @@ impl NyaTermApp {
                             .child(compact_transfer_footer_button_active(
                                 palette,
                                 "transfer-browser-footer-auto-sync",
-                                "icons/lock.svg",
+                                "icons/fe/sync.svg",
                                 if cwd_tracking_available {
                                     self.tr("fileExplorer.autoSyncTerminalPath")
                                 } else {
@@ -662,7 +660,7 @@ impl NyaTermApp {
                             .child(compact_transfer_footer_button(
                                 palette,
                                 "transfer-browser-footer-send-path",
-                                "icons/send.svg",
+                                "icons/fe/send-path.svg",
                                 self.tr("fileExplorer.sendToTerminal"),
                                 true,
                                 cx.listener(|this, _, _, cx| {

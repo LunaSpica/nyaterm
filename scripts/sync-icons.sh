@@ -23,6 +23,7 @@ SI_VERSION="16.27.1"        # simple-icons                 CC0-1.0
 FA_VERSION="7.3.1"          # @fortawesome/fontawesome-free CC BY 4.0
 VSC_VERSION="0.0.46-24"     # @vscode/codicons             CC BY 4.0
 RMX_VERSION="4.9.1"         # remixicon                    Apache-2.0
+LU_VERSION="0.575.0"        # lucide-static                ISC
 
 CHECK_ONLY=0
 [[ "${1:-}" == "--check" ]] && CHECK_ONLY=1
@@ -65,6 +66,7 @@ pkg_root() {
     fa) fetch_pkg "@fortawesome/fontawesome-free" "$FA_VERSION" fa; printf '%s/fa/svgs' "$SCRATCH" ;;
     vsc) fetch_pkg "@vscode/codicons" "$VSC_VERSION" vsc; printf '%s/vsc/src/icons' "$SCRATCH" ;;
     rmx) fetch_pkg "remixicon" "$RMX_VERSION" rmx; printf '%s/rmx/icons' "$SCRATCH" ;;
+    lu) fetch_pkg "lucide-static" "$LU_VERSION" lu; printf '%s/lu/icons' "$SCRATCH" ;;
     *) return 1 ;;
   esac
 }

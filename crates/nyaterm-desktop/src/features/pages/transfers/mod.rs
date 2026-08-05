@@ -33,6 +33,30 @@ use helpers::*;
 
 const NATIVE_EDITOR_MAX_BYTES: u64 = 512 * 1024;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::features::pages::transfers) enum TransferBrowserAvailability {
+    NoSession,
+    UnsupportedSession,
+    DisconnectedSsh,
+    Browsable,
+}
+
+fn transfer_browser_availability(
+    has_active_session: bool,
+    has_ssh_config: bool,
+    is_disconnected: bool,
+) -> TransferBrowserAvailability {
+    if !has_active_session {
+        TransferBrowserAvailability::NoSession
+    } else if !has_ssh_config {
+        TransferBrowserAvailability::UnsupportedSession
+    } else if is_disconnected {
+        TransferBrowserAvailability::DisconnectedSsh
+    } else {
+        TransferBrowserAvailability::Browsable
+    }
+}
+
 fn transfer_dialog_width(viewport_width: f32, preferred_width: f32) -> f32 {
     preferred_width.min((viewport_width - 32.).max(240.))
 }
@@ -58,11 +82,12 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let can_transfer = self.session.active_ssh_config().is_some()
-            && self
-                .session
-                .active_id()
-                .is_some_and(|session_id| !self.session.is_disconnected(session_id));
+        let active_session_id = self.session.active_id();
+        let browser_availability = transfer_browser_availability(
+            active_session_id.is_some(),
+            self.session.active_ssh_config().is_some(),
+            active_session_id.is_some_and(|session_id| self.session.is_disconnected(session_id)),
+        );
         let transfer_height = self.transfer.panel_height().clamp(60., 600.);
         let duplicate_prompt = self.session.prompt_active_duplicate().cloned();
 
@@ -80,7 +105,7 @@ impl NyaTermApp {
                 .flex_1()
                 .min_h_0()
                 .overflow_hidden()
-                .child(self.transfer_browser_view(can_transfer, cx)),
+                .child(self.transfer_browser_view(browser_availability, cx)),
         )
         .child(self.transfer_height_resize_handle(cx))
         .child(
@@ -98,7 +123,30 @@ impl NyaTermApp {
 
 #[cfg(test)]
 mod tests {
-    use super::{transfer_dialog_width, transfer_menu_position};
+    use super::{
+        TransferBrowserAvailability, transfer_browser_availability, transfer_dialog_width,
+        transfer_menu_position,
+    };
+
+    #[test]
+    fn browser_availability_distinguishes_session_states() {
+        assert_eq!(
+            transfer_browser_availability(false, false, false),
+            TransferBrowserAvailability::NoSession
+        );
+        assert_eq!(
+            transfer_browser_availability(true, false, false),
+            TransferBrowserAvailability::UnsupportedSession
+        );
+        assert_eq!(
+            transfer_browser_availability(true, true, true),
+            TransferBrowserAvailability::DisconnectedSsh
+        );
+        assert_eq!(
+            transfer_browser_availability(true, true, false),
+            TransferBrowserAvailability::Browsable
+        );
+    }
 
     #[test]
     fn dialog_width_uses_preferred_size_with_narrow_viewport_fallback() {

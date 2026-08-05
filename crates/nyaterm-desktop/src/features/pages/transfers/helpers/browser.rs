@@ -3,7 +3,7 @@ use std::cmp::Ordering;
 use gpui::{
     ClickEvent, Context, FontWeight, InteractiveElement as _, IntoElement, MouseButton,
     MouseDownEvent, ParentElement as _, Pixels, Rgba, SharedString,
-    StatefulInteractiveElement as _, Styled as _, div, px, rgb, rgba,
+    StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _, px, rgb, rgba,
 };
 use nyaterm_transport::{SftpFileEntry, SftpFileType};
 
@@ -33,14 +33,9 @@ pub(in crate::features::pages::transfers) fn sort_header_cell(
 ) -> impl IntoElement {
     let is_active = column == state.active_column;
     let is_resizing = state.resizing_column == Some(column);
-    let label = if is_active {
-        format!(
-            "{} {}",
-            localized_label.to_uppercase(),
-            state.direction.marker()
-        )
-    } else {
-        localized_label.to_uppercase()
+    let direction_icon = match state.direction {
+        TransferBrowserSortDirection::Ascending => "icons/fe/sort-ascending.svg",
+        TransferBrowserSortDirection::Descending => "icons/fe/sort-descending.svg",
     };
 
     div()
@@ -54,6 +49,7 @@ pub(in crate::features::pages::transfers) fn sort_header_cell(
         .relative()
         .flex()
         .items_center()
+        .gap_1()
         .px_2()
         .border_r_1()
         .border_color(rgb(palette.surface_elevated))
@@ -74,7 +70,24 @@ pub(in crate::features::pages::transfers) fn sort_header_cell(
         .on_click(cx.listener(move |this, _, _, cx| {
             this.toggle_transfer_browser_sort(column, cx);
         }))
-        .child(label)
+        .child(
+            div()
+                .min_w_0()
+                .flex_1()
+                .overflow_hidden()
+                .whitespace_nowrap()
+                .text_ellipsis()
+                .child(localized_label.to_uppercase()),
+        )
+        .when(is_active, |this| {
+            this.child(
+                gpui::svg()
+                    .size(px(14.))
+                    .flex_none()
+                    .path(direction_icon)
+                    .text_color(rgb(palette.link)),
+            )
+        })
         .child(
             div()
                 .id(SharedString::from(format!(
