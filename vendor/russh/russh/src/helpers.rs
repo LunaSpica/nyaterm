@@ -87,7 +87,6 @@ mod name_list {
             if value.is_empty() {
                 return Ok(Self(Vec::new()));
             }
-
             let mut names = value.split(',').collect::<Vec<_>>();
             if names.last() == Some(&"") && names.len() > 1 {
                 names.pop();
@@ -171,8 +170,6 @@ mod name_list {
 
         #[test]
         fn middle_empty_entry_is_rejected() {
-            // An empty entry mid-list (",,") is still invalid — only
-            // the zero-length whole-list case is allowed.
             assert!(NameList::from_encoded_string("a,,b").is_err());
         }
 

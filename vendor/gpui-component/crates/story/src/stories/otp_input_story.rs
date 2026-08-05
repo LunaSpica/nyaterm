@@ -1,14 +1,13 @@
 use gpui::{
-    App, AppContext as _, Context, Entity, Focusable, InteractiveElement, IntoElement,
-    ParentElement as _, Render, SharedString, Styled, Subscription, Window,
-    prelude::FluentBuilder as _, px,
+    prelude::FluentBuilder as _, px, App, AppContext as _, Context, Entity, Focusable,
+    InteractiveElement, IntoElement, ParentElement as _, Render, SharedString, Styled,
+    Subscription, Window,
 };
 use gpui_component::{
-    Disableable as _, Sizable, StyledExt,
     checkbox::Checkbox,
     h_flex,
     input::{InputEvent, OtpInput, OtpState},
-    v_flex,
+    v_flex, Disableable as _, Sizable, StyledExt,
 };
 
 use crate::section;

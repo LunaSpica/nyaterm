@@ -3,6 +3,7 @@
 .pijul
 target
 Cargo.lock
+!Cargo.lock
 .cargo-ok
 ca-test*
 /.vscode

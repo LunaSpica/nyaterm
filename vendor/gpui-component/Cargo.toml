@@ -20,6 +20,7 @@ members = [
     "examples/text_selection",
     "examples/root_borderless",
     "examples/table_in_scrollable",
+    "examples/markdown_table",
 ]
 resolver = "2"
 
@@ -39,7 +40,6 @@ gpui_web = { path = "../zed/crates/gpui_web" }
 gpui_macros = { path = "../zed/crates/gpui_macros" }
 reqwest_client = { path = "../zed/crates/reqwest_client" }
 sum-tree = { version = "0.2.0", package = "zed-sum-tree" }
-# reqwest = { version = "0.12.15-zed", package = "zed-reqwest" }
 reqwest = { version = "0.12.15-zed", package = "zed-reqwest", default-features = false, features = [
     "charset",
     "http2",

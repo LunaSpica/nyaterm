@@ -3,8 +3,8 @@ use gpui::{
     Styled, Window,
 };
 use gpui_component::{
-    ActiveTheme as _, Icon, IconName, Sizable as _, avatar::Avatar, badge::Badge,
-    dock::PanelControl, v_flex,
+    avatar::Avatar, badge::Badge, dock::PanelControl, v_flex, ActiveTheme as _, Icon, IconName,
+    Sizable as _,
 };
 
 use crate::section;

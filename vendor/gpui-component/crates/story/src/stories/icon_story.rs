@@ -3,10 +3,9 @@ use gpui::{
     Styled, Window,
 };
 use gpui_component::{
-    ActiveTheme as _, Icon, IconName, Sizable,
     button::{Button, ButtonVariant, ButtonVariants},
     dock::PanelControl,
-    h_flex, neutral_500, v_flex,
+    h_flex, neutral_500, v_flex, ActiveTheme as _, Icon, IconName, Sizable,
 };
 
 use crate::section;
