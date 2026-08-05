@@ -17,7 +17,7 @@ use nyaterm_transport::{SftpDuplicatePolicy, SftpFileEntry, SftpFileProperties};
 use nyaterm_ui::NyaWindowHandle;
 
 use crate::models::{
-    TransferBrowserColumnResizeState, TransferBrowserColumnWidths,
+    TransferBrowserColumnResizeState, TransferBrowserColumnWidths, TransferBrowserContextTarget,
     TransferBrowserDragSelectionState, TransferBrowserFavoritesMenuState,
     TransferBrowserNavigationSnapshot, TransferBrowserPathMenuState,
     TransferBrowserPendingRenameState, TransferBrowserSessionCacheState, TransferBrowserSortColumn,
@@ -94,7 +94,7 @@ pub(in crate::features) struct TransferBrowserView<'a> {
     pub selected_remote_path: &'a Option<String>,
     pub selected_remote_paths: &'a HashSet<String>,
     pub drag_selection: &'a Option<TransferBrowserDragSelectionState>,
-    pub pending_rename: &'a Option<TransferBrowserPendingRenameState>,
+    pub context_target: &'a TransferBrowserContextTarget,
     pub favorites_menu: &'a Option<TransferBrowserFavoritesMenuState>,
     pub path_menu: &'a Option<TransferBrowserPathMenuState>,
     pub upload_menu: &'a Option<TransferBrowserUploadMenuState>,
@@ -132,6 +132,8 @@ pub(super) struct TransferBrowserState {
     pub(super) selected_remote_path: Option<String>,
     pub(super) selected_remote_paths: HashSet<String>,
     pub(super) drag_selection: Option<TransferBrowserDragSelectionState>,
+    pub(super) context_target: TransferBrowserContextTarget,
+    pub(super) rename_click_candidate: Option<String>,
     pub(super) pending_rename: Option<TransferBrowserPendingRenameState>,
     pub(super) pending_rename_token: u64,
     pub(super) favorites_menu: Option<TransferBrowserFavoritesMenuState>,
@@ -249,6 +251,8 @@ impl TransferFeatureState {
                 selected_remote_path: None,
                 selected_remote_paths: HashSet::new(),
                 drag_selection: None,
+                context_target: TransferBrowserContextTarget::default(),
+                rename_click_candidate: None,
                 pending_rename: None,
                 pending_rename_token: 0,
                 favorites_menu: None,
@@ -424,10 +428,12 @@ impl TransferFeatureState {
     }
 
     pub(in crate::features) fn open_rename_dialog(&mut self, state: TransferRenameState) {
+        self.browser.cancel_pending_rename();
         self.file_ops.open_rename(state);
     }
 
     pub(in crate::features) fn close_rename_dialog(&mut self) {
+        self.browser.cancel_pending_rename();
         self.file_ops.close_rename();
     }
 

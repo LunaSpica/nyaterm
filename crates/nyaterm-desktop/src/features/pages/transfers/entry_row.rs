@@ -5,7 +5,6 @@ use gpui::{
 };
 use nyaterm_core::truncate_preview;
 use nyaterm_transport::{SftpFileEntry, SftpFileType};
-use nyaterm_ui::{NyaContextMenu, NyaMenuItem};
 
 use std::collections::HashSet;
 
@@ -18,12 +17,10 @@ use super::{format_permissions_octal, format_sftp_modified};
 pub(super) fn transfer_browser_parent_entry_row(
     palette: ThemePalette,
     column_widths: TransferBrowserColumnWidths,
-    context_items: Vec<NyaMenuItem>,
     cx: &mut Context<NyaTermApp>,
 ) -> impl IntoElement {
-    let row = div()
+    div()
         .id(SharedString::from("transfer-browser-entry-parent"))
-        .block_mouse_except_scroll()
         .h(px(30.))
         .flex()
         .items_center()
@@ -37,7 +34,6 @@ pub(super) fn transfer_browser_parent_entry_row(
         .on_mouse_down(
             MouseButton::Right,
             cx.listener(move |this, _: &MouseDownEvent, window, cx| {
-                cx.stop_propagation();
                 this.prepare_transfer_browser_parent_context_menu(window, cx);
             }),
         )
@@ -67,8 +63,7 @@ pub(super) fn transfer_browser_parent_entry_row(
             "",
         ))
         .child(transfer_browser_text_cell(palette, column_widths.owner, ""))
-        .child(transfer_browser_text_cell(palette, column_widths.group, ""));
-    NyaContextMenu::new(row, context_items)
+        .child(transfer_browser_text_cell(palette, column_widths.group, ""))
 }
 
 fn transfer_browser_text_cell(
@@ -98,7 +93,6 @@ pub(super) fn transfer_browser_entry_row(
         column_widths,
         rename_state,
         rename_input,
-        context_items,
     } = presentation;
     let entry_path = entry.path.clone();
     let mouse_down_path = entry.path.clone();
@@ -108,9 +102,6 @@ pub(super) fn transfer_browser_entry_row(
     let is_marked = selected_remote_paths.contains(&entry.path);
     let inline_rename = rename_state.filter(|state| state.old_path == entry.path);
     let is_renaming = inline_rename.is_some();
-    let was_single_selected_on_mouse_down = is_selected
-        && selected_remote_paths.len() == 1
-        && selected_remote_paths.contains(&entry.path);
     let name_click_path = entry.path.clone();
     let rename_input_path = entry.path.clone();
     let mut rename_input = rename_input;
@@ -125,11 +116,10 @@ pub(super) fn transfer_browser_entry_row(
     } else {
         format_file_size(entry.size)
     };
-    let row = div()
+    div()
         .id(SharedString::from(format!(
             "transfer-browser-entry-{entry_path}"
         )))
-        .block_mouse_except_scroll()
         .h(px(30.))
         .flex()
         .items_center()
@@ -158,8 +148,9 @@ pub(super) fn transfer_browser_entry_row(
         .on_mouse_down(
             MouseButton::Right,
             cx.listener(move |this, _: &MouseDownEvent, window, cx| {
-                cx.stop_propagation();
-                if !is_renaming {
+                if is_renaming {
+                    this.suppress_transfer_browser_context_menu(cx);
+                } else {
                     this.prepare_transfer_browser_entry_context_menu(
                         context_path.clone(),
                         window,
@@ -223,6 +214,13 @@ pub(super) fn transfer_browser_entry_row(
                             .on_mouse_down(MouseButton::Left, |_, _, cx| {
                                 cx.stop_propagation();
                             })
+                            .on_mouse_down(
+                                MouseButton::Right,
+                                cx.listener(|this, _, _, cx| {
+                                    this.suppress_transfer_browser_context_menu(cx);
+                                    cx.stop_propagation();
+                                }),
+                            )
                             .on_click(|_, _, cx| {
                                 cx.stop_propagation();
                             })
@@ -249,7 +247,6 @@ pub(super) fn transfer_browser_entry_row(
                             .on_click(cx.listener(move |this, event: &ClickEvent, _, cx| {
                                 this.schedule_transfer_browser_name_rename(
                                     name_click_path.clone(),
-                                    was_single_selected_on_mouse_down,
                                     event,
                                     cx,
                                 );
@@ -324,8 +321,7 @@ pub(super) fn transfer_browser_entry_row(
                 } else {
                     entry.group.clone()
                 }),
-        );
-    NyaContextMenu::new(row, context_items).enabled(!is_renaming)
+        )
 }
 
 pub(super) struct TransferBrowserEntryRowPresentation<'a> {
@@ -336,5 +332,4 @@ pub(super) struct TransferBrowserEntryRowPresentation<'a> {
     pub column_widths: TransferBrowserColumnWidths,
     pub rename_state: Option<TransferRenameState>,
     pub rename_input: Option<AnyElement>,
-    pub context_items: Vec<NyaMenuItem>,
 }

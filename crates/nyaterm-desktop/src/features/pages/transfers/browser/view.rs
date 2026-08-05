@@ -125,8 +125,7 @@ impl NyaTermApp {
         let search_active = !self.transfer.browser_view().search.trim().is_empty();
         let search_expanded = self.transfer.browser_view().search_expanded || search_active;
         let show_hidden_files = self.settings.summary().ui_file_explorer_show_hidden_files;
-        let current_context_items = self.transfer_browser_current_context_menu_items(cx);
-        let parent_context_items = self.transfer_browser_parent_context_menu_items(cx);
+        let app = cx.entity();
         let search_input = search_expanded.then(|| {
             let field = self.text_input(
                 "transfer.browser.search",
@@ -196,7 +195,6 @@ impl NyaTermApp {
                     .child(transfer_browser_parent_entry_row(
                         palette,
                         column_widths,
-                        parent_context_items.clone(),
                         cx,
                     ))
                     .into_any_element()
@@ -262,13 +260,8 @@ impl NyaTermApp {
                     for index in range {
                         if has_parent_entry && index == 0 {
                             items.push(
-                                transfer_browser_parent_entry_row(
-                                    palette,
-                                    column_widths,
-                                    parent_context_items.clone(),
-                                    cx,
-                                )
-                                .into_any_element(),
+                                transfer_browser_parent_entry_row(palette, column_widths, cx)
+                                    .into_any_element(),
                             );
                             continue;
                         }
@@ -290,8 +283,6 @@ impl NyaTermApp {
                                 )
                                 .into_any_element()
                             });
-                        let context_items =
-                            this.transfer_browser_entry_context_menu_items(entry.clone(), cx);
                         items.push(
                             transfer_browser_entry_row(
                                 TransferBrowserEntryRowPresentation {
@@ -302,7 +293,6 @@ impl NyaTermApp {
                                     column_widths,
                                     rename_state: renaming.clone(),
                                     rename_input,
-                                    context_items,
                                 },
                                 cx,
                             )
@@ -489,7 +479,7 @@ impl NyaTermApp {
                 )
                 .child(self.transfer_browser_path_row(current_browser_path.clone(), cx))
             })
-            .child(NyaContextMenu::new(
+            .child(NyaContextMenu::new_dynamic(
                 div()
                     .id(SharedString::from("transfer-browser-table-viewport"))
                     .relative()
@@ -497,6 +487,11 @@ impl NyaTermApp {
                     .min_h_0()
                     .min_w_0()
                     .overflow_hidden()
+                    .capture_any_mouse_down(cx.listener(|this, event: &MouseDownEvent, _, cx| {
+                        if event.button == MouseButton::Right {
+                            this.begin_transfer_browser_context_menu(cx);
+                        }
+                    }))
                     .on_mouse_down(
                         MouseButton::Right,
                         cx.listener(|this, _: &MouseDownEvent, window, cx| {
@@ -602,7 +597,9 @@ impl NyaTermApp {
                                 self.transfer.browser_view().horizontal_scroll,
                             )),
                     ),
-                current_context_items,
+                move |_, cx| {
+                    app.update(cx, |this, cx| this.transfer_browser_context_menu_items(cx))
+                },
             ))
             // Tauri FileExplorer footer: totals left, cwd sync / send icons right.
             .child(

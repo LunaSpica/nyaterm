@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::path::PathBuf;
 use std::sync::mpsc;
 
@@ -9,10 +9,11 @@ use nyaterm_transport::{
 };
 
 use crate::models::{
-    TransferBrowserNavigationSnapshot, TransferBrowserSessionCacheState, TransferEditorField,
-    TransferEditorState, TransferExternalSyncPromptState, TransferJobEvent, TransferJobKind,
-    TransferJobResult, TransferJobState, TransferJobStatus, TransferNewFolderState,
-    TransferPathPromptKind, TransferPropertiesState, TransferRenameState,
+    TransferBrowserContextTarget, TransferBrowserNavigationSnapshot,
+    TransferBrowserSessionCacheState, TransferEditorField, TransferEditorState,
+    TransferExternalSyncPromptState, TransferJobEvent, TransferJobKind, TransferJobResult,
+    TransferJobState, TransferJobStatus, TransferNewFolderState, TransferPathPromptKind,
+    TransferPropertiesState, TransferRenameState,
 };
 
 use super::{
@@ -52,6 +53,84 @@ fn file_entry(path: &str) -> SftpFileEntry {
         group: "group".to_string(),
         modified_at: Some(1),
     }
+}
+
+#[test]
+fn browser_rename_click_requires_selection_before_mouse_down() {
+    let cx = TestAppContext::single();
+    let mut transfer = transfer_state(&cx);
+
+    assert!(!transfer.arm_browser_rename_click("/first.txt", true));
+    transfer.select_browser_entry("/first.txt".to_string());
+    assert!(!transfer.consume_browser_rename_click("/first.txt"));
+
+    assert!(transfer.arm_browser_rename_click("/first.txt", true));
+    let browser = transfer.browser_view();
+    assert_eq!(browser.selected_remote_path.as_deref(), Some("/first.txt"));
+    assert!(transfer.consume_browser_rename_click("/first.txt"));
+
+    assert!(!transfer.arm_browser_rename_click("/first.txt", false));
+    assert!(!transfer.consume_browser_rename_click("/first.txt"));
+
+    transfer.replace_browser_selection(
+        HashSet::from(["/first.txt".to_string(), "/second.txt".to_string()]),
+        Some("/first.txt".to_string()),
+    );
+    assert!(!transfer.arm_browser_rename_click("/first.txt", true));
+    assert!(!transfer.consume_browser_rename_click("/first.txt"));
+}
+
+#[test]
+fn browser_context_target_cancels_armed_rename_click() {
+    let cx = TestAppContext::single();
+    let mut transfer = transfer_state(&cx);
+    transfer.select_browser_entry("/first.txt".to_string());
+    assert!(transfer.arm_browser_rename_click("/first.txt", true));
+
+    transfer.set_browser_context_target(TransferBrowserContextTarget::Entry(
+        "/first.txt".to_string(),
+    ));
+
+    assert_eq!(
+        transfer.browser_view().context_target,
+        &TransferBrowserContextTarget::Entry("/first.txt".to_string())
+    );
+    assert!(!transfer.consume_browser_rename_click("/first.txt"));
+}
+
+#[test]
+fn browser_entry_context_target_preserves_an_existing_multi_selection() {
+    let cx = TestAppContext::single();
+    let mut transfer = transfer_state(&cx);
+    let selected = HashSet::from(["/first.txt".to_string(), "/second.txt".to_string()]);
+    transfer.replace_browser_selection(selected.clone(), Some("/second.txt".to_string()));
+
+    transfer.set_browser_context_target(TransferBrowserContextTarget::Entry(
+        "/first.txt".to_string(),
+    ));
+
+    assert_eq!(transfer.activate_marked_browser_path("/first.txt"), Some(2));
+    assert_eq!(transfer.browser.selected_remote_paths, selected);
+    assert_eq!(
+        transfer.browser.selected_remote_path.as_deref(),
+        Some("/first.txt")
+    );
+}
+
+#[test]
+fn browser_navigation_clears_the_rename_click_candidate() {
+    let cx = TestAppContext::single();
+    let mut transfer = transfer_state(&cx);
+    transfer.select_browser_entry("/first.txt".to_string());
+    assert!(transfer.arm_browser_rename_click("/first.txt", true));
+
+    transfer.begin_browser_directory_load("/next".to_string());
+
+    assert!(!transfer.consume_browser_rename_click("/first.txt"));
+    assert_eq!(
+        transfer.browser.context_target,
+        TransferBrowserContextTarget::CurrentDirectory
+    );
 }
 
 fn file_properties(path: &str) -> SftpFileProperties {
@@ -122,11 +201,11 @@ fn browser_session_restore_clamps_history_and_clears_interaction() {
         transfer.restore_browser_session_cache("session-a"),
         Some("/srv".to_string())
     );
+    assert!(transfer.browser.pending_rename.is_none());
     let browser = transfer.browser_view();
     assert_eq!(browser.path.as_str(), "/srv");
     assert_eq!(browser.history_index, 0);
     assert!(browser.selected_remote_paths.is_empty());
-    assert!(browser.pending_rename.is_none());
     assert_eq!(browser.entries.len(), 1);
     assert_eq!(browser.horizontal_scroll.offset().x, px(0.));
 }

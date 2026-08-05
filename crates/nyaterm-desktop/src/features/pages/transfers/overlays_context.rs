@@ -3,11 +3,42 @@ use nyaterm_transport::{SftpFileEntry, SftpFileType};
 use nyaterm_ui::NyaMenuItem;
 
 use crate::features::NyaTermApp;
-use crate::models::TransferPathPromptKind;
+use crate::models::{TransferBrowserContextTarget, TransferPathPromptKind};
 
 use super::TransferPathPart;
 
 impl NyaTermApp {
+    pub(in crate::features::pages::transfers) fn transfer_browser_context_menu_items(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> Vec<NyaMenuItem> {
+        match self.transfer.browser_view().context_target.clone() {
+            TransferBrowserContextTarget::CurrentDirectory => {
+                self.transfer_browser_current_context_menu_items(cx)
+            }
+            TransferBrowserContextTarget::ParentDirectory => {
+                self.transfer_browser_parent_context_menu_items(cx)
+            }
+            TransferBrowserContextTarget::Entry(path) => {
+                if self.transfer.rename_dialog_is_open() {
+                    return Vec::new();
+                }
+                let Some(entry) = self
+                    .transfer
+                    .browser_view()
+                    .entries
+                    .iter()
+                    .find(|entry| entry.path == path)
+                    .cloned()
+                else {
+                    return Vec::new();
+                };
+                self.transfer_browser_entry_context_menu_items(entry, cx)
+            }
+            TransferBrowserContextTarget::Suppressed => Vec::new(),
+        }
+    }
+
     pub(in crate::features::pages::transfers) fn transfer_browser_current_context_menu_items(
         &mut self,
         cx: &mut Context<Self>,

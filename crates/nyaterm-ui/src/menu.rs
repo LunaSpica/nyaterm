@@ -9,6 +9,7 @@ use gpui_component::menu::{ContextMenuExt as _, DropdownMenu as _, PopupMenu, Po
 use gpui_component::{ActiveTheme as _, Disableable as _, Icon, Selectable as _, Sizable as _};
 
 type MenuClickHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
+type ContextMenuItemsBuilder = Rc<dyn Fn(&mut Window, &mut App) -> Vec<NyaMenuItem>>;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum NyaMenuAnchor {
@@ -348,7 +349,7 @@ where
     E: InteractiveElement + ParentElement + Styled + IntoElement + 'static,
 {
     element: E,
-    items: Vec<NyaMenuItem>,
+    items_builder: ContextMenuItemsBuilder,
     enabled: bool,
 }
 
@@ -357,9 +358,21 @@ where
     E: InteractiveElement + ParentElement + Styled + IntoElement + 'static,
 {
     pub fn new(element: E, items: impl IntoIterator<Item = NyaMenuItem>) -> Self {
+        let items: Vec<_> = items.into_iter().collect();
         Self {
             element,
-            items: items.into_iter().collect(),
+            items_builder: Rc::new(move |_, _| items.clone()),
+            enabled: true,
+        }
+    }
+
+    pub fn new_dynamic(
+        element: E,
+        items_builder: impl Fn(&mut Window, &mut App) -> Vec<NyaMenuItem> + 'static,
+    ) -> Self {
+        Self {
+            element,
+            items_builder: Rc::new(items_builder),
             enabled: true,
         }
     }
@@ -378,9 +391,10 @@ where
         if !self.enabled {
             return self.element.into_any_element();
         }
-        let items = self.items;
+        let items_builder = self.items_builder;
         self.element
             .context_menu(move |menu, window, cx| {
+                let items = items_builder(window, cx);
                 items
                     .iter()
                     .fold(menu, |menu, item| item.append_to(menu, window, cx))
@@ -394,38 +408,79 @@ mod tests {
     use std::{cell::Cell, rc::Rc};
 
     use gpui::{
-        Context, IntoElement, MouseButton, MouseDownEvent, Render, TestAppContext,
-        VisualTestContext, Window, div, point, prelude::*, px,
+        Context, IntoElement, MouseButton, MouseDownEvent, Render, SharedString, TestAppContext,
+        VisualTestContext, Window, div, point, prelude::*, px, uniform_list,
     };
 
     use super::{NyaContextMenu, NyaMenuItem, NyaMenuItemKind};
 
-    struct NestedContextMenuFixture {
-        outer_triggered: Rc<Cell<bool>>,
-        inner_triggered: Rc<Cell<bool>>,
+    struct DynamicContextMenuFixture {
+        target: Rc<Cell<u8>>,
+        current_triggered: Rc<Cell<bool>>,
+        parent_triggered: Rc<Cell<bool>>,
+        entry_triggered: Rc<Cell<bool>>,
     }
 
-    impl Render for NestedContextMenuFixture {
-        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-            let outer_triggered = self.outer_triggered.clone();
-            let inner_triggered = self.inner_triggered.clone();
-            NyaContextMenu::new(
+    impl Render for DynamicContextMenuFixture {
+        fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+            let target_for_capture = self.target.clone();
+            let target_for_row = self.target.clone();
+            let target_for_menu = self.target.clone();
+            let current_triggered = self.current_triggered.clone();
+            let parent_triggered = self.parent_triggered.clone();
+            let entry_triggered = self.entry_triggered.clone();
+            NyaContextMenu::new_dynamic(
                 div()
-                    .id("outer-context-menu")
+                    .id("dynamic-context-menu")
                     .size(px(100.))
-                    .child(NyaContextMenu::new(
-                        div()
-                            .id("inner-context-menu")
-                            .block_mouse_except_scroll()
-                            .w_full()
-                            .h(px(30.)),
-                        [NyaMenuItem::action("Inner").on_click(move |_, _, _| {
-                            inner_triggered.set(true);
-                        })],
-                    )),
-                [NyaMenuItem::action("Outer").on_click(move |_, _, _| {
-                    outer_triggered.set(true);
-                })],
+                    .capture_any_mouse_down(move |event, _, _| {
+                        if event.button == MouseButton::Right {
+                            target_for_capture.set(0);
+                        }
+                    })
+                    .child(
+                        uniform_list(
+                            "dynamic-context-menu-rows",
+                            2,
+                            cx.processor(move |_, range: std::ops::Range<usize>, _, _| {
+                                range
+                                    .map(|index| {
+                                        let target_for_row = target_for_row.clone();
+                                        div()
+                                            .id(SharedString::from(format!(
+                                                "dynamic-context-menu-row-{index}"
+                                            )))
+                                            .w_full()
+                                            .h(px(30.))
+                                            .on_mouse_down(MouseButton::Right, move |_, _, _| {
+                                                target_for_row.set(index as u8 + 1)
+                                            })
+                                    })
+                                    .collect::<Vec<_>>()
+                            }),
+                        )
+                        .h(px(60.)),
+                    ),
+                move |_, _| match target_for_menu.get() {
+                    1 => {
+                        let parent_triggered = parent_triggered.clone();
+                        vec![NyaMenuItem::action("Parent").on_click(move |_, _, _| {
+                            parent_triggered.set(true);
+                        })]
+                    }
+                    2 => {
+                        let entry_triggered = entry_triggered.clone();
+                        vec![NyaMenuItem::action("Entry").on_click(move |_, _, _| {
+                            entry_triggered.set(true);
+                        })]
+                    }
+                    _ => {
+                        let current_triggered = current_triggered.clone();
+                        vec![NyaMenuItem::action("Current").on_click(move |_, _, _| {
+                            current_triggered.set(true);
+                        })]
+                    }
+                },
             )
         }
     }
@@ -464,16 +519,22 @@ mod tests {
     }
 
     #[gpui::test]
-    fn blocking_inner_trigger_opens_only_the_nested_context_menu(cx: &mut TestAppContext) {
+    fn dynamic_context_menu_uses_the_latest_uniform_list_target(cx: &mut TestAppContext) {
         cx.update(gpui_component::init);
-        let outer_triggered = Rc::new(Cell::new(false));
-        let inner_triggered = Rc::new(Cell::new(false));
+        let target = Rc::new(Cell::new(0));
+        let current_triggered = Rc::new(Cell::new(false));
+        let parent_triggered = Rc::new(Cell::new(false));
+        let entry_triggered = Rc::new(Cell::new(false));
         let (_, cx) = cx.add_window_view({
-            let outer_triggered = outer_triggered.clone();
-            let inner_triggered = inner_triggered.clone();
-            move |_, _| NestedContextMenuFixture {
-                outer_triggered: outer_triggered.clone(),
-                inner_triggered: inner_triggered.clone(),
+            let target = target.clone();
+            let current_triggered = current_triggered.clone();
+            let parent_triggered = parent_triggered.clone();
+            let entry_triggered = entry_triggered.clone();
+            move |_, _| DynamicContextMenuFixture {
+                target: target.clone(),
+                current_triggered: current_triggered.clone(),
+                parent_triggered: parent_triggered.clone(),
+                entry_triggered: entry_triggered.clone(),
             }
         });
         let cx: &mut VisualTestContext = cx;
@@ -496,7 +557,41 @@ mod tests {
         cx.simulate_keystrokes("down enter");
         cx.run_until_parked();
 
-        assert!(inner_triggered.get());
-        assert!(!outer_triggered.get());
+        assert!(parent_triggered.get());
+        assert!(!entry_triggered.get());
+        assert!(!current_triggered.get());
+
+        cx.simulate_event(MouseDownEvent {
+            button: MouseButton::Right,
+            position: point(px(10.), px(40.)),
+            modifiers: Default::default(),
+            click_count: 1,
+            first_mouse: false,
+        });
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            _ = window.draw(cx);
+        });
+        cx.simulate_keystrokes("down enter");
+        cx.run_until_parked();
+
+        assert!(entry_triggered.get());
+        assert!(!current_triggered.get());
+
+        cx.simulate_event(MouseDownEvent {
+            button: MouseButton::Right,
+            position: point(px(10.), px(80.)),
+            modifiers: Default::default(),
+            click_count: 1,
+            first_mouse: false,
+        });
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            _ = window.draw(cx);
+        });
+        cx.simulate_keystrokes("down enter");
+        cx.run_until_parked();
+
+        assert!(current_triggered.get());
     }
 }

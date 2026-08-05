@@ -6,10 +6,11 @@ use std::time::Instant;
 use gpui::{Pixels, ScrollHandle, ScrollStrategy};
 
 use crate::models::{
-    TransferBrowserColumnResizeState, TransferBrowserDragSelectionState,
-    TransferBrowserFavoritesMenuState, TransferBrowserNavigationSnapshot,
-    TransferBrowserPathMenuState, TransferBrowserPendingRenameState,
-    TransferBrowserSessionCacheState, TransferBrowserSortColumn, TransferBrowserUploadMenuState,
+    TransferBrowserColumnResizeState, TransferBrowserContextTarget,
+    TransferBrowserDragSelectionState, TransferBrowserFavoritesMenuState,
+    TransferBrowserNavigationSnapshot, TransferBrowserPathMenuState,
+    TransferBrowserPendingRenameState, TransferBrowserSessionCacheState, TransferBrowserSortColumn,
+    TransferBrowserUploadMenuState,
 };
 
 use super::{TransferBrowserState, TransferBrowserView, TransferFeatureState};
@@ -40,7 +41,7 @@ impl TransferFeatureState {
             selected_remote_path: &self.browser.selected_remote_path,
             selected_remote_paths: &self.browser.selected_remote_paths,
             drag_selection: &self.browser.drag_selection,
-            pending_rename: &self.browser.pending_rename,
+            context_target: &self.browser.context_target,
             favorites_menu: &self.browser.favorites_menu,
             path_menu: &self.browser.path_menu,
             upload_menu: &self.browser.upload_menu,
@@ -307,6 +308,9 @@ impl TransferFeatureState {
         self.browser.path_editing = false;
         self.browser.path_menu = None;
         self.browser.selected_remote_path = None;
+        self.browser.selected_remote_paths.clear();
+        self.browser.context_target = TransferBrowserContextTarget::CurrentDirectory;
+        self.browser.cancel_pending_rename();
         self.browser.status = "Loading remote directory...".to_string();
         self.browser.loading = true;
         self.browser.error = None;
@@ -318,6 +322,8 @@ impl TransferFeatureState {
         self.browser.path = path;
         self.browser.selected_remote_path = None;
         self.browser.selected_remote_paths.clear();
+        self.browser.context_target = TransferBrowserContextTarget::CurrentDirectory;
+        self.browser.cancel_pending_rename();
         self.browser.status = "Loading parent directory...".to_string();
         self.browser.loading = true;
         self.browser.error = None;
@@ -421,6 +427,38 @@ impl TransferFeatureState {
     pub(in crate::features) fn clear_browser_selection(&mut self) {
         self.browser.selected_remote_path = None;
         self.browser.selected_remote_paths.clear();
+    }
+
+    pub(in crate::features) fn set_browser_context_target(
+        &mut self,
+        target: TransferBrowserContextTarget,
+    ) {
+        self.browser.context_target = target;
+        self.browser.cancel_pending_rename();
+    }
+
+    pub(in crate::features) fn arm_browser_rename_click(
+        &mut self,
+        path: &str,
+        is_unmodified_single_click: bool,
+    ) -> bool {
+        let pending_cancelled = self.browser.cancel_pending_rename();
+        let next_candidate = (is_unmodified_single_click
+            && self.browser.selected_remote_path.as_deref() == Some(path)
+            && self.browser.selected_remote_paths.len() == 1
+            && self.browser.selected_remote_paths.contains(path))
+        .then(|| path.to_string());
+        let changed = self.browser.rename_click_candidate != next_candidate;
+        self.browser.rename_click_candidate = next_candidate;
+        pending_cancelled || changed
+    }
+
+    pub(in crate::features) fn consume_browser_rename_click(&mut self, path: &str) -> bool {
+        self.browser.rename_click_candidate.take().as_deref() == Some(path)
+    }
+
+    pub(in crate::features) fn clear_browser_rename_click(&mut self) -> bool {
+        self.browser.rename_click_candidate.take().is_some()
     }
 
     pub(in crate::features) fn activate_marked_browser_path(
@@ -534,6 +572,7 @@ impl TransferBrowserState {
         self.selected_remote_path = None;
         self.selected_remote_paths.clear();
         self.drag_selection = None;
+        self.context_target = TransferBrowserContextTarget::CurrentDirectory;
         self.cancel_pending_rename();
         self.favorites_menu = None;
         self.path_menu = None;
@@ -592,14 +631,17 @@ impl TransferBrowserState {
         self.selected_remote_paths = snapshot.selected_paths;
         self.list_scroll = snapshot.list_scroll;
         self.horizontal_scroll = snapshot.horizontal_scroll;
+        self.context_target = TransferBrowserContextTarget::CurrentDirectory;
+        self.cancel_pending_rename();
     }
 
-    fn cancel_pending_rename(&mut self) -> bool {
-        let cancelled = self.pending_rename.take().is_some();
-        if cancelled {
+    pub(super) fn cancel_pending_rename(&mut self) -> bool {
+        let pending_cancelled = self.pending_rename.take().is_some();
+        let candidate_cancelled = self.rename_click_candidate.take().is_some();
+        if pending_cancelled {
             self.pending_rename_token = self.pending_rename_token.wrapping_add(1);
         }
-        cancelled
+        pending_cancelled || candidate_cancelled
     }
 
     fn cancel_path_edit(&mut self) {

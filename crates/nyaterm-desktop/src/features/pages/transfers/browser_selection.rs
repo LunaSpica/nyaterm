@@ -8,7 +8,7 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use crate::features::NyaTermApp;
-use crate::models::TransferBrowserDragSelectionState;
+use crate::models::{TransferBrowserContextTarget, TransferBrowserDragSelectionState};
 
 use super::{TransferPathPart, remote_file_name, transfer_path_part_value};
 
@@ -32,6 +32,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         window.focus(self.transfer.browser_view().focus, cx);
+        self.transfer.clear_browser_rename_click();
         let modifiers = event.modifiers();
         if event.click_count() >= 2 && !modifiers.modified() {
             self.cancel_transfer_browser_pending_rename(cx);
@@ -61,15 +62,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         window.focus(self.transfer.browser_view().focus, cx);
-        if self
-            .transfer
-            .browser_view()
-            .pending_rename
-            .as_ref()
-            .is_some_and(|pending| pending.path != path)
-        {
-            self.cancel_transfer_browser_pending_rename(cx);
-        }
+        self.transfer
+            .arm_browser_rename_click(&path, event.click_count == 1 && !event.modifiers.modified());
 
         let additive = event.modifiers.platform || event.modifiers.control;
         let range_anchor = event
@@ -123,12 +117,12 @@ impl NyaTermApp {
     pub(in crate::features::pages::transfers) fn schedule_transfer_browser_name_rename(
         &mut self,
         path: String,
-        was_single_selected_on_mouse_down: bool,
         event: &ClickEvent,
         cx: &mut Context<Self>,
     ) {
         let modifiers = event.modifiers();
-        if !was_single_selected_on_mouse_down
+        let was_armed_on_mouse_down = self.transfer.consume_browser_rename_click(&path);
+        if !was_armed_on_mouse_down
             || event.click_count() != 1
             || modifiers.modified()
             || self.transfer.rename_dialog_is_open()
@@ -182,6 +176,8 @@ impl NyaTermApp {
             return;
         }
 
+        self.transfer.cancel_browser_pending_rename();
+
         let Some(drag_selection) = self.transfer.browser_view().drag_selection.clone() else {
             return;
         };
@@ -230,6 +226,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.transfer.close_browser_path_menu();
+        self.transfer
+            .set_browser_context_target(TransferBrowserContextTarget::Entry(path.clone()));
         self.select_transfer_browser_entry_from_context(path, window, cx);
     }
 
@@ -239,7 +237,27 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         window.focus(self.transfer.browser_view().focus, cx);
+        self.transfer
+            .set_browser_context_target(TransferBrowserContextTarget::ParentDirectory);
         self.transfer.clear_browser_selection();
+        cx.notify();
+    }
+
+    pub(in crate::features::pages::transfers) fn begin_transfer_browser_context_menu(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        self.transfer
+            .set_browser_context_target(TransferBrowserContextTarget::CurrentDirectory);
+        cx.notify();
+    }
+
+    pub(in crate::features::pages::transfers) fn suppress_transfer_browser_context_menu(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        self.transfer
+            .set_browser_context_target(TransferBrowserContextTarget::Suppressed);
         cx.notify();
     }
 
@@ -248,6 +266,12 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if !matches!(
+            self.transfer.browser_view().context_target,
+            TransferBrowserContextTarget::CurrentDirectory
+        ) {
+            return;
+        }
         window.focus(self.transfer.browser_view().focus, cx);
         self.transfer.clear_browser_selection();
         cx.notify();

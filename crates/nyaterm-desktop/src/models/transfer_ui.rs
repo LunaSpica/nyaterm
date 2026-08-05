@@ -65,6 +65,15 @@ pub(crate) struct TransferBrowserUploadMenuState {
     pub(crate) y: Pixels,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) enum TransferBrowserContextTarget {
+    #[default]
+    CurrentDirectory,
+    ParentDirectory,
+    Entry(String),
+    Suppressed,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct TransferBrowserPendingRenameState {
     pub(crate) path: String,
