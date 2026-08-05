@@ -1090,6 +1090,7 @@ impl NyaTermApp {
         div()
             .id(SharedString::from("command-suggestions-overlay"))
             .absolute()
+            .occlude()
             .left(px(placement.x))
             .top(px(placement.y))
             .w(px(menu_w))

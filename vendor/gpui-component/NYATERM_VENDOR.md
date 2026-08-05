@@ -22,6 +22,9 @@ Local modifications:
   `reqwest_client` workspace dependencies to `../zed/crates/...`.
 - Adjusted segmented `TabBar` layout so indicator bounds wrappers preserve
   full-width equal tab segments used by NyaTerm forms.
+- Deferred closable dialog-backdrop dismissal from mouse-down to the completed
+  click. The upstream `0.5.2` behavior removed the modal before mouse-up, which
+  allowed that mouse-up to reach NyaTerm content beneath the dialog.
 
 Validation performed:
 

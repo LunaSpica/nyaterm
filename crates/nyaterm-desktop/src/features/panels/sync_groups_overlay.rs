@@ -7,7 +7,7 @@ use nyaterm_core::truncate_preview;
 use nyaterm_ui::NyaInput;
 
 use crate::features::formatting::session_kind_label;
-use crate::features::view_widgets::dialog_action_button;
+use crate::features::view_widgets::{dialog_action_button, full_window_input_layer};
 use crate::features::{
     NyaTermApp, ORDINARY_INPUT_SHELL_PADDING_X_PX, TextInputSetup, ordinary_input_focus_ring,
     ordinary_input_shell_border_color,
@@ -652,10 +652,7 @@ impl NyaTermApp {
             )
             .when_some(pending_delete_message, |this, message| {
                 this.child(
-                    div()
-                        .id(SharedString::from("sync-group-delete-backdrop"))
-                        .absolute()
-                        .inset_0()
+                    full_window_input_layer("sync-group-delete-backdrop")
                         .flex()
                         .items_center()
                         .justify_center()

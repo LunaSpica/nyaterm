@@ -1,6 +1,6 @@
 use gpui::{
     Context, InteractiveElement as _, IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent,
-    MouseUpEvent, SharedString, Styled as _, div, prelude::FluentBuilder as _, px, rgb,
+    SharedString, Styled as _, div, prelude::FluentBuilder as _, px, rgb,
 };
 use nyaterm_core::ConnectionStore;
 
@@ -55,11 +55,7 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn finish_panel_resize(
-        &mut self,
-        _event: &MouseUpEvent,
-        cx: &mut Context<Self>,
-    ) {
+    pub(in crate::features) fn finish_panel_resize(&mut self, cx: &mut Context<Self>) {
         if self.shell.panels.finish_resize() {
             self.persist_panel_widths();
             self.shell.set_status(format!(
@@ -248,11 +244,7 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn finish_transfer_height_resize(
-        &mut self,
-        _event: &MouseUpEvent,
-        cx: &mut Context<Self>,
-    ) {
+    pub(in crate::features) fn finish_transfer_height_resize(&mut self, cx: &mut Context<Self>) {
         if self.transfer.finish_panel_height_resize() {
             self.persist_ui_layout();
             self.shell.set_status(format!(
@@ -311,11 +303,7 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn finish_bottom_panel_resize(
-        &mut self,
-        _event: &MouseUpEvent,
-        cx: &mut Context<Self>,
-    ) {
+    pub(in crate::features) fn finish_bottom_panel_resize(&mut self, cx: &mut Context<Self>) {
         if self.shell.bottom_panel.finish_resize() {
             self.persist_ui_layout();
             self.shell.set_status("bottom panel size saved".to_string());

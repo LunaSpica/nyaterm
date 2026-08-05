@@ -107,6 +107,13 @@ pub(super) struct TerminalSelectionState {
     pub(super) mouse_report_position: Option<(u16, u16)>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::features) enum LostTerminalSelectionRecovery {
+    None,
+    ClearedEmpty,
+    Committed,
+}
+
 pub(super) struct TerminalSelectedOccurrenceState {
     pub(super) session_id: Option<String>,
     pub(super) query: Option<String>,
@@ -299,6 +306,27 @@ impl TerminalFeatureState {
         self.menus.action_link_tooltip = None;
         self.menus.action_link_hover_pending = None;
         had_interaction
+    }
+
+    pub(in crate::features) fn recover_lost_selection_mouse_up(
+        &mut self,
+    ) -> LostTerminalSelectionRecovery {
+        if !self.selection.dragging {
+            return LostTerminalSelectionRecovery::None;
+        }
+        self.selection.dragging = false;
+        if self
+            .selection
+            .selection
+            .as_ref()
+            .is_none_or(TerminalSelection::is_empty)
+        {
+            self.selection.selection = None;
+            self.selection.session_id = None;
+            LostTerminalSelectionRecovery::ClearedEmpty
+        } else {
+            LostTerminalSelectionRecovery::Committed
+        }
     }
 
     pub(in crate::features) fn cell_metrics(&self) -> Option<(f32, f32)> {
@@ -557,7 +585,10 @@ mod tests {
     use nyaterm_terminal::{TerminalOutputDecoder, TerminalScreen};
 
     use super::super::window_state::{TerminalWindowDockResult, TerminalWindowReconcileResult};
-    use super::{TerminalFeatureFocus, TerminalFeatureState, TerminalPasteReviewState};
+    use super::{
+        LostTerminalSelectionRecovery, TerminalFeatureFocus, TerminalFeatureState,
+        TerminalPasteReviewState,
+    };
     use crate::models::{
         SmartSplitMode, TabDockEdge, TabDockZone, TerminalFramePipeline, TerminalSearchMode,
     };
@@ -626,6 +657,36 @@ mod tests {
         assert!(!state.selection.dragging);
         assert!(!state.action_link_hover_is_pending());
         assert!(!state.clear_activation_interaction());
+    }
+
+    #[test]
+    fn terminal_owner_recovers_empty_and_non_empty_lost_selection_mouse_up() {
+        let mut state = terminal_state();
+        state.selection.dragging = true;
+        state.selection.selection = Some(crate::models::TerminalSelection::with_anchor(
+            crate::models::TerminalBufferCellPos::new(4, 2),
+        ));
+        assert_eq!(
+            state.recover_lost_selection_mouse_up(),
+            LostTerminalSelectionRecovery::ClearedEmpty
+        );
+        assert!(state.selection.selection.is_none());
+        assert_eq!(
+            state.recover_lost_selection_mouse_up(),
+            LostTerminalSelectionRecovery::None
+        );
+
+        state.selection.dragging = true;
+        state.selection.selection = Some(crate::models::TerminalSelection::from_range(
+            crate::models::TerminalBufferCellPos::new(4, 2),
+            crate::models::TerminalBufferCellPos::new(4, 5),
+        ));
+        assert_eq!(
+            state.recover_lost_selection_mouse_up(),
+            LostTerminalSelectionRecovery::Committed
+        );
+        assert!(state.selection.selection.is_some());
+        assert!(!state.selection.dragging);
     }
 
     #[test]

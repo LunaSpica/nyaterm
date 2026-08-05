@@ -47,9 +47,13 @@ pub fn nya_root(
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
     use gpui::{
-        AppContext as _, Context, InteractiveElement as _, IntoElement, ParentElement as _, Render,
-        Styled as _, TestAppContext, VisualTestContext, Window, div,
+        AppContext as _, Context, InteractiveElement as _, IntoElement, Modifiers, MouseButton,
+        ParentElement as _, Render, StatefulInteractiveElement as _, Styled as _, TestAppContext,
+        VisualTestContext, Window, div, point, px,
     };
 
     use crate::{NyaDialogFooter, NyaDialogWindowExt as _, nya_root};
@@ -61,6 +65,29 @@ mod tests {
             div()
                 .size_full()
                 .debug_selector(|| "nya-root-content".to_string())
+        }
+    }
+
+    struct PointerContentFixture {
+        events: Arc<AtomicUsize>,
+    }
+
+    impl Render for PointerContentFixture {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            let down = self.events.clone();
+            let movement = self.events.clone();
+            let up = self.events.clone();
+            div()
+                .size_full()
+                .on_any_mouse_down(move |_, _, _| {
+                    down.fetch_add(1, Ordering::SeqCst);
+                })
+                .on_mouse_move(move |_, _, _| {
+                    movement.fetch_add(1, Ordering::SeqCst);
+                })
+                .on_mouse_up(MouseButton::Left, move |_, _, _| {
+                    up.fetch_add(1, Ordering::SeqCst);
+                })
         }
     }
 
@@ -96,6 +123,53 @@ mod tests {
         draw(cx);
 
         assert!(cx.debug_bounds("nya-dialog-content").is_some());
+    }
+
+    #[gpui::test]
+    fn nya_dialog_blocks_lower_pointer_events_and_preserves_dialog_clicks(cx: &mut TestAppContext) {
+        cx.update(gpui_component::init);
+        let lower_events = Arc::new(AtomicUsize::new(0));
+        let dialog_clicks = Arc::new(AtomicUsize::new(0));
+        let fixture_events = lower_events.clone();
+        let (_, cx) = cx.add_window_view(move |window, cx| {
+            let view = cx.new(|_| PointerContentFixture {
+                events: fixture_events,
+            });
+            nya_root(view, window, cx)
+        });
+        let cx: &mut VisualTestContext = cx;
+
+        let clicks = dialog_clicks.clone();
+        cx.update(|window, cx| {
+            window.open_nya_dialog(cx, move |dialog, _, _| {
+                let clicks = clicks.clone();
+                dialog.title("Dialog").content(
+                    div()
+                        .id("nya-dialog-test-action")
+                        .debug_selector(|| "nya-dialog-test-action".to_string())
+                        .size(px(40.))
+                        .on_click(move |_, _, _| {
+                            clicks.fetch_add(1, Ordering::SeqCst);
+                        }),
+                )
+            });
+        });
+        draw(cx);
+
+        cx.simulate_mouse_move(point(px(12.), px(80.)), None, Modifiers::default());
+        let action = cx
+            .debug_bounds("nya-dialog-test-action")
+            .expect("dialog action should be rendered");
+        cx.simulate_click(action.center(), Modifiers::default());
+        assert_eq!(dialog_clicks.load(Ordering::SeqCst), 1);
+        assert_eq!(lower_events.load(Ordering::SeqCst), 0);
+
+        cx.simulate_click(point(px(12.), px(80.)), Modifiers::default());
+        cx.run_until_parked();
+        assert_eq!(lower_events.load(Ordering::SeqCst), 0);
+        cx.update(|window, cx| {
+            assert!(!window.has_active_nya_dialog(cx));
+        });
     }
 
     #[gpui::test]

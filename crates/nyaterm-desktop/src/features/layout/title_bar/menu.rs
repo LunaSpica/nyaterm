@@ -148,8 +148,8 @@ impl NyaTermApp {
             NyaMenuItem::separator(),
             NyaMenuItem::action(format!("{} NyaTerm", self.tr("menu.about")))
                 .icon("icons/menu/info.svg")
-                .on_click(cx.listener(|this, _, _, cx| {
-                    this.open_about(cx);
+                .on_click(cx.listener(|this, _, window, cx| {
+                    this.open_about(window, cx);
                 })),
         ]
     }

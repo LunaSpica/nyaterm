@@ -149,6 +149,7 @@ impl NyaTermApp {
         div()
             .id(SharedString::from("action-link-tooltip-overlay"))
             .absolute()
+            .occlude()
             .left(px(x.max(8.0)))
             .top(px(y.max(8.0)))
             .max_w(px(340.))

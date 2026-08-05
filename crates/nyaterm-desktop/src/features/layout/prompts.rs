@@ -11,7 +11,7 @@ use crate::features::session::{
     KeyboardInteractivePromptState, SftpDuplicatePromptState, credential_prompt_target,
     credential_text_input_id, keyboard_interactive_text_input_id, unix_seconds_now,
 };
-use crate::features::view_widgets::dialog_action_button;
+use crate::features::view_widgets::{dialog_action_button, full_window_input_layer};
 use crate::features::{NyaTermApp, TextInputSetup, bounded_dialog_width};
 use crate::models::{SnapshotPasswordPromptKind, SnapshotPasswordPromptState};
 use crate::widgets::small_button;
@@ -38,13 +38,7 @@ impl NyaTermApp {
             .replace("{{kind}}", kind)
             .replace("{{name}}", &target_name);
 
-        div()
-            .id("duplicate-prompt-overlay")
-            .absolute()
-            .top_0()
-            .bottom_0()
-            .left_0()
-            .right_0()
+        full_window_input_layer("duplicate-prompt-overlay")
             .bg(rgba(0x00000080))
             .flex()
             .items_center()

@@ -441,12 +441,14 @@ impl RemoteTextEditor {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.selecting {
-            self.head = self.index_for_point(event.position);
-            self.scroll_cursor_pending = true;
-            self.notify_cursor_changed(cx);
-            cx.notify();
+        if !remote_text_selection_drag_active(self.selecting, event.pressed_button) {
+            self.selecting = false;
+            return;
         }
+        self.head = self.index_for_point(event.position);
+        self.scroll_cursor_pending = true;
+        self.notify_cursor_changed(cx);
+        cx.notify();
     }
 
     fn on_mouse_up(&mut self, _: &MouseUpEvent, _: &mut Window, cx: &mut Context<Self>) {
@@ -642,6 +644,10 @@ impl RemoteTextEditor {
         offset.y = offset.y.clamp(-max.y, px(0.));
         self.scroll.set_offset(offset);
     }
+}
+
+fn remote_text_selection_drag_active(selecting: bool, pressed_button: Option<MouseButton>) -> bool {
+    selecting && pressed_button == Some(MouseButton::Left)
 }
 
 impl EntityInputHandler for RemoteTextEditor {
@@ -1361,8 +1367,27 @@ mod tests {
     use super::{
         byte_offset_for_char_column, is_close_bracket, line_end, line_number_visual_rows,
         line_start, matching_bracket_ranges, matching_close_bracket, nearest_char_boundary,
-        next_char_boundary, previous_char_boundary, should_auto_close, utf16_to_utf8, word_bounds,
+        next_char_boundary, previous_char_boundary, remote_text_selection_drag_active,
+        should_auto_close, utf16_to_utf8, word_bounds,
     };
+    use gpui::MouseButton;
+
+    #[test]
+    fn editor_selection_drag_stops_when_left_button_is_no_longer_pressed() {
+        assert!(remote_text_selection_drag_active(
+            true,
+            Some(MouseButton::Left)
+        ));
+        assert!(!remote_text_selection_drag_active(true, None));
+        assert!(!remote_text_selection_drag_active(
+            true,
+            Some(MouseButton::Right)
+        ));
+        assert!(!remote_text_selection_drag_active(
+            false,
+            Some(MouseButton::Left)
+        ));
+    }
 
     #[test]
     fn editor_boundaries_preserve_utf8_characters() {

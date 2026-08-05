@@ -502,24 +502,28 @@ impl RenderOnce for Dialog {
                         this.bg(overlay_color(self.props.overlay, cx))
                     })
                     .when(self.props.overlay, |this| {
-                        // Only the last dialog owns the `mouse down - close dialog` event.
+                        // Only the last dialog owns the backdrop events.
                         if (self.layer_ix + 1) != Root::read(window, cx).active_dialogs.len() {
                             return this;
                         }
 
+                        let overlay_closable = self.props.overlay_closable;
                         this.window_control_area(WindowControlArea::Drag)
-                            .on_any_mouse_down({
+                            .on_any_mouse_down(move |event, _, cx| {
+                                if event.position.y >= TITLE_BAR_HEIGHT {
+                                    cx.stop_propagation();
+                                }
+                            })
+                            .on_click({
                                 let on_cancel = on_cancel.clone();
                                 let on_close = on_close.clone();
                                 move |event, window, cx| {
-                                    if event.position.y < TITLE_BAR_HEIGHT {
+                                    if event.position().y < TITLE_BAR_HEIGHT {
                                         return;
                                     }
 
                                     cx.stop_propagation();
-                                    if self.props.overlay_closable
-                                        && event.button == MouseButton::Left
-                                    {
+                                    if overlay_closable && event.standard_click() {
                                         if on_cancel(&ClickEvent::default(), window, cx) {
                                             on_close(&ClickEvent::default(), window, cx);
                                             window.close_dialog(cx);

@@ -4,6 +4,7 @@ use gpui::{
 };
 use nyaterm_ui::NyaInput;
 
+use crate::features::view_widgets::full_window_input_layer;
 use crate::features::{NyaTermApp, TextInputSetup};
 use crate::widgets::small_button;
 
@@ -102,9 +103,7 @@ impl NyaTermApp {
             cx,
         );
         let password_focus = password_input.read(cx).focus_handle();
-        div()
-            .absolute()
-            .inset_0()
+        full_window_input_layer("security-unlock-input-layer")
             .flex()
             .items_center()
             .justify_center()
@@ -205,9 +204,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        div()
-            .absolute()
-            .inset_0()
+        full_window_input_layer("security-master-required-input-layer")
             .flex()
             .items_center()
             .justify_center()

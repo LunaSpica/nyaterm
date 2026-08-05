@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use gpui::{Context, KeyDownEvent, KeyUpEvent, Window};
+use gpui::{Context, KeyDownEvent, KeyUpEvent, MouseButton, MouseMoveEvent, MouseUpEvent, Window};
 use nyaterm_core::{
     TerminalMouseReportEligibility, TerminalWireWriteKind, terminal_input_fanout_status,
     terminal_mouse_report_should_send, terminal_wire_write_disposition,
@@ -16,6 +16,23 @@ enum MouseReportWriteResult {
     NotHandled,
     Sent,
     Failed,
+}
+
+pub(super) fn terminal_mouse_report_button(button: u8) -> Option<MouseButton> {
+    match button {
+        0 => Some(MouseButton::Left),
+        1 => Some(MouseButton::Middle),
+        2 => Some(MouseButton::Right),
+        _ => None,
+    }
+}
+
+pub(super) fn lost_mouse_report_release_button(
+    captured_button: u8,
+    pressed_button: Option<MouseButton>,
+) -> Option<MouseButton> {
+    let expected_button = terminal_mouse_report_button(captured_button)?;
+    (pressed_button != Some(expected_button)).then_some(expected_button)
 }
 
 #[derive(Clone, Copy)]
@@ -475,6 +492,25 @@ impl NyaTermApp {
             modifiers,
         } = report;
         let result = self.write_mouse_report_to_session(report, cx);
+        if !press && self.terminal.selection.mouse_report_button.is_some() {
+            let peers = std::mem::take(&mut self.terminal.selection.mouse_report_peer_session_ids);
+            for peer_id in peers {
+                let _ = self.write_mouse_report_to_session(
+                    TerminalMouseReportRequest {
+                        session_id: &peer_id,
+                        button,
+                        col,
+                        row,
+                        press: false,
+                        motion: false,
+                        modifiers,
+                    },
+                    cx,
+                );
+            }
+            self.clear_terminal_mouse_report_capture();
+            return true;
+        }
         match result {
             MouseReportWriteResult::NotHandled => return false,
             MouseReportWriteResult::Failed => return true,
@@ -527,23 +563,6 @@ impl NyaTermApp {
             self.terminal.selection.mouse_report_button = Some(button);
             self.terminal.selection.mouse_report_session_id = Some(session_id.to_string());
             self.terminal.selection.mouse_report_peer_session_ids = captured_peers;
-        } else if !press {
-            let peers = std::mem::take(&mut self.terminal.selection.mouse_report_peer_session_ids);
-            for peer_id in peers {
-                let _ = self.write_mouse_report_to_session(
-                    TerminalMouseReportRequest {
-                        session_id: &peer_id,
-                        button,
-                        col,
-                        row,
-                        press: false,
-                        motion: false,
-                        modifiers,
-                    },
-                    cx,
-                );
-            }
-            self.clear_terminal_mouse_report_capture();
         }
         true
     }
@@ -703,6 +722,34 @@ impl NyaTermApp {
             },
             cx,
         )
+    }
+
+    pub(in crate::features) fn recover_terminal_mouse_report_after_lost_mouse_up(
+        &mut self,
+        event: &MouseMoveEvent,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(captured_button) = self.terminal.selection.mouse_report_button else {
+            return;
+        };
+        let Some(release_button) =
+            lost_mouse_report_release_button(captured_button, event.pressed_button)
+        else {
+            if terminal_mouse_report_button(captured_button).is_none() {
+                self.clear_terminal_mouse_report_capture();
+            }
+            return;
+        };
+        let release = MouseUpEvent {
+            button: release_button,
+            position: event.position,
+            modifiers: event.modifiers,
+            click_count: 1,
+        };
+        let _ = self.finish_terminal_mouse_report(&release, cx);
+        // Protocol mode can change between press and recovery. A release that
+        // is no longer encodable must still end the local capture.
+        self.clear_terminal_mouse_report_capture();
     }
 
     pub(in crate::features) fn clear_terminal_mouse_report_for_session(

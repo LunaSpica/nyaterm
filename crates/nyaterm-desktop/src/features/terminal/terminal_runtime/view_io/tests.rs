@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use gpui::KeyDownEvent;
+use gpui::{KeyDownEvent, MouseButton};
 use nyaterm_terminal::TerminalScreen;
 
 use crate::features::terminal::terminal_surface_entity::terminal_snapshot_anchor_row_for_display_offset;
@@ -11,9 +11,10 @@ use crate::terminal::{TerminalBufferMatch, TerminalKeyMode};
 
 use super::{
     TERMINAL_INPUT_LATENCY_WINDOW, TERMINAL_USER_SCROLL_ACTIVE_WINDOW,
-    terminal_cursor_visible_for_display_offset, terminal_input_latency_active,
-    terminal_key_bytes_for_mode_and_settings, terminal_keyword_highlight_updates_allowed,
-    terminal_live_action_link_enrichment_allowed, terminal_paint_snapshot_for_view,
+    lost_mouse_report_release_button, terminal_cursor_visible_for_display_offset,
+    terminal_input_latency_active, terminal_key_bytes_for_mode_and_settings,
+    terminal_keyword_highlight_updates_allowed, terminal_live_action_link_enrichment_allowed,
+    terminal_mouse_report_button, terminal_paint_snapshot_for_view,
     terminal_paint_window_snapshot_for_view, terminal_retained_snapshot_matches_view,
     terminal_scroll_retained_window_extra_rows, terminal_scroll_snapshot_request_offset,
     terminal_scroll_text_first_decorations, terminal_selection_for_session,
@@ -22,6 +23,40 @@ use super::{
     terminal_snapshot_with_newer_edge_row, terminal_snapshot_with_retained_scroll_window,
     terminal_status_changed, terminal_user_scroll_active, terminal_visual_display_offset,
 };
+
+#[test]
+fn terminal_mouse_report_buttons_map_to_their_gpui_capture_button() {
+    assert_eq!(terminal_mouse_report_button(0), Some(MouseButton::Left));
+    assert_eq!(terminal_mouse_report_button(1), Some(MouseButton::Middle));
+    assert_eq!(terminal_mouse_report_button(2), Some(MouseButton::Right));
+    assert_eq!(terminal_mouse_report_button(3), None);
+}
+
+#[test]
+fn lost_mouse_report_capture_releases_the_button_that_is_no_longer_pressed() {
+    for (captured, button) in [
+        (0, MouseButton::Left),
+        (1, MouseButton::Middle),
+        (2, MouseButton::Right),
+    ] {
+        assert_eq!(
+            lost_mouse_report_release_button(captured, Some(button)),
+            None
+        );
+        assert_eq!(
+            lost_mouse_report_release_button(captured, None),
+            Some(button)
+        );
+        assert_eq!(
+            lost_mouse_report_release_button(
+                captured,
+                Some(MouseButton::Navigate(gpui::NavigationDirection::Back))
+            ),
+            Some(button)
+        );
+    }
+    assert_eq!(lost_mouse_report_release_button(3, None), None);
+}
 
 #[test]
 fn terminal_selection_visual_is_isolated_to_its_owner_session() {

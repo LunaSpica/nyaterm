@@ -1,10 +1,11 @@
 use gpui::{
     AnyElement, App, ClickEvent, Context, Entity, FontWeight, IntoElement, KeyDownEvent,
-    MouseButton, SharedString, Window, div, prelude::*, px, rgb, rgba, svg,
+    SharedString, Window, div, prelude::*, px, rgb, rgba, svg,
 };
 use nyaterm_core::truncate_preview;
 
 use crate::features::transfers::RemoteTextEditor;
+use crate::features::view_widgets::full_window_input_layer;
 use crate::features::{NyaTermApp, dialog_action_button};
 use crate::models::{
     TransferEditorField, TransferEditorState, TransferEditorWorkspaceState,
@@ -1081,16 +1082,12 @@ fn transfer_editor_alert_dialog(
     description: &'static str,
     actions: impl IntoElement,
 ) -> impl IntoElement {
-    div()
-        .id(SharedString::from(format!("{id}-backdrop")))
-        .absolute()
-        .inset_0()
+    full_window_input_layer(format!("{id}-backdrop"))
         .bg(rgba(0x00000099))
         .flex()
         .items_center()
         .justify_center()
         .p_3()
-        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
         .on_click(|_, _, cx| cx.stop_propagation())
         .child(
             div()

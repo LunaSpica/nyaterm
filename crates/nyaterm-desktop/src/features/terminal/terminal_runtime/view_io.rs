@@ -27,7 +27,8 @@ mod input;
 pub(in crate::features) use input::TerminalMouseReportRequest;
 #[cfg(test)]
 use input::{
-    terminal_key_bytes_for_mode_and_settings, terminal_session_write_failure_log,
+    lost_mouse_report_release_button, terminal_key_bytes_for_mode_and_settings,
+    terminal_mouse_report_button, terminal_session_write_failure_log,
     terminal_should_defer_key_text_to_input_handler_for_state,
     terminal_should_track_command_suggestion_input, terminal_status_changed,
 };

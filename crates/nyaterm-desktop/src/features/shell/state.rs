@@ -109,7 +109,6 @@ pub(super) struct ShellPanelState {
 
 /// Activity bar, title menus, tab-strip menus and connection-failure chrome.
 pub(super) struct ShellChromeState {
-    pub(super) about_open: bool,
     pub(super) activity_bar_layout: ActivityBarLayoutState,
     pub(super) activity_bar_context_menu: Option<ActivityBarContextMenuState>,
     pub(super) header_status: HeaderStatusState,
@@ -181,7 +180,6 @@ impl ShellFeatureState {
                 stack_resize: None,
             },
             chrome: ShellChromeState {
-                about_open: false,
                 activity_bar_layout: init.activity_bar_layout,
                 activity_bar_context_menu: None,
                 header_status: HeaderStatusState::default(),
@@ -449,14 +447,6 @@ impl ShellFeatureState {
 
     pub(in crate::features) fn set_right_focus(&mut self, focus: RightFocus) {
         self.panels.right_focus = focus;
-    }
-
-    pub(in crate::features) fn about_is_open(&self) -> bool {
-        self.chrome.about_open
-    }
-
-    pub(in crate::features) fn set_about_open(&mut self, open: bool) {
-        self.chrome.about_open = open;
     }
 
     pub(in crate::features) fn activity_bar_layout(&self) -> &ActivityBarLayoutState {
@@ -1007,6 +997,7 @@ mod tests {
         let total = shell.panels.stack_sizes["above"] + shell.panels.stack_sizes["below"];
         assert!((total - 3.).abs() < f32::EPSILON);
         assert!(shell.panels.finish_stack_resize());
+        assert!(!shell.panels.finish_stack_resize());
     }
 
     #[test]

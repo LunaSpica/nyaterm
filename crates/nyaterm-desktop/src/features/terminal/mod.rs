@@ -28,7 +28,9 @@ pub(in crate::features) fn init_key_bindings(cx: &mut App) {
     ]);
 }
 
-pub(in crate::features) use state::{TerminalFeatureFocus, TerminalFeatureState};
+pub(in crate::features) use state::{
+    LostTerminalSelectionRecovery, TerminalFeatureFocus, TerminalFeatureState,
+};
 pub(in crate::features) use terminal_surface_entity::{
     FULL_SHELL_PAINT_COUNT, full_shell_paint_count, terminal_surface_paint_count,
 };

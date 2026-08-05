@@ -4,6 +4,7 @@ use gpui::{ClipboardItem, Context, MouseButton, MouseDownEvent, MouseMoveEvent, 
 use nyaterm_terminal::TerminalSnapshot;
 
 use crate::features::NyaTermApp;
+use crate::features::terminal::LostTerminalSelectionRecovery;
 use crate::features::terminal::terminal_runtime::TerminalMouseReportRequest;
 use crate::features::terminal::terminal_surface::{
     terminal_absolute_line_for_snapshot_row, terminal_snapshot_absolute_range,
@@ -461,6 +462,39 @@ impl NyaTermApp {
         }
         self.schedule_terminal_selected_occurrence_search(cx);
         self.notify_terminal_selection_owner_surface(cx);
+    }
+
+    pub(in crate::features) fn recover_terminal_selection_after_lost_mouse_up(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        let previous_session_id = self
+            .terminal
+            .selection
+            .session_id
+            .clone()
+            .or_else(|| self.session.active_id_owned());
+        match self.terminal.recover_lost_selection_mouse_up() {
+            LostTerminalSelectionRecovery::None => {}
+            LostTerminalSelectionRecovery::ClearedEmpty => {
+                self.clear_terminal_selected_occurrence(cx);
+                if let Some(session_id) =
+                    previous_session_id.filter(|session_id| !session_id.is_empty())
+                {
+                    self.notify_terminal_selection_visual_only(session_id.as_str(), cx);
+                }
+            }
+            LostTerminalSelectionRecovery::Committed => {
+                if self.settings.summary().interaction_copy_on_select {
+                    let _ = self.copy_terminal_selection(cx);
+                } else {
+                    self.shell.set_status("selection ready".to_string());
+                    cx.notify();
+                }
+                self.schedule_terminal_selected_occurrence_search(cx);
+                self.notify_terminal_selection_owner_surface(cx);
+            }
+        }
     }
 
     fn schedule_terminal_selected_occurrence_search(&mut self, cx: &mut Context<Self>) {

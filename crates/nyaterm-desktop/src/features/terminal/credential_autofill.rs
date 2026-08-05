@@ -672,6 +672,7 @@ impl NyaTermApp {
         div()
             .id(SharedString::from("credential-suggestions-overlay"))
             .absolute()
+            .occlude()
             .left(px(placement.x))
             .top(px(placement.y))
             .w(px(menu_w))

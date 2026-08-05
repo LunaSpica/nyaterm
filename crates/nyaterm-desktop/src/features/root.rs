@@ -8,6 +8,7 @@ use gpui::{
 };
 
 use super::terminal::{FULL_SHELL_PAINT_COUNT, terminal_surface_paint_count};
+use super::view_widgets::full_window_input_layer;
 use super::{ActivitySide, NyaTermApp, ThemePalette};
 
 const WALLPAPER_TILE_ELEMENT_LIMIT: usize = 8192;
@@ -112,17 +113,22 @@ impl NyaTermApp {
                 if this.modal_child_window_open() {
                     return;
                 }
-                this.update_transfer_browser_column_resize(event, cx);
-                this.update_panel_resize(event, cx);
-                this.update_transfer_height_resize(event, cx);
-                this.update_bottom_panel_resize(event, cx);
-                this.update_panel_stack_resize(event, cx);
-                this.update_workspace_split_resize(event, cx);
+                this.reconcile_root_pointer_interactions(event, cx);
+                if event.dragging() {
+                    this.update_transfer_browser_column_resize(event, cx);
+                    this.update_panel_resize(event, cx);
+                    this.update_transfer_height_resize(event, cx);
+                    this.update_bottom_panel_resize(event, cx);
+                    this.update_panel_stack_resize(event, cx);
+                    this.update_workspace_split_resize(event, cx);
+                }
                 if this.maybe_send_terminal_any_motion_report(event, cx) {
                     return;
                 }
                 this.update_terminal_selection_drag(event, cx);
-                this.update_terminal_scrollbar_drag(event, cx);
+                if event.dragging() {
+                    this.update_terminal_scrollbar_drag(event, cx);
+                }
                 this.update_action_link_hover(event, cx);
             }))
             .on_mouse_up(
@@ -131,12 +137,12 @@ impl NyaTermApp {
                     if this.modal_child_window_open() {
                         return;
                     }
-                    this.finish_transfer_browser_column_resize(event, cx);
-                    this.finish_panel_resize(event, cx);
-                    this.finish_transfer_height_resize(event, cx);
-                    this.finish_bottom_panel_resize(event, cx);
-                    this.finish_panel_stack_resize(event, cx);
-                    this.finish_workspace_split_resize(event, cx);
+                    this.finish_transfer_browser_column_resize(cx);
+                    this.finish_panel_resize(cx);
+                    this.finish_transfer_height_resize(cx);
+                    this.finish_bottom_panel_resize(cx);
+                    this.finish_panel_stack_resize(cx);
+                    this.finish_workspace_split_resize(cx);
                     this.finish_terminal_selection(event, cx);
                     this.finish_terminal_scrollbar_drag(cx);
                     this.clear_terminal_window_drop(cx);
@@ -326,10 +332,7 @@ impl NyaTermApp {
 
             if left_drawer_open || right_drawer_open {
                 surface = surface.child(
-                    div()
-                        .id("mobile-panel-backdrop")
-                        .absolute()
-                        .inset_0()
+                    full_window_input_layer("mobile-panel-backdrop")
                         .bg(rgba(0x00000080))
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.shell.close_mobile_panels();
@@ -469,41 +472,79 @@ impl NyaTermApp {
 
         content
             .when(overlay.tab_actions_open, |this| {
-                this.child(self.tab_actions_overlay(cx))
+                this.child(
+                    full_window_input_layer("tab-actions-input-layer")
+                        .child(self.tab_actions_overlay(cx)),
+                )
             })
             .when(overlay.color_picker_open, |this| {
-                this.child(self.tab_color_picker_overlay(cx))
+                this.child(
+                    full_window_input_layer("tab-color-input-layer")
+                        .child(self.tab_color_picker_overlay(cx)),
+                )
             })
             .when(overlay.session_info_open, |this| {
-                this.child(self.session_info_overlay(cx))
+                this.child(
+                    full_window_input_layer("session-info-input-layer")
+                        .child(self.session_info_overlay(cx)),
+                )
             })
             .when(self.transfer.transfer_job_menu().is_some(), |this| {
-                this.child(self.transfer_job_menu_overlay(cx))
+                this.child(
+                    full_window_input_layer("transfer-job-menu-input-layer")
+                        .child(self.transfer_job_menu_overlay(cx)),
+                )
             })
             .when(transfer_editor_open, |this| {
-                this.child(self.transfer_editor_overlay(cx))
+                this.child(
+                    full_window_input_layer("transfer-editor-input-layer")
+                        .child(self.transfer_editor_overlay(cx)),
+                )
             })
             .when(transfer_external_sync_open, |this| {
-                this.child(self.transfer_external_sync_prompt_overlay(cx))
+                this.child(
+                    full_window_input_layer("transfer-external-sync-input-layer")
+                        .child(self.transfer_external_sync_prompt_overlay(cx)),
+                )
             })
             .when(
                 self.transfer.browser_view().favorites_menu.is_some(),
-                |this| this.child(self.transfer_browser_favorites_menu_overlay(cx)),
+                |this| {
+                    this.child(
+                        full_window_input_layer("transfer-favorites-menu-input-layer")
+                            .child(self.transfer_browser_favorites_menu_overlay(cx)),
+                    )
+                },
             )
             .when(self.transfer.browser_view().path_menu.is_some(), |this| {
-                this.child(self.transfer_browser_path_menu_overlay(cx))
+                this.child(
+                    full_window_input_layer("transfer-path-menu-input-layer")
+                        .child(self.transfer_browser_path_menu_overlay(cx)),
+                )
             })
             .when(self.transfer.browser_view().upload_menu.is_some(), |this| {
-                this.child(self.transfer_browser_upload_menu_overlay(cx))
+                this.child(
+                    full_window_input_layer("transfer-upload-menu-input-layer")
+                        .child(self.transfer_browser_upload_menu_overlay(cx)),
+                )
             })
             .when(overlay.multi_line_paste_open, |this| {
-                this.child(self.multi_line_paste_overlay(cx))
+                this.child(
+                    full_window_input_layer("multi-line-paste-input-layer")
+                        .child(self.multi_line_paste_overlay(cx)),
+                )
             })
             .when(overlay.terminal_actions_open, |this| {
-                this.child(self.terminal_actions_overlay(cx))
+                this.child(
+                    full_window_input_layer("terminal-actions-input-layer")
+                        .child(self.terminal_actions_overlay(cx)),
+                )
             })
             .when(overlay.action_link_menu_open, |this| {
-                this.child(self.action_link_menu_overlay(cx))
+                this.child(
+                    full_window_input_layer("action-link-menu-input-layer")
+                        .child(self.action_link_menu_overlay(cx)),
+                )
             })
             .when(
                 overlay.action_link_tooltip_open
@@ -518,41 +559,91 @@ impl NyaTermApp {
                 this.child(self.credential_suggestions_overlay(cx))
             })
             .when(self.sync_input.is_open(), |this| {
-                this.child(self.sync_groups_overlay(cx))
+                this.child(
+                    full_window_input_layer("sync-groups-input-layer")
+                        .child(self.sync_groups_overlay(cx)),
+                )
             })
             .when_some(
                 self.connection_state.inline_editor_panel_draft(),
-                |this, editor| this.child(self.connection_editor_panel(editor, cx)),
+                |this, editor| {
+                    this.child(
+                        full_window_input_layer("connection-editor-input-layer")
+                            .child(self.connection_editor_panel(editor, cx)),
+                    )
+                },
             )
             .when(self.commands.quick_editor_is_inline(), |this| {
-                this.child(self.quick_command_editor_overlay(cx))
+                this.child(
+                    full_window_input_layer("quick-command-editor-input-layer")
+                        .child(self.quick_command_editor_overlay(cx)),
+                )
             })
             .when(self.commands.quick_details().is_some(), |this| {
-                this.child(self.quick_command_details_overlay(cx))
+                this.child(
+                    full_window_input_layer("quick-command-details-input-layer")
+                        .child(self.quick_command_details_overlay(cx)),
+                )
             })
             .when(self.commands.quick_variable_prompt().is_some(), |this| {
-                this.child(self.quick_command_variable_prompt_overlay(cx))
+                this.child(
+                    full_window_input_layer("quick-command-variable-input-layer")
+                        .child(self.quick_command_variable_prompt_overlay(cx)),
+                )
             })
             .when(quick_switch_open, |this| {
-                this.child(self.quick_switch_overlay(cx))
+                this.child(
+                    full_window_input_layer("quick-switch-input-layer")
+                        .child(self.quick_switch_overlay(cx)),
+                )
             })
             .when(self.shell.activity_bar_context_menu().is_some(), |this| {
-                this.child(self.activity_bar_context_menu_overlay(cx))
+                this.child(
+                    full_window_input_layer("activity-context-input-layer")
+                        .child(self.activity_bar_context_menu_overlay(cx)),
+                )
             })
             .when(overlay.locked, |this| {
-                this.child(self.lock_screen_overlay(window, cx))
-            })
-            .when(self.shell.about_is_open(), |this| {
-                this.child(self.about_overlay(cx))
+                this.child(
+                    full_window_input_layer("lock-screen-input-layer")
+                        .child(self.lock_screen_overlay(window, cx)),
+                )
             })
             .when(self.modal_child_window_open(), |this| {
-                this.child(self.modal_owner_backdrop(cx))
+                this.child(
+                    full_window_input_layer("modal-owner-input-layer")
+                        .child(self.modal_owner_backdrop(cx)),
+                )
             })
             // Background SSH operations can request credentials while another
             // modal is open, so authentication must be the topmost overlay.
             .when(ssh_auth_prompt_open, |this| {
-                this.child(self.ssh_auth_prompt_overlay(cx))
+                this.child(
+                    full_window_input_layer("ssh-auth-prompt-input-layer")
+                        .child(self.ssh_auth_prompt_overlay(cx)),
+                )
             })
+    }
+
+    fn reconcile_root_pointer_interactions(
+        &mut self,
+        event: &MouseMoveEvent,
+        cx: &mut Context<Self>,
+    ) {
+        self.recover_terminal_mouse_report_after_lost_mouse_up(event, cx);
+        if event.dragging() {
+            return;
+        }
+        self.finish_transfer_browser_column_resize(cx);
+        self.finish_panel_resize(cx);
+        self.finish_transfer_height_resize(cx);
+        self.finish_bottom_panel_resize(cx);
+        self.finish_panel_stack_resize(cx);
+        self.finish_workspace_split_resize(cx);
+        self.recover_terminal_selection_after_lost_mouse_up(cx);
+        self.finish_terminal_scrollbar_drag(cx);
+        self.clear_terminal_window_drop(cx);
+        self.clear_session_tab_drag(cx);
     }
 
     fn modal_child_window_open(&self) -> bool {

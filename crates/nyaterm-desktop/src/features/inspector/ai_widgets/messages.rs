@@ -6,6 +6,7 @@ use nyaterm_core::{AiMessage, AiMessageRole, truncate_preview};
 
 use crate::features::NyaTermApp;
 use crate::features::formatting::extract_think_content;
+use crate::features::view_widgets::full_window_input_layer;
 use crate::features::view_widgets::markdown_content_view;
 use crate::models::AiMessageMenuState;
 
@@ -85,13 +86,7 @@ impl NyaTermApp {
             viewport_w,
             viewport_h,
         );
-        div()
-            .id(SharedString::from("ai-message-context-menu-overlay"))
-            .absolute()
-            .top_0()
-            .bottom_0()
-            .left_0()
-            .right_0()
+        full_window_input_layer("ai-message-context-menu-overlay")
             .on_click(cx.listener(|this, _, _, cx| {
                 this.close_ai_message_menu(cx);
             }))

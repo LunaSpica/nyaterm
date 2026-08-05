@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use gpui::{
     Context, InteractiveElement as _, IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent,
-    MouseUpEvent, SharedString, Styled as _, Window, div, px, rgb,
+    SharedString, Styled as _, Window, div, px, rgb,
 };
 use nyaterm_core::{ConnectionStore, uuid};
 
@@ -347,11 +347,7 @@ impl NyaTermApp {
         }
     }
 
-    pub(in crate::features) fn finish_workspace_split_resize(
-        &mut self,
-        _event: &MouseUpEvent,
-        cx: &mut Context<Self>,
-    ) {
+    pub(in crate::features) fn finish_workspace_split_resize(&mut self, cx: &mut Context<Self>) {
         if let Some(state) = self.shell.workspace.split_resize.take() {
             let ratio = self
                 .terminal

@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use gpui::{
     AnyElement, App, ClickEvent, Context, InteractiveElement as _, IntoElement, MouseButton,
-    MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement as _, SharedString,
+    MouseDownEvent, MouseMoveEvent, ParentElement as _, SharedString,
     StatefulInteractiveElement as _, Styled as _, Window, div, prelude::FluentBuilder as _, px,
     rgb, svg,
 };
@@ -356,11 +356,7 @@ impl NyaTermApp {
         }
     }
 
-    pub(in crate::features) fn finish_panel_stack_resize(
-        &mut self,
-        _event: &MouseUpEvent,
-        cx: &mut Context<Self>,
-    ) {
+    pub(in crate::features) fn finish_panel_stack_resize(&mut self, cx: &mut Context<Self>) {
         if self.shell.panels.finish_stack_resize() {
             self.persist_ui_layout();
             self.shell.set_status("panel stack sizes saved".to_string());
