@@ -69,14 +69,16 @@ mod tests {
     }
 
     struct PointerContentFixture {
-        events: Arc<AtomicUsize>,
+        down: Arc<AtomicUsize>,
+        movement: Arc<AtomicUsize>,
+        up: Arc<AtomicUsize>,
     }
 
     impl Render for PointerContentFixture {
         fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-            let down = self.events.clone();
-            let movement = self.events.clone();
-            let up = self.events.clone();
+            let down = self.down.clone();
+            let movement = self.movement.clone();
+            let up = self.up.clone();
             div()
                 .size_full()
                 .on_any_mouse_down(move |_, _, _| {
@@ -126,14 +128,22 @@ mod tests {
     }
 
     #[gpui::test]
-    fn nya_dialog_blocks_lower_pointer_events_and_preserves_dialog_clicks(cx: &mut TestAppContext) {
+    fn nya_dialog_blocks_lower_pointer_events_while_open_and_preserves_clicks(
+        cx: &mut TestAppContext,
+    ) {
         cx.update(gpui_component::init);
-        let lower_events = Arc::new(AtomicUsize::new(0));
+        let lower_down = Arc::new(AtomicUsize::new(0));
+        let lower_movement = Arc::new(AtomicUsize::new(0));
+        let lower_up = Arc::new(AtomicUsize::new(0));
         let dialog_clicks = Arc::new(AtomicUsize::new(0));
-        let fixture_events = lower_events.clone();
+        let fixture_down = lower_down.clone();
+        let fixture_movement = lower_movement.clone();
+        let fixture_up = lower_up.clone();
         let (_, cx) = cx.add_window_view(move |window, cx| {
             let view = cx.new(|_| PointerContentFixture {
-                events: fixture_events,
+                down: fixture_down,
+                movement: fixture_movement,
+                up: fixture_up,
             });
             nya_root(view, window, cx)
         });
@@ -157,16 +167,27 @@ mod tests {
         draw(cx);
 
         cx.simulate_mouse_move(point(px(12.), px(80.)), None, Modifiers::default());
+        cx.simulate_mouse_up(
+            point(px(12.), px(80.)),
+            MouseButton::Left,
+            Modifiers::default(),
+        );
+        assert_eq!(lower_movement.load(Ordering::SeqCst), 0);
+        assert_eq!(lower_up.load(Ordering::SeqCst), 0);
+
         let action = cx
             .debug_bounds("nya-dialog-test-action")
             .expect("dialog action should be rendered");
         cx.simulate_click(action.center(), Modifiers::default());
         assert_eq!(dialog_clicks.load(Ordering::SeqCst), 1);
-        assert_eq!(lower_events.load(Ordering::SeqCst), 0);
+        assert_eq!(lower_down.load(Ordering::SeqCst), 0);
+        assert_eq!(lower_movement.load(Ordering::SeqCst), 0);
+        assert_eq!(lower_up.load(Ordering::SeqCst), 0);
 
         cx.simulate_click(point(px(12.), px(80.)), Modifiers::default());
         cx.run_until_parked();
-        assert_eq!(lower_events.load(Ordering::SeqCst), 0);
+        assert_eq!(lower_down.load(Ordering::SeqCst), 0);
+        assert_eq!(lower_movement.load(Ordering::SeqCst), 0);
         cx.update(|window, cx| {
             assert!(!window.has_active_nya_dialog(cx));
         });
