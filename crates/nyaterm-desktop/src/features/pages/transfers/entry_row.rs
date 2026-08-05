@@ -23,6 +23,7 @@ pub(super) fn transfer_browser_parent_entry_row(
 ) -> impl IntoElement {
     let row = div()
         .id(SharedString::from("transfer-browser-entry-parent"))
+        .block_mouse_except_scroll()
         .h(px(30.))
         .flex()
         .items_center()
@@ -128,6 +129,7 @@ pub(super) fn transfer_browser_entry_row(
         .id(SharedString::from(format!(
             "transfer-browser-entry-{entry_path}"
         )))
+        .block_mouse_except_scroll()
         .h(px(30.))
         .flex()
         .items_center()

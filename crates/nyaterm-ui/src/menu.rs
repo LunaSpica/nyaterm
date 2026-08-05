@@ -391,7 +391,44 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{NyaMenuItem, NyaMenuItemKind};
+    use std::{cell::Cell, rc::Rc};
+
+    use gpui::{
+        Context, IntoElement, MouseButton, MouseDownEvent, Render, TestAppContext,
+        VisualTestContext, Window, div, point, prelude::*, px,
+    };
+
+    use super::{NyaContextMenu, NyaMenuItem, NyaMenuItemKind};
+
+    struct NestedContextMenuFixture {
+        outer_triggered: Rc<Cell<bool>>,
+        inner_triggered: Rc<Cell<bool>>,
+    }
+
+    impl Render for NestedContextMenuFixture {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            let outer_triggered = self.outer_triggered.clone();
+            let inner_triggered = self.inner_triggered.clone();
+            NyaContextMenu::new(
+                div()
+                    .id("outer-context-menu")
+                    .size(px(100.))
+                    .child(NyaContextMenu::new(
+                        div()
+                            .id("inner-context-menu")
+                            .block_mouse_except_scroll()
+                            .w_full()
+                            .h(px(30.)),
+                        [NyaMenuItem::action("Inner").on_click(move |_, _, _| {
+                            inner_triggered.set(true);
+                        })],
+                    )),
+                [NyaMenuItem::action("Outer").on_click(move |_, _, _| {
+                    outer_triggered.set(true);
+                })],
+            )
+        }
+    }
 
     #[test]
     fn menu_item_builders_preserve_behavior_flags() {
@@ -424,5 +461,42 @@ mod tests {
             panic!("expected submenu");
         };
         assert_eq!(items.len(), 2);
+    }
+
+    #[gpui::test]
+    fn blocking_inner_trigger_opens_only_the_nested_context_menu(cx: &mut TestAppContext) {
+        cx.update(gpui_component::init);
+        let outer_triggered = Rc::new(Cell::new(false));
+        let inner_triggered = Rc::new(Cell::new(false));
+        let (_, cx) = cx.add_window_view({
+            let outer_triggered = outer_triggered.clone();
+            let inner_triggered = inner_triggered.clone();
+            move |_, _| NestedContextMenuFixture {
+                outer_triggered: outer_triggered.clone(),
+                inner_triggered: inner_triggered.clone(),
+            }
+        });
+        let cx: &mut VisualTestContext = cx;
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            _ = window.draw(cx);
+        });
+
+        cx.simulate_event(MouseDownEvent {
+            button: MouseButton::Right,
+            position: point(px(10.), px(10.)),
+            modifiers: Default::default(),
+            click_count: 1,
+            first_mouse: false,
+        });
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            _ = window.draw(cx);
+        });
+        cx.simulate_keystrokes("down enter");
+        cx.run_until_parked();
+
+        assert!(inner_triggered.get());
+        assert!(!outer_triggered.get());
     }
 }
