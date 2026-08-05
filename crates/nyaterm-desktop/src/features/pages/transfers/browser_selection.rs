@@ -225,6 +225,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.dismiss_transfer_rename_if_open(cx);
         self.transfer.close_browser_path_menu();
         self.transfer
             .set_browser_context_target(TransferBrowserContextTarget::Entry(path.clone()));
@@ -236,6 +237,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.dismiss_transfer_rename_if_open(cx);
         window.focus(self.transfer.browser_view().focus, cx);
         self.transfer
             .set_browser_context_target(TransferBrowserContextTarget::ParentDirectory);
@@ -266,6 +268,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.dismiss_transfer_rename_if_open(cx);
         if !matches!(
             self.transfer.browser_view().context_target,
             TransferBrowserContextTarget::CurrentDirectory

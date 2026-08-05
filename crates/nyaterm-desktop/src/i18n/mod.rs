@@ -67,6 +67,10 @@ mod tests {
         assert_eq!(text("zh-CN", "menu.file"), "文件");
         assert_eq!(text("zh_CN", "common.cancel"), "取消");
         assert_eq!(text("zh-Hans", "settings.title"), "设置");
+        assert_eq!(text("en", "common.copyToClipboard"), "Copy");
+        assert_eq!(text("zh-CN", "common.copyToClipboard"), "复制");
+        assert_eq!(text("en", "common.retry"), "Retry");
+        assert_eq!(text("zh-CN", "common.retry"), "重试");
     }
 
     #[test]

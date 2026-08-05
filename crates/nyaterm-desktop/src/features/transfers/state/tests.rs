@@ -437,7 +437,12 @@ fn transfer_file_ops_track_real_rename_input_focus_and_creation_options() {
     assert!(!transfer.rename_focus_is_pending());
     transfer.schedule_rename_focus();
     transfer.close_rename_dialog();
+    assert!(!transfer.rename_dialog_is_open());
+    assert!(!transfer.rename_focus_is_pending());
     assert!(transfer.pending_rename_input_id().is_none());
+    transfer.close_rename_dialog();
+    assert!(!transfer.rename_dialog_is_open());
+    assert!(!transfer.rename_focus_is_pending());
 
     transfer.open_new_folder_dialog(TransferNewFolderState {
         parent_path: "/srv".to_string(),

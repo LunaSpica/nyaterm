@@ -83,12 +83,19 @@ impl NyaTermApp {
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, _, _, cx| {
+                    this.dismiss_transfer_rename_if_open(cx);
                     let changed =
                         this.shell.close_root_menus() || this.remote_ops.docker_menus_open();
                     if changed {
                         this.remote_ops.close_docker_menus();
                         cx.notify();
                     }
+                }),
+            )
+            .on_mouse_down(
+                MouseButton::Right,
+                cx.listener(|this, _, _, cx| {
+                    this.dismiss_transfer_rename_if_open(cx);
                 }),
             )
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {

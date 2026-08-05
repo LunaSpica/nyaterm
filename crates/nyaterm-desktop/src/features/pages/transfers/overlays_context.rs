@@ -222,7 +222,7 @@ impl NyaTermApp {
         items.extend([
             NyaMenuItem::separator(),
             NyaMenuItem::submenu(
-                self.tr("common.copy"),
+                self.tr("common.copyToClipboard"),
                 vec![
                     NyaMenuItem::action(self.tr("fileExplorer.cmCopyPath")).on_click(cx.listener(
                         |this, _, _, cx| {

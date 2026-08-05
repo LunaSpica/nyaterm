@@ -223,6 +223,17 @@ impl NyaTermApp {
         cx.notify();
     }
 
+    pub(in crate::features) fn dismiss_transfer_rename_if_open(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if !self.transfer.rename_dialog_is_open() {
+            return false;
+        }
+        self.close_transfer_rename_dialog(cx);
+        true
+    }
+
     pub(in crate::features) fn submit_transfer_rename(
         &mut self,
         window: &mut Window,

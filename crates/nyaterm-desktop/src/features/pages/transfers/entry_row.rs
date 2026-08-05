@@ -148,15 +148,7 @@ pub(super) fn transfer_browser_entry_row(
         .on_mouse_down(
             MouseButton::Right,
             cx.listener(move |this, _: &MouseDownEvent, window, cx| {
-                if is_renaming {
-                    this.suppress_transfer_browser_context_menu(cx);
-                } else {
-                    this.prepare_transfer_browser_entry_context_menu(
-                        context_path.clone(),
-                        window,
-                        cx,
-                    );
-                }
+                this.prepare_transfer_browser_entry_context_menu(context_path.clone(), window, cx);
             }),
         )
         .on_mouse_move(cx.listener(move |this, event: &MouseMoveEvent, _, cx| {
