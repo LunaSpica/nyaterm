@@ -201,6 +201,7 @@ impl NyaTermApp {
         let SavedConnectionStartOptions {
             custom_name,
             tab_color,
+            locked,
             after_session_id,
             insert_index,
             seed_output,
@@ -222,6 +223,7 @@ impl NyaTermApp {
                 ai_execution_profile,
                 custom_name,
                 tab_color,
+                locked,
                 after_session_id,
                 insert_index,
                 seed_output,

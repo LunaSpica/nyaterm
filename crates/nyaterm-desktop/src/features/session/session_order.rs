@@ -52,6 +52,24 @@ impl NyaTermApp {
         current
     }
 
+    pub(in crate::features) fn tab_tree_session_ids(&self, session_id: &str) -> Vec<String> {
+        let tab_root = self.tab_root_for_session(session_id);
+        self.shell
+            .workspace_pane_root(&tab_root)
+            .map(|root| root.session_ids())
+            .filter(|ids| !ids.is_empty())
+            .unwrap_or_else(|| vec![tab_root])
+    }
+
+    pub(in crate::features) fn tab_tree_is_locked(&self, session_id: &str) -> bool {
+        let tab_root = self.tab_root_for_session(session_id);
+        self.session.tab_is_locked(&tab_root)
+            || self
+                .tab_tree_session_ids(&tab_root)
+                .iter()
+                .any(|id| self.session.tab_is_locked(id))
+    }
+
     /// Sessions shown in the global tab strip / multi-leaf tab lists (tab roots only).
     pub(in crate::features) fn ordered_tab_sessions(&self) -> Vec<SessionInfo> {
         let mut ordered = Vec::with_capacity(self.session.session_order_len());

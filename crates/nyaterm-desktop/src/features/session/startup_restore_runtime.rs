@@ -199,13 +199,15 @@ impl NyaTermApp {
             .tab_color(&session.id)
             .map(|color| format!("#{color:06x}"));
         let title = self.session.display_name_by_info(session);
-        RestorableOpenTab::with_leaf_root(
+        let mut tab = RestorableOpenTab::with_leaf_root(
             title,
             session_type,
             connection_id,
             custom_name,
             tab_color,
-        )
+        );
+        tab.locked = self.tab_tree_is_locked(&session.id);
+        tab
     }
 
     /// When every session is present in a global workspace split, emit one open_tabs
@@ -369,6 +371,7 @@ impl NyaTermApp {
                     connection_id: session.connection_id,
                     custom_name: session.custom_name,
                     tab_color: session.tab_color,
+                    locked: session.locked,
                     active_pane_id: None,
                     root: None,
                 });
@@ -512,6 +515,7 @@ impl NyaTermApp {
                 SavedConnectionStartOptions {
                     custom_name,
                     tab_color,
+                    locked: tab.locked,
                     ..Default::default()
                 },
                 window,
@@ -531,6 +535,7 @@ impl NyaTermApp {
                 SavedConnectionStartOptions {
                     custom_name,
                     tab_color,
+                    locked: tab.locked,
                     ..Default::default()
                 },
                 cx,

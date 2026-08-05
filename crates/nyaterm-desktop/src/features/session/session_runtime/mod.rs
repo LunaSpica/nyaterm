@@ -20,6 +20,7 @@ pub(in crate::features) struct PendingSessionStartRegistration {
     pub(in crate::features) ai_execution_profile: AiExecutionProfile,
     pub(in crate::features) custom_name: Option<String>,
     pub(in crate::features) tab_color: Option<u32>,
+    pub(in crate::features) locked: bool,
     pub(in crate::features) after_session_id: Option<String>,
     pub(in crate::features) insert_index: Option<usize>,
     pub(in crate::features) seed_output: Option<String>,

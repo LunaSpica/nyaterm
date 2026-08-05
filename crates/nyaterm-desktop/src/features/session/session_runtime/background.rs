@@ -94,6 +94,7 @@ impl NyaTermApp {
             ai_execution_profile,
             custom_name,
             tab_color,
+            locked,
             after_session_id,
             insert_index,
             seed_output,
@@ -114,6 +115,7 @@ impl NyaTermApp {
                 ai_execution_profile,
                 custom_name,
                 tab_color,
+                locked,
                 after_session_id,
                 insert_index,
                 seed_output,
@@ -147,6 +149,7 @@ impl NyaTermApp {
         let SavedConnectionStartOptions {
             custom_name,
             tab_color,
+            locked,
             after_session_id,
             insert_index,
             seed_output,
@@ -161,6 +164,7 @@ impl NyaTermApp {
                 ai_execution_profile,
                 custom_name,
                 tab_color,
+                locked,
                 after_session_id,
                 insert_index,
                 seed_output,
@@ -209,6 +213,7 @@ impl NyaTermApp {
         let SavedConnectionStartOptions {
             custom_name,
             tab_color,
+            locked,
             after_session_id,
             insert_index,
             seed_output,
@@ -234,6 +239,7 @@ impl NyaTermApp {
                 ai_execution_profile,
                 custom_name,
                 tab_color,
+                locked,
                 after_session_id,
                 insert_index,
                 seed_output,
@@ -287,6 +293,7 @@ impl NyaTermApp {
         let SavedConnectionStartOptions {
             custom_name,
             tab_color,
+            locked,
             after_session_id,
             insert_index,
             seed_output,
@@ -313,6 +320,7 @@ impl NyaTermApp {
                 ai_execution_profile,
                 custom_name,
                 tab_color,
+                locked,
                 after_session_id,
                 insert_index,
                 seed_output,
@@ -525,6 +533,9 @@ impl NyaTermApp {
                     if let Some(tab_color) = pending.as_ref().and_then(|pending| pending.tab_color)
                     {
                         self.session.set_tab_color(&session_id, Some(tab_color));
+                    }
+                    if pending.as_ref().is_some_and(|pending| pending.locked) {
+                        self.session.set_tab_locked(&session_id, true);
                     }
                     if let Some(seed_output) = pending
                         .as_ref()

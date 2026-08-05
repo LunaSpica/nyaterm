@@ -37,6 +37,7 @@ icons/history.svg	md:filled/history.svg
 icons/import.svg	md:filled/file_download.svg
 icons/keyboard.svg	md:filled/keyboard.svg
 icons/lock.svg	md:filled/lock.svg
+icons/unlock.svg	md:filled/lock_open.svg
 icons/minus.svg	md:filled/remove.svg
 icons/mouse.svg	md:filled/mouse.svg
 icons/network.svg	md:filled/lan.svg

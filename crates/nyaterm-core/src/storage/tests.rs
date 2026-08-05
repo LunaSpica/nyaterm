@@ -1803,6 +1803,7 @@ fn open_tab_pane_root_expands_and_maps_layout() {
         connection_id: Some("c1".to_string()),
         custom_name: Some("g".to_string()),
         tab_color: Some("#ff0000".to_string()),
+        locked: true,
         active_pane_id: None,
         root: Some(crate::models::RestorablePaneNode::Split {
             id: "s".to_string(),
@@ -1822,6 +1823,7 @@ fn open_tab_pane_root_expands_and_maps_layout() {
     assert_eq!(sessions.len(), 2);
     assert_eq!(sessions[0].title, "a");
     assert_eq!(sessions[1].session_type, "Local");
+    assert!(sessions.iter().all(|session| session.locked));
     let layout = tab.workspace_pane_layout_from_root(3).expect("layout");
     match layout {
         crate::models::RestorableWorkspacePaneNode::Split {
@@ -1864,6 +1866,7 @@ fn open_tabs_roundtrip() {
             connection_id: Some("conn-1".to_string()),
             custom_name: None,
             tab_color: None,
+            locked: true,
             active_pane_id: None,
             root: Some(crate::models::RestorablePaneNode::Split {
                 id: "split-1".to_string(),

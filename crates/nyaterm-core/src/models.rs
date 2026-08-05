@@ -725,6 +725,8 @@ pub struct RestorableOpenTab {
     pub custom_name: Option<String>,
     #[serde(default)]
     pub tab_color: Option<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub locked: bool,
     #[serde(default)]
     pub active_pane_id: Option<String>,
     #[serde(default)]
@@ -761,6 +763,7 @@ impl RestorableOpenTab {
                             connection_id,
                             custom_name: self.custom_name.clone(),
                             tab_color: self.tab_color.clone(),
+                            locked: self.locked,
                         }
                     })
                     .collect();
@@ -773,6 +776,7 @@ impl RestorableOpenTab {
             connection_id: self.connection_id.clone(),
             custom_name: self.custom_name.clone(),
             tab_color: self.tab_color.clone(),
+            locked: self.locked,
         }]
     }
 
@@ -813,6 +817,7 @@ impl RestorableOpenTab {
             connection_id,
             custom_name,
             tab_color,
+            locked: false,
             active_pane_id: None,
             root: Some(root),
         }
@@ -827,6 +832,7 @@ pub struct RestorableOpenTabSession {
     pub connection_id: Option<String>,
     pub custom_name: Option<String>,
     pub tab_color: Option<String>,
+    pub locked: bool,
 }
 
 /// Native workspace pane split tree (indexes into ordered open tabs).
@@ -1539,5 +1545,31 @@ mod tests {
             serde_json::from_str(&serde_json::to_string(&explicit).expect("serializes"))
                 .expect("reloads");
         assert_eq!(reloaded.icon_auto_detect, Some(false));
+    }
+
+    #[test]
+    fn restorable_open_tab_lock_is_backward_compatible_and_sparse() {
+        let legacy = r#"{
+            "title":"Local",
+            "session_type":"Local",
+            "connection_id":null,
+            "custom_name":null,
+            "tab_color":null,
+            "active_pane_id":null,
+            "root":null
+        }"#;
+        let tab: RestorableOpenTab = serde_json::from_str(legacy).expect("legacy tab loads");
+        assert!(!tab.locked);
+        let json = serde_json::to_string(&tab).expect("tab serializes");
+        assert!(!json.contains("locked"), "{json}");
+
+        let locked = RestorableOpenTab {
+            locked: true,
+            ..tab
+        };
+        let json = serde_json::to_string(&locked).expect("locked tab serializes");
+        assert!(json.contains(r#""locked":true"#), "{json}");
+        let reloaded: RestorableOpenTab = serde_json::from_str(&json).expect("locked tab reloads");
+        assert!(reloaded.locked);
     }
 }

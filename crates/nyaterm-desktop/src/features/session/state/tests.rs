@@ -34,6 +34,7 @@ fn pending(name: &str) -> PendingSessionStart {
         ai_execution_profile: AiExecutionProfile::default(),
         custom_name: None,
         tab_color: None,
+        locked: false,
         after_session_id: None,
         insert_index: None,
         seed_output: None,
@@ -622,6 +623,7 @@ fn reconnect_presentation_migration_preserves_destination_overrides() {
     assert!(sessions.update_cwd("new", "/new".to_string()));
     sessions.set_tab_color("old", Some(0x112233));
     sessions.set_tab_color("new", Some(0x445566));
+    assert!(sessions.set_tab_locked("old", true));
     sessions.record_command_history("old", "pwd");
 
     sessions.migrate_session_presentation("old", "new");
@@ -632,6 +634,8 @@ fn reconnect_presentation_migration_preserves_destination_overrides() {
     assert_eq!(sessions.cwd("new"), Some("/old"));
     assert!(sessions.cwd("old").is_none());
     assert_eq!(sessions.tab_color("new"), Some(0x445566));
+    assert!(sessions.tab_is_locked("new"));
+    assert!(!sessions.tab_is_locked("old"));
     assert_eq!(
         sessions.command_history_for("new"),
         Some(["pwd".to_string()].as_slice())
@@ -652,6 +656,7 @@ fn removing_session_catalog_clears_all_session_scoped_entries() {
     sessions.set_dynamic_title("session-a", Some("dynamic".to_string()));
     sessions.update_cwd("session-a", "/workspace".to_string());
     sessions.set_tab_color("session-a", Some(0x112233));
+    assert!(sessions.set_tab_locked("session-a", true));
     sessions.record_command_history("session-a", "pwd");
     assert!(sessions.begin_reconnect_action("session-a".to_string()));
     sessions.zmodem_state_mut_or_default("session-a");
@@ -673,6 +678,7 @@ fn removing_session_catalog_clears_all_session_scoped_entries() {
     assert!(sessions.dynamic_title("session-a").is_none());
     assert!(sessions.cwd("session-a").is_none());
     assert!(sessions.tab_color("session-a").is_none());
+    assert!(!sessions.tab_is_locked("session-a"));
     assert!(sessions.command_history_for("session-a").is_none());
     assert!(!sessions.session_is_busy("session-a"));
     assert!(sessions.active_id().is_none());
@@ -682,6 +688,70 @@ fn removing_session_catalog_clears_all_session_scoped_entries() {
         AiExecutionProfile::SendOnly
     );
     assert_eq!(sessions.protocol_runtime_counts(), (0, 0, 0));
+}
+
+#[test]
+fn tab_lock_and_drag_state_have_single_owner() {
+    let cx = TestAppContext::single();
+    let mut sessions = session_state(&cx);
+
+    assert!(sessions.set_tab_locked("tab-a", true));
+    assert!(sessions.tab_is_locked("tab-a"));
+    assert!(!sessions.set_tab_locked("tab-a", true));
+    assert!(sessions.set_tab_locked("tab-a", false));
+    assert!(!sessions.tab_is_locked("tab-a"));
+
+    assert!(sessions.set_tab_drag_target("tab-a".to_string(), "tab-b".to_string(), false,));
+    assert!(sessions.tab_drag_source_is("tab-a"));
+    assert_eq!(sessions.tab_drop_after("tab-b"), Some(false));
+    assert!(!sessions.set_tab_drag_target("tab-a".to_string(), "tab-b".to_string(), false,));
+    assert!(sessions.set_tab_drag_target("tab-a".to_string(), "tab-b".to_string(), true,));
+    assert_eq!(sessions.tab_drop_after("tab-b"), Some(true));
+    assert!(sessions.clear_tab_drag());
+    assert!(!sessions.clear_tab_drag());
+}
+
+#[test]
+fn closing_a_split_root_can_migrate_logical_tab_presentation() {
+    let cx = TestAppContext::single();
+    let mut sessions = session_state(&cx);
+    sessions.set_custom_name("root".to_string(), "logical tab".to_string());
+    sessions.set_custom_name("survivor".to_string(), "pane".to_string());
+    sessions.set_tab_color("root", Some(0x112233));
+    sessions.set_tab_locked("root", true);
+
+    sessions.migrate_tab_root_presentation("root", "survivor");
+
+    assert_eq!(sessions.custom_name("survivor"), Some("logical tab"));
+    assert_eq!(sessions.tab_color("survivor"), Some(0x112233));
+    assert!(sessions.tab_is_locked("survivor"));
+    assert!(sessions.custom_name("root").is_none());
+    assert!(sessions.tab_color("root").is_none());
+    assert!(!sessions.tab_is_locked("root"));
+}
+
+#[test]
+fn tab_group_reorder_moves_split_sessions_as_one_block() {
+    let cx = TestAppContext::single();
+    let mut sessions = session_state(&cx);
+    for id in ["a", "a-child", "b", "c", "c-child"] {
+        sessions.register_session_metadata(id, session_metadata(id, None));
+    }
+
+    assert!(sessions.move_session_group_relative(
+        &["a".to_string(), "a-child".to_string()],
+        &["c".to_string(), "c-child".to_string()],
+        true,
+    ));
+    assert_eq!(
+        sessions.session_order(),
+        ["b", "c", "c-child", "a", "a-child"]
+    );
+    assert!(sessions.move_session_group_to_end(&["b".to_string()]));
+    assert_eq!(
+        sessions.session_order(),
+        ["c", "c-child", "a", "a-child", "b"]
+    );
 }
 
 #[test]

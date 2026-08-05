@@ -49,7 +49,16 @@ pub(in crate::features) struct SessionFeatureState {
     /// Latest OSC 7 working directories per session.
     cwds: HashMap<String, String>,
     tab_colors: HashMap<String, u32>,
+    locked_tabs: HashSet<String>,
+    tab_drag: Option<SessionTabDragState>,
     protocols: SessionProtocolRuntimeState,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct SessionTabDragState {
+    source_id: String,
+    target_id: String,
+    insert_after: bool,
 }
 
 #[derive(Default)]
@@ -196,6 +205,8 @@ impl SessionFeatureState {
             dynamic_titles: HashMap::new(),
             cwds: HashMap::new(),
             tab_colors: HashMap::new(),
+            locked_tabs: HashSet::new(),
+            tab_drag: None,
             protocols: SessionProtocolRuntimeState::default(),
         }
     }
@@ -940,6 +951,87 @@ impl SessionFeatureState {
         true
     }
 
+    pub(in crate::features) fn move_session_group_relative(
+        &mut self,
+        source_ids: &[String],
+        target_ids: &[String],
+        insert_after: bool,
+    ) -> bool {
+        let source_ids = source_ids
+            .iter()
+            .map(String::as_str)
+            .collect::<HashSet<_>>();
+        let target_ids = target_ids
+            .iter()
+            .map(String::as_str)
+            .collect::<HashSet<_>>();
+        if source_ids.is_empty() || target_ids.is_empty() || !source_ids.is_disjoint(&target_ids) {
+            return false;
+        }
+        let source_block = self
+            .order
+            .iter()
+            .filter(|id| source_ids.contains(id.as_str()))
+            .cloned()
+            .collect::<Vec<_>>();
+        if source_block.is_empty() {
+            return false;
+        }
+        let mut remaining = self
+            .order
+            .iter()
+            .filter(|id| !source_ids.contains(id.as_str()))
+            .cloned()
+            .collect::<Vec<_>>();
+        let target_positions = remaining
+            .iter()
+            .enumerate()
+            .filter_map(|(index, id)| target_ids.contains(id.as_str()).then_some(index))
+            .collect::<Vec<_>>();
+        let Some(first_target) = target_positions.first().copied() else {
+            return false;
+        };
+        let insert_index = if insert_after {
+            target_positions.last().copied().unwrap_or(first_target) + 1
+        } else {
+            first_target
+        };
+        remaining.splice(insert_index..insert_index, source_block);
+        if remaining == self.order {
+            return false;
+        }
+        self.order = remaining;
+        true
+    }
+
+    pub(in crate::features) fn move_session_group_to_end(&mut self, source_ids: &[String]) -> bool {
+        let source_ids = source_ids
+            .iter()
+            .map(String::as_str)
+            .collect::<HashSet<_>>();
+        let source_block = self
+            .order
+            .iter()
+            .filter(|id| source_ids.contains(id.as_str()))
+            .cloned()
+            .collect::<Vec<_>>();
+        if source_block.is_empty() {
+            return false;
+        }
+        let mut next = self
+            .order
+            .iter()
+            .filter(|id| !source_ids.contains(id.as_str()))
+            .cloned()
+            .collect::<Vec<_>>();
+        next.extend(source_block);
+        if next == self.order {
+            return false;
+        }
+        self.order = next;
+        true
+    }
+
     pub(in crate::features) fn ordered_sessions(&self) -> Vec<SessionInfo> {
         let mut ordered = Vec::with_capacity(self.order.len());
         let mut seen = HashSet::with_capacity(self.order.len());
@@ -1164,6 +1256,53 @@ impl SessionFeatureState {
         }
     }
 
+    pub(in crate::features) fn tab_is_locked(&self, session_id: &str) -> bool {
+        self.locked_tabs.contains(session_id)
+    }
+
+    pub(in crate::features) fn set_tab_locked(&mut self, session_id: &str, locked: bool) -> bool {
+        if locked {
+            self.locked_tabs.insert(session_id.to_string())
+        } else {
+            self.locked_tabs.remove(session_id)
+        }
+    }
+
+    pub(in crate::features) fn set_tab_drag_target(
+        &mut self,
+        source_id: String,
+        target_id: String,
+        insert_after: bool,
+    ) -> bool {
+        let next = SessionTabDragState {
+            source_id,
+            target_id,
+            insert_after,
+        };
+        if self.tab_drag.as_ref() == Some(&next) {
+            return false;
+        }
+        self.tab_drag = Some(next);
+        true
+    }
+
+    pub(in crate::features) fn tab_drag_source_is(&self, session_id: &str) -> bool {
+        self.tab_drag
+            .as_ref()
+            .is_some_and(|drag| drag.source_id == session_id)
+    }
+
+    pub(in crate::features) fn tab_drop_after(&self, session_id: &str) -> Option<bool> {
+        self.tab_drag
+            .as_ref()
+            .filter(|drag| drag.target_id == session_id)
+            .map(|drag| drag.insert_after)
+    }
+
+    pub(in crate::features) fn clear_tab_drag(&mut self) -> bool {
+        self.tab_drag.take().is_some()
+    }
+
     pub(in crate::features) fn migrate_session_presentation(&mut self, old_id: &str, new_id: &str) {
         if !self.custom_names.contains_key(new_id)
             && let Some(custom_name) = self.custom_names.remove(old_id)
@@ -1181,7 +1320,26 @@ impl SessionFeatureState {
         {
             self.tab_colors.insert(new_id.to_string(), color);
         }
+        if !self.locked_tabs.contains(new_id) && self.locked_tabs.remove(old_id) {
+            self.locked_tabs.insert(new_id.to_string());
+        }
         self.migrate_command_history(old_id, new_id);
+    }
+
+    pub(in crate::features) fn migrate_tab_root_presentation(
+        &mut self,
+        old_root: &str,
+        new_root: &str,
+    ) {
+        if let Some(custom_name) = self.custom_names.remove(old_root) {
+            self.custom_names.insert(new_root.to_string(), custom_name);
+        }
+        if let Some(color) = self.tab_colors.remove(old_root) {
+            self.tab_colors.insert(new_root.to_string(), color);
+        }
+        if self.locked_tabs.remove(old_root) {
+            self.locked_tabs.insert(new_root.to_string());
+        }
     }
 
     pub(in crate::features) fn remove_session_catalog(
@@ -1199,6 +1357,14 @@ impl SessionFeatureState {
         self.dynamic_titles.remove(session_id);
         self.cwds.remove(session_id);
         self.tab_colors.remove(session_id);
+        self.locked_tabs.remove(session_id);
+        if self
+            .tab_drag
+            .as_ref()
+            .is_some_and(|drag| drag.source_id == session_id || drag.target_id == session_id)
+        {
+            self.tab_drag = None;
+        }
         self.command_history.remove(session_id);
         self.busy_actions.remove(session_id);
         if self.active_id() == Some(session_id) {
@@ -1847,6 +2013,7 @@ pub(in crate::features) struct PendingSessionStart {
     pub ai_execution_profile: AiExecutionProfile,
     pub custom_name: Option<String>,
     pub tab_color: Option<u32>,
+    pub locked: bool,
     pub after_session_id: Option<String>,
     pub insert_index: Option<usize>,
     pub seed_output: Option<String>,
@@ -1893,6 +2060,7 @@ pub(in crate::features) enum SessionStartEventRequest {
 pub(in crate::features) struct SavedConnectionStartOptions {
     pub custom_name: Option<String>,
     pub tab_color: Option<u32>,
+    pub locked: bool,
     pub after_session_id: Option<String>,
     pub insert_index: Option<usize>,
     pub seed_output: Option<String>,

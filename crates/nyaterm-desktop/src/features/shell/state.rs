@@ -639,6 +639,14 @@ impl ShellFeatureState {
     pub(in crate::features) fn remove_workspace_session(&mut self, session_id: &str) {
         self.workspace.remove_session(session_id);
     }
+
+    pub(in crate::features) fn rekey_workspace_pane_root(
+        &mut self,
+        old_root: &str,
+        new_root: String,
+    ) -> bool {
+        self.workspace.rekey_pane_root(old_root, new_root)
+    }
 }
 
 impl ShellDiagnosticState {
@@ -880,6 +888,22 @@ impl ShellWorkspaceState {
         self.tab_owner.remove(session_id);
         self.pane_roots.remove(session_id);
     }
+
+    pub(in crate::features) fn rekey_pane_root(
+        &mut self,
+        old_root: &str,
+        new_root: String,
+    ) -> bool {
+        if old_root == new_root || self.pane_roots.contains_key(&new_root) {
+            return false;
+        }
+        let Some(root) = self.pane_roots.remove(old_root) else {
+            return false;
+        };
+        self.pane_roots.insert(new_root, root);
+        self.rebuild_tab_owners();
+        true
+    }
 }
 
 #[cfg(test)]
@@ -1118,5 +1142,32 @@ mod tests {
         assert!(shell.workspace.pane_roots.contains_key("renamed"));
         assert_eq!(shell.workspace.tab_owner["leaf"], "renamed");
         assert_eq!(shell.workspace.tab_owner["renamed"], "renamed");
+    }
+
+    #[test]
+    fn workspace_rekeys_split_root_before_closing_the_root_pane() {
+        let mut shell = shell(BottomPanelMode::Hidden);
+        shell.workspace.pane_roots.insert(
+            "root".to_string(),
+            WorkspacePaneNode::Split {
+                id: "split".to_string(),
+                direction: WorkspaceSplitDirection::Horizontal,
+                ratio_percent: 50,
+                first: Box::new(WorkspacePaneNode::leaf("root".to_string())),
+                second: Box::new(WorkspacePaneNode::leaf("survivor".to_string())),
+            },
+        );
+        shell.workspace.rebuild_tab_owners();
+
+        assert!(
+            shell
+                .workspace
+                .rekey_pane_root("root", "survivor".to_string())
+        );
+        shell.workspace.remove_session("root");
+
+        assert!(!shell.workspace.pane_roots.contains_key("root"));
+        assert!(shell.workspace.pane_roots.contains_key("survivor"));
+        assert_eq!(shell.workspace.tab_owner["survivor"], "survivor");
     }
 }

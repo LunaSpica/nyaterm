@@ -1,7 +1,8 @@
 use gpui::{
     ClickEvent, ClipboardItem, Context, FontWeight, InteractiveElement as _, IntoElement,
-    MouseButton, ParentElement as _, Render, SharedString, StatefulInteractiveElement as _,
-    Styled as _, Window, div, prelude::FluentBuilder as _, px, rgb, rgba,
+    MouseButton, MouseDownEvent, ParentElement as _, Render, SharedString,
+    StatefulInteractiveElement as _, Styled as _, Window, div, prelude::FluentBuilder as _, px,
+    rgb, rgba,
 };
 use nyaterm_core::truncate_preview;
 
@@ -211,48 +212,6 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if let ClickEvent::Mouse(mouse) = event {
-            let is_middle_click =
-                mouse.down.button == MouseButton::Middle && mouse.up.button == MouseButton::Middle;
-            if is_middle_click {
-                cx.stop_propagation();
-                let action = self
-                    .settings
-                    .summary()
-                    .interaction_tab_middle_click_action
-                    .clone();
-                if action == "none" {
-                    self.shell
-                        .set_status("middle-click tab action is disabled".to_string());
-                    cx.notify();
-                } else {
-                    self.run_tab_mouse_action(session_id, action, window, cx);
-                }
-                return;
-            }
-
-            if event.is_right_click() {
-                cx.stop_propagation();
-                let action = self
-                    .settings
-                    .summary()
-                    .interaction_tab_right_click_action
-                    .clone();
-                if action == "none" {
-                    let anchor = if let ClickEvent::Mouse(mouse) = event {
-                        Some((
-                            f32::from(mouse.up.position.x),
-                            f32::from(mouse.up.position.y),
-                        ))
-                    } else {
-                        None
-                    };
-                    self.open_tab_actions_at(session_id, anchor, window, cx);
-                } else {
-                    self.run_tab_mouse_action(session_id, action, window, cx);
-                }
-                return;
-            }
-
             let is_left_double_click = mouse.down.button == MouseButton::Left
                 && mouse.up.button == MouseButton::Left
                 && event.click_count() >= 2;
@@ -273,43 +232,75 @@ impl NyaTermApp {
         self.select_session(session_id, cx);
     }
 
-    pub(in crate::features) fn reorder_session_before(
+    pub(in crate::features) fn handle_session_tab_mouse_down(
+        &mut self,
+        session_id: String,
+        event: &MouseDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let action = match event.button {
+            MouseButton::Middle => self
+                .settings
+                .summary()
+                .interaction_tab_middle_click_action
+                .clone(),
+            MouseButton::Right => self
+                .settings
+                .summary()
+                .interaction_tab_right_click_action
+                .clone(),
+            _ => return,
+        };
+        let enabled = self.tab_mouse_action_enabled(&session_id, &action);
+        if event.button == MouseButton::Right && (action == "none" || !enabled) {
+            cx.stop_propagation();
+            self.open_tab_actions_at(
+                session_id,
+                Some((f32::from(event.position.x), f32::from(event.position.y))),
+                window,
+                cx,
+            );
+        } else if action != "none" && enabled {
+            cx.stop_propagation();
+            self.run_tab_mouse_action(session_id, action, window, cx);
+        }
+    }
+
+    pub(in crate::features) fn reorder_session_relative(
         &mut self,
         dragged_session_id: String,
         target_session_id: String,
+        insert_after: bool,
         cx: &mut Context<Self>,
     ) {
         if dragged_session_id == target_session_id {
+            self.clear_session_tab_drag(cx);
             return;
         }
-        let sessions = self.session.ordered_sessions();
-        let Some(target_index) = sessions
-            .iter()
-            .position(|session| session.id == target_session_id)
-        else {
+        let tabs = self.ordered_tab_sessions();
+        if !tabs.iter().any(|session| session.id == target_session_id) {
             self.shell
                 .set_status("drop target session no longer exists".to_string());
-            cx.notify();
+            self.clear_session_tab_drag(cx);
             return;
-        };
-        let Some(source_index) = sessions
-            .iter()
-            .position(|session| session.id == dragged_session_id)
-        else {
+        }
+        if !tabs.iter().any(|session| session.id == dragged_session_id) {
             self.shell
                 .set_status("dragged session no longer exists".to_string());
-            cx.notify();
+            self.clear_session_tab_drag(cx);
             return;
-        };
-        let next_index = if source_index < target_index {
-            target_index.saturating_sub(1)
-        } else {
-            target_index
-        };
+        }
+        let source_ids = self.tab_tree_session_ids(&dragged_session_id);
+        let target_ids = self.tab_tree_session_ids(&target_session_id);
         self.session
-            .move_session_to_index(&dragged_session_id, next_index);
-        self.shell
-            .set_status(format!("moved tab before {}", short_id(&target_session_id)));
+            .move_session_group_relative(&source_ids, &target_ids, insert_after);
+        self.session.clear_tab_drag();
+        self.shell.set_status(format!(
+            "moved tab {} {}",
+            if insert_after { "after" } else { "before" },
+            short_id(&target_session_id)
+        ));
         if self.session.restore_is_complete() {
             self.persist_open_tabs();
         } else if self.terminal_windows_is_multi_leaf() {
@@ -323,7 +314,7 @@ impl NyaTermApp {
         dragged_session_id: String,
         cx: &mut Context<Self>,
     ) {
-        let sessions = self.session.ordered_sessions();
+        let sessions = self.ordered_tab_sessions();
         if !sessions
             .iter()
             .any(|session| session.id == dragged_session_id)
@@ -333,9 +324,9 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        let last_index = sessions.len().saturating_sub(1);
-        self.session
-            .move_session_to_index(&dragged_session_id, last_index);
+        let source_ids = self.tab_tree_session_ids(&dragged_session_id);
+        self.session.move_session_group_to_end(&source_ids);
+        self.session.clear_tab_drag();
         self.shell.set_status("moved tab to end".to_string());
         if self.session.restore_is_complete() {
             self.persist_open_tabs();
@@ -345,6 +336,56 @@ impl NyaTermApp {
         cx.notify();
     }
 
+    pub(in crate::features) fn update_session_tab_drag(
+        &mut self,
+        source_id: String,
+        target_id: String,
+        insert_after: bool,
+        cx: &mut Context<Self>,
+    ) {
+        if self
+            .session
+            .set_tab_drag_target(source_id, target_id, insert_after)
+        {
+            cx.notify();
+        }
+    }
+
+    pub(in crate::features) fn clear_session_tab_drag(&mut self, cx: &mut Context<Self>) {
+        if self.session.clear_tab_drag() {
+            cx.notify();
+        }
+    }
+
+    fn tab_mouse_action_enabled(&self, session_id: &str, action: &str) -> bool {
+        let tab_root = self.tab_root_for_session(session_id);
+        let pane_id = self.active_pane_for_tab_root(&tab_root);
+        match action {
+            "none" => false,
+            "rename_tab" | "copy_tab_name" => true,
+            "copy_server_ip" => self.session.ssh_host(&pane_id).is_some(),
+            "duplicate_session" => self.tab_action_can_spawn_session(&pane_id),
+            "multiplex_ssh" => {
+                self.session
+                    .session_info(&pane_id)
+                    .is_some_and(|session| session.kind == nyaterm_transport::SessionKind::Ssh)
+                    && !self.session.session_is_busy(&pane_id)
+                    && !self.session.is_disconnected(&pane_id)
+            }
+            "reconnect_session" => {
+                self.session.is_disconnected(&pane_id)
+                    && self.tab_action_can_spawn_session(&pane_id)
+                    && !self.session.session_is_busy(&pane_id)
+                    && !self.session.start_has_pending()
+            }
+            "disconnect_session" => {
+                !self.session.session_is_busy(&pane_id) && !self.session.is_disconnected(&pane_id)
+            }
+            "close_tab" => !self.tab_tree_is_locked(&tab_root),
+            _ => false,
+        }
+    }
+
     fn run_tab_mouse_action(
         &mut self,
         session_id: String,
@@ -352,25 +393,29 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let tab_root = self.tab_root_for_session(&session_id);
         if action == "close_tab" {
-            self.close_session(session_id, cx);
+            self.close_session(tab_root, cx);
             return;
         }
 
-        self.select_session(session_id.clone(), cx);
-        if self.session.active_id() != Some(session_id.as_str()) {
+        self.select_session(tab_root.clone(), cx);
+        let Some(active_pane_id) = self.session.active_id_owned() else {
+            return;
+        };
+        if self.tab_root_for_session(&active_pane_id) != tab_root {
             return;
         }
 
         match action.as_str() {
             "none" => {}
-            "rename_tab" => self.open_rename_session(session_id, window, cx),
-            "copy_tab_name" => self.copy_active_session_name(cx),
+            "rename_tab" => self.open_rename_session(tab_root, window, cx),
+            "copy_tab_name" => self.copy_session_name(&tab_root, cx),
             "copy_server_ip" => self.copy_active_session_ssh_host(cx),
             "duplicate_session" => self.duplicate_active_session(window, cx),
             "multiplex_ssh" => self.multiplex_active_ssh_session(window, cx),
             "reconnect_session" => self.reconnect_active_session(window, cx),
-            "disconnect_session" => self.disconnect_session(session_id, cx),
+            "disconnect_session" => self.disconnect_session(active_pane_id, cx),
             _ => {
                 self.shell
                     .set_status(format!("unknown tab action '{action}'"));

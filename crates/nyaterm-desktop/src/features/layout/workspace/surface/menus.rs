@@ -105,6 +105,22 @@ fn new_session_connections_for_group(
     matches
 }
 
+fn connection_group_path(groups: &[Group], group_id: &str) -> Option<String> {
+    let mut parts = Vec::new();
+    let mut next = Some(group_id);
+    let mut seen = HashSet::new();
+    while let Some(id) = next {
+        if !seen.insert(id.to_string()) {
+            break;
+        }
+        let group = groups.iter().find(|group| group.id == id)?;
+        parts.push(group.name.clone());
+        next = group.parent_id.as_deref();
+    }
+    parts.reverse();
+    Some(parts.join(" / "))
+}
+
 impl NyaTermApp {
     pub(in crate::features) fn render_open_tabs_menu(
         &mut self,
@@ -175,10 +191,34 @@ impl NyaTermApp {
                 let is_disconnected = leaf_ids.iter().any(|id| self.session.is_disconnected(id));
                 let title = self.session.display_name_by_info(&session);
                 let kind_icon = session_kind_icon_path(session.kind);
+                let is_locked = self.tab_tree_is_locked(&session_id);
+                let active_pane = self.active_pane_for_tab_root(&session_id);
+                let connection = self
+                    .session
+                    .metadata(&active_pane)
+                    .and_then(|metadata| metadata.source_connection_id.as_deref())
+                    .and_then(|connection_id| {
+                        self.connection_state
+                            .connections()
+                            .iter()
+                            .find(|connection| connection.id == connection_id)
+                    });
+                let group_path = connection
+                    .and_then(|connection| connection.group_id.as_deref())
+                    .and_then(|group_id| {
+                        connection_group_path(self.connection_state.groups(), group_id)
+                    });
+                let detail = self
+                    .session
+                    .tab_tooltip_lines(&active_pane)
+                    .into_iter()
+                    .take(2)
+                    .collect::<Vec<_>>()
+                    .join(" / ");
                 menu = menu.child(
                     div()
                         .id(SharedString::from(format!("open-tabs-menu-{session_id}")))
-                        .h(px(32.))
+                        .min_h(px(42.))
                         .px_3()
                         .flex()
                         .items_center()
@@ -251,15 +291,60 @@ impl NyaTermApp {
                                     div()
                                         .min_w_0()
                                         .flex_1()
+                                        .flex()
+                                        .flex_col()
                                         .overflow_hidden()
-                                        .text_color(if is_disconnected {
-                                            rgb(palette.text_dimmed)
-                                        } else {
-                                            rgb(palette.text)
-                                        })
-                                        .child(truncate_preview(&title, 28)),
+                                        .child(
+                                            div()
+                                                .text_color(if is_disconnected {
+                                                    rgb(palette.text_dimmed)
+                                                } else {
+                                                    rgb(palette.text)
+                                                })
+                                                .child(truncate_preview(&title, 28)),
+                                        )
+                                        .when(group_path.is_some() || !detail.is_empty(), |this| {
+                                            let subtitle = [
+                                                group_path.as_deref().unwrap_or(""),
+                                                detail.as_str(),
+                                            ]
+                                            .into_iter()
+                                            .filter(|part| !part.is_empty())
+                                            .collect::<Vec<_>>()
+                                            .join(" / ");
+                                            this.child(
+                                                div()
+                                                    .text_size(px(10.))
+                                                    .text_color(rgb(palette.text_dimmed))
+                                                    .child(truncate_preview(&subtitle, 38)),
+                                            )
+                                        }),
                                 ),
-                        ),
+                        )
+                        .when(is_locked, |this| {
+                            let locked_label = self.tr("tabCtx.locked").to_string();
+                            this.child(
+                                div()
+                                    .id(SharedString::from(format!(
+                                        "open-tabs-locked-{}",
+                                        session.id
+                                    )))
+                                    .size(px(16.))
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .tooltip(move |window, cx| {
+                                        nyaterm_ui::NyaTooltip::new(locked_label.clone())
+                                            .build(window, cx)
+                                    })
+                                    .child(
+                                        svg()
+                                            .size(px(12.))
+                                            .path("icons/lock.svg")
+                                            .text_color(rgb(palette.warning)),
+                                    ),
+                            )
+                        }),
                 );
             }
         }

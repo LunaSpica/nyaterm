@@ -29,7 +29,9 @@ pub(super) struct TabActionCapabilities {
 
 pub(super) struct CompactTabActionsMenuState {
     pub session_id: String,
+    pub tab_root_id: String,
     pub active_color: Option<u32>,
+    pub locked: bool,
     pub capabilities: TabActionCapabilities,
     pub visible_for_ai: String,
     pub buffer_for_ai: String,
@@ -57,7 +59,9 @@ impl NyaTermApp {
     ) -> gpui::AnyElement {
         let CompactTabActionsMenuState {
             session_id,
+            tab_root_id,
             active_color,
+            locked,
             capabilities:
                 TabActionCapabilities {
                     can_copy_ssh,
@@ -86,7 +90,7 @@ impl NyaTermApp {
         let mut color_row = div().p_2().flex().flex_wrap().gap_1().items_center();
         for (name, color) in TAB_PRESET_COLORS {
             let selected = active_color == Some(color);
-            let color_session_id = session_id.clone();
+            let color_session_id = tab_root_id.clone();
             color_row = color_row.child(
                 div()
                     .id(SharedString::from(format!("tab-ctx-color-{name}")))
@@ -115,8 +119,8 @@ impl NyaTermApp {
                     })),
             );
         }
-        let rename_session_id = session_id.clone();
-        let copy_name_session_id = session_id.clone();
+        let rename_session_id = tab_root_id.clone();
+        let copy_name_session_id = tab_root_id.clone();
         let copy_host_session_id = session_id.clone();
         let duplicate_session_id = session_id.clone();
         let multiplex_session_id = session_id.clone();
@@ -127,8 +131,9 @@ impl NyaTermApp {
         let reconnect_session_id = session_id.clone();
         let disconnect_session_id = session_id.clone();
         let info_session_id = session_id.clone();
-        let inactive_anchor = session_id.clone();
-        let right_anchor = session_id.clone();
+        let inactive_anchor = tab_root_id.clone();
+        let right_anchor = tab_root_id.clone();
+        let lock_session_id = tab_root_id.clone();
         let explain_session_id = session_id.clone();
         let analyze_session_id = session_id.clone();
 
@@ -177,13 +182,15 @@ impl NyaTermApp {
                 .flex()
                 .flex_col()
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                .on_mouse_down(MouseButton::Middle, |_, _, cx| cx.stop_propagation())
+                .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
                 .on_click(|_, _, cx| cx.stop_propagation());
 
             match submenu {
                 TabActionsSubmenu::Color => {
                     panel = panel.child(color_row);
                     if active_color.is_some() {
-                        let reset_color_session_id = session_id.clone();
+                        let reset_color_session_id = tab_root_id.clone();
                         panel = panel.child(tab_menu_separator(palette)).child(tab_menu_item(
                             palette,
                             "tab-ctx-color-reset",
@@ -318,6 +325,20 @@ impl NyaTermApp {
             .right_0()
             .bg(rgba(0x00000000))
             .track_focus(self.session.dialog_tab_actions_focus())
+            .on_mouse_down(
+                MouseButton::Middle,
+                cx.listener(|this, _, _, cx| {
+                    cx.stop_propagation();
+                    this.close_tab_actions(cx);
+                }),
+            )
+            .on_mouse_down(
+                MouseButton::Right,
+                cx.listener(|this, _, _, cx| {
+                    cx.stop_propagation();
+                    this.close_tab_actions(cx);
+                }),
+            )
             .on_click(cx.listener(|this, _, _, cx| {
                 this.close_tab_actions(cx);
             }))
@@ -344,6 +365,8 @@ impl NyaTermApp {
                     .py_1()
                     .flex()
                     .flex_col()
+                    .on_mouse_down(MouseButton::Middle, |_, _, cx| cx.stop_propagation())
+                    .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
                     .on_click(|_, _, cx| cx.stop_propagation())
                     .child(tab_actions_submenu_item(
                         palette,
@@ -376,12 +399,28 @@ impl NyaTermApp {
                     ))
                     .child(tab_menu_item(
                         palette,
+                        if locked {
+                            "tab-ctx-unlock"
+                        } else {
+                            "tab-ctx-lock"
+                        },
+                        if locked {
+                            self.tr("tabCtx.unlockTab")
+                        } else {
+                            self.tr("tabCtx.lockTab")
+                        },
+                        cx.listener(move |this, _, _, cx| {
+                            this.close_tab_actions(cx);
+                            this.toggle_tab_tree_locked(&lock_session_id, cx);
+                        }),
+                    ))
+                    .child(tab_menu_item(
+                        palette,
                         "tab-ctx-copy-name",
                         self.tr("tabCtx.copyName"),
                         cx.listener(move |this, _, _, cx| {
-                            this.select_session(copy_name_session_id.clone(), cx);
                             this.close_tab_actions(cx);
-                            this.copy_active_session_name(cx);
+                            this.copy_session_name(&copy_name_session_id, cx);
                         }),
                     ))
                     .child(tab_menu_item_enabled(
@@ -568,13 +607,14 @@ impl NyaTermApp {
                         ))
                     })
                     .child(tab_menu_separator(palette))
-                    .child(tab_menu_item(
+                    .child(tab_menu_item_enabled(
                         palette,
                         "tab-ctx-close",
                         self.tr("tabCtx.close"),
+                        !locked,
                         cx.listener(move |this, _, _, cx| {
                             this.close_tab_actions(cx);
-                            this.close_session(session_id.clone(), cx);
+                            this.close_tab_active_pane(&tab_root_id, cx);
                         }),
                     ))
                     .child(tab_menu_item(

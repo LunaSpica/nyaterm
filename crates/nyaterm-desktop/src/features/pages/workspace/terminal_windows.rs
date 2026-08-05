@@ -180,22 +180,29 @@ impl NyaTermApp {
                                 window.focus(this.terminal.input_focus(), cx);
                             }))
                             .on_mouse_down(
-                                gpui::MouseButton::Right,
-                                cx.listener(
-                                    move |this, event: &gpui::MouseDownEvent, window, cx| {
-                                        cx.stop_propagation();
-                                        let anchor = Some((
-                                            f32::from(event.position.x),
-                                            f32::from(event.position.y),
-                                        ));
-                                        this.open_tab_actions_at(
+                                gpui::MouseButton::Middle,
+                                cx.listener({
+                                    let actions_id = actions_id.clone();
+                                    move |this, event, window, cx| {
+                                        this.handle_session_tab_mouse_down(
                                             actions_id.clone(),
-                                            anchor,
+                                            event,
                                             window,
                                             cx,
                                         );
-                                    },
-                                ),
+                                    }
+                                }),
+                            )
+                            .on_mouse_down(
+                                gpui::MouseButton::Right,
+                                cx.listener(move |this, event, window, cx| {
+                                    this.handle_session_tab_mouse_down(
+                                        actions_id.clone(),
+                                        event,
+                                        window,
+                                        cx,
+                                    );
+                                }),
                             )
                             .on_drag(drag_payload, |payload, position, _, cx| {
                                 cx.new(|_| SessionTabDragPreview::new(payload.clone(), position))

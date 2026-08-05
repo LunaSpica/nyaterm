@@ -7,7 +7,7 @@ use crate::features::NyaTermApp;
 use crate::models::SessionLaunchConfig;
 
 impl NyaTermApp {
-    pub(super) fn tab_action_can_spawn_session(&self, session_id: &str) -> bool {
+    pub(in crate::features) fn tab_action_can_spawn_session(&self, session_id: &str) -> bool {
         self.session.metadata(session_id).is_some_and(|metadata| {
             matches!(metadata.launch_config, SessionLaunchConfig::Local(_))
                 || metadata
@@ -29,7 +29,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
         let palette = self.theme_palette();
-        let Some(session_id) = self
+        let Some(tab_root_id) = self
             .session
             .dialog_tab_actions_session_id()
             .map(str::to_string)
@@ -37,7 +37,13 @@ impl NyaTermApp {
             return div().into_any_element();
         };
         let sessions = self.session.ordered_sessions();
-        let Some(session) = sessions
+        if !sessions.iter().any(|session| session.id == tab_root_id) {
+            self.session.dialog_close_tab_actions();
+            return div().into_any_element();
+        }
+
+        let session_id = self.active_pane_for_tab_root(&tab_root_id);
+        let Some(active_session) = sessions
             .iter()
             .find(|session| session.id == session_id)
             .cloned()
@@ -45,28 +51,28 @@ impl NyaTermApp {
             self.session.dialog_close_tab_actions();
             return div().into_any_element();
         };
-
-        let active_color = self.session.tab_color(&session_id);
+        let active_color = self.session.tab_color(&tab_root_id);
+        let locked = self.tab_tree_is_locked(&tab_root_id);
         let can_copy_ssh = self.session.ssh_address(&session_id).is_some();
         let busy_action = self.session.busy_action(&session_id).map(str::to_string);
         let is_busy = busy_action.is_some();
         let is_disconnected = self.session.is_disconnected(&session_id);
         let can_spawn_session = self.tab_action_can_spawn_session(&session_id);
         let can_session_info = self.tab_action_can_show_session_info(&session_id);
-        let can_multiplex = session.kind == SessionKind::Ssh && !is_busy && !is_disconnected;
-        let can_reconnect = can_spawn_session && !is_busy && !self.session.start_has_pending();
+        let can_multiplex = active_session.kind == SessionKind::Ssh && !is_busy && !is_disconnected;
+        let can_reconnect =
+            is_disconnected && can_spawn_session && !is_busy && !self.session.start_has_pending();
         let can_disconnect = !is_busy && !is_disconnected;
         let can_use_ai = !is_busy && !is_disconnected;
-        let can_close_inactive = sessions.len() > 1;
-        let can_close_right = sessions
+        let tab_sessions = self.ordered_tab_sessions();
+        let can_close_inactive = tab_sessions.len() > 1;
+        let can_close_right = tab_sessions
             .iter()
-            .position(|session| session.id == session_id)
-            .is_some_and(|index| index + 1 < sessions.len());
+            .position(|session| session.id == tab_root_id)
+            .is_some_and(|index| index + 1 < tab_sessions.len());
         let can_unsplit = self
-            .session
-            .active_id()
-            .map(|id| self.tab_root_for_session(id))
-            .and_then(|root| self.shell.workspace_pane_root(&root))
+            .shell
+            .workspace_pane_root(&tab_root_id)
             .is_some_and(|root| root.is_split())
             || self.shell.workspace_split().is_some();
         let scroll_offset = self.terminal.session_scroll_offset(&session_id);
@@ -87,7 +93,9 @@ impl NyaTermApp {
             palette,
             CompactTabActionsMenuState {
                 session_id,
+                tab_root_id,
                 active_color,
+                locked,
                 capabilities: TabActionCapabilities {
                     can_copy_ssh,
                     can_spawn_session,

@@ -47,7 +47,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        self.close_session(session_id, cx);
+        self.close_session(self.tab_root_for_session(&session_id), cx);
     }
 
     pub(in crate::features) fn close_session(
@@ -55,7 +55,10 @@ impl NyaTermApp {
         session_id: String,
         cx: &mut Context<Self>,
     ) {
-        let was_active = self.session.active_id() == Some(session_id.as_str());
+        if self.tab_tree_is_locked(&session_id) {
+            self.notify_locked_tab_close_blocked(cx);
+            return;
+        }
         // Tauri: closing a strip tab closes the whole tab tree; closing a secondary leaf
         // only removes that pane. Strip close uses the tab-root id.
         let close_ids = if !self.is_secondary_pane_session(&session_id) {
@@ -67,6 +70,10 @@ impl NyaTermApp {
         } else {
             vec![session_id.clone()]
         };
+        let was_active = self
+            .session
+            .active_id()
+            .is_some_and(|active_id| close_ids.iter().any(|id| id == active_id));
         for close_id in &close_ids {
             let disconnected = self.session.is_disconnected(close_id);
             match self.session.manager().close(close_id) {
@@ -107,6 +114,67 @@ impl NyaTermApp {
             self.shell
                 .set_status(format!("closed {}", short_id(&session_id)));
         }
+        cx.notify();
+    }
+
+    pub(in crate::features) fn close_tab_active_pane(
+        &mut self,
+        tab_root_id: &str,
+        cx: &mut Context<Self>,
+    ) {
+        if self.tab_tree_is_locked(tab_root_id) {
+            self.notify_locked_tab_close_blocked(cx);
+            return;
+        }
+        let pane_id = self.active_pane_for_tab_root(tab_root_id);
+        if self.tab_tree_session_ids(tab_root_id).len() <= 1 {
+            self.close_session(tab_root_id.to_string(), cx);
+            return;
+        }
+
+        if pane_id == tab_root_id
+            && let Some(survivor_id) = self
+                .tab_tree_session_ids(tab_root_id)
+                .into_iter()
+                .find(|id| id != &pane_id)
+        {
+            self.session
+                .migrate_tab_root_presentation(tab_root_id, &survivor_id);
+            self.shell
+                .rekey_workspace_pane_root(tab_root_id, survivor_id);
+        }
+
+        let was_active = self.session.active_id() == Some(pane_id.as_str());
+        let disconnected = self.session.is_disconnected(&pane_id);
+        match self.session.manager().close(&pane_id) {
+            Ok(()) => {}
+            Err(_) if disconnected => {}
+            Err(error) if !disconnected && !self.session.has_session(&pane_id) => {
+                self.shell.set_status(format!("close failed: {error}"));
+                cx.notify();
+                return;
+            }
+            Err(_) => {}
+        }
+        self.cleanup_recording_for_session(&pane_id);
+        self.remove_session_state(&pane_id);
+        self.prune_workspace_split();
+        if was_active {
+            self.ai.reset_agent_runtime();
+            self.sync_session_event_bridge_policy();
+            let next = self
+                .tab_tree_session_ids(tab_root_id)
+                .into_iter()
+                .find(|id| self.session.has_session(id))
+                .or_else(|| self.session.next_session_after(&pane_id));
+            if let Some(next_session_id) = next {
+                self.activate_session_id(&next_session_id);
+            } else {
+                self.session.clear_active_session();
+            }
+        }
+        self.shell
+            .set_status(format!("closed {}", short_id(&pane_id)));
         cx.notify();
     }
 
@@ -280,27 +348,26 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> bool {
         let quit_after = self.session.dialog_take_close_all_sessions_confirm();
-        self.close_all_sessions(cx);
         if quit_after {
             if self.settings.summary().startup_restore {
                 self.flush_open_tabs_now();
             }
-            self.shell
-                .set_status("sessions closed; closing window".to_string());
+            self.shell.set_status("closing window".to_string());
             window.remove_window();
             return true;
         }
+        self.close_all_sessions(cx);
         cx.notify();
         true
     }
 
     pub(in crate::features) fn close_all_sessions(&mut self, cx: &mut Context<Self>) {
-        let ids = self
-            .session
-            .session_ids()
-            .map(ToOwned::to_owned)
+        let roots = self
+            .ordered_tab_sessions()
+            .into_iter()
+            .map(|session| session.id)
             .collect::<Vec<_>>();
-        self.close_session_batch(ids, "active");
+        self.close_tab_roots_batch(roots, "active");
         cx.notify();
     }
 
@@ -309,14 +376,13 @@ impl NyaTermApp {
         keep_session_id: String,
         cx: &mut Context<Self>,
     ) {
-        let ids = self
-            .session
-            .ordered_sessions()
+        let roots = self
+            .ordered_tab_sessions()
             .into_iter()
             .filter_map(|session| (session.id != keep_session_id).then_some(session.id))
             .collect::<Vec<_>>();
         self.activate_session_id_with_surface_sync(&keep_session_id, cx);
-        self.close_session_batch(ids, "inactive");
+        self.close_tab_roots_batch(roots, "inactive");
         cx.notify();
     }
 
@@ -325,7 +391,7 @@ impl NyaTermApp {
         anchor_session_id: String,
         cx: &mut Context<Self>,
     ) {
-        let sessions = self.session.ordered_sessions();
+        let sessions = self.ordered_tab_sessions();
         let Some(anchor_index) = sessions
             .iter()
             .position(|session| session.id == anchor_session_id)
@@ -335,13 +401,34 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        let ids = sessions
+        let roots = sessions
             .into_iter()
             .skip(anchor_index + 1)
             .map(|session| session.id)
             .collect::<Vec<_>>();
-        self.close_session_batch(ids, "right-side");
+        self.close_tab_roots_batch(roots, "right-side");
         cx.notify();
+    }
+
+    fn close_tab_roots_batch(&mut self, tab_roots: Vec<String>, label: &'static str) {
+        let mut skipped = 0usize;
+        let mut close_ids = Vec::new();
+        for tab_root in tab_roots {
+            if self.tab_tree_is_locked(&tab_root) {
+                skipped += 1;
+            } else {
+                close_ids.extend(self.tab_tree_session_ids(&tab_root));
+            }
+        }
+        close_ids.sort();
+        close_ids.dedup();
+        self.close_session_batch(close_ids, label);
+        if skipped > 0 {
+            self.shell.set_status(format!(
+                "{} ({skipped})",
+                self.tr("tabCtx.lockedTabsSkipped")
+            ));
+        }
     }
 
     pub(in crate::features) fn clear_terminal(&mut self, cx: &mut Context<Self>) {

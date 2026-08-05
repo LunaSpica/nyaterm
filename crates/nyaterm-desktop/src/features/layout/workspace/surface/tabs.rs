@@ -1,14 +1,16 @@
 use std::time::{Duration, Instant};
 
 use gpui::{
-    AnimationExt, ClickEvent, Context, FontWeight, IntoElement, MouseButton, SharedString, div,
-    prelude::*, px, rgb, rgba, svg,
+    AnimationExt, ClickEvent, Context, FontWeight, IntoElement, MouseButton, ScrollDelta,
+    ScrollWheelEvent, SharedString, div, point, prelude::*, px, rgb, rgba, svg,
 };
 use nyaterm_core::truncate_preview;
 
 use crate::features::NyaTermApp;
 use crate::features::formatting::session_kind_label;
+use crate::features::resolve_connection_icon;
 use crate::features::shell::{SessionTabDragPayload, SessionTabDragPreview, SessionTabTooltip};
+use crate::features::view_widgets::themed_icon;
 
 use super::super::super::view_helpers::session_kind_icon_path;
 
@@ -21,6 +23,19 @@ fn pending_tab_insert_index(
         .or_else(|| after_position.map(|index| index + 1))
         .unwrap_or(session_count)
         .min(session_count)
+}
+
+fn tab_drop_insert_after(pointer_x: f32, origin_x: f32, width: f32) -> bool {
+    pointer_x >= origin_x + width.max(0.) / 2.
+}
+
+fn tab_scroll_x(current_x: f32, max_x: f32, delta_x: f32, delta_y: f32) -> f32 {
+    let dominant = if delta_x.abs() > delta_y.abs() {
+        delta_x
+    } else {
+        delta_y
+    };
+    (current_x + dominant).clamp(-max_x.max(0.), 0.)
 }
 
 type TransientSessionTab = (usize, Instant, String, String, String, Option<String>);
@@ -366,7 +381,9 @@ impl NyaTermApp {
         });
         if self.shell.session_tab_scroll_into_view_pending() {
             if let Some(active_id) = self.session.active_id()
-                && let Some(index) = sessions.iter().position(|session| session.id == active_id)
+                && let Some(index) = sessions
+                    .iter()
+                    .position(|session| session.id == self.tab_root_for_session(active_id))
             {
                 let pending_count = transient_tabs
                     .iter()
@@ -379,6 +396,7 @@ impl NyaTermApp {
             }
             self.shell.consume_session_tab_scroll_into_view();
         }
+        let tab_scroll = self.shell.session_tab_strip_scroll().clone();
         let mut tabs = div()
             .id("session-tab-strip-scroll")
             .h_full()
@@ -389,7 +407,23 @@ impl NyaTermApp {
             // Tauri tab-strip-scroll: horizontal overflow instead of clipping tabs.
             .overflow_x_scroll()
             .overflow_y_hidden()
-            .track_scroll(self.shell.session_tab_strip_scroll());
+            .track_scroll(&tab_scroll)
+            .on_scroll_wheel(cx.listener(move |_, event: &ScrollWheelEvent, _, cx| {
+                let (delta_x, delta_y) = match event.delta {
+                    ScrollDelta::Lines(delta) => (delta.x * 36., delta.y * 36.),
+                    ScrollDelta::Pixels(delta) => (f32::from(delta.x), f32::from(delta.y)),
+                };
+                let max_x = f32::from(tab_scroll.max_offset().x).max(0.);
+                if max_x <= 0. || (delta_x == 0. && delta_y == 0.) {
+                    return;
+                }
+                let current = tab_scroll.offset();
+                let next_x = tab_scroll_x(f32::from(current.x), max_x, delta_x, delta_y);
+                if next_x != f32::from(current.x) {
+                    tab_scroll.set_offset(point(px(next_x), px(0.)));
+                    cx.stop_propagation();
+                }
+            }));
 
         let mut transient_cursor = 0usize;
         for (tab_index, session) in sessions.into_iter().enumerate() {
@@ -415,14 +449,43 @@ impl NyaTermApp {
             let tab_group_name = SharedString::from(format!("session-tab-group-{session_id}"));
             let tab_number = tab_index + transient_cursor + 1;
             let kind_icon = session_kind_icon_path(session.kind);
+            let saved_icon = self
+                .session
+                .metadata(&session.id)
+                .and_then(|metadata| metadata.source_connection_id.as_deref())
+                .and_then(|connection_id| {
+                    self.connection_state
+                        .connections()
+                        .iter()
+                        .find(|connection| connection.id == connection_id)
+                })
+                .and_then(|connection| connection.icon.as_deref())
+                .filter(|icon| !icon.trim().is_empty())
+                .map(|icon| {
+                    let kind = match session.kind {
+                        nyaterm_transport::SessionKind::LocalPty => "Local",
+                        nyaterm_transport::SessionKind::Ssh => "SSH",
+                        nyaterm_transport::SessionKind::Telnet => "Telnet",
+                        nyaterm_transport::SessionKind::Serial => "Serial",
+                        nyaterm_transport::SessionKind::RawTcp => "SSH",
+                    };
+                    resolve_connection_icon(Some(icon), kind)
+                });
             let tooltip_title = display_name.clone();
-            let tooltip_lines = self.session.tab_tooltip_lines(&session.id);
+            let is_locked = self.tab_tree_is_locked(&session.id);
+            let mut tooltip_lines = self.session.tab_tooltip_lines(&session.id);
+            if is_locked {
+                tooltip_lines.push(self.tr("tabCtx.locked").to_string());
+            }
             let drag_payload = SessionTabDragPayload {
                 session_id: session.id.clone(),
                 display_name: display_name.clone(),
                 kind_label: session_kind_label(session.kind),
             };
             let drop_target_session_id = session.id.clone();
+            let drag_move_target_session_id = session.id.clone();
+            let is_drag_source = self.session.tab_drag_source_is(&session.id);
+            let drop_after = self.session.tab_drop_after(&session.id);
             let custom_color = self.session.tab_color(&session.id);
             // Active when any leaf under this tab root is focused.
             let is_active = self
@@ -439,6 +502,9 @@ impl NyaTermApp {
             let has_unread = leaf_ids
                 .iter()
                 .any(|id| self.terminal.session_has_unread(id));
+            if has_unread && !is_active {
+                tooltip_lines.push(self.tr("tabCtx.unreadOutput").to_string());
+            }
             let sync_group = leaf_ids
                 .iter()
                 .find_map(|id| self.sync_input.active_group_for_session(id));
@@ -503,21 +569,55 @@ impl NyaTermApp {
                     })
                     .bg(bg)
                     .when(is_disconnected, |this| this.opacity(0.78))
+                    .when(is_drag_source, |this| this.opacity(0.55))
                     .cursor_pointer()
                     .hover(move |this| this.bg(hover_bg))
                     .cursor_move()
                     .on_drag(drag_payload, |payload, position, _, cx| {
                         cx.new(|_| SessionTabDragPreview::new(payload.clone(), position))
                     })
+                    .on_drag_move(cx.listener(
+                        move |this, event: &gpui::DragMoveEvent<SessionTabDragPayload>, _, cx| {
+                            let payload = event.drag(cx);
+                            let insert_after = tab_drop_insert_after(
+                                f32::from(event.event.position.x),
+                                f32::from(event.bounds.origin.x),
+                                f32::from(event.bounds.size.width),
+                            );
+                            this.update_session_tab_drag(
+                                payload.session_id.clone(),
+                                drag_move_target_session_id.clone(),
+                                insert_after,
+                                cx,
+                            );
+                        },
+                    ))
                     .on_drop(
                         cx.listener(move |this, payload: &SessionTabDragPayload, _, cx| {
-                            this.reorder_session_before(
+                            let insert_after = this
+                                .session
+                                .tab_drop_after(&drop_target_session_id)
+                                .unwrap_or(false);
+                            this.reorder_session_relative(
                                 payload.session_id.clone(),
                                 drop_target_session_id.clone(),
+                                insert_after,
                                 cx,
                             );
                         }),
                     )
+                    .when_some(drop_after, |this, insert_after| {
+                        this.child(
+                            div()
+                                .absolute()
+                                .top_0()
+                                .bottom_0()
+                                .when(insert_after, |line| line.right_0())
+                                .when(!insert_after, |line| line.left_0())
+                                .w(px(2.))
+                                .bg(rgb(palette.primary)),
+                        )
+                    })
                     .when(custom_color.is_some(), move |this| {
                         this.child(
                             div()
@@ -557,7 +657,15 @@ impl NyaTermApp {
                             .flex()
                             .items_center()
                             .justify_center()
-                            .child(svg().size(px(12.)).path(kind_icon).text_color(accent)),
+                            .child(if let Some(icon) = saved_icon {
+                                themed_icon(palette, icon, is_active, 12.)
+                            } else {
+                                svg()
+                                    .size(px(12.))
+                                    .path(kind_icon)
+                                    .text_color(accent)
+                                    .into_any_element()
+                            }),
                     )
                     .child(
                         div()
@@ -623,22 +731,34 @@ impl NyaTermApp {
                             .rounded_sm()
                             .text_xs()
                             .text_color(rgb(palette.text_muted))
-                            .when(!is_active, |this| {
+                            .when(!is_active && !is_locked, |this| {
                                 this.opacity(0.)
                                     .group_hover(tab_group_name.clone(), |style| style.opacity(1.))
                             })
                             .hover(|this| {
-                                this.bg(rgb(palette.border)).text_color(rgb(palette.danger))
+                                this.bg(rgb(palette.border)).text_color(if is_locked {
+                                    rgb(palette.warning)
+                                } else {
+                                    rgb(palette.danger)
+                                })
                             })
                             .child(
                                 svg()
                                     .size(px(13.))
-                                    .path("icons/window/close.svg")
+                                    .path(if is_locked {
+                                        "icons/lock.svg"
+                                    } else {
+                                        "icons/window/close.svg"
+                                    })
                                     .text_color(rgb(palette.text_muted)),
                             )
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 cx.stop_propagation();
-                                this.close_session(close_session_id.clone(), cx);
+                                if is_locked {
+                                    this.notify_locked_tab_close_blocked(cx);
+                                } else {
+                                    this.close_session(close_session_id.clone(), cx);
+                                }
                             })),
                     )
                     .tooltip(move |_, cx| {
@@ -649,7 +769,35 @@ impl NyaTermApp {
                     })
                     .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
                         this.handle_session_tab_click(session_id.clone(), event, window, cx);
-                    })),
+                    }))
+                    .on_mouse_down(
+                        MouseButton::Middle,
+                        cx.listener({
+                            let session_id = session.id.clone();
+                            move |this, event, window, cx| {
+                                this.handle_session_tab_mouse_down(
+                                    session_id.clone(),
+                                    event,
+                                    window,
+                                    cx,
+                                );
+                            }
+                        }),
+                    )
+                    .on_mouse_down(
+                        MouseButton::Right,
+                        cx.listener({
+                            let session_id = session.id.clone();
+                            move |this, event, window, cx| {
+                                this.handle_session_tab_mouse_down(
+                                    session_id.clone(),
+                                    event,
+                                    window,
+                                    cx,
+                                );
+                            }
+                        }),
+                    ),
             );
         }
         while transient_cursor < transient_tabs.len() {
@@ -809,7 +957,7 @@ impl NyaTermApp {
 
 #[cfg(test)]
 mod tests {
-    use super::pending_tab_insert_index;
+    use super::{pending_tab_insert_index, tab_drop_insert_after, tab_scroll_x};
 
     #[test]
     fn pending_tab_position_matches_tauri_insertion_rules() {
@@ -817,5 +965,21 @@ mod tests {
         assert_eq!(pending_tab_insert_index(3, Some(0), None), 1);
         assert_eq!(pending_tab_insert_index(3, Some(0), Some(2)), 2);
         assert_eq!(pending_tab_insert_index(3, None, Some(99)), 3);
+    }
+
+    #[test]
+    fn tab_drop_uses_target_half_for_insertion_side() {
+        assert!(!tab_drop_insert_after(119., 100., 40.));
+        assert!(tab_drop_insert_after(120., 100., 40.));
+        assert!(tab_drop_insert_after(140., 100., 40.));
+    }
+
+    #[test]
+    fn tab_wheel_uses_dominant_axis_and_clamps_range() {
+        assert_eq!(tab_scroll_x(-40., 120., 2., -30.), -70.);
+        assert_eq!(tab_scroll_x(-40., 120., -50., 2.), -90.);
+        assert_eq!(tab_scroll_x(-110., 120., 0., -40.), -120.);
+        assert_eq!(tab_scroll_x(-10., 120., 0., 40.), 0.);
+        assert_eq!(tab_scroll_x(-10., 0., 0., -40.), 0.);
     }
 }

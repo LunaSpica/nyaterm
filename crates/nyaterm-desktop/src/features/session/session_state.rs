@@ -327,11 +327,16 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.select_session(session_id.clone(), cx);
-        if self.session.active_id() != Some(session_id.as_str()) {
+        let tab_root = self.tab_root_for_session(&session_id);
+        self.select_session(tab_root.clone(), cx);
+        if !self
+            .session
+            .active_id()
+            .is_some_and(|active| self.tab_root_for_session(active) == tab_root)
+        {
             return;
         }
-        self.session.dialogs.open_tab_actions(session_id, anchor);
+        self.session.dialogs.open_tab_actions(tab_root, anchor);
         self.shell.set_status("tab actions opened".to_string());
         window.focus(self.session.dialogs.tab_actions_focus(), cx);
         cx.notify();
@@ -343,13 +348,11 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn copy_active_session_name(&mut self, cx: &mut Context<Self>) {
-        let Some(session_id) = self.session.active_id() else {
-            self.shell
-                .set_status("no active session name to copy".to_string());
-            cx.notify();
-            return;
-        };
+    pub(in crate::features) fn copy_session_name(
+        &mut self,
+        session_id: &str,
+        cx: &mut Context<Self>,
+    ) {
         let Some(name) = self.session.display_name(session_id) else {
             self.shell
                 .set_status("active session name is unavailable".to_string());
@@ -438,13 +441,56 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        self.session.set_tab_color(&session_id, color);
+        let tab_root = self.tab_root_for_session(&session_id);
+        self.session.set_tab_color(&tab_root, color);
         self.shell.set_status(if color.is_some() {
             "tab color updated".to_string()
         } else {
             "tab color reset".to_string()
         });
         self.session.dialogs.close_color_picker();
+        self.persist_open_tabs();
+        cx.notify();
+    }
+
+    pub(in crate::features) fn set_tab_tree_locked(
+        &mut self,
+        session_id: &str,
+        locked: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let tab_root = self.tab_root_for_session(session_id);
+        let mut ids = self.tab_tree_session_ids(&tab_root);
+        if !ids.iter().any(|id| id == &tab_root) {
+            ids.push(tab_root);
+        }
+        for id in ids {
+            self.session.set_tab_locked(&id, locked);
+        }
+        self.shell.set_status(
+            self.tr(if locked {
+                "tabCtx.locked"
+            } else {
+                "tabCtx.unlockTab"
+            })
+            .to_string(),
+        );
+        self.persist_open_tabs();
+        cx.notify();
+    }
+
+    pub(in crate::features) fn toggle_tab_tree_locked(
+        &mut self,
+        session_id: &str,
+        cx: &mut Context<Self>,
+    ) {
+        let locked = !self.tab_tree_is_locked(session_id);
+        self.set_tab_tree_locked(session_id, locked, cx);
+    }
+
+    pub(in crate::features) fn notify_locked_tab_close_blocked(&mut self, cx: &mut Context<Self>) {
+        self.shell
+            .set_status(self.tr("tabCtx.lockedCloseBlocked").to_string());
         cx.notify();
     }
 }

@@ -140,6 +140,7 @@ impl NyaTermApp {
                     this.finish_terminal_selection(event, cx);
                     this.finish_terminal_scrollbar_drag(cx);
                     this.clear_terminal_window_drop(cx);
+                    this.clear_session_tab_drag(cx);
                 }),
             )
             .on_mouse_up(

@@ -2024,6 +2024,11 @@
     "duplicateFailed": "会话复制失败",
     "duplicateWithCommand": "复制并执行命令",
     "ipCopied": "服务器 IP 已复制",
+    "lockTab": "锁定标签",
+    "lockToggleFailed": "标签锁定状态更新失败",
+    "locked": "已锁定",
+    "lockedCloseBlocked": "请先解锁此标签再关闭",
+    "lockedTabsSkipped": "已跳过锁定的标签",
     "multiplexSsh": "复用 SSH 连接新建会话",
     "multiplexSshFailed": "SSH 通道复用失败",
     "multiplexSshWithCommand": "复用 SSH 连接并执行命令",
@@ -2049,6 +2054,8 @@
     "splitVertical": "垂直拆分会话",
     "sshAddressCopied": "SSH 地址已复制",
     "sshAdvanced": "SSH 高级",
+    "unlockTab": "解除锁定标签",
+    "unreadOutput": "有新输出",
     "unsplit": "合并所有窗格"
   },
   "temporarySsh": {
