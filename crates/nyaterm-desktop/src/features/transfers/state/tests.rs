@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::mpsc;
 
-use gpui::{ScrollStrategy, TestAppContext, UniformListScrollHandle, px};
+use gpui::{ScrollHandle, ScrollStrategy, TestAppContext, UniformListScrollHandle, point, px};
 use nyaterm_transport::{
     SftpDuplicatePolicy, SftpFileEntry, SftpFileProperties, SftpFileType, SftpTransferControl,
     SftpWriteTextResult,
@@ -113,6 +113,10 @@ fn browser_session_restore_clamps_history_and_clears_interaction() {
             visited_history: VecDeque::from(["/srv".to_string()]),
         },
     );
+    transfer
+        .browser
+        .horizontal_scroll
+        .set_offset(point(px(-24.), px(0.)));
 
     assert_eq!(
         transfer.restore_browser_session_cache("session-a"),
@@ -124,6 +128,7 @@ fn browser_session_restore_clamps_history_and_clears_interaction() {
     assert!(browser.selected_remote_paths.is_empty());
     assert!(browser.pending_rename.is_none());
     assert_eq!(browser.entries.len(), 1);
+    assert_eq!(browser.horizontal_scroll.offset().x, px(0.));
 }
 
 #[test]
@@ -137,6 +142,8 @@ fn browser_navigation_restores_the_stable_pending_snapshot() {
         .insert("session-a".to_string(), "list-1".to_string());
     let list_scroll = UniformListScrollHandle::new();
     list_scroll.scroll_to_item_strict(3, ScrollStrategy::Top);
+    let horizontal_scroll = ScrollHandle::new();
+    horizontal_scroll.set_offset(point(px(-24.), px(0.)));
     let stable = TransferBrowserNavigationSnapshot {
         remote_path: "/stable".to_string(),
         browser_path: "/stable".to_string(),
@@ -150,6 +157,7 @@ fn browser_navigation_restores_the_stable_pending_snapshot() {
         selected_path: None,
         selected_paths: Default::default(),
         list_scroll,
+        horizontal_scroll,
     };
     transfer
         .browser
@@ -161,8 +169,43 @@ fn browser_navigation_restores_the_stable_pending_snapshot() {
     assert_eq!(rollback.browser_path, "/stable");
     assert_eq!(transfer.browser.path, "/stable");
     assert_eq!(transfer.browser.list_scroll.logical_scroll_top_index(), 3);
+    assert_eq!(transfer.browser.horizontal_scroll.offset().x, px(-24.));
     assert!(!transfer.browser.navigation_jobs.contains_key("session-a"));
     assert!(!transfer.browser.pending_navigations.contains_key("list-1"));
+}
+
+#[test]
+fn browser_navigation_and_filters_reset_horizontal_scroll() {
+    let cx = TestAppContext::single();
+    let mut transfer = transfer_state(&cx);
+
+    transfer
+        .browser
+        .horizontal_scroll
+        .set_offset(point(px(-24.), px(0.)));
+    transfer.set_browser_search("term".to_string());
+    assert_eq!(transfer.browser.horizontal_scroll.offset().x, px(0.));
+
+    transfer
+        .browser
+        .horizontal_scroll
+        .set_offset(point(px(-24.), px(0.)));
+    transfer.toggle_browser_sort(crate::models::TransferBrowserSortColumn::Modified);
+    assert_eq!(transfer.browser.horizontal_scroll.offset().x, px(0.));
+
+    transfer
+        .browser
+        .horizontal_scroll
+        .set_offset(point(px(-24.), px(0.)));
+    transfer.begin_browser_directory_load("/next".to_string());
+    assert_eq!(transfer.browser.horizontal_scroll.offset().x, px(0.));
+
+    transfer
+        .browser
+        .horizontal_scroll
+        .set_offset(point(px(-24.), px(0.)));
+    transfer.reset_browser_for_session(true);
+    assert_eq!(transfer.browser.horizontal_scroll.offset().x, px(0.));
 }
 
 #[test]

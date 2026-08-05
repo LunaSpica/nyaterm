@@ -4,7 +4,7 @@ use gpui::{
 };
 use nyaterm_core::truncate_preview;
 use nyaterm_transport::SftpFileType;
-use nyaterm_ui::{NyaContextMenu, NyaInput, NyaUniformListScrollbar};
+use nyaterm_ui::{NyaContextMenu, NyaHorizontalScrollbar, NyaInput, NyaUniformListScrollbar};
 
 use crate::features::{NyaTermApp, TextInputSetup, format_file_size};
 use crate::models::TransferBrowserSortColumn;
@@ -20,6 +20,10 @@ use super::helpers::{
     compact_transfer_toolbar_button_enabled, compact_transfer_upload_menu_button,
     transfer_toolbar_divider,
 };
+
+const FILE_BROWSER_SCROLLBAR_GUTTER_PX: f32 = 12.;
+const FILE_BROWSER_SCROLLBAR_SIZE_PX: f32 = 16.;
+const FILE_BROWSER_SCROLLBAR_EDGE_INSET_PX: f32 = 4.;
 
 impl NyaTermApp {
     pub(in crate::features::pages::transfers) fn transfer_browser_view(
@@ -507,7 +511,8 @@ impl NyaTermApp {
                             .overflow_x_scroll()
                             .overflow_y_hidden()
                             .restrict_scroll_to_axis()
-                            .scrollbar_width(px(0.))
+                            .scrollbar_width(px(FILE_BROWSER_SCROLLBAR_GUTTER_PX))
+                            .track_scroll(self.transfer.browser_view().horizontal_scroll)
                             .child(
                                 div()
                                     .min_w(table_width)
@@ -576,15 +581,27 @@ impl NyaTermApp {
                             div()
                                 .absolute()
                                 .top(px(28.))
-                                .bottom_0()
-                                .right_0()
-                                .w(px(12.))
+                                .bottom(px(FILE_BROWSER_SCROLLBAR_GUTTER_PX))
+                                .right(px(-FILE_BROWSER_SCROLLBAR_EDGE_INSET_PX))
+                                .w(px(FILE_BROWSER_SCROLLBAR_SIZE_PX))
                                 .child(NyaUniformListScrollbar::new(
                                     "transfer-browser-vertical-scrollbar",
                                     self.transfer.browser_view().list_scroll,
                                 )),
                         )
-                    }),
+                    })
+                    .child(
+                        div()
+                            .absolute()
+                            .left_0()
+                            .right(px(FILE_BROWSER_SCROLLBAR_GUTTER_PX))
+                            .bottom(px(-FILE_BROWSER_SCROLLBAR_EDGE_INSET_PX))
+                            .h(px(FILE_BROWSER_SCROLLBAR_SIZE_PX))
+                            .child(NyaHorizontalScrollbar::new(
+                                "transfer-browser-horizontal-scrollbar",
+                                self.transfer.browser_view().horizontal_scroll,
+                            )),
+                    ),
                 current_context_items,
             ))
             // Tauri FileExplorer footer: totals left, cwd sync / send icons right.

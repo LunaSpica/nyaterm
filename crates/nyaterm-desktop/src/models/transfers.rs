@@ -1,4 +1,4 @@
-use gpui::{Pixels, UniformListScrollHandle, px};
+use gpui::{Pixels, ScrollHandle, UniformListScrollHandle, px};
 use nyaterm_transport::{
     SftpFileEntry, SftpFileProperties, SftpRemoteTextFile, SftpTransferControl,
     SftpTransferProgress, SftpTransferSummary, SftpWriteTextResult,
@@ -327,6 +327,7 @@ pub(crate) struct TransferBrowserNavigationSnapshot {
     pub(crate) selected_path: Option<String>,
     pub(crate) selected_paths: HashSet<String>,
     pub(crate) list_scroll: UniformListScrollHandle,
+    pub(crate) horizontal_scroll: ScrollHandle,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

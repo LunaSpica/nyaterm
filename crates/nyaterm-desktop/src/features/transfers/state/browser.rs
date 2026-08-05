@@ -3,7 +3,7 @@
 use std::collections::{HashSet, VecDeque};
 use std::time::Instant;
 
-use gpui::{Pixels, ScrollStrategy};
+use gpui::{Pixels, ScrollHandle, ScrollStrategy};
 
 use crate::models::{
     TransferBrowserColumnResizeState, TransferBrowserDragSelectionState,
@@ -27,6 +27,7 @@ impl TransferFeatureState {
             error: &self.browser.error,
             search: &self.browser.search,
             list_scroll: &self.browser.list_scroll,
+            horizontal_scroll: &self.browser.horizontal_scroll,
             search_expanded: self.browser.search_expanded,
             history: &self.browser.history,
             history_index: self.browser.history_index,
@@ -65,6 +66,8 @@ impl TransferFeatureState {
         }
         self.browser.path = cwd.clone();
         self.browser.path_draft = cwd.clone();
+        self.browser.list_scroll = gpui::UniformListScrollHandle::new();
+        self.browser.horizontal_scroll = ScrollHandle::new();
         self.browser.status = format!("cwd synced: {cwd}");
         true
     }
@@ -127,6 +130,9 @@ impl TransferFeatureState {
         self.browser
             .list_scroll
             .scroll_to_item_strict(0, ScrollStrategy::Top);
+        self.browser
+            .horizontal_scroll
+            .set_offset(Default::default());
     }
 
     pub(in crate::features) fn expand_browser_search(&mut self) {
@@ -142,6 +148,9 @@ impl TransferFeatureState {
         self.browser
             .list_scroll
             .scroll_to_item_strict(0, ScrollStrategy::Top);
+        self.browser
+            .horizontal_scroll
+            .set_offset(Default::default());
     }
 
     pub(in crate::features) fn toggle_browser_sort(
@@ -157,6 +166,9 @@ impl TransferFeatureState {
         self.browser
             .list_scroll
             .scroll_to_item_strict(0, ScrollStrategy::Top);
+        self.browser
+            .horizontal_scroll
+            .set_offset(Default::default());
         let status = format!(
             "sorted by {} {}",
             self.browser.sort_column.label().to_lowercase(),
@@ -259,6 +271,8 @@ impl TransferFeatureState {
             .history_index
             .min(self.browser.history.len().saturating_sub(1));
         self.browser.visited_history = cache.visited_history;
+        self.browser.list_scroll = gpui::UniformListScrollHandle::new();
+        self.browser.horizontal_scroll = ScrollHandle::new();
         self.browser.clear_interaction();
         Some(remote_path)
     }
@@ -281,11 +295,13 @@ impl TransferFeatureState {
         self.browser.history_index = 0;
         self.browser.visited_history.clear();
         self.browser.list_scroll = gpui::UniformListScrollHandle::new();
+        self.browser.horizontal_scroll = ScrollHandle::new();
         self.browser.clear_interaction();
     }
 
     pub(in crate::features) fn begin_browser_directory_load(&mut self, path: String) {
         self.browser.list_scroll = gpui::UniformListScrollHandle::new();
+        self.browser.horizontal_scroll = ScrollHandle::new();
         self.browser.path = path;
         self.browser.path_draft.clear();
         self.browser.path_editing = false;
@@ -298,6 +314,7 @@ impl TransferFeatureState {
 
     pub(in crate::features) fn begin_browser_parent_load(&mut self, path: String) {
         self.browser.list_scroll = gpui::UniformListScrollHandle::new();
+        self.browser.horizontal_scroll = ScrollHandle::new();
         self.browser.path = path;
         self.browser.selected_remote_path = None;
         self.browser.selected_remote_paths.clear();
@@ -556,6 +573,7 @@ impl TransferBrowserState {
             selected_path: self.selected_remote_path.clone(),
             selected_paths: self.selected_remote_paths.clone(),
             list_scroll: self.list_scroll.clone(),
+            horizontal_scroll: self.horizontal_scroll.clone(),
         }
     }
 
@@ -573,6 +591,7 @@ impl TransferBrowserState {
         self.selected_remote_path = snapshot.selected_path;
         self.selected_remote_paths = snapshot.selected_paths;
         self.list_scroll = snapshot.list_scroll;
+        self.horizontal_scroll = snapshot.horizontal_scroll;
     }
 
     fn cancel_pending_rename(&mut self) -> bool {

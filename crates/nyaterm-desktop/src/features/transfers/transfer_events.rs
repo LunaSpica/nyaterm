@@ -327,6 +327,8 @@ impl NyaTermApp {
                     job.status = TransferJobStatus::Completed;
                     job.detail = format!("Synced cwd {remote_path}");
                     remote_path_to_set = Some(remote_path.clone());
+                    self.transfer.browser.list_scroll = gpui::UniformListScrollHandle::new();
+                    self.transfer.browser.horizontal_scroll = gpui::ScrollHandle::new();
                     self.transfer.browser.path = remote_path;
                     self.transfer.browser.entries = entries.clone();
                     self.transfer.browser.loading = false;

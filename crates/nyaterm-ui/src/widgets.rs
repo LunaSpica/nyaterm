@@ -107,6 +107,30 @@ impl NyaUniformListScrollbar {
     }
 }
 
+/// A component-themed horizontal scrollbar for a GPUI scroll container.
+#[derive(IntoElement)]
+pub struct NyaHorizontalScrollbar {
+    id: SharedString,
+    handle: ScrollHandle,
+}
+
+impl NyaHorizontalScrollbar {
+    pub fn new(id: impl Into<SharedString>, handle: &ScrollHandle) -> Self {
+        Self {
+            id: id.into(),
+            handle: handle.clone(),
+        }
+    }
+}
+
+impl RenderOnce for NyaHorizontalScrollbar {
+    fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
+        Scrollbar::horizontal(&self.handle)
+            .id(self.id)
+            .scrollbar_show(ScrollbarShow::Always)
+    }
+}
+
 impl RenderOnce for NyaUniformListScrollbar {
     fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
         Scrollbar::vertical(&self.handle)
@@ -257,13 +281,51 @@ pub fn svg_icon_button(
 
 #[cfg(test)]
 mod tests {
-    use super::NyaScrollArea;
+    use super::{NyaHorizontalScrollbar, NyaScrollArea};
     use gpui::{
-        Context, Render, ScrollDelta, ScrollWheelEvent, TestAppContext, VisualTestContext, Window,
-        div, point, prelude::*, px,
+        Context, Render, ScrollDelta, ScrollHandle, ScrollWheelEvent, TestAppContext,
+        VisualTestContext, Window, div, point, prelude::*, px,
     };
 
     struct MaxHeightScrollAreaFixture;
+
+    struct HorizontalScrollbarFixture {
+        scroll: ScrollHandle,
+    }
+
+    impl Render for HorizontalScrollbarFixture {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            div()
+                .relative()
+                .w(px(100.))
+                .h(px(40.))
+                .overflow_hidden()
+                .child(
+                    div()
+                        .id("horizontal-scroll-area")
+                        .size_full()
+                        .overflow_x_scroll()
+                        .overflow_y_hidden()
+                        .restrict_scroll_to_axis()
+                        .scrollbar_width(px(12.))
+                        .track_scroll(&self.scroll)
+                        .child(div().w(px(300.)).h_full()),
+                )
+                .child(
+                    div()
+                        .absolute()
+                        .left_0()
+                        .right(px(12.))
+                        .bottom(px(-4.))
+                        .h(px(16.))
+                        .debug_selector(|| "horizontal-scrollbar-layer".to_string())
+                        .child(NyaHorizontalScrollbar::new(
+                            "horizontal-scrollbar",
+                            &self.scroll,
+                        )),
+                )
+        }
+    }
 
     impl Render for MaxHeightScrollAreaFixture {
         fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
@@ -308,6 +370,15 @@ mod tests {
         draw(cx);
     }
 
+    fn scroll_xy(cx: &mut VisualTestContext, dx: f32, dy: f32) {
+        cx.simulate_event(ScrollWheelEvent {
+            position: point(px(10.), px(10.)),
+            delta: ScrollDelta::Pixels(point(px(dx), px(dy))),
+            ..Default::default()
+        });
+        draw(cx);
+    }
+
     #[gpui::test]
     fn max_height_scroll_area_handles_wheel_events(cx: &mut TestAppContext) {
         cx.update(gpui_component::init);
@@ -327,5 +398,29 @@ mod tests {
 
         let scrolled_last_y = cx.debug_bounds("last-scroll-row").unwrap().origin.y;
         assert!(scrolled_last_y < initial_last_y);
+    }
+
+    #[gpui::test]
+    fn horizontal_scrollbar_tracks_only_horizontal_wheel_input(cx: &mut TestAppContext) {
+        cx.update(gpui_component::init);
+        let scroll = ScrollHandle::new();
+        let (_, cx) = cx.add_window_view({
+            let scroll = scroll.clone();
+            move |_, _| HorizontalScrollbarFixture {
+                scroll: scroll.clone(),
+            }
+        });
+        let cx: &mut VisualTestContext = cx;
+        draw(cx);
+
+        let layer = cx.debug_bounds("horizontal-scrollbar-layer").unwrap();
+        assert_eq!(layer.top(), px(28.));
+        assert_eq!(layer.bottom(), px(44.));
+
+        scroll_xy(cx, 0., -30.);
+        assert_eq!(scroll.offset().x, px(0.));
+
+        scroll_xy(cx, -30., 0.);
+        assert!(scroll.offset().x < px(0.));
     }
 }

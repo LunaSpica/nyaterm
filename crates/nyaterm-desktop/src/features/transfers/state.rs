@@ -12,7 +12,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::mpsc;
 use std::time::Instant;
 
-use gpui::{FocusHandle, Pixels, UniformListScrollHandle};
+use gpui::{FocusHandle, Pixels, ScrollHandle, UniformListScrollHandle};
 use nyaterm_transport::{SftpDuplicatePolicy, SftpFileEntry, SftpFileProperties};
 use nyaterm_ui::NyaWindowHandle;
 
@@ -81,6 +81,7 @@ pub(in crate::features) struct TransferBrowserView<'a> {
     pub error: &'a Option<String>,
     pub search: &'a String,
     pub list_scroll: &'a UniformListScrollHandle,
+    pub horizontal_scroll: &'a ScrollHandle,
     pub search_expanded: bool,
     pub history: &'a VecDeque<String>,
     pub history_index: usize,
@@ -113,6 +114,7 @@ pub(super) struct TransferBrowserState {
     pub(super) status: String,
     pub(super) search: String,
     pub(super) list_scroll: UniformListScrollHandle,
+    pub(super) horizontal_scroll: ScrollHandle,
     pub(super) search_expanded: bool,
     pub(super) history: VecDeque<String>,
     pub(super) history_index: usize,
@@ -230,6 +232,7 @@ impl TransferFeatureState {
                 status: "List a remote directory to browse files.".to_string(),
                 search: String::new(),
                 list_scroll: UniformListScrollHandle::new(),
+                horizontal_scroll: ScrollHandle::new(),
                 search_expanded: false,
                 history: VecDeque::new(),
                 history_index: 0,
