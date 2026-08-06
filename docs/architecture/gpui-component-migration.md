@@ -13,7 +13,8 @@ NyaTerm component names rather than importing `gpui_component` directly.
 | `small_button` | Common action buttons | `Button` | Low | Yes |
 | `network_switch_button` / settings switches | Tunnel list, settings pages, Telnet editor, keyword-highlight rules | `Switch` | Low | Yes |
 | Manual Select | Settings, commands, tunnels | `Select` | Medium | Yes |
-| Manual popup menus | Title bar, connections, terminal | `PopupMenu/ContextMenu` | Medium | Yes |
+| Independent title dropdowns | Title bar | `NyaAppMenuBar/PopupMenu` | Medium | Done |
+| Manual popup menus | Connections, terminal | `PopupMenu/ContextMenu` | Medium | Yes |
 | `modal_dialog_shell` | CRUD and confirmation dialogs | `Dialog` | Medium | Partial |
 | Terminal character area | Terminal | Custom GPUI | High | No |
 | `RemoteTextEditor` | SFTP editor | Dedicated editor | High | No |
@@ -27,7 +28,7 @@ Core component phases are in place for reusable controls:
 | Add exact `gpui-component` dependency | Done | `gpui-component` is vendored at `vendor/gpui-component/crates/ui` as `0.5.2` at `e1570bdc8fd2dc17d38cab09e74b1783bdf3b24b`. |
 | Verify GPUI version consistency | Done | `cargo tree -i gpui` shows one active `gpui v0.2.2` from Zed `4aad57fd1f002f9feeea2b7fb6229ccbcd576cb1` at `vendor/zed/crates/gpui`; `gpui-component` uses that same path. |
 | Initialize component library | Done | `gpui_component::init(cx)` runs before the main window opens. |
-| Establish `nyaterm-ui` wrappers | Done | `NyaInput`, `NyaButton`, `NyaIconButton`, `NyaSwitch`, `NyaCheckbox`, `NyaRadioGroup`, `NyaTabs`, `NyaSelect`, `NyaDialog`, `NyaConfirmDialog`, `NyaTooltip`, menu wrappers, and `NyaRoot` are exported. |
+| Establish `nyaterm-ui` wrappers | Done | `NyaInput`, `NyaButton`, `NyaIconButton`, `NyaSwitch`, `NyaCheckbox`, `NyaRadioGroup`, `NyaTabs`, `NyaSelect`, `NyaDialog`, `NyaConfirmDialog`, `NyaTooltip`, `NyaAppMenuBar`, menu wrappers, and `NyaRoot` are exported. |
 | Theme bridge | Done for Phase 0 | `apply_component_theme(ThemePalette, &mut App)` maps NyaTerm colors into component theme colors. Startup calls `sync_component_theme` after the main window opens; user-driven appearance changes call it after updating the NyaTerm theme id; UI-triggered store reloads use `refresh_store_from_runtime_and_sync_theme`. |
 | Root on all component windows | Done for Phase 0 | Main, settings, connection editor, quick-command editor, remote editor, and external-sync windows open `NyaRoot` first through `nyaterm-ui::nya_root`; stored child-window handles use `NyaWindowHandle`. |
 
@@ -44,7 +45,7 @@ before claiming the full component migration complete.
 
 ## Current Search Inventory
 
-Required pre-migration searches were run on 2026-07-30:
+Required pre-migration searches were last refreshed on 2026-08-06:
 
 | Search | Result summary |
 | --- | --- |
@@ -52,7 +53,7 @@ Required pre-migration searches were run on 2026-07-30:
 | `number_stepper\|stepper_button\|NumberInput` | User-editable numeric fields now go through `nyaterm-ui::NyaNumberInput`; remaining ordinary text boxes are textual, masked, multiline, search/path, or semantics-preserving fields such as octal file modes. |
 | `small_button\|mode_button\|svg_icon_button` | `small_button`, `mode_button`, `settings_choice_chip`, and `dialog_action_button` now render through `NyaButton`; `svg_icon_button` and `modal_close_icon_button` now render through asset-path based `NyaIconButton`. |
 | `modal_dialog_shell\|modal_dialog_footer` | Only two retained custom shells remain: the inline connection-editor fallback and Docker details surface. |
-| `overflow_menu\|select_trigger\|select_menu\|selector` | Ordinary selects and action menus use `NyaSelect`/`NyaDropdownMenu`/`NyaContextMenu`; remaining hits are dedicated large-list, editor, terminal, or domain-workspace surfaces. |
+| `overflow_menu\|select_trigger\|select_menu\|selector` | Ordinary selects and action menus use `NyaSelect`/`NyaDropdownMenu`/`NyaContextMenu`; the title bar uses one coordinated `NyaAppMenuBar`; remaining hits are dedicated large-list, editor, terminal, or domain-workspace surfaces. |
 | `stand-in\|Tauri Switch\|Tauri Dialog\|Tauri Tabs` | Tunnel, settings, Telnet option, and keyword-highlight rule switch stand-ins now use `NyaSwitch`; tunnel list and Telnet segmented tabs now use `NyaTabs`; dialog comments and other tab comments identify remaining migration candidates. |
 | `.absolute().*menu\|.tooltip(` | Manual tooltip/menu positioning is concentrated in title/session/connection/transfer/settings surfaces. |
 
@@ -90,6 +91,12 @@ component selects; their four manual absolute menus and four pure-UI open flags
 were deleted while the send state still gates changes during an active run.
 Cloud-sync provider selection is component-backed and no longer stores
 `provider_menu_open` in `CloudSyncFeatureState`.
+The four independent title-bar dropdown triggers now render through one
+`nyaterm-ui::NyaAppMenuBar` Entity. It owns only the active top-level menu,
+popup lifecycle, and saved focus; labels and `NyaMenuItem` contents are built
+lazily from `NyaTermApp`, preserving translated text, icons, shortcuts,
+submenus, and checked state. The existing 40px custom window chrome and its
+platform-specific close/minimize behavior remain unchanged.
 Numeric form controls now follow the same boundary. `nyaterm-ui::NyaNumberInput`
 wraps component `NumberInput` with range, step, decimal formatting, disabled,
 prefix/suffix and infinity support. The desktop registry keeps number input

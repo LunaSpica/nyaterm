@@ -2,14 +2,14 @@ use gpui::{
     Context, IntoElement, MouseButton, Window, WindowControlArea, div, prelude::*, px, rgb, svg,
 };
 use nyaterm_transport::SessionKind;
-use nyaterm_ui::{NyaDropdownMenu, NyaMenuAnchor};
+use nyaterm_ui::NyaDropdownMenu;
 use time::{OffsetDateTime, UtcOffset, Weekday, macros::format_description};
 
 use crate::features::{
     NyaTermApp, format_file_size, format_rate, format_uptime, logo_mark, short_id,
     window_control_button,
 };
-use crate::models::{HeaderStatusMode, TitleMenu};
+use crate::models::HeaderStatusMode;
 
 use super::super::view_helpers::session_kind_icon_path;
 
@@ -95,10 +95,9 @@ impl NyaTermApp {
                                 })),
                         )
                     })
-                    .child(self.title_menu_trigger(TitleMenu::File, cx))
-                    .child(self.title_menu_trigger(TitleMenu::View, cx))
-                    .child(self.title_menu_trigger(TitleMenu::Terminal, cx))
-                    .child(self.title_menu_trigger(TitleMenu::Help, cx)),
+                    .when_some(self.shell.title_menu_bar(), |this, menu_bar| {
+                        this.child(menu_bar)
+                    }),
             )
             .child(
                 div()
@@ -486,33 +485,6 @@ impl NyaTermApp {
             return Some("icons/session/disconnect.svg");
         }
         None
-    }
-
-    pub(in crate::features) fn title_menu_trigger(
-        &self,
-        menu: TitleMenu,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let id_label = menu.label();
-        let label = self.tr(menu.i18n_key());
-        let items = self.title_menu_items(menu, cx);
-        div()
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(|_, _, _, cx| cx.stop_propagation()),
-            )
-            .child(
-                NyaDropdownMenu::new(format!("title-menu-trigger-{id_label}"))
-                    .label(label)
-                    .anchor(NyaMenuAnchor::TopLeft)
-                    .min_width(px(220.))
-                    .items(items)
-                    .on_trigger(cx.listener(|this, _, _, cx| {
-                        this.shell.close_open_tabs_menu();
-                        this.shell.close_new_session_menu();
-                        cx.notify();
-                    })),
-            )
     }
 }
 

@@ -7,8 +7,8 @@
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
-use gpui::{Pixels, ScrollHandle};
-use nyaterm_ui::NyaWindowHandle;
+use gpui::{Entity, Pixels, ScrollHandle};
+use nyaterm_ui::{NyaAppMenuBar, NyaWindowHandle};
 
 use super::super::app_state::SettingsDraftSnapshot;
 use super::runtime_state::ShellRuntimeState;
@@ -109,6 +109,7 @@ pub(super) struct ShellPanelState {
 
 /// Activity bar, title menus, tab-strip menus and connection-failure chrome.
 pub(super) struct ShellChromeState {
+    pub(super) title_menu_bar: Option<Entity<NyaAppMenuBar>>,
     pub(super) activity_bar_layout: ActivityBarLayoutState,
     pub(super) activity_bar_context_menu: Option<ActivityBarContextMenuState>,
     pub(super) header_status: HeaderStatusState,
@@ -180,6 +181,7 @@ impl ShellFeatureState {
                 stack_resize: None,
             },
             chrome: ShellChromeState {
+                title_menu_bar: None,
                 activity_bar_layout: init.activity_bar_layout,
                 activity_bar_context_menu: None,
                 header_status: HeaderStatusState::default(),
@@ -206,6 +208,14 @@ impl ShellFeatureState {
 
     pub(in crate::features) fn status(&self) -> &str {
         &self.status
+    }
+
+    pub(in crate::features) fn set_title_menu_bar(&mut self, menu_bar: Entity<NyaAppMenuBar>) {
+        self.chrome.title_menu_bar = Some(menu_bar);
+    }
+
+    pub(in crate::features) fn title_menu_bar(&self) -> Option<Entity<NyaAppMenuBar>> {
+        self.chrome.title_menu_bar.clone()
     }
 
     pub(in crate::features) fn set_status(&mut self, status: impl Into<String>) {

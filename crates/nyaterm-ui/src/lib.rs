@@ -1,5 +1,6 @@
 //! Shared GPUI theme tokens and reusable presentation widgets for NyaTerm.
 
+mod app_menu_bar;
 mod button;
 mod dialog;
 mod input;
@@ -16,6 +17,7 @@ mod theme_bridge;
 mod tooltip;
 mod widgets;
 
+pub use app_menu_bar::{NyaAppMenu, NyaAppMenuBar};
 pub use button::{NyaButton, NyaButtonVariant, NyaIconButton};
 pub use dialog::{NyaConfirmDialog, NyaDialog, NyaDialogFooter, NyaDialogWindowExt};
 pub use input::{NyaInput, NyaInputEvent, NyaInputState, NyaTextArea};

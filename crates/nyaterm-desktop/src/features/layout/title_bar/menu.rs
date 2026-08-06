@@ -1,10 +1,32 @@
 use gpui::Context;
-use nyaterm_ui::{NyaDialogWindowExt as _, NyaMenuItem};
+use nyaterm_ui::{NyaAppMenuBar, NyaDialogWindowExt as _, NyaMenuItem};
 
 use crate::features::NyaTermApp;
 use crate::models::{SmartSplitMode, TitleMenu};
 
 impl NyaTermApp {
+    pub(crate) fn set_title_menu_bar(&mut self, menu_bar: gpui::Entity<NyaAppMenuBar>) {
+        self.shell.set_title_menu_bar(menu_bar);
+    }
+
+    pub(crate) fn title_menu_label(&self, menu: TitleMenu) -> &'static str {
+        self.tr(menu.i18n_key())
+    }
+
+    pub(crate) fn build_title_menu_items(
+        &mut self,
+        menu: TitleMenu,
+        cx: &mut Context<Self>,
+    ) -> Vec<NyaMenuItem> {
+        self.title_menu_items(menu, cx)
+    }
+
+    pub(crate) fn prepare_title_menu(&mut self, cx: &mut Context<Self>) {
+        self.shell.close_open_tabs_menu();
+        self.shell.close_new_session_menu();
+        cx.notify();
+    }
+
     pub(in crate::features) fn title_menu_items(
         &self,
         menu: TitleMenu,

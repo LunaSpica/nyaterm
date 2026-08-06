@@ -6,7 +6,7 @@ remaining entries here describe targeted parity, compatibility, ownership, and
 cleanup work rather than a broad half-migrated application state. Keep dynamic
 counts here instead of in `AGENTS.md`.
 
-Last updated from the working tree on 2026-08-05.
+Last updated from the working tree on 2026-08-06.
 
 ## Current Metrics
 
@@ -109,6 +109,14 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   the registry. Their click-to-cycle/manual absolute menu implementations and
   pure-UI open flags were removed while draft, send-progress, and cloud-sync
   feature state remain authoritative for selected values.
+  The title bar now hosts one `nyaterm-ui::NyaAppMenuBar` Entity instead of four
+  independent dropdown triggers. The Entity is authoritative for active-menu,
+  popup, and focus-restoration state; translated labels and the existing
+  icon/shortcut/check-aware `NyaMenuItem` trees are resolved lazily from the
+  application owner. Top-level hover switching, wrapping left/right navigation,
+  Escape dismissal, and focus restoration are covered by component tests while
+  the existing 40px custom window chrome remains authoritative for drag and
+  platform window controls.
   Ordinary component dialogs now host CRUD, confirmation, import, translation
   result and update-check flows, including network group/tunnel/proxy dialogs,
   connection and quick-command confirmations, SFTP file-operation dialogs,

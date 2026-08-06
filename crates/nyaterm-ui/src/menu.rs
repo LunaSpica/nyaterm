@@ -119,7 +119,26 @@ impl NyaMenuItem {
         self
     }
 
-    fn append_to(
+    #[cfg(test)]
+    pub(crate) fn test_label(&self) -> &str {
+        self.label.as_ref()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_presentation(
+        &self,
+    ) -> (String, Option<String>, Option<String>, bool, bool, bool) {
+        (
+            self.label.to_string(),
+            self.icon_path.as_ref().map(ToString::to_string),
+            self.shortcut.as_ref().map(ToString::to_string),
+            self.disabled,
+            self.checked,
+            self.danger,
+        )
+    }
+
+    pub(crate) fn append_to(
         &self,
         menu: PopupMenu,
         window: &mut Window,
