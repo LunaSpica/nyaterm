@@ -20,6 +20,7 @@ use serialport::{DataBits, FlowControl, Parity, SerialPort, StopBits};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite};
 use tokio::sync::mpsc as tokio_mpsc;
 
+mod local_fs;
 mod recording;
 mod remote_process;
 mod session_config;
@@ -93,6 +94,7 @@ pub use docker::{
     parse_docker_images_output, parse_docker_networks_output, parse_docker_overview_output,
     parse_docker_stats_output, parse_docker_volumes_output,
 };
+pub use local_fs::{LocalDirectoryChild, LocalFileService};
 pub use recording::{
     DEFAULT_HISTORY_SEARCH_LIMIT, DEFAULT_HISTORY_SEARCH_LINES, DEFAULT_MEMORY_LIMIT_BYTES,
     MAX_HISTORY_SEARCH_LINES, RecordingError, RecordingManager, TerminalHistorySearchRequest,

@@ -45,6 +45,5 @@ pub(in crate::features) use state::{
     TransferFeatureFocus, TransferFeatureState,
 };
 pub(in crate::features) use transfer_widgets::{
-    duplicate_decision_label, duplicate_policy_label, format_file_size, transfer_job_title,
-    transfer_status_label,
+    duplicate_decision_label, duplicate_policy_label, format_file_size, transfer_status_label,
 };

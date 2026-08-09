@@ -897,10 +897,6 @@ impl TransferFeatureState {
         self.paths.local_path()
     }
 
-    pub(in crate::features) fn set_local_path(&mut self, path: impl Into<String>) {
-        self.paths.set_local_path(path);
-    }
-
     pub(in crate::features) fn duplicate_policy(&self) -> SftpDuplicatePolicy {
         self.paths.duplicate_policy()
     }
@@ -1053,6 +1049,7 @@ impl TransferPathState {
         &self.local
     }
 
+    #[cfg(test)]
     fn set_local_path(&mut self, path: impl Into<String>) {
         self.local = path.into();
     }

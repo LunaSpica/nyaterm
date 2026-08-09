@@ -46,11 +46,10 @@ impl NyaTermApp {
                     | TransferJobStatus::Cancelling
             )
         });
-        let download_path = if self.transfer.local_path().trim().is_empty() {
-            format!("{}: -", self.tr("fileTransfer.downloadPath"))
-        } else {
-            truncate_preview(self.transfer.local_path(), 48)
-        };
+        let download_path = self
+            .resolved_transfer_download_dir()
+            .map(|path| truncate_preview(&path.display().to_string(), 64))
+            .unwrap_or_else(|| format!("{}: -", self.tr("fileTransfer.downloadPath")));
 
         let mut list = div().flex().flex_col();
         if self.session.active_id().is_none() {

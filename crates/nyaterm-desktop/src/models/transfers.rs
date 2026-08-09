@@ -130,6 +130,7 @@ impl TransferJobState {
             &self.kind,
             TransferJobKind::Download { .. }
                 | TransferJobKind::Upload { .. }
+                | TransferJobKind::OpenExternal { .. }
                 | TransferJobKind::ZmodemUpload { .. }
                 | TransferJobKind::ZmodemDownload { .. }
                 | TransferJobKind::TrzszDownload { .. }
@@ -191,6 +192,22 @@ mod transfer_job_state_tests {
         assert!(!list.is_user_transfer());
         assert!(!list.is_visible_for_session(None));
         assert!(!list.is_visible_for_session(Some("session-a")));
+    }
+
+    #[test]
+    fn external_editor_downloads_are_visible_user_transfers() {
+        let external = job(
+            TransferJobKind::OpenExternal {
+                remote_path: "/remote/file.txt".to_string(),
+                local_path: PathBuf::from("/tmp/file.txt"),
+            },
+            Some("session-a"),
+        );
+
+        assert!(external.is_user_transfer());
+        assert!(external.is_visible_for_session(None));
+        assert!(external.is_visible_for_session(Some("session-a")));
+        assert!(!external.is_visible_for_session(Some("session-b")));
     }
 }
 

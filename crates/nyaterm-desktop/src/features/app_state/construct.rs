@@ -327,7 +327,7 @@ impl NyaTermApp {
             ),
             transfer: TransferFeatureState::new(
                 ".".to_string(),
-                "nyaterm-download.bin".to_string(),
+                String::new(),
                 transfer_duplicate_policy,
                 transfer_panel_height,
                 TransferFeatureFocus {

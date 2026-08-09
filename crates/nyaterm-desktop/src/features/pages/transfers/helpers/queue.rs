@@ -52,36 +52,6 @@ pub(in crate::features::pages::transfers) fn queue_action_button(
         )
 }
 
-pub(in crate::features::pages::transfers) fn transfer_direction_label(
-    kind: &TransferJobKind,
-) -> &'static str {
-    match kind {
-        TransferJobKind::ListDir { .. } => "LIST",
-        TransferJobKind::ListChildren { .. } => "LIST",
-        TransferJobKind::ResolveHome => "HOME",
-        TransferJobKind::SyncCwd => "CWD",
-        TransferJobKind::Download { .. } => "DOWN",
-        TransferJobKind::Upload { .. } => "UP",
-        TransferJobKind::Rename { .. } => "REN",
-        TransferJobKind::Move { .. } => "MOV",
-        TransferJobKind::Delete { .. } => "DEL",
-        TransferJobKind::Mkdir { .. } => "MKD",
-        TransferJobKind::CreateFile { .. } => "NEW",
-        TransferJobKind::Symlink { .. } => "LNK",
-        TransferJobKind::LoadProperties { .. } => "GET",
-        TransferJobKind::UpdateProperties { .. } => "SET",
-        TransferJobKind::LoadEditor { .. } => "EDIT",
-        TransferJobKind::SaveEditor { .. } => "SAVE",
-        TransferJobKind::OpenExternal { .. } => "OPEN",
-        TransferJobKind::AiFileAction { .. } => "AI",
-        TransferJobKind::ZmodemUpload { .. } => "Z↑",
-        TransferJobKind::ZmodemDownload { .. } => "Z↓",
-        TransferJobKind::TrzszDownload { .. } => "T↓",
-        TransferJobKind::TrzszUpload { .. } => "T↑",
-        TransferJobKind::ZmodemConflictProbe { .. } => "Z?",
-    }
-}
-
 pub(in crate::features::pages::transfers) fn transfer_job_has_local_target(
     job: &TransferJobState,
 ) -> bool {

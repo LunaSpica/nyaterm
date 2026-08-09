@@ -469,8 +469,13 @@ impl NyaTermApp {
             self.prompt_transfer_download_directory_and_start(remote_paths, window, cx);
             return;
         }
-        let base_local_path = self.normalized_transfer_local_path();
         let total = entries.len();
+        let base_local_path = if total == 1 {
+            self.normalized_transfer_local_path()
+        } else {
+            self.resolved_transfer_download_dir()
+                .unwrap_or_else(|| std::path::PathBuf::from("."))
+        };
         for entry in entries {
             let local_path = if total == 1 {
                 base_local_path.clone()

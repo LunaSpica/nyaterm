@@ -169,12 +169,9 @@ impl NyaTermApp {
         if value.is_empty() {
             let file_name =
                 download_file_name_from_remote_path(&self.transfer.normalized_remote_path());
-            let download_path = self.settings.summary().transfer_download_path.trim();
-            if download_path.is_empty() {
-                PathBuf::from(file_name)
-            } else {
-                PathBuf::from(download_path).join(file_name)
-            }
+            self.resolved_transfer_download_dir()
+                .unwrap_or_else(|| PathBuf::from("."))
+                .join(file_name)
         } else {
             PathBuf::from(value)
         }
@@ -377,8 +374,6 @@ impl NyaTermApp {
                     return;
                 };
                 let total = remote_paths.len();
-                self.transfer
-                    .set_local_path(directory.display().to_string());
                 let multiplex = session_id.as_deref().and_then(|session_id| {
                     self.session.ssh_multiplex_handle_for_session(session_id)
                 });
@@ -445,12 +440,6 @@ impl NyaTermApp {
                     return;
                 }
                 let total = paths.len();
-                if total == 1 {
-                    self.transfer.set_local_path(paths[0].display().to_string());
-                } else {
-                    self.transfer
-                        .set_local_path(format!("{total} selected upload items"));
-                }
                 self.transfer.set_remote_path(remote_path.clone());
                 self.transfer.browser.status = if total == 1 {
                     format!(
