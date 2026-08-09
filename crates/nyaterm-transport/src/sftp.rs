@@ -4,10 +4,11 @@
 //! behaviour, conflict resolution and progress reporting are unchanged; this
 //! only moves the code.
 
+use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::{
-    Arc,
-    atomic::{AtomicBool, Ordering},
+    Arc, Mutex as StdMutex,
+    atomic::{AtomicBool, AtomicU64, Ordering},
 };
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -15,6 +16,8 @@ use encoding_rs::{Encoding, GB18030, GBK, UTF_8};
 use russh::{Disconnect, client};
 use russh_sftp::client::SftpSession;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::sync::mpsc;
+use tokio::task::JoinSet;
 
 use super::{
     PROCESS_TIMEOUT, SftpDuplicateDecision, SftpDuplicatePolicy, SftpDuplicateRequest,
@@ -157,7 +160,7 @@ where
 }
 
 struct OpenSftpSession {
-    sftp: SftpSession,
+    sftp: Arc<SftpSession>,
     connection: OpenSftpConnection,
 }
 
@@ -206,7 +209,10 @@ async fn open_sftp_session(
     )
     .await
     .map_err(|_| anyhow::anyhow!("SFTP initialization timed out"))??;
-    Ok(OpenSftpSession { sftp, connection })
+    Ok(OpenSftpSession {
+        sftp: Arc::new(sftp),
+        connection,
+    })
 }
 
 async fn close_sftp_session(session: OpenSftpSession) {
@@ -1162,10 +1168,10 @@ impl SftpService {
                 let result = async {
                     let codec = SftpPathCodec::from_ssh_config(&config)?;
                     let session = open_sftp_session(&config, multiplex.as_ref()).await?;
-                    let sftp = &session.sftp;
+                    let sftp = Arc::clone(&session.sftp);
                     control.wait_if_paused().await?;
                     let Some(remote_target) = resolve_remote_write_target(
-                        sftp,
+                        &sftp,
                         &codec,
                         &local_path.display().to_string(),
                         &remote_path,
@@ -1185,7 +1191,7 @@ impl SftpService {
                     };
                     let bytes = if metadata.is_dir() {
                         upload_local_directory(
-                            sftp,
+                            Arc::clone(&sftp),
                             &codec,
                             &local_path,
                             &remote_target,
@@ -1196,7 +1202,7 @@ impl SftpService {
                         .await?
                     } else {
                         upload_local_file(
-                            sftp,
+                            &sftp,
                             &codec,
                             &local_path,
                             &remote_target,
@@ -1758,8 +1764,36 @@ where
     Ok(bytes)
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LocalDirectoryUploadFileInventory {
+    local_path: PathBuf,
+    relative_path: PathBuf,
+    size: u64,
+    modified_at: Option<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LocalDirectoryUploadDirectoryInventory {
+    local_path: PathBuf,
+    relative_path: PathBuf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LocalDirectoryUploadInventory {
+    directories: Vec<LocalDirectoryUploadDirectoryInventory>,
+    files: Vec<LocalDirectoryUploadFileInventory>,
+    total_bytes: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LocalDirectoryUploadEntry {
+    local_path: PathBuf,
+    remote_path: String,
+    size: u64,
+}
+
 async fn upload_local_directory<F>(
-    sftp: &SftpSession,
+    sftp: Arc<SftpSession>,
     codec: &SftpPathCodec,
     local_path: &Path,
     remote_path: &str,
@@ -1771,82 +1805,379 @@ where
     F: FnMut(SftpTransferProgress) + Send,
 {
     control.wait_if_paused().await?;
-    ensure_remote_dir(sftp, codec, remote_path, control).await?;
-    let (expected_bytes, item_count_total) =
-        local_directory_transfer_totals(local_path, control).await?;
+    let inventory = collect_local_directory_upload_inventory(local_path, control).await?;
+    let entries = plan_local_directory_upload_entries(
+        &sftp,
+        codec,
+        remote_path,
+        inventory,
+        control,
+        path_options,
+    )
+    .await?;
+    upload_local_directory_entries(sftp, *codec, entries, control, path_options, progress).await
+}
+
+async fn collect_local_directory_upload_inventory(
+    local_path: &Path,
+    control: &SftpTransferControl,
+) -> anyhow::Result<LocalDirectoryUploadInventory> {
+    let mut directories = Vec::new();
+    let mut files = Vec::new();
     let mut total_bytes = 0_u64;
-    let mut item_count_completed = 0_u64;
-    let mut pending = vec![(local_path.to_path_buf(), remote_path.to_string())];
+    let mut pending = vec![(local_path.to_path_buf(), PathBuf::new())];
     while let Some((local_dir, remote_dir)) = pending.pop() {
         control.wait_if_paused().await?;
-        ensure_remote_dir(sftp, codec, &remote_dir, control).await?;
         let mut entries = tokio::fs::read_dir(&local_dir).await?;
+        let mut children = Vec::new();
         while let Some(entry) = entries.next_entry().await? {
+            children.push(entry);
+        }
+        children.sort_by_key(|entry| entry.file_name());
+        for entry in children {
             control.wait_if_paused().await?;
             let local_child = entry.path();
             let file_type = entry.file_type().await?;
-            let name = entry.file_name().to_string_lossy().to_string();
-            let remote_child = remote_join(&remote_dir, &name);
+            let relative_child = if remote_dir.as_os_str().is_empty() {
+                PathBuf::from(entry.file_name())
+            } else {
+                remote_dir.join(entry.file_name())
+            };
             if file_type.is_dir() {
-                if let Some(remote_child) = resolve_remote_write_target(
-                    sftp,
-                    codec,
-                    &local_child.display().to_string(),
-                    &remote_child,
-                    true,
-                    path_options.duplicate_policy(),
-                    path_options.duplicate_resolver(),
-                )
-                .await?
-                {
-                    pending.push((local_child, remote_child));
-                }
-            } else if file_type.is_file() {
-                if let Some(remote_child) = resolve_remote_write_target(
-                    sftp,
-                    codec,
-                    &local_child.display().to_string(),
-                    &remote_child,
-                    false,
-                    path_options.duplicate_policy(),
-                    path_options.duplicate_resolver(),
-                )
-                .await?
-                {
-                    let completed_bytes = total_bytes;
-                    let mut aggregate_progress = |current| {
-                        progress(directory_transfer_progress(
-                            current,
-                            completed_bytes,
-                            expected_bytes,
-                            item_count_completed,
-                            item_count_total,
-                        ));
-                    };
-                    total_bytes += upload_local_file(
-                        sftp,
-                        codec,
-                        &local_child,
-                        &remote_child,
-                        control,
-                        path_options.transfer_options(),
-                        &mut aggregate_progress,
-                    )
-                    .await?;
-                }
-                item_count_completed = item_count_completed.saturating_add(1);
-                progress(SftpTransferProgress {
-                    remote_path: remote_child,
-                    local_path: local_child,
-                    bytes_transferred: total_bytes,
-                    total_bytes: (expected_bytes > 0).then_some(expected_bytes),
-                    item_count_completed: Some(item_count_completed.min(item_count_total)),
-                    item_count_total: Some(item_count_total),
+                directories.push(LocalDirectoryUploadDirectoryInventory {
+                    local_path: local_child.clone(),
+                    relative_path: relative_child.clone(),
                 });
+                pending.push((local_child, relative_child));
+            } else if file_type.is_file() {
+                let metadata = entry.metadata().await?;
+                let size = metadata.len();
+                let modified_at = metadata.modified().ok().and_then(sftp_timestamp_secs);
+                files.push(LocalDirectoryUploadFileInventory {
+                    local_path: local_child,
+                    relative_path: relative_child,
+                    size,
+                    modified_at,
+                });
+                total_bytes = total_bytes.saturating_add(size);
             }
         }
     }
-    Ok(total_bytes)
+    Ok(LocalDirectoryUploadInventory {
+        directories,
+        files,
+        total_bytes,
+    })
+}
+
+async fn plan_local_directory_upload_entries(
+    sftp: &SftpSession,
+    codec: &SftpPathCodec,
+    remote_path: &str,
+    inventory: LocalDirectoryUploadInventory,
+    control: &SftpTransferControl,
+    path_options: &SftpPathTransferOptions,
+) -> anyhow::Result<Vec<LocalDirectoryUploadEntry>> {
+    control.wait_if_paused().await?;
+    ensure_remote_dir(sftp, codec, remote_path, control).await?;
+    let mut directory_targets = HashMap::new();
+    directory_targets.insert(PathBuf::new(), remote_path.to_string());
+
+    for directory in inventory.directories {
+        control.wait_if_paused().await?;
+        let Some((parent_relative, name)) =
+            local_upload_relative_parent_and_name(&directory.relative_path)?
+        else {
+            continue;
+        };
+        let Some(parent_remote) = directory_targets.get(parent_relative) else {
+            continue;
+        };
+        let remote_child = remote_join(parent_remote, &name);
+        let Some(remote_child) = resolve_remote_upload_write_target(
+            sftp,
+            codec,
+            &directory.local_path.display().to_string(),
+            &remote_child,
+            true,
+            path_options.duplicate_policy(),
+            path_options.duplicate_resolver(),
+        )
+        .await?
+        else {
+            continue;
+        };
+        ensure_remote_dir(sftp, codec, &remote_child, control).await?;
+        directory_targets.insert(directory.relative_path, remote_child);
+    }
+
+    let mut entries = Vec::with_capacity(inventory.files.len());
+    for file in inventory.files {
+        control.wait_if_paused().await?;
+        let Some((parent_relative, name)) =
+            local_upload_relative_parent_and_name(&file.relative_path)?
+        else {
+            continue;
+        };
+        let Some(parent_remote) = directory_targets.get(parent_relative) else {
+            continue;
+        };
+        let remote_child = remote_join(parent_remote, &name);
+        let Some(remote_child) = resolve_remote_upload_write_target(
+            sftp,
+            codec,
+            &file.local_path.display().to_string(),
+            &remote_child,
+            false,
+            path_options.duplicate_policy(),
+            path_options.duplicate_resolver(),
+        )
+        .await?
+        else {
+            continue;
+        };
+        entries.push(LocalDirectoryUploadEntry {
+            local_path: file.local_path,
+            remote_path: remote_child,
+            size: file.size,
+        });
+    }
+    Ok(entries)
+}
+
+async fn upload_local_directory_entries<F>(
+    sftp: Arc<SftpSession>,
+    codec: SftpPathCodec,
+    entries: Vec<LocalDirectoryUploadEntry>,
+    control: &SftpTransferControl,
+    path_options: &SftpPathTransferOptions,
+    progress: &mut F,
+) -> anyhow::Result<u64>
+where
+    F: FnMut(SftpTransferProgress) + Send,
+{
+    let item_count_total = entries.len() as u64;
+    let expected_bytes = entries
+        .iter()
+        .fold(0_u64, |total, entry| total.saturating_add(entry.size));
+    let worker_count =
+        directory_upload_worker_count(entries.len(), path_options.transfer_options());
+    if worker_count == 0 {
+        return Ok(0);
+    }
+
+    let queue = Arc::new(StdMutex::new(VecDeque::from(entries)));
+    let bytes_transferred = Arc::new(AtomicU64::new(0));
+    let item_count_completed = Arc::new(AtomicU64::new(0));
+    let (progress_tx, mut progress_rx) = mpsc::unbounded_channel();
+    let mut workers = JoinSet::new();
+
+    for _ in 0..worker_count {
+        let worker_sftp = Arc::clone(&sftp);
+        let worker_queue = Arc::clone(&queue);
+        let worker_control = control.clone();
+        let worker_options = path_options.transfer_options().clone();
+        let worker_bytes_transferred = Arc::clone(&bytes_transferred);
+        let worker_item_count_completed = Arc::clone(&item_count_completed);
+        let worker_progress_tx = progress_tx.clone();
+        workers.spawn(async move {
+            loop {
+                worker_control.wait_if_paused().await?;
+                let entry = next_local_directory_upload_entry(&worker_queue)?;
+                let Some(entry) = entry else {
+                    break;
+                };
+                upload_local_directory_entry(
+                    Arc::clone(&worker_sftp),
+                    codec,
+                    entry,
+                    worker_control.clone(),
+                    worker_options.clone(),
+                    worker_bytes_transferred.clone(),
+                    worker_item_count_completed.clone(),
+                    expected_bytes,
+                    item_count_total,
+                    worker_progress_tx.clone(),
+                )
+                .await?;
+            }
+            Ok::<(), anyhow::Error>(())
+        });
+    }
+    drop(progress_tx);
+
+    let mut remaining_workers = worker_count;
+    let mut progress_closed = false;
+    while remaining_workers > 0 {
+        tokio::select! {
+            progress_update = progress_rx.recv(), if !progress_closed => {
+                if let Some(progress_update) = progress_update {
+                    progress(progress_update);
+                } else {
+                    progress_closed = true;
+                }
+            }
+            joined = workers.join_next() => {
+                match joined {
+                    Some(Ok(Ok(()))) => {
+                        remaining_workers -= 1;
+                    }
+                    Some(Ok(Err(error))) => {
+                        workers.abort_all();
+                        return Err(error);
+                    }
+                    Some(Err(error)) => {
+                        workers.abort_all();
+                        return Err(anyhow::anyhow!("SFTP directory upload worker failed: {error}"));
+                    }
+                    None => break,
+                }
+            }
+        }
+    }
+    while let Ok(progress_update) = progress_rx.try_recv() {
+        progress(progress_update);
+    }
+    Ok(bytes_transferred.load(Ordering::Relaxed))
+}
+
+fn next_local_directory_upload_entry(
+    queue: &StdMutex<VecDeque<LocalDirectoryUploadEntry>>,
+) -> anyhow::Result<Option<LocalDirectoryUploadEntry>> {
+    queue
+        .lock()
+        .map_err(|_| anyhow::anyhow!("SFTP directory upload queue lock poisoned"))
+        .map(|mut queue| queue.pop_front())
+}
+
+#[expect(clippy::too_many_arguments)]
+async fn upload_local_directory_entry(
+    sftp: Arc<SftpSession>,
+    codec: SftpPathCodec,
+    entry: LocalDirectoryUploadEntry,
+    control: SftpTransferControl,
+    options: SftpTransferOptions,
+    bytes_transferred: Arc<AtomicU64>,
+    item_count_completed: Arc<AtomicU64>,
+    expected_bytes: u64,
+    item_count_total: u64,
+    progress_tx: mpsc::UnboundedSender<SftpTransferProgress>,
+) -> anyhow::Result<()> {
+    let mut last_file_bytes = 0_u64;
+    let progress_remote_path = entry.remote_path.clone();
+    let progress_local_path = entry.local_path.clone();
+    let mut aggregate_progress = |current: SftpTransferProgress| {
+        let delta = current.bytes_transferred.saturating_sub(last_file_bytes);
+        last_file_bytes = current.bytes_transferred;
+        let aggregate_bytes = bytes_transferred
+            .fetch_add(delta, Ordering::Relaxed)
+            .saturating_add(delta);
+        let completed_items = item_count_completed.load(Ordering::Relaxed);
+        let _ = progress_tx.send(directory_upload_aggregate_progress(
+            current,
+            aggregate_bytes,
+            expected_bytes,
+            completed_items,
+            item_count_total,
+        ));
+    };
+    upload_local_file(
+        &sftp,
+        &codec,
+        &entry.local_path,
+        &entry.remote_path,
+        &control,
+        &options,
+        &mut aggregate_progress,
+    )
+    .await?;
+    let completed_items = item_count_completed
+        .fetch_add(1, Ordering::Relaxed)
+        .saturating_add(1)
+        .min(item_count_total);
+    let aggregate_bytes = bytes_transferred.load(Ordering::Relaxed);
+    let _ = progress_tx.send(SftpTransferProgress {
+        remote_path: progress_remote_path,
+        local_path: progress_local_path,
+        bytes_transferred: aggregate_bytes,
+        total_bytes: (expected_bytes > 0).then_some(expected_bytes),
+        item_count_completed: Some(completed_items),
+        item_count_total: Some(item_count_total),
+    });
+    Ok(())
+}
+
+fn directory_upload_worker_count(file_count: usize, options: &SftpTransferOptions) -> usize {
+    if file_count == 0 {
+        0
+    } else {
+        file_count.min(options.directory_upload_threads())
+    }
+}
+
+fn directory_upload_aggregate_progress(
+    current: SftpTransferProgress,
+    aggregate_bytes: u64,
+    expected_bytes: u64,
+    item_count_completed: u64,
+    item_count_total: u64,
+) -> SftpTransferProgress {
+    SftpTransferProgress {
+        remote_path: current.remote_path,
+        local_path: current.local_path,
+        bytes_transferred: aggregate_bytes,
+        total_bytes: (expected_bytes > 0).then_some(expected_bytes),
+        item_count_completed: Some(item_count_completed.min(item_count_total)),
+        item_count_total: Some(item_count_total),
+    }
+}
+
+async fn resolve_remote_upload_write_target(
+    sftp: &SftpSession,
+    codec: &SftpPathCodec,
+    local_path: &str,
+    remote_path: &str,
+    is_directory: bool,
+    duplicate_policy: SftpDuplicatePolicy,
+    duplicate_resolver: Option<&dyn SftpDuplicateResolver>,
+) -> anyhow::Result<Option<String>> {
+    if !remote_upload_write_target_requires_probe(duplicate_policy) {
+        return Ok(Some(remote_path.to_string()));
+    }
+    resolve_remote_write_target(
+        sftp,
+        codec,
+        local_path,
+        remote_path,
+        is_directory,
+        duplicate_policy,
+        duplicate_resolver,
+    )
+    .await
+}
+
+fn remote_upload_write_target_requires_probe(duplicate_policy: SftpDuplicatePolicy) -> bool {
+    matches!(
+        duplicate_policy,
+        SftpDuplicatePolicy::Ask | SftpDuplicatePolicy::Rename | SftpDuplicatePolicy::Skip
+    )
+}
+
+fn local_upload_relative_parent_and_name(
+    relative_path: &Path,
+) -> anyhow::Result<Option<(&Path, String)>> {
+    let Some(name) = relative_path
+        .file_name()
+        .map(|name| name.to_string_lossy().to_string())
+        .filter(|name| !name.is_empty())
+    else {
+        return Ok(None);
+    };
+    let parent = relative_path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new(""));
+    Ok(Some((parent, name)))
 }
 
 fn directory_transfer_progress(
@@ -1891,29 +2222,6 @@ async fn remote_directory_transfer_totals(
                     total_bytes = total_bytes.saturating_add(entry.metadata().size.unwrap_or(0));
                 }
                 russh_sftp::protocol::FileType::Other => {}
-            }
-        }
-    }
-    Ok((total_bytes, total_items))
-}
-
-async fn local_directory_transfer_totals(
-    local_path: &Path,
-    control: &SftpTransferControl,
-) -> anyhow::Result<(u64, u64)> {
-    let mut total_bytes = 0_u64;
-    let mut total_items = 0_u64;
-    let mut pending = vec![local_path.to_path_buf()];
-    while let Some(local_dir) = pending.pop() {
-        control.wait_if_paused().await?;
-        let mut entries = tokio::fs::read_dir(local_dir).await?;
-        while let Some(entry) = entries.next_entry().await? {
-            let file_type = entry.file_type().await?;
-            if file_type.is_dir() {
-                pending.push(entry.path());
-            } else if file_type.is_file() {
-                total_items = total_items.saturating_add(1);
-                total_bytes = total_bytes.saturating_add(entry.metadata().await?.len());
             }
         }
     }
@@ -2192,6 +2500,90 @@ mod tests {
         assert_eq!(aggregate.item_count_completed, Some(1));
         assert_eq!(aggregate.item_count_total, Some(4));
         assert_eq!(aggregate.remote_path, "/remote/two.txt");
+    }
+
+    #[test]
+    fn directory_upload_worker_count_uses_file_count_and_configured_limit() {
+        let default_options = SftpTransferOptions::default();
+        assert_eq!(directory_upload_worker_count(0, &default_options), 0);
+        assert_eq!(directory_upload_worker_count(1, &default_options), 1);
+        assert_eq!(directory_upload_worker_count(10, &default_options), 3);
+
+        let two_workers = SftpTransferOptions::default().with_directory_upload_threads(2);
+        assert_eq!(directory_upload_worker_count(10, &two_workers), 2);
+
+        let capped = SftpTransferOptions::default().with_directory_upload_threads(99);
+        assert_eq!(directory_upload_worker_count(20, &capped), 10);
+    }
+
+    #[test]
+    fn upload_overwrite_policy_skips_remote_conflict_probe() {
+        assert!(!remote_upload_write_target_requires_probe(
+            SftpDuplicatePolicy::Overwrite
+        ));
+        assert!(remote_upload_write_target_requires_probe(
+            SftpDuplicatePolicy::Ask
+        ));
+        assert!(remote_upload_write_target_requires_probe(
+            SftpDuplicatePolicy::Skip
+        ));
+        assert!(remote_upload_write_target_requires_probe(
+            SftpDuplicatePolicy::Rename
+        ));
+    }
+
+    #[test]
+    fn directory_upload_progress_uses_global_bytes_and_completed_items() {
+        let current = SftpTransferProgress {
+            remote_path: "/remote/current.txt".to_string(),
+            local_path: PathBuf::from("/local/current.txt"),
+            bytes_transferred: 15,
+            total_bytes: Some(20),
+            item_count_completed: None,
+            item_count_total: None,
+        };
+
+        let aggregate = directory_upload_aggregate_progress(current, 250, 400, 2, 5);
+
+        assert_eq!(aggregate.bytes_transferred, 250);
+        assert_eq!(aggregate.total_bytes, Some(400));
+        assert_eq!(aggregate.item_count_completed, Some(2));
+        assert_eq!(aggregate.item_count_total, Some(5));
+        assert_eq!(aggregate.remote_path, "/remote/current.txt");
+    }
+
+    #[tokio::test]
+    async fn local_directory_upload_inventory_preserves_nested_paths_sizes_and_mtime() {
+        let dir =
+            std::env::temp_dir().join(format!("nyaterm-upload-inventory-{}", uuid::Uuid::new_v4()));
+        let nested = dir.join("nested");
+        std::fs::create_dir_all(&nested).expect("nested dir");
+        std::fs::write(dir.join("root.txt"), b"root").expect("root file");
+        std::fs::write(nested.join("child.txt"), b"child").expect("child file");
+
+        let inventory = collect_local_directory_upload_inventory(&dir, &SftpTransferControl::new())
+            .await
+            .expect("inventory");
+        let mut directories = inventory
+            .directories
+            .iter()
+            .map(|directory| directory.relative_path.clone())
+            .collect::<Vec<_>>();
+        directories.sort();
+        let mut files = inventory.files.clone();
+        files.sort_by_key(|file| file.relative_path.clone());
+
+        assert_eq!(directories, vec![PathBuf::from("nested")]);
+        assert_eq!(files.len(), 2);
+        assert_eq!(files[0].relative_path, PathBuf::from("nested/child.txt"));
+        assert_eq!(files[0].size, 5);
+        assert!(files[0].modified_at.is_some());
+        assert_eq!(files[1].relative_path, PathBuf::from("root.txt"));
+        assert_eq!(files[1].size, 4);
+        assert!(files[1].modified_at.is_some());
+        assert_eq!(inventory.total_bytes, 9);
+
+        std::fs::remove_dir_all(&dir).expect("cleanup");
     }
 
     #[test]

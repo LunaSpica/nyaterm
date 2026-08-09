@@ -12,5 +12,6 @@ impl NyaTermApp {
                 &self.settings.summary().transfer_default_file_permissions,
             )
             .with_resume_broken_transfer(self.settings.summary().transfer_resume_broken_transfer)
+            .with_directory_upload_threads(self.settings.summary().transfer_upload_threads as usize)
     }
 }

@@ -23,6 +23,9 @@ pub const SFTP_TRANSFER_DEFAULT_BUFFER_SIZE: usize = 64 * 1024;
 pub const SFTP_TRANSFER_MIN_BUFFER_SIZE: usize = 8 * 1024;
 pub const SFTP_TRANSFER_MAX_BUFFER_SIZE: usize = 256 * 1024;
 pub const SFTP_TRANSFER_MAX_RETRIES: u32 = 10;
+pub const SFTP_TRANSFER_DEFAULT_DIRECTORY_UPLOAD_THREADS: usize = 3;
+pub const SFTP_TRANSFER_MIN_DIRECTORY_UPLOAD_THREADS: usize = 1;
+pub const SFTP_TRANSFER_MAX_DIRECTORY_UPLOAD_THREADS: usize = 10;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SftpTransferOptions {
@@ -31,6 +34,7 @@ pub struct SftpTransferOptions {
     pub preserve_timestamps: bool,
     pub default_file_mode: Option<u32>,
     pub resume_broken_transfer: bool,
+    pub directory_upload_threads: usize,
 }
 
 impl Default for SftpTransferOptions {
@@ -41,6 +45,7 @@ impl Default for SftpTransferOptions {
             preserve_timestamps: false,
             default_file_mode: None,
             resume_broken_transfer: false,
+            directory_upload_threads: SFTP_TRANSFER_DEFAULT_DIRECTORY_UPLOAD_THREADS,
         }
     }
 }
@@ -79,6 +84,21 @@ impl SftpTransferOptions {
     pub fn with_resume_broken_transfer(mut self, resume_broken_transfer: bool) -> Self {
         self.resume_broken_transfer = resume_broken_transfer;
         self
+    }
+
+    pub fn with_directory_upload_threads(mut self, directory_upload_threads: usize) -> Self {
+        self.directory_upload_threads = directory_upload_threads.clamp(
+            SFTP_TRANSFER_MIN_DIRECTORY_UPLOAD_THREADS,
+            SFTP_TRANSFER_MAX_DIRECTORY_UPLOAD_THREADS,
+        );
+        self
+    }
+
+    pub fn directory_upload_threads(&self) -> usize {
+        self.directory_upload_threads.clamp(
+            SFTP_TRANSFER_MIN_DIRECTORY_UPLOAD_THREADS,
+            SFTP_TRANSFER_MAX_DIRECTORY_UPLOAD_THREADS,
+        )
     }
 }
 
@@ -190,10 +210,12 @@ mod tests {
     use std::sync::Arc;
 
     use super::{
-        SFTP_TRANSFER_DEFAULT_BUFFER_SIZE, SFTP_TRANSFER_MAX_BUFFER_SIZE,
-        SFTP_TRANSFER_MAX_RETRIES, SFTP_TRANSFER_MIN_BUFFER_SIZE, SftpDuplicateDecision,
-        SftpDuplicatePolicy, SftpDuplicateRequest, SftpDuplicateResolver, SftpPathTransferOptions,
-        SftpTransferOptions, parse_sftp_file_mode,
+        SFTP_TRANSFER_DEFAULT_BUFFER_SIZE, SFTP_TRANSFER_DEFAULT_DIRECTORY_UPLOAD_THREADS,
+        SFTP_TRANSFER_MAX_BUFFER_SIZE, SFTP_TRANSFER_MAX_DIRECTORY_UPLOAD_THREADS,
+        SFTP_TRANSFER_MAX_RETRIES, SFTP_TRANSFER_MIN_BUFFER_SIZE,
+        SFTP_TRANSFER_MIN_DIRECTORY_UPLOAD_THREADS, SftpDuplicateDecision, SftpDuplicatePolicy,
+        SftpDuplicateRequest, SftpDuplicateResolver, SftpPathTransferOptions, SftpTransferOptions,
+        parse_sftp_file_mode,
     };
 
     struct TestDuplicateResolver;
@@ -261,6 +283,28 @@ mod tests {
             SftpTransferOptions::default()
                 .with_resume_broken_transfer(true)
                 .resume_broken_transfer
+        );
+        assert_eq!(
+            SftpTransferOptions::default().directory_upload_threads(),
+            SFTP_TRANSFER_DEFAULT_DIRECTORY_UPLOAD_THREADS
+        );
+        assert_eq!(
+            SftpTransferOptions::default()
+                .with_directory_upload_threads(0)
+                .directory_upload_threads(),
+            SFTP_TRANSFER_MIN_DIRECTORY_UPLOAD_THREADS
+        );
+        assert_eq!(
+            SftpTransferOptions::default()
+                .with_directory_upload_threads(SFTP_TRANSFER_MAX_DIRECTORY_UPLOAD_THREADS + 20)
+                .directory_upload_threads(),
+            SFTP_TRANSFER_MAX_DIRECTORY_UPLOAD_THREADS
+        );
+        assert_eq!(
+            SftpTransferOptions::default()
+                .with_directory_upload_threads(5)
+                .directory_upload_threads(),
+            5
         );
     }
 

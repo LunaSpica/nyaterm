@@ -68,8 +68,10 @@ pub use sftp::{
     SftpRemoteTextFile, SftpService, SftpTransferControl, SftpWriteTextResult,
 };
 pub use sftp_transfer_types::{
-    SFTP_TRANSFER_DEFAULT_BUFFER_SIZE, SFTP_TRANSFER_MAX_BUFFER_SIZE, SFTP_TRANSFER_MAX_RETRIES,
-    SFTP_TRANSFER_MIN_BUFFER_SIZE, SftpDuplicateDecision, SftpDuplicatePolicy,
+    SFTP_TRANSFER_DEFAULT_BUFFER_SIZE, SFTP_TRANSFER_DEFAULT_DIRECTORY_UPLOAD_THREADS,
+    SFTP_TRANSFER_MAX_BUFFER_SIZE, SFTP_TRANSFER_MAX_DIRECTORY_UPLOAD_THREADS,
+    SFTP_TRANSFER_MAX_RETRIES, SFTP_TRANSFER_MIN_BUFFER_SIZE,
+    SFTP_TRANSFER_MIN_DIRECTORY_UPLOAD_THREADS, SftpDuplicateDecision, SftpDuplicatePolicy,
     SftpDuplicateRequest, SftpDuplicateResolver, SftpPathTransferOptions, SftpTransferDirection,
     SftpTransferOptions, SftpTransferProgress, SftpTransferSummary,
 };
