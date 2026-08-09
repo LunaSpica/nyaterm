@@ -1,4 +1,7 @@
-use gpui::{AnyElement, Hsla, Img, IntoElement, Svg, div, img, prelude::*, px, rgb, svg};
+use gpui::{
+    AnyElement, Hsla, Img, IntoElement, Svg, div, img, linear_color_stop, linear_gradient,
+    prelude::*, px, rgb, svg,
+};
 
 use crate::features::{IconDef, file_entry_icon};
 use crate::theme::ThemePalette;
@@ -35,9 +38,31 @@ pub(in crate::features) fn color_icon(path: &'static str, size_px: f32) -> Img {
     img(path).size(px(size_px)).flex_none()
 }
 
-/// Full-color NyaTerm application icon, matching the Tauri app icon.
-pub(in crate::features) fn nyaterm_app_icon(size_px: f32) -> Img {
-    color_icon("color/app/nyaterm.svg", size_px)
+/// Theme-colored NyaTerm application icon, matching the Tauri logo composition.
+pub(in crate::features) fn nyaterm_app_icon(
+    palette: ThemePalette,
+    size_px: f32,
+) -> impl IntoElement {
+    div()
+        .size(px(size_px))
+        .flex_none()
+        .overflow_hidden()
+        .rounded(px(size_px * 0.1875))
+        .flex()
+        .items_center()
+        .justify_center()
+        .bg(linear_gradient(
+            135.,
+            linear_color_stop(rgb(palette.primary), 0.),
+            linear_color_stop(rgb(palette.primary_hover), 1.),
+        ))
+        .child(
+            svg()
+                .size(px(size_px))
+                .flex_none()
+                .path("icons/logo.svg")
+                .text_color(rgb(0xffffff)),
+        )
 }
 
 /// Activity-bar icon.

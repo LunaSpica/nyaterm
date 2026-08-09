@@ -28,7 +28,7 @@ impl NyaTermApp {
             .flex_col()
             .items_center()
             .gap_4()
-            .child(nyaterm_app_icon(96.))
+            .child(nyaterm_app_icon(palette, 96.))
             .child(
                 div()
                     .text_size(px(18.))

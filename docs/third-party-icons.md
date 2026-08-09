@@ -21,7 +21,7 @@ the manifest and verifies that canonical project assets are present.
 | [Font Awesome Free](https://github.com/FortAwesome/Font-Awesome) | The default server glyph, plus the AWS and Yahoo marks that Simple Icons no longer ships | 7.3.1 | CC BY 4.0 |
 | [Remix Icon](https://github.com/Remix-Design/RemixIcon) | The OpenAI mark, likewise absent from Simple Icons | 4.9.1 | Apache-2.0 |
 | [Lucide](https://github.com/lucide-icons/lucide) (`lucide-static`) | File explorer controls that use Lucide in the Tauri UI | 0.575.0 | ISC |
-| NyaTerm | `icons/logo.svg`, `color/app/nyaterm.svg`, and the full-color OS/distro logos and importer brand marks under `color/` | — | Project assets, carried over from the Tauri release |
+| NyaTerm | `icons/logo.svg`, and the full-color OS/distro logos and importer brand marks under `color/` | — | Project assets, carried over from the Tauri release |
 
 CC BY 4.0 requires attribution; this file is that attribution. Apache-2.0
 requires the license and notice be carried; both sets are unmodified copies, and

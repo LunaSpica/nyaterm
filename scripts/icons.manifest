@@ -19,7 +19,6 @@
 # Pinned upstream versions live in scripts/sync-icons.sh.
 
 # --- Shell chrome -----------------------------------------------------------
-color/app/nyaterm.svg	keep
 icons/logo.svg	keep
 icons/ai.svg	md:filled/auto_awesome.svg
 icons/auth.svg	md:filled/vpn_key.svg

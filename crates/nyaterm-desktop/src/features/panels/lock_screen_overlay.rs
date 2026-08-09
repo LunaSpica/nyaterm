@@ -125,7 +125,7 @@ impl NyaTermApp {
                                             .flex()
                                             .items_center()
                                             .justify_center()
-                                            .child(nyaterm_app_icon(82.)),
+                                            .child(nyaterm_app_icon(palette, 82.)),
                                     )
                                     .child(
                                         div()

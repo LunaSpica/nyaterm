@@ -2,7 +2,7 @@ use gpui::{
     App, ClickEvent, Context, FontWeight, IntoElement, Window, div, prelude::*, px, rgb, rgba, svg,
 };
 
-use crate::features::{NyaTermApp, color_icon, mono_icon};
+use crate::features::{NyaTermApp, color_icon, mono_icon, nyaterm_app_icon};
 use crate::models::ConnectionImportSource;
 use crate::theme::ThemePalette;
 
@@ -44,7 +44,7 @@ impl NyaTermApp {
                     .child(connection_import_source_card(
                         palette,
                         "connection-import-nyaterm",
-                        "color/app/nyaterm.svg",
+                        "nyaterm",
                         "NyaTerm",
                         ".nya",
                         cx.listener(|this, _, window, cx| {
@@ -251,7 +251,9 @@ fn connection_import_source_card(
         .cursor_pointer()
         .hover(move |this| this.border_color(rgb(palette.primary)).bg(hover))
         .on_click(on_click)
-        .child(if icon.starts_with("color/") {
+        .child(if icon == "nyaterm" {
+            nyaterm_app_icon(palette, 40.).into_any_element()
+        } else if icon.starts_with("color/") {
             // Vendor logos are full-color rasters; they cannot go through svg().
             color_icon(icon, 40.).into_any_element()
         } else {

@@ -6,14 +6,14 @@ use gpui::{
 use crate::theme::ThemePalette;
 use nyaterm_ui::{NyaButton, NyaButtonVariant};
 
-pub(in crate::features) fn logo_mark(_palette: ThemePalette) -> impl IntoElement {
+pub(in crate::features) fn logo_mark(palette: ThemePalette) -> impl IntoElement {
     div()
         .size(px(22.))
         .flex_none()
         .flex()
         .items_center()
         .justify_center()
-        .child(super::icons::nyaterm_app_icon(22.))
+        .child(super::icons::nyaterm_app_icon(palette, 22.))
 }
 
 pub(in crate::features) fn window_control_button(
