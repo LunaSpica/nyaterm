@@ -102,6 +102,29 @@ fn windterm_defaults_execute_and_skips_empty_entries() {
 }
 
 #[test]
+fn windterm_strips_real_and_escaped_terminal_newlines_and_executes() {
+    let import_config = parse_windterm_quickbar(
+        r#"[
+            {"quick.label":"Escaped newline","quick.text":"echo one\\n","quick.type":"Send Text"},
+            {"quick.label":"Real newline","quick.text":"echo two\n","quick.type":"Send Text"}
+        ]"#,
+    )
+    .expect("windterm quickbar parses");
+
+    assert_eq!(import_config.commands.len(), 2);
+    assert_eq!(import_config.commands[0].command, "echo one");
+    assert_eq!(
+        import_config.commands[0].execution_mode.as_deref(),
+        Some("execute")
+    );
+    assert_eq!(import_config.commands[1].command, "echo two");
+    assert_eq!(
+        import_config.commands[1].execution_mode.as_deref(),
+        Some("execute")
+    );
+}
+
+#[test]
 fn imports_xshell_quick_buttons_type_one_only() {
     let import_config = parse_xshell_quick_buttons_content(
         r#"[Info]

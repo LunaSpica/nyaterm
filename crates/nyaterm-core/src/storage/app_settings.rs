@@ -182,6 +182,11 @@ impl ConnectionStore {
                 &["ui", "saved_connections_sort_mode"],
                 "default",
             )),
+            ui_saved_connections_expanded_group_ids: json_string_vec(
+                &value,
+                &["ui", "saved_connections_expanded_group_ids"],
+                512,
+            ),
             ui_header_status_mode: normalize_header_status_mode(&json_string(
                 &value,
                 &["ui", "header_status_mode"],
@@ -753,6 +758,11 @@ impl ConnectionStore {
             &mut value,
             &["ui", "saved_connections_sort_mode"],
             normalize_saved_connections_sort_mode(&settings.ui_saved_connections_sort_mode),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["ui", "saved_connections_expanded_group_ids"],
+            string_vec_json_value(&settings.ui_saved_connections_expanded_group_ids, 512),
         );
         set_nested_json_string(
             &mut value,

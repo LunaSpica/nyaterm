@@ -64,14 +64,14 @@ pub(super) fn parse_windterm_quickbar(raw: &str) -> Result<ImportConfig, String>
             .and_then(Value::as_str)
             .map(str::trim)
             .unwrap_or("");
-        let command = entry
+        let raw_command = entry
             .get("quick.text")
             .and_then(Value::as_str)
-            .map(str::trim)
             .unwrap_or("");
-        if label.is_empty() || command.is_empty() {
+        if label.is_empty() || raw_command.trim().is_empty() {
             continue;
         }
+        let (command, has_terminal_newline) = split_windterm_command(raw_command);
 
         let id = entry
             .get("quick.uuid")
@@ -89,13 +89,14 @@ pub(super) fn parse_windterm_quickbar(raw: &str) -> Result<ImportConfig, String>
             .get("quick.icon")
             .and_then(Value::as_str)
             .and_then(map_windterm_icon);
-        let execution_mode = match entry
+        let quick_type = entry
             .get("quick.type")
             .and_then(Value::as_str)
             .unwrap_or("")
-            .trim()
-        {
-            value if value.eq_ignore_ascii_case("Send Text") => "append",
+            .trim();
+        let execution_mode = match (has_terminal_newline, quick_type) {
+            (true, _) => "execute",
+            (false, value) if value.eq_ignore_ascii_case("Send Text") => "append",
             _ => "execute",
         };
 
@@ -119,6 +120,18 @@ pub(super) fn parse_windterm_quickbar(raw: &str) -> Result<ImportConfig, String>
         commands,
         categories: Vec::new(),
     })
+}
+
+fn split_windterm_command(raw: &str) -> (&str, bool) {
+    const TERMINATORS: [&str; 6] = ["\\r\\n", "\\n", "\\r", "\r\n", "\n", "\r"];
+
+    for terminator in TERMINATORS {
+        if let Some(command) = raw.strip_suffix(terminator) {
+            return (command, true);
+        }
+    }
+
+    (raw, false)
 }
 
 pub(super) fn parse_xshell_xts_quick_buttons(

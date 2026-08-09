@@ -385,6 +385,95 @@ pub struct QuickCommandsConfig {
     pub categories: Vec<QuickCommandCategory>,
 }
 
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct QuickCommandsExportConfig {
+    pub categories: Vec<QuickCommandCategoryExport>,
+    pub commands: Vec<QuickCommandExport>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct QuickCommandCategoryExport {
+    pub id: String,
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_id: Option<String>,
+    pub sort_order: i32,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct QuickCommandExport {
+    pub id: String,
+    pub label: String,
+    pub command: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub category_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub color_tag: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon_tag: Option<String>,
+    pub pinned: bool,
+    pub execution_mode: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub risk_level: Option<String>,
+}
+
+impl From<QuickCommandsConfig> for QuickCommandsExportConfig {
+    fn from(config: QuickCommandsConfig) -> Self {
+        Self {
+            categories: config
+                .categories
+                .into_iter()
+                .map(|category| QuickCommandCategoryExport {
+                    id: category.id,
+                    name: category.name,
+                    parent_id: None,
+                    sort_order: 0,
+                })
+                .collect(),
+            commands: config
+                .commands
+                .into_iter()
+                .map(|command| QuickCommandExport {
+                    id: command.id,
+                    label: command.label,
+                    command: command.command,
+                    category_id: command.category_id,
+                    description: command.description,
+                    color_tag: command.color_tag,
+                    icon_tag: command.icon_tag,
+                    pinned: command.pinned.unwrap_or_default(),
+                    execution_mode: command
+                        .execution_mode
+                        .unwrap_or_else(|| "execute".to_string()),
+                    source: command.source,
+                    risk_level: command
+                        .risk_level
+                        .map(|risk| quick_command_export_risk_label(&risk).to_string()),
+                })
+                .collect(),
+        }
+    }
+}
+
+pub fn export_quick_commands_json(
+    config: QuickCommandsConfig,
+) -> Result<String, serde_json::Error> {
+    serde_json::to_string_pretty(&QuickCommandsExportConfig::from(config))
+}
+
+fn quick_command_export_risk_label(risk: &RiskLevel) -> &'static str {
+    match risk {
+        RiskLevel::Low => "low",
+        RiskLevel::Medium => "medium",
+        RiskLevel::High => "high",
+        RiskLevel::Critical => "critical",
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CommandHistoryEntry {
     pub command: String,
@@ -955,6 +1044,8 @@ pub struct AppSettingsSummary {
     pub ui_quick_cmd_sort_mode: String,
     #[serde(default = "default_saved_connections_sort_mode")]
     pub ui_saved_connections_sort_mode: String,
+    #[serde(default)]
+    pub ui_saved_connections_expanded_group_ids: Vec<String>,
     /// Which reading the title bar's centre shows: `session`, `resources`,
     /// `host` or `datetime`.
     #[serde(default = "default_header_status_mode")]
@@ -1147,6 +1238,7 @@ impl Default for AppSettingsSummary {
             ui_quick_cmd_view_mode: default_quick_cmd_view_mode(),
             ui_quick_cmd_sort_mode: default_quick_cmd_sort_mode(),
             ui_saved_connections_sort_mode: default_saved_connections_sort_mode(),
+            ui_saved_connections_expanded_group_ids: Vec::new(),
             ui_header_status_mode: default_header_status_mode(),
             ui_header_status_visible: true,
             ui_file_explorer_show_hidden_files: true,

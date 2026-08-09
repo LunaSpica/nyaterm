@@ -151,6 +151,12 @@ impl NyaTermApp {
                 .list_sort_mode()
                 .persistence_id()
                 .to_string(),
+            saved_connections_expanded_group_ids: self
+                .connection_state
+                .list_expanded_group_ids()
+                .iter()
+                .cloned()
+                .collect(),
             activity_bar_left_top: self.shell.chrome.activity_bar_layout.left_top.clone(),
             activity_bar_left_bottom: self.shell.chrome.activity_bar_layout.left_bottom.clone(),
             activity_bar_right_top: self.shell.chrome.activity_bar_layout.right_top.clone(),

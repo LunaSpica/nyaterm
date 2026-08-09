@@ -1,4 +1,5 @@
 use gpui::{AppContext, Context, IntoElement, PathPromptOptions, SharedString, Window};
+use nyaterm_core::{ConnectionStore, export_quick_commands_json};
 use nyaterm_ui::NyaDialogWindowExt as _;
 
 use crate::features::NyaTermApp;
@@ -43,6 +44,67 @@ impl NyaTermApp {
     ) {
         window.close_nya_dialog(cx);
         self.prompt_quick_command_import(kind, cx);
+    }
+
+    pub(in crate::features) fn prompt_quick_command_export(&mut self, cx: &mut Context<Self>) {
+        let directory = self.runtime.config_dir().to_path_buf();
+        let receiver = cx.prompt_for_new_path(&directory, Some("nyaterm-quick-commands.json"));
+        let config_dir = self.runtime.config_dir().to_path_buf();
+        let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
+        self.shell
+            .set_status("selecting quick command export destination".to_string());
+        cx.spawn(async move |this, cx| {
+            let result = match receiver.await {
+                Ok(Ok(Some(path))) => {
+                    cx.background_spawn(async move {
+                        let store = ConnectionStore::open_with_portable_key_path(
+                            &config_dir,
+                            portable_key_path,
+                        )
+                        .map_err(|error| error.to_string())?;
+                        let config = store
+                            .load_quick_commands()
+                            .map_err(|error| error.to_string())?;
+                        let raw = export_quick_commands_json(config)
+                            .map_err(|error| error.to_string())?;
+                        std::fs::write(&path, raw).map_err(|error| error.to_string())?;
+                        Ok::<_, String>(path)
+                    })
+                    .await
+                }
+                Ok(Ok(None)) => Err("cancelled".to_string()),
+                Ok(Err(error)) => Err(error.to_string()),
+                Err(_) => Err("closed".to_string()),
+            };
+            let _ = this.update(cx, |this, cx| {
+                match result {
+                    Ok(path) => {
+                        this.shell
+                            .set_status(format!("quick commands exported to {}", path.display()));
+                        this.settings
+                            .update_store_status(this.shell.status().to_string(), true);
+                    }
+                    Err(error) if error == "cancelled" => {
+                        this.shell
+                            .set_status("quick command export cancelled".to_string());
+                    }
+                    Err(error) if error == "closed" => {
+                        this.shell.set_status(
+                            "quick command export picker closed before returning".to_string(),
+                        );
+                    }
+                    Err(error) => {
+                        this.shell
+                            .set_status(format!("quick command export failed: {error}"));
+                        this.settings
+                            .update_store_status(this.shell.status().to_string(), false);
+                    }
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+        cx.notify();
     }
 
     fn prompt_quick_command_import(

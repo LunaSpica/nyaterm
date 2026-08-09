@@ -316,6 +316,8 @@ pub struct CloudSyncSettings {
     pub auto_check_on_startup: bool,
     #[serde(default = "default_true")]
     pub auto_push_on_change: bool,
+    #[serde(default = "default_true")]
+    pub auto_pull_remote_changes: bool,
     #[serde(default = "default_sync_debounce_seconds")]
     pub sync_debounce_seconds: u64,
     #[serde(default)]
@@ -343,6 +345,7 @@ impl Default for CloudSyncSettings {
             device_name: default_device_name(),
             auto_check_on_startup: true,
             auto_push_on_change: true,
+            auto_pull_remote_changes: true,
             sync_debounce_seconds: default_sync_debounce_seconds(),
             webdav: WebdavSyncSettings::default(),
             s3: S3SyncSettings::default(),
@@ -352,6 +355,43 @@ impl Default for CloudSyncSettings {
             aliyun_drive: AliyunDriveSyncSettings::default(),
             github_gist: GithubGistSyncSettings::default(),
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CloudRemoteCheckDecision {
+    UpToDate,
+    LocalChanged,
+    AutoPull,
+    RemoteAvailable,
+    Conflict,
+}
+
+pub fn decide_cloud_remote_check(
+    state: &CloudSyncState,
+    local_hash: &str,
+    remote: &RemoteSyncPointer,
+    allow_auto_pull: bool,
+) -> CloudRemoteCheckDecision {
+    if remote.payload_hash == local_hash {
+        return CloudRemoteCheckDecision::UpToDate;
+    }
+
+    let local_changed = state
+        .last_synced_payload_hash
+        .as_deref()
+        .is_none_or(|hash| hash != local_hash);
+    let remote_changed = state
+        .last_applied_remote_revision
+        .as_deref()
+        .is_none_or(|revision| revision != remote.revision_id);
+
+    match (remote_changed, local_changed, allow_auto_pull) {
+        (true, true, _) => CloudRemoteCheckDecision::Conflict,
+        (true, false, true) => CloudRemoteCheckDecision::AutoPull,
+        (true, false, false) => CloudRemoteCheckDecision::RemoteAvailable,
+        (false, true, _) => CloudRemoteCheckDecision::LocalChanged,
+        (false, false, _) => CloudRemoteCheckDecision::UpToDate,
     }
 }
 

@@ -6,7 +6,24 @@ remaining entries here describe targeted parity, compatibility, ownership, and
 cleanup work rather than a broad half-migrated application state. Keep dynamic
 counts here instead of in `AGENTS.md`.
 
-Last updated from the working tree on 2026-08-06.
+Last updated from the working tree on 2026-08-09.
+
+## Tauri Main Parity Refreshes
+
+- 2026-08-09 audited the active Tauri `main` delta from `f41e0d6d` to
+  `b5900d70`. GPUI now carries the compatible quick-command export JSON shape,
+  WindTerm quickbar escaped/real terminal-newline handling, cloud-sync
+  `auto_pull_remote_changes` settings compatibility, cloud remote-check decision
+  logic, the Sync Backup History push/pull shortcuts, persisted saved-connection
+  expanded folder ids, and matching English/Simplified Chinese localization
+  keys.
+- The same Tauri range also changed pure React/WebView surfaces and a Tauri
+  backend-only Claude Code subprocess runner. GPUI does not yet have the
+  equivalent external Claude Code runtime, so the stdin-based invocation fix
+  remains a targeted future AI parity task rather than WebView migration debt.
+- Tauri saved-connections also added copy buttons inside the connection detail
+  tooltip. GPUI already owns the detail tooltip surface, but the copy affordance
+  remains a focused connection-list parity task.
 
 ## Current Metrics
 

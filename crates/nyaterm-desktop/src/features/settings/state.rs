@@ -77,6 +77,7 @@ pub(in crate::features) struct UiLayoutSettingsUpdate {
     pub left_panel_collapsed: bool,
     pub right_panel_collapsed: bool,
     pub saved_connections_sort_mode: String,
+    pub saved_connections_expanded_group_ids: Vec<String>,
     pub activity_bar_left_top: Vec<String>,
     pub activity_bar_left_bottom: Vec<String>,
     pub activity_bar_right_top: Vec<String>,
@@ -624,6 +625,8 @@ impl SettingsFeatureState {
         self.summary.ui_left_panel_collapsed = update.left_panel_collapsed;
         self.summary.ui_right_panel_collapsed = update.right_panel_collapsed;
         self.summary.ui_saved_connections_sort_mode = update.saved_connections_sort_mode;
+        self.summary.ui_saved_connections_expanded_group_ids =
+            update.saved_connections_expanded_group_ids;
         self.summary.ui_activity_bar_left_top = update.activity_bar_left_top;
         self.summary.ui_activity_bar_left_bottom = update.activity_bar_left_bottom;
         self.summary.ui_activity_bar_right_top = update.activity_bar_right_top;
@@ -1465,6 +1468,7 @@ mod tests {
             left_panel_collapsed: false,
             right_panel_collapsed: true,
             saved_connections_sort_mode: "recent".to_string(),
+            saved_connections_expanded_group_ids: vec!["group-a".to_string()],
             activity_bar_left_top: vec!["connections".to_string()],
             activity_bar_left_bottom: vec!["settings".to_string()],
             activity_bar_right_top: vec!["sftp".to_string()],
@@ -1479,6 +1483,10 @@ mod tests {
         let summary = state.summary();
         assert_eq!(summary.ui_left_panel_width, 320);
         assert_eq!(summary.ui_right_panel_width, 360);
+        assert_eq!(
+            summary.ui_saved_connections_expanded_group_ids,
+            vec!["group-a".to_string()]
+        );
         assert!(!summary.ui_quick_cmd_visible);
         assert!(summary.ui_serial_send_visible);
         assert_eq!(summary.ui_active_left_panel.as_deref(), Some("connections"));

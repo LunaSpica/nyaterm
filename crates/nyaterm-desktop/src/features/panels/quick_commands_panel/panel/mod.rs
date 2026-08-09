@@ -357,6 +357,17 @@ impl NyaTermApp {
                             this.open_quick_command_import_dialog(window, cx);
                         }),
                     ))
+                    .child(quick_command_toolbar_icon_button(
+                        palette,
+                        "quick-command-export",
+                        "icons/menu/export.svg",
+                        false,
+                        self.tr("quickCommands.export"),
+                        cx.listener(|this, _, _, cx| {
+                            this.close_quick_command_toolbar_popovers();
+                            this.prompt_quick_command_export(cx);
+                        }),
+                    ))
                     .child(quick_command_toolbar_divider(palette))
                     .child(quick_command_ai_popover_button(
                         toolbar_context,

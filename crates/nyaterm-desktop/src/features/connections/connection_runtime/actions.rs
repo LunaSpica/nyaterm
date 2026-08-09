@@ -228,6 +228,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.connection_state.toggle_list_group_expanded(group_id);
+        self.persist_ui_layout();
         cx.notify();
     }
 

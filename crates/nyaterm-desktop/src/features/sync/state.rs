@@ -258,6 +258,11 @@ impl CloudSyncFeatureState {
         self.status = "cloud sync auto-push setting edited".to_string();
     }
 
+    pub(in crate::features) fn toggle_auto_pull_remote_changes(&mut self) {
+        self.settings.auto_pull_remote_changes = !self.settings.auto_pull_remote_changes;
+        self.status = "cloud sync auto-pull setting edited".to_string();
+    }
+
     pub(in crate::features) fn set_debounce(&mut self, value: u64) {
         self.settings.sync_debounce_seconds = value.clamp(1, 3_600);
         self.status = "cloud sync debounce setting edited".to_string();

@@ -4,12 +4,13 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, UNIX_EPOCH};
 
 use super::{
-    CLOUD_SYNC_HISTORY_DOMAIN, CLOUD_SYNC_HISTORY_EVENT, CLOUD_SYNC_HISTORY_LIMIT, CloudSyncError,
-    CloudSyncHistoryEntry, CloudSyncRemote, CloudSyncSettings, CloudSyncState,
-    GiteeSnippetHttpBackend, GiteeSnippetSyncSettings, GithubGistHttpBackend,
-    GithubGistSyncSettings, LocalCloudSyncOptions, MASKED_SECRET_VALUE, S3HttpMethod,
-    S3SyncSettings, SnippetBlobBackend, SnippetHttpClient, SnippetHttpMethod, SnippetHttpRequest,
-    SnippetHttpResponse, SnippetRemote, append_cloud_sync_history, build_s3_signed_request,
+    CLOUD_SYNC_HISTORY_DOMAIN, CLOUD_SYNC_HISTORY_EVENT, CLOUD_SYNC_HISTORY_LIMIT,
+    CloudRemoteCheckDecision, CloudSyncError, CloudSyncHistoryEntry, CloudSyncRemote,
+    CloudSyncSettings, CloudSyncState, GiteeSnippetHttpBackend, GiteeSnippetSyncSettings,
+    GithubGistHttpBackend, GithubGistSyncSettings, LocalCloudSyncOptions, MASKED_SECRET_VALUE,
+    RemoteSyncPointer, S3HttpMethod, S3SyncSettings, SnippetBlobBackend, SnippetHttpClient,
+    SnippetHttpMethod, SnippetHttpRequest, SnippetHttpResponse, SnippetRemote,
+    append_cloud_sync_history, build_s3_signed_request, decide_cloud_remote_check,
     decode_snippet_blob, drive_remote_segments, encode_snippet_blob, gitee_snippet_patch_body,
     github_gist_patch_body, google_drive_query_literal, merge_masked_cloud_sync_settings,
     pull_local_snapshot, pull_snapshot_with_remote, push_local_snapshot, push_snapshot_with_remote,
@@ -807,6 +808,90 @@ fn masked_cloud_sync_merge_preserves_provider_secrets() {
     assert_eq!(
         merged.github_gist.access_token.as_deref(),
         Some("replacement")
+    );
+}
+
+fn remote_pointer(revision_id: &str, payload_hash: &str) -> RemoteSyncPointer {
+    RemoteSyncPointer {
+        revision_id: revision_id.to_string(),
+        created_at_ms: 2,
+        payload_hash: payload_hash.to_string(),
+        device_id: "remote-device".to_string(),
+        app_version: "test".to_string(),
+    }
+}
+
+fn synced_state(revision_id: &str, payload_hash: &str) -> CloudSyncState {
+    CloudSyncState {
+        device_id: "local-device".to_string(),
+        last_synced_payload_hash: Some(payload_hash.to_string()),
+        last_applied_remote_revision: Some(revision_id.to_string()),
+        last_checked_at_ms: None,
+        last_synced_at_ms: None,
+    }
+}
+
+#[test]
+fn cloud_sync_settings_default_auto_pull_remote_changes_to_enabled() {
+    let settings: CloudSyncSettings =
+        serde_json::from_str(r#"{"enabled":true}"#).expect("legacy settings deserialize");
+
+    assert!(settings.auto_pull_remote_changes);
+    assert!(CloudSyncSettings::default().auto_pull_remote_changes);
+}
+
+#[test]
+fn remote_check_decides_up_to_date_when_local_and_remote_match() {
+    let state = synced_state("r1", "hash-1");
+    let remote = remote_pointer("r2", "hash-1");
+
+    assert_eq!(
+        decide_cloud_remote_check(&state, "hash-1", &remote, true),
+        CloudRemoteCheckDecision::UpToDate
+    );
+}
+
+#[test]
+fn remote_check_decides_auto_pull_when_remote_changed_and_local_clean() {
+    let state = synced_state("r1", "hash-1");
+    let remote = remote_pointer("r2", "hash-2");
+
+    assert_eq!(
+        decide_cloud_remote_check(&state, "hash-1", &remote, true),
+        CloudRemoteCheckDecision::AutoPull
+    );
+}
+
+#[test]
+fn remote_check_decides_remote_available_when_auto_pull_disabled() {
+    let state = synced_state("r1", "hash-1");
+    let remote = remote_pointer("r2", "hash-2");
+
+    assert_eq!(
+        decide_cloud_remote_check(&state, "hash-1", &remote, false),
+        CloudRemoteCheckDecision::RemoteAvailable
+    );
+}
+
+#[test]
+fn remote_check_decides_local_changed_when_only_local_changed() {
+    let state = synced_state("r1", "hash-1");
+    let remote = remote_pointer("r1", "hash-remote");
+
+    assert_eq!(
+        decide_cloud_remote_check(&state, "hash-local", &remote, true),
+        CloudRemoteCheckDecision::LocalChanged
+    );
+}
+
+#[test]
+fn remote_check_decides_conflict_when_local_and_remote_changed() {
+    let state = synced_state("r1", "hash-1");
+    let remote = remote_pointer("r2", "hash-2");
+
+    assert_eq!(
+        decide_cloud_remote_check(&state, "hash-local", &remote, true),
+        CloudRemoteCheckDecision::Conflict
     );
 }
 

@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use crate::{
     AiExecutionProfile, CloudSyncSettings, CloudSyncState, CommandHistoryEntry, ConnectionAuth,
-    ConnectionType, OtpEntry, SearchEngineConfig, SshKey,
+    ConnectionType, OtpEntry, SearchEngineConfig, SshKey, export_quick_commands_json,
 };
 use aes_gcm::{Aes256Gcm, Key, KeyInit, aead::Aead};
 use base64::{Engine, engine::general_purpose::STANDARD as B64};
@@ -1701,7 +1701,27 @@ fn app_settings_summary_reads_and_updates_host_key_policy() {
         Some("name")
     );
 
-    let mut interaction_update = saved_quick_command_ui.clone();
+    let mut ui_layout_update = saved_quick_command_ui.clone();
+    ui_layout_update.ui_saved_connections_expanded_group_ids =
+        vec!["group-a".to_string(), "group-b".to_string()];
+    let saved_ui_layout = store
+        .save_ui_layout_settings(&ui_layout_update)
+        .expect("save saved connection group expansion");
+    assert_eq!(
+        saved_ui_layout.ui_saved_connections_expanded_group_ids,
+        vec!["group-a".to_string(), "group-b".to_string()]
+    );
+    let stored = store
+        .load_settings_value()
+        .expect("stored saved connection group expansion");
+    assert_eq!(
+        json_path(&stored, &["ui", "saved_connections_expanded_group_ids"])
+            .and_then(|value| value.as_array())
+            .map(Vec::len),
+        Some(2)
+    );
+
+    let mut interaction_update = saved_ui_layout.clone();
     interaction_update.interaction_right_click_paste = false;
     interaction_update.interaction_command_suggestion_min_chars = 4;
     interaction_update.interaction_command_suggestion_max_chars = 120;
@@ -2516,6 +2536,44 @@ fn quick_commands_round_trip_and_upsert_preserves_created_use_count() {
     assert!(raw["commands"][0].get("use_count").is_some());
 
     std::fs::remove_dir_all(dir).ok();
+}
+
+#[test]
+fn quick_commands_export_matches_tauri_json_shape() {
+    let raw = export_quick_commands_json(QuickCommandsConfig {
+        categories: vec![QuickCommandCategory {
+            id: "cat-shell".to_string(),
+            name: "Shell".to_string(),
+        }],
+        commands: vec![QuickCommand {
+            id: "cmd-1".to_string(),
+            label: "List".to_string(),
+            command: "ls -la".to_string(),
+            category_id: Some("cat-shell".to_string()),
+            description: Some("List files".to_string()),
+            color_tag: Some("blue".to_string()),
+            icon_tag: Some("terminal".to_string()),
+            pinned: Some(true),
+            execution_mode: Some("append".to_string()),
+            source: Some("manual".to_string()),
+            risk_level: Some(crate::RiskLevel::Low),
+            updated_at: Some(222),
+            created_at: Some(111),
+            use_count: Some(7),
+        }],
+    })
+    .expect("export serializes");
+    let value: serde_json::Value = serde_json::from_str(&raw).expect("export json parses");
+
+    assert_eq!(value["categories"][0]["id"], "cat-shell");
+    assert_eq!(value["categories"][0]["sort_order"], 0);
+    assert!(value["categories"][0].get("parent_id").is_none());
+    assert_eq!(value["commands"][0]["id"], "cmd-1");
+    assert_eq!(value["commands"][0]["pinned"], true);
+    assert_eq!(value["commands"][0]["execution_mode"], "append");
+    assert_eq!(value["commands"][0]["risk_level"], "low");
+    assert!(value["commands"][0].get("created_at").is_none());
+    assert!(value["commands"][0].get("use_count").is_none());
 }
 
 #[test]

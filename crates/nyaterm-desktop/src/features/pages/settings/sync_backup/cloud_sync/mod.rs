@@ -507,6 +507,22 @@ impl NyaTermApp {
                     ))
                     .child(settings_form_row(
                         palette,
+                        self.tr("settings.autoPullRemoteChanges"),
+                        Some(SharedString::from(
+                            self.tr("settings.autoPullRemoteChangesDesc"),
+                        )),
+                        settings_switch_with_enabled(
+                            palette,
+                            "cloud-auto-pull-remote-changes",
+                            self.cloud_sync.settings().auto_pull_remote_changes,
+                            auto_sync_enabled,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_cloud_sync_auto_pull_remote_changes(cx);
+                            }),
+                        ),
+                    ))
+                    .child(settings_form_row(
+                        palette,
                         self.tr("settings.syncDebounceSeconds"),
                         Some(SharedString::from(
                             self.tr("settings.syncDebounceSecondsDesc"),

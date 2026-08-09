@@ -171,9 +171,11 @@ impl ConnectionFeatureState {
                 keyboard_active_connection_id: None,
                 drop_target: None,
                 hovered_group_id: None,
-                // Tauri opens the panel with every folder closed; the tree is
-                // long enough that seeding it expanded buries the folder list.
-                expanded_group_ids: HashSet::new(),
+                expanded_group_ids: settings
+                    .ui_saved_connections_expanded_group_ids
+                    .iter()
+                    .cloned()
+                    .collect(),
                 search_expanded_base: None,
                 search_applied_query: None,
                 selected_ids: HashSet::new(),

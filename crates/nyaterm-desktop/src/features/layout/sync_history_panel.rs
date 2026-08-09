@@ -1,5 +1,5 @@
 use gpui::{
-    ClipboardItem, Context, FontWeight, IntoElement, SharedString, div, prelude::*, px, rgb,
+    ClipboardItem, Context, FontWeight, IntoElement, SharedString, div, prelude::*, px, rgb, svg,
 };
 use nyaterm_core::truncate_preview;
 
@@ -12,6 +12,7 @@ use crate::features::view_widgets::{
     CloudSyncHistoryRowLabels, cloud_sync_history_row, dialog_action_button,
 };
 use crate::widgets::small_button;
+use nyaterm_ui::NyaTooltip;
 
 impl NyaTermApp {
     pub(in crate::features) fn sync_backup_history_panel(
@@ -84,6 +85,7 @@ impl NyaTermApp {
         let history = self.cloud_sync.history().to_vec();
         let expanded = self.cloud_sync.history_expanded().clone();
         let conflict = self.cloud_sync.conflict().cloned();
+        let sync_action_enabled = enabled && !self.cloud_sync.job_running();
 
         let mut rows = div().flex().flex_col();
         if history.is_empty() {
@@ -222,7 +224,45 @@ impl NyaTermApp {
                                     .text_color(rgb(palette.text_muted))
                                     .overflow_hidden()
                                     .child(provider_label),
-                            ),
+                            )
+                            .child(sync_history_action_button(
+                                palette,
+                                "sync-history-push-now",
+                                "icons/fe/upload.svg",
+                                self.tr("settings.syncPushNow"),
+                                sync_action_enabled,
+                                cx.listener(move |this, _, window, cx| {
+                                    if !this.cloud_sync.settings().enabled
+                                        || this.cloud_sync.job_running()
+                                    {
+                                        this.shell.set_status(
+                                            "cloud sync is disabled or already running".to_string(),
+                                        );
+                                        cx.notify();
+                                        return;
+                                    }
+                                    this.prompt_provider_cloud_sync_push(window, cx);
+                                }),
+                            ))
+                            .child(sync_history_action_button(
+                                palette,
+                                "sync-history-pull-now",
+                                "icons/fe/download.svg",
+                                self.tr("settings.syncPullNow"),
+                                sync_action_enabled,
+                                cx.listener(move |this, _, window, cx| {
+                                    if !this.cloud_sync.settings().enabled
+                                        || this.cloud_sync.job_running()
+                                    {
+                                        this.shell.set_status(
+                                            "cloud sync is disabled or already running".to_string(),
+                                        );
+                                        cx.notify();
+                                        return;
+                                    }
+                                    this.prompt_provider_cloud_sync_pull(window, cx);
+                                }),
+                            )),
                     )
                     .when(
                         !status_message.trim().is_empty() && conflict.is_none(),
@@ -346,4 +386,39 @@ impl NyaTermApp {
                     .child(rows),
             )
     }
+}
+
+fn sync_history_action_button(
+    palette: crate::theme::ThemePalette,
+    id: impl Into<String>,
+    icon_path: &'static str,
+    tooltip: &'static str,
+    enabled: bool,
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+) -> impl IntoElement {
+    div()
+        .id(SharedString::from(id.into()))
+        .size(px(24.))
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded_md()
+        .opacity(if enabled { 1.0 } else { 0.45 })
+        .cursor_pointer()
+        .tooltip(move |window, cx| NyaTooltip::new(tooltip).build(window, cx))
+        .hover(|this| {
+            if enabled {
+                this.bg(rgb(palette.surface_elevated))
+            } else {
+                this
+            }
+        })
+        .child(
+            svg()
+                .size(px(14.))
+                .flex_none()
+                .path(icon_path)
+                .text_color(rgb(palette.text_muted)),
+        )
+        .on_click(on_click)
 }

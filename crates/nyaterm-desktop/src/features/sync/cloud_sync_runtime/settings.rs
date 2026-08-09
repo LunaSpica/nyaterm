@@ -65,6 +65,17 @@ impl NyaTermApp {
         cx.notify();
     }
 
+    pub(in crate::features) fn toggle_cloud_sync_auto_pull_remote_changes(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.cloud_sync_form_enabled() || !self.cloud_sync.settings().enabled {
+            return;
+        }
+        self.cloud_sync.toggle_auto_pull_remote_changes();
+        cx.notify();
+    }
+
     pub(in crate::features) fn set_cloud_sync_debounce(
         &mut self,
         value: u64,
