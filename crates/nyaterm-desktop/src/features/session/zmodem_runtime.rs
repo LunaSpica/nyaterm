@@ -227,6 +227,8 @@ impl NyaTermApp {
                 "Probing remote conflicts in {remote_dir} ({} file(s))",
                 files.len()
             ),
+            created_at_ms: TransferJobState::now_ms(),
+            display_name: String::new(),
             entries: Vec::new(),
             summary: None,
             progress: None,
@@ -707,6 +709,8 @@ impl NyaTermApp {
             kind,
             status,
             detail,
+            created_at_ms: TransferJobState::now_ms(),
+            display_name: String::new(),
             entries: Vec::new(),
             summary: None,
             progress: Some(progress),

@@ -304,7 +304,8 @@ impl TransferFeatureState {
         self.queue.visit_jobs_mut(visit);
     }
 
-    pub(in crate::features) fn enqueue_transfer_job(&mut self, job: TransferJobState) {
+    pub(in crate::features) fn enqueue_transfer_job(&mut self, mut job: TransferJobState) {
+        job.ensure_presentation_fields();
         self.queue.enqueue(job);
     }
 

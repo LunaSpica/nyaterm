@@ -5,6 +5,7 @@ use nyaterm_transport::{
 };
 use std::collections::{HashSet, VecDeque};
 use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum TransferJobKind {
@@ -118,6 +119,8 @@ pub(crate) struct TransferJobState {
     pub(crate) kind: TransferJobKind,
     pub(crate) status: TransferJobStatus,
     pub(crate) detail: String,
+    pub(crate) created_at_ms: u128,
+    pub(crate) display_name: String,
     pub(crate) entries: Vec<SftpFileEntry>,
     pub(crate) summary: Option<SftpTransferSummary>,
     pub(crate) progress: Option<SftpTransferProgress>,
@@ -125,6 +128,53 @@ pub(crate) struct TransferJobState {
 }
 
 impl TransferJobState {
+    pub(crate) fn now_ms() -> u128 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|duration| duration.as_millis())
+            .unwrap_or(0)
+    }
+
+    pub(crate) fn display_name_for_kind(kind: &TransferJobKind) -> String {
+        match kind {
+            TransferJobKind::Download { remote_path, .. }
+            | TransferJobKind::OpenExternal { remote_path, .. }
+            | TransferJobKind::LoadEditor { remote_path }
+            | TransferJobKind::SaveEditor { remote_path }
+            | TransferJobKind::LoadProperties { remote_path }
+            | TransferJobKind::UpdateProperties { remote_path, .. }
+            | TransferJobKind::AiFileAction { remote_path, .. }
+            | TransferJobKind::Delete { remote_path, .. }
+            | TransferJobKind::Mkdir { remote_path, .. }
+            | TransferJobKind::CreateFile { remote_path, .. }
+            | TransferJobKind::Symlink {
+                link_path: remote_path,
+                ..
+            }
+            | TransferJobKind::ListChildren { remote_path }
+            | TransferJobKind::ListDir { remote_path, .. } => remote_file_name(remote_path),
+            TransferJobKind::Upload { local_path, .. } => local_file_name(local_path),
+            TransferJobKind::Rename { new_path, .. } | TransferJobKind::Move { new_path, .. } => {
+                remote_file_name(new_path)
+            }
+            TransferJobKind::ZmodemUpload { file_name, .. }
+            | TransferJobKind::ZmodemDownload { file_name, .. }
+            | TransferJobKind::TrzszDownload { file_name, .. }
+            | TransferJobKind::TrzszUpload { file_name, .. } => file_name.clone(),
+            TransferJobKind::ResolveHome | TransferJobKind::SyncCwd => String::new(),
+            TransferJobKind::ZmodemConflictProbe { remote_dir, .. } => remote_file_name(remote_dir),
+        }
+    }
+
+    pub(crate) fn ensure_presentation_fields(&mut self) {
+        if self.created_at_ms == 0 {
+            self.created_at_ms = Self::now_ms();
+        }
+        if self.display_name.trim().is_empty() {
+            self.display_name = Self::display_name_for_kind(&self.kind);
+        }
+    }
+
     pub(crate) fn is_user_transfer(&self) -> bool {
         matches!(
             &self.kind,
@@ -144,6 +194,23 @@ impl TransferJobState {
     }
 }
 
+fn remote_file_name(path: &str) -> String {
+    path.trim_end_matches('/')
+        .rsplit('/')
+        .next()
+        .filter(|name| !name.is_empty())
+        .unwrap_or(path)
+        .to_string()
+}
+
+fn local_file_name(path: &std::path::Path) -> String {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| path.display().to_string())
+}
+
 #[cfg(test)]
 mod transfer_job_state_tests {
     use std::path::PathBuf;
@@ -157,6 +224,8 @@ mod transfer_job_state_tests {
             kind,
             status: TransferJobStatus::Completed,
             detail: String::new(),
+            created_at_ms: 1,
+            display_name: String::new(),
             entries: Vec::new(),
             summary: None,
             progress: None,
@@ -208,6 +277,31 @@ mod transfer_job_state_tests {
         assert!(external.is_visible_for_session(None));
         assert!(external.is_visible_for_session(Some("session-a")));
         assert!(!external.is_visible_for_session(Some("session-b")));
+    }
+
+    #[test]
+    fn display_names_are_stable_from_initial_transfer_kind() {
+        assert_eq!(
+            TransferJobState::display_name_for_kind(&TransferJobKind::OpenExternal {
+                remote_path: "/remote/project/file.txt".to_string(),
+                local_path: PathBuf::from("/tmp/file.txt"),
+            }),
+            "file.txt"
+        );
+        assert_eq!(
+            TransferJobState::display_name_for_kind(&TransferJobKind::Download {
+                remote_path: "/remote/project/".to_string(),
+                local_path: PathBuf::from("/tmp/project"),
+            }),
+            "project"
+        );
+        assert_eq!(
+            TransferJobState::display_name_for_kind(&TransferJobKind::Upload {
+                local_path: PathBuf::from("/tmp/local.bin"),
+                remote_path: "/remote/local.bin".to_string(),
+            }),
+            "local.bin"
+        );
     }
 }
 

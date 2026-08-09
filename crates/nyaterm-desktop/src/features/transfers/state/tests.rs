@@ -328,6 +328,8 @@ fn transfer_job(
         },
         status,
         detail: String::new(),
+        created_at_ms: TransferJobState::now_ms(),
+        display_name: String::new(),
         entries: Vec::new(),
         summary: None,
         progress: None,

@@ -8,7 +8,7 @@ use crate::features::{NyaTermApp, gpui_code_font_family, panel_header_with_actio
 use crate::models::{TransferJobState, TransferJobStatus};
 use nyaterm_ui::NyaTooltip;
 
-use super::helpers::{queue_action_button, transfer_job_row};
+use super::helpers::{TransferJobRowLabels, queue_action_button, transfer_job_row};
 
 impl NyaTermApp {
     pub(super) fn transfer_queue_view(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -78,6 +78,16 @@ impl NyaTermApp {
             );
         } else {
             list = list.gap(px(2.)).p_1();
+            let row_labels = TransferJobRowLabels {
+                transferring: self.tr("fileTransfer.transferring").to_string(),
+                paused: self.tr("fileTransfer.paused").to_string(),
+                cancelling: self.tr("fileTransfer.cancelling").to_string(),
+                cancelled: self.tr("fileTransfer.cancelled").to_string(),
+                completed: self.tr("fileTransfer.completed").to_string(),
+                failed: self.tr("fileTransfer.failed").to_string(),
+                streaming: self.tr("fileTransfer.streaming").to_string(),
+                unknown_size: self.tr("fileTransfer.unknownSize").to_string(),
+            };
             for job in ordered_transfer_jobs(&visible_jobs) {
                 let directory_progress = job.progress.as_ref().and_then(|progress| {
                     progress
@@ -93,6 +103,7 @@ impl NyaTermApp {
                     palette,
                     job,
                     directory_progress,
+                    row_labels.clone(),
                     self.transfer.browser_view().selected_remote_path.clone(),
                     self.transfer.selected_transfer_job_id().map(str::to_string),
                     cx,

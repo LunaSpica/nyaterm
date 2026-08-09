@@ -1,6 +1,6 @@
 use nyaterm_transport::{SftpDuplicateDecision, SftpDuplicatePolicy, SftpTransferProgress};
 
-use crate::models::{TransferJobKind, TransferJobStatus};
+use crate::models::TransferJobKind;
 
 pub(in crate::features) fn duplicate_policy_label(policy: SftpDuplicatePolicy) -> &'static str {
     match policy {
@@ -78,17 +78,6 @@ pub(in crate::features) fn transfer_job_title(kind: &TransferJobKind) -> String 
             session_id,
             remote_dir,
         } => format!("ZMODEM probe {remote_dir} ({session_id})"),
-    }
-}
-
-pub(in crate::features) fn transfer_status_label(status: TransferJobStatus) -> &'static str {
-    match status {
-        TransferJobStatus::Running => "Running",
-        TransferJobStatus::Paused => "Paused",
-        TransferJobStatus::Cancelling => "Cancelling",
-        TransferJobStatus::Cancelled => "Cancelled",
-        TransferJobStatus::Completed => "Done",
-        TransferJobStatus::Failed => "Failed",
     }
 }
 

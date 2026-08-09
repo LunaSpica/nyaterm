@@ -103,7 +103,7 @@ pub(in crate::features) use text_inputs::{
 pub(in crate::features) use transfers::{
     TransferEditorCloseAfterSave, TransferEditorCloseOutcome, TransferEditorDiscardOutcome,
     TransferFeatureFocus, TransferFeatureState, duplicate_decision_label, duplicate_policy_label,
-    format_file_size, transfer_status_label,
+    format_file_size,
 };
 pub(in crate::features) use translation::TranslationFeatureState;
 pub(in crate::features) use tunnels::{TunnelCatalogState, TunnelFeatureState};

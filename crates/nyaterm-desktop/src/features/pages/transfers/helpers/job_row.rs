@@ -5,16 +5,29 @@ use gpui::{
 };
 use nyaterm_core::truncate_preview;
 
-use crate::features::{NyaTermApp, format_file_size, transfer_status_label};
+use crate::features::{NyaTermApp, format_file_size};
 use crate::models::{TransferJobKind, TransferJobState, TransferJobStatus};
 use crate::theme::ThemePalette;
 
 use super::{transfer_progress_percent_label, transfer_progress_ratio};
 
+#[derive(Clone)]
+pub(in crate::features::pages::transfers) struct TransferJobRowLabels {
+    pub(in crate::features::pages::transfers) transferring: String,
+    pub(in crate::features::pages::transfers) paused: String,
+    pub(in crate::features::pages::transfers) cancelling: String,
+    pub(in crate::features::pages::transfers) cancelled: String,
+    pub(in crate::features::pages::transfers) completed: String,
+    pub(in crate::features::pages::transfers) failed: String,
+    pub(in crate::features::pages::transfers) streaming: String,
+    pub(in crate::features::pages::transfers) unknown_size: String,
+}
+
 pub(in crate::features::pages::transfers) fn transfer_job_row(
     palette: ThemePalette,
     job: TransferJobState,
     directory_progress: Option<String>,
+    labels: TransferJobRowLabels,
     _selected_remote_path: Option<String>,
     selected_job_id: Option<String>,
     cx: &mut Context<NyaTermApp>,
@@ -29,18 +42,18 @@ pub(in crate::features::pages::transfers) fn transfer_job_row(
     };
     let job_selected = selected_job_id.as_deref() == Some(job.id.as_str());
     let file_name = transfer_job_file_name(&job);
-    let icon_path = transfer_job_icon_path(&job.kind);
+    let icon_path = transfer_job_icon_path(&job.kind, &job);
     let direction_color = transfer_job_direction_color(&job.kind);
-    let detail = transfer_job_detail(&job, directory_progress);
+    let detail = transfer_job_detail(&job, directory_progress, &labels);
     let progress_label = if job.status == TransferJobStatus::Running {
         job.progress
             .as_ref()
-            .map(transfer_progress_percent_label)
-            .unwrap_or_else(|| "0 B/s".to_string())
+            .map(|progress| transfer_progress_percent_label(progress, &labels.streaming))
+            .unwrap_or_else(|| labels.transferring.clone())
     } else {
-        transfer_status_label(job.status).to_string()
+        transfer_job_status_label(job.status, &labels).to_string()
     };
-    let progress_percent = job.progress.as_ref().and_then(transfer_progress_ratio);
+    let progress_percent = transfer_job_progress_percent(&job);
     let context_job_id = job.id.clone();
 
     div()
@@ -142,16 +155,13 @@ pub(in crate::features::pages::transfers) fn transfer_job_row(
 }
 
 fn transfer_job_file_name(job: &TransferJobState) -> String {
-    job.summary
-        .as_ref()
-        .map(|summary| match &job.kind {
-            TransferJobKind::Upload { .. } => local_file_name(&summary.local_path),
-            _ => remote_file_name(&summary.remote_path),
-        })
+    (!job.display_name.trim().is_empty())
+        .then(|| job.display_name.clone())
         .or_else(|| {
-            job.progress
-                .as_ref()
-                .map(|progress| remote_file_name(&progress.remote_path))
+            job.summary.as_ref().map(|summary| match &job.kind {
+                TransferJobKind::Upload { .. } => local_file_name(&summary.local_path),
+                _ => remote_file_name(&summary.remote_path),
+            })
         })
         .unwrap_or_else(|| match &job.kind {
             TransferJobKind::Download { remote_path, .. }
@@ -170,19 +180,27 @@ fn transfer_job_file_name(job: &TransferJobState) -> String {
         })
 }
 
-fn transfer_job_detail(job: &TransferJobState, directory_progress: Option<String>) -> String {
-    let time = format_transfer_row_time();
+fn transfer_job_detail(
+    job: &TransferJobState,
+    directory_progress: Option<String>,
+    labels: &TransferJobRowLabels,
+) -> String {
+    let time = format_transfer_row_time(job.created_at_ms);
     let size_detail = job.progress.as_ref().and_then(|progress| {
-        progress
-            .total_bytes
-            .filter(|total| *total > 0)
-            .map(|total| {
-                format!(
-                    "{} / {}",
-                    format_file_size(Some(progress.bytes_transferred)),
-                    format_file_size(Some(total))
-                )
-            })
+        if let Some(total) = progress.total_bytes.filter(|total| *total > 0) {
+            return Some(format!(
+                "{} / {}",
+                format_file_size(Some(progress.bytes_transferred)),
+                format_file_size(Some(total))
+            ));
+        }
+        (progress.bytes_transferred > 0).then(|| {
+            format!(
+                "{} / {}",
+                format_file_size(Some(progress.bytes_transferred)),
+                labels.unknown_size
+            )
+        })
     });
     let completed_size = job.summary.as_ref().and_then(|summary| {
         (summary.bytes > 0).then(|| {
@@ -204,22 +222,55 @@ fn transfer_job_detail(job: &TransferJobState, directory_progress: Option<String
     }
 }
 
-fn format_transfer_row_time() -> String {
-    let Ok(now) = time::OffsetDateTime::now_local() else {
+fn transfer_job_progress_percent(job: &TransferJobState) -> Option<f32> {
+    matches!(
+        job.status,
+        TransferJobStatus::Running | TransferJobStatus::Paused
+    )
+    .then(|| job.progress.as_ref().and_then(transfer_progress_ratio))
+    .flatten()
+}
+
+fn transfer_job_status_label(status: TransferJobStatus, labels: &TransferJobRowLabels) -> &str {
+    match status {
+        TransferJobStatus::Running => &labels.transferring,
+        TransferJobStatus::Paused => &labels.paused,
+        TransferJobStatus::Cancelling => &labels.cancelling,
+        TransferJobStatus::Cancelled => &labels.cancelled,
+        TransferJobStatus::Completed => &labels.completed,
+        TransferJobStatus::Failed => &labels.failed,
+    }
+}
+
+fn format_transfer_row_time(created_at_ms: u128) -> String {
+    let timestamp = i64::try_from(created_at_ms / 1000).unwrap_or(i64::MAX);
+    let Ok(datetime) = time::OffsetDateTime::from_unix_timestamp(timestamp) else {
         return "--:--:--".to_string();
     };
+    let offset = time::UtcOffset::current_local_offset().unwrap_or(time::UtcOffset::UTC);
     let format = time::macros::format_description!("[hour]:[minute]:[second]");
-    now.format(&format)
+    datetime
+        .to_offset(offset)
+        .format(&format)
         .unwrap_or_else(|_| "--:--:--".to_string())
 }
 
-fn transfer_job_icon_path(kind: &TransferJobKind) -> &'static str {
+fn transfer_job_icon_path(kind: &TransferJobKind, job: &TransferJobState) -> &'static str {
+    if transfer_job_is_directory(job) {
+        return "icons/conn/folder.svg";
+    }
     match kind {
         TransferJobKind::Upload { .. }
         | TransferJobKind::ZmodemUpload { .. }
         | TransferJobKind::TrzszUpload { .. } => "icons/fe/upload.svg",
         _ => "icons/fe/download.svg",
     }
+}
+
+fn transfer_job_is_directory(job: &TransferJobState) -> bool {
+    job.progress
+        .as_ref()
+        .is_some_and(|progress| progress.item_count_total.is_some())
 }
 
 fn transfer_job_direction_color(kind: &TransferJobKind) -> gpui::Rgba {
@@ -246,4 +297,134 @@ fn local_file_name(path: &std::path::Path) -> String {
         .filter(|name| !name.is_empty())
         .map(ToOwned::to_owned)
         .unwrap_or_else(|| path.display().to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use nyaterm_transport::SftpTransferProgress;
+
+    use crate::models::{TransferJobKind, TransferJobState, TransferJobStatus};
+
+    use super::{
+        TransferJobRowLabels, format_transfer_row_time, transfer_job_file_name,
+        transfer_job_icon_path, transfer_job_progress_percent, transfer_job_status_label,
+    };
+
+    fn labels() -> TransferJobRowLabels {
+        TransferJobRowLabels {
+            transferring: "transferring-i18n".to_string(),
+            paused: "paused-i18n".to_string(),
+            cancelling: "cancelling-i18n".to_string(),
+            cancelled: "cancelled-i18n".to_string(),
+            completed: "completed-i18n".to_string(),
+            failed: "failed-i18n".to_string(),
+            streaming: "streaming-i18n".to_string(),
+            unknown_size: "unknown-size-i18n".to_string(),
+        }
+    }
+
+    fn progress(
+        remote_path: &str,
+        bytes_transferred: u64,
+        total_bytes: Option<u64>,
+        item_count_completed: Option<u64>,
+        item_count_total: Option<u64>,
+    ) -> SftpTransferProgress {
+        SftpTransferProgress {
+            remote_path: remote_path.to_string(),
+            local_path: PathBuf::from("/local/target"),
+            bytes_transferred,
+            total_bytes,
+            item_count_completed,
+            item_count_total,
+        }
+    }
+
+    fn job(status: TransferJobStatus) -> TransferJobState {
+        let kind = TransferJobKind::Download {
+            remote_path: "/remote/file.bin".to_string(),
+            local_path: PathBuf::from("/local/file.bin"),
+        };
+        TransferJobState {
+            id: "job-1".to_string(),
+            session_id: Some("session-a".to_string()),
+            display_name: TransferJobState::display_name_for_kind(&kind),
+            kind,
+            status,
+            detail: String::new(),
+            created_at_ms: 1_785_555_123_000,
+            entries: Vec::new(),
+            summary: None,
+            progress: Some(progress("/remote/file.bin", 25, Some(100), None, None)),
+            control: None,
+        }
+    }
+
+    #[test]
+    fn completed_transfer_keeps_stable_timestamp_text() {
+        let created_at_ms = 1_785_555_123_000;
+
+        assert_eq!(
+            format_transfer_row_time(created_at_ms),
+            format_transfer_row_time(created_at_ms)
+        );
+    }
+
+    #[test]
+    fn progress_bar_is_only_visible_for_running_or_paused_jobs() {
+        assert!(transfer_job_progress_percent(&job(TransferJobStatus::Running)).is_some());
+        assert!(transfer_job_progress_percent(&job(TransferJobStatus::Paused)).is_some());
+        assert!(transfer_job_progress_percent(&job(TransferJobStatus::Completed)).is_none());
+        assert!(transfer_job_progress_percent(&job(TransferJobStatus::Failed)).is_none());
+        assert!(transfer_job_progress_percent(&job(TransferJobStatus::Cancelled)).is_none());
+    }
+
+    #[test]
+    fn directory_transfer_title_stays_on_root_item_name() {
+        let kind = TransferJobKind::Download {
+            remote_path: "/remote/project".to_string(),
+            local_path: PathBuf::from("/downloads/project"),
+        };
+        let job = TransferJobState {
+            id: "job-1".to_string(),
+            session_id: Some("session-a".to_string()),
+            display_name: TransferJobState::display_name_for_kind(&kind),
+            kind,
+            status: TransferJobStatus::Running,
+            detail: String::new(),
+            created_at_ms: 1,
+            entries: Vec::new(),
+            summary: None,
+            progress: Some(progress(
+                "/remote/project/src/main.rs",
+                10,
+                Some(100),
+                Some(1),
+                Some(4),
+            )),
+            control: None,
+        };
+
+        assert_eq!(transfer_job_file_name(&job), "project");
+        assert_eq!(
+            transfer_job_icon_path(&job.kind, &job),
+            "icons/conn/folder.svg"
+        );
+    }
+
+    #[test]
+    fn status_labels_come_from_i18n_values() {
+        let labels = labels();
+
+        assert_eq!(
+            transfer_job_status_label(TransferJobStatus::Completed, &labels),
+            "completed-i18n"
+        );
+        assert_eq!(
+            transfer_job_status_label(TransferJobStatus::Failed, &labels),
+            "failed-i18n"
+        );
+    }
 }
