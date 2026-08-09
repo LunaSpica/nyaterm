@@ -679,6 +679,9 @@ impl NyaTermApp {
         if !cx.has_active_drag() && self.terminal.clear_terminal_file_drop_hover() {
             dirty = true;
         }
+        if !cx.has_active_drag() && self.transfer.set_browser_external_drop_hover(false) {
+            dirty = true;
+        }
         RuntimeVisualPlaneResult {
             dirty,
             duration: visual_stage_started_at.elapsed(),

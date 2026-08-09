@@ -41,6 +41,7 @@ impl TransferFeatureState {
             selected_remote_path: &self.browser.selected_remote_path,
             selected_remote_paths: &self.browser.selected_remote_paths,
             drag_selection: &self.browser.drag_selection,
+            external_drop_hover: self.browser.external_drop_hover,
             context_target: &self.browser.context_target,
             favorites_menu: &self.browser.favorites_menu,
             path_menu: &self.browser.path_menu,
@@ -496,6 +497,18 @@ impl TransferFeatureState {
         self.browser.drag_selection.take().is_some()
     }
 
+    pub(in crate::features) fn set_browser_external_drop_hover(&mut self, hover: bool) -> bool {
+        if self.browser.external_drop_hover == hover {
+            return false;
+        }
+        self.browser.external_drop_hover = hover;
+        true
+    }
+
+    pub(in crate::features) fn browser_external_drop_hover_is_pending(&self) -> bool {
+        self.browser.external_drop_hover
+    }
+
     pub(in crate::features) fn schedule_browser_pending_rename(
         &mut self,
         path: &str,
@@ -572,6 +585,7 @@ impl TransferBrowserState {
         self.selected_remote_path = None;
         self.selected_remote_paths.clear();
         self.drag_selection = None;
+        self.external_drop_hover = false;
         self.context_target = TransferBrowserContextTarget::CurrentDirectory;
         self.cancel_pending_rename();
         self.favorites_menu = None;

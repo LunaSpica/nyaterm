@@ -901,11 +901,17 @@ impl NyaTermApp {
                                               event: &gpui::DragMoveEvent<gpui::ExternalPaths>,
                                               _,
                                               cx| {
-                                            let _ = event;
-                                            this.set_terminal_file_drop_hover(
-                                                Some(session_id.clone()),
-                                                cx,
-                                            );
+                                            if event.bounds.contains(&event.event.position) {
+                                                this.set_terminal_file_drop_hover(
+                                                    Some(session_id.clone()),
+                                                    cx,
+                                                );
+                                            } else {
+                                                this.clear_terminal_file_drop_hover_for_session(
+                                                    &session_id,
+                                                    cx,
+                                                );
+                                            }
                                         },
                                     )
                                 })

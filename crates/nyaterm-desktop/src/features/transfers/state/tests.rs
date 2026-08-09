@@ -99,6 +99,21 @@ fn browser_context_target_cancels_armed_rename_click() {
 }
 
 #[test]
+fn browser_external_drop_hover_tracks_overlay_visibility() {
+    let cx = TestAppContext::single();
+    let mut transfer = transfer_state(&cx);
+
+    assert!(!transfer.browser_view().external_drop_hover);
+    assert!(transfer.set_browser_external_drop_hover(true));
+    assert!(transfer.browser_external_drop_hover_is_pending());
+    assert!(transfer.browser_view().external_drop_hover);
+    assert!(!transfer.set_browser_external_drop_hover(true));
+    assert!(transfer.set_browser_external_drop_hover(false));
+    assert!(!transfer.browser_external_drop_hover_is_pending());
+    assert!(!transfer.browser_view().external_drop_hover);
+}
+
+#[test]
 fn browser_entry_context_target_preserves_an_existing_multi_selection() {
     let cx = TestAppContext::single();
     let mut transfer = transfer_state(&cx);

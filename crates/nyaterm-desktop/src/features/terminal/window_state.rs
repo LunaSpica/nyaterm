@@ -310,6 +310,17 @@ impl TerminalFeatureState {
     pub(in crate::features) fn clear_terminal_file_drop_hover(&mut self) -> bool {
         self.windows.file_drop_hover.take().is_some()
     }
+
+    pub(in crate::features) fn clear_terminal_file_drop_hover_for_session(
+        &mut self,
+        session_id: &str,
+    ) -> bool {
+        if self.windows.file_drop_hover.as_deref() != Some(session_id) {
+            return false;
+        }
+        self.windows.file_drop_hover = None;
+        true
+    }
 }
 
 fn terminal_window_leaf_with_tab(node: &TerminalWindowNode, tab_id: &str) -> Option<String> {

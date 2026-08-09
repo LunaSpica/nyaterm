@@ -1009,6 +1009,19 @@ impl NyaTermApp {
         }
     }
 
+    pub(in crate::features) fn clear_terminal_file_drop_hover_for_session(
+        &mut self,
+        session_id: &str,
+        cx: &mut Context<Self>,
+    ) {
+        if self
+            .terminal
+            .clear_terminal_file_drop_hover_for_session(session_id)
+        {
+            cx.notify();
+        }
+    }
+
     pub(in crate::features) fn apply_session_cwd(&mut self, session_id: &str, cwd: String) {
         let changed = self.session.update_cwd(session_id, cwd.clone());
         // Auto-sync the transfer browser path when enabled for the active SSH session.

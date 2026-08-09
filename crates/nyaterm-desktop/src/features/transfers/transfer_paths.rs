@@ -439,44 +439,20 @@ impl NyaTermApp {
                     self.transfer.browser.status = "upload selection cancelled".to_string();
                     return;
                 }
-                let total = paths.len();
-                self.transfer.set_remote_path(remote_path.clone());
-                self.transfer.browser.status = if total == 1 {
-                    format!(
-                        "Uploading {} to {}",
-                        paths[0].display(),
-                        truncate_preview(&remote_path, 48)
-                    )
-                } else {
-                    format!(
-                        "Uploading {total} items to {}",
-                        truncate_preview(&remote_path, 48)
-                    )
+                let fallback = match kind {
+                    TransferPathPromptKind::UploadFile => "uploaded_file",
+                    TransferPathPromptKind::UploadDirectory => "uploaded_folder",
+                    TransferPathPromptKind::DownloadDirectory => unreachable!(),
                 };
-                let multiplex = session_id.as_deref().and_then(|session_id| {
-                    self.session.ssh_multiplex_handle_for_session(session_id)
-                });
-                let session = SftpJobSession {
+                self.enqueue_transfer_browser_upload_paths(
+                    paths,
+                    remote_path,
                     session_id,
                     config,
-                    multiplex,
-                };
-                for path in paths {
-                    let fallback = match kind {
-                        TransferPathPromptKind::UploadFile => "uploaded_file",
-                        TransferPathPromptKind::UploadDirectory => "uploaded_folder",
-                        TransferPathPromptKind::DownloadDirectory => unreachable!(),
-                    };
-                    let upload_name = transfer_upload_local_name(&path, fallback);
-                    let target_path = transfer_upload_remote_child_path(&remote_path, &upload_name);
-                    self.enqueue_sftp_upload_job_for_target(
-                        session.clone(),
-                        path,
-                        target_path,
-                        path_options.clone(),
-                        cx,
-                    );
-                }
+                    path_options,
+                    fallback,
+                    cx,
+                );
             }
             TransferPathPromptResult::Cancelled => {
                 self.shell.set_status("path picker cancelled".to_string());
@@ -492,6 +468,110 @@ impl NyaTermApp {
                     .set_status("path picker closed before returning".to_string());
                 self.transfer.browser.status = self.shell.status().to_string();
             }
+        }
+    }
+
+    pub(in crate::features) fn set_transfer_browser_external_drop_hover(
+        &mut self,
+        hover: bool,
+        cx: &mut Context<Self>,
+    ) {
+        if self.transfer.set_browser_external_drop_hover(hover) {
+            cx.notify();
+        }
+    }
+
+    pub(in crate::features) fn handle_transfer_browser_external_file_drop(
+        &mut self,
+        paths: Vec<PathBuf>,
+        cx: &mut Context<Self>,
+    ) {
+        self.transfer.set_browser_external_drop_hover(false);
+        if paths.is_empty() {
+            let status = self
+                .tr("fileExplorer.externalDropPathsRequired")
+                .to_string();
+            self.shell.set_status(status.clone());
+            self.transfer.set_browser_status(status);
+            cx.notify();
+            return;
+        }
+        self.start_transfer_browser_upload_paths(paths, cx);
+    }
+
+    fn start_transfer_browser_upload_paths(&mut self, paths: Vec<PathBuf>, cx: &mut Context<Self>) {
+        let Some(config) = self.session.active_ssh_config_owned() else {
+            self.shell
+                .set_status("start an SSH session first".to_string());
+            cx.notify();
+            return;
+        };
+        let session_id = self.session.active_id_owned();
+        let duplicate_policy = self.transfer.duplicate_policy();
+        let duplicate_resolver = (duplicate_policy == SftpDuplicatePolicy::Ask)
+            .then(|| self.session.prompt_duplicate_broker() as Arc<dyn SftpDuplicateResolver>);
+        let path_options = SftpPathTransferOptions::new(
+            duplicate_policy,
+            duplicate_resolver,
+            self.sftp_transfer_options(),
+        );
+        let remote_path = self.normalized_transfer_browser_upload_target();
+        self.enqueue_transfer_browser_upload_paths(
+            paths,
+            remote_path,
+            session_id,
+            config,
+            path_options,
+            "uploaded_item",
+            cx,
+        );
+    }
+
+    fn enqueue_transfer_browser_upload_paths(
+        &mut self,
+        paths: Vec<PathBuf>,
+        remote_path: String,
+        session_id: Option<String>,
+        config: SshSessionConfig,
+        path_options: SftpPathTransferOptions,
+        fallback_name: &str,
+        cx: &mut Context<Self>,
+    ) {
+        if paths.is_empty() {
+            return;
+        }
+        let total = paths.len();
+        self.transfer.set_remote_path(remote_path.clone());
+        self.transfer.browser.status = if total == 1 {
+            format!(
+                "Uploading {} to {}",
+                paths[0].display(),
+                truncate_preview(&remote_path, 48)
+            )
+        } else {
+            format!(
+                "Uploading {total} items to {}",
+                truncate_preview(&remote_path, 48)
+            )
+        };
+        let multiplex = session_id
+            .as_deref()
+            .and_then(|session_id| self.session.ssh_multiplex_handle_for_session(session_id));
+        let session = SftpJobSession {
+            session_id,
+            config,
+            multiplex,
+        };
+        for path in paths {
+            let upload_name = transfer_upload_local_name(&path, fallback_name);
+            let target_path = transfer_upload_remote_child_path(&remote_path, &upload_name);
+            self.enqueue_sftp_upload_job_for_target(
+                session.clone(),
+                path,
+                target_path,
+                path_options.clone(),
+                cx,
+            );
         }
     }
 
@@ -529,9 +609,56 @@ fn transfer_upload_local_name(path: &std::path::Path, fallback: &str) -> String 
 }
 
 fn transfer_upload_remote_child_path(remote_dir: &str, name: &str) -> String {
+    let remote_dir = remote_dir.trim();
+    if remote_dir == "/" {
+        return format!("/{name}");
+    }
     match remote_dir.trim_end_matches('/') {
         "" | "." => name.to_string(),
-        "/" => format!("/{name}"),
         parent => format!("{parent}/{name}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{transfer_upload_local_name, transfer_upload_remote_child_path};
+    use std::path::PathBuf;
+
+    #[test]
+    fn upload_remote_child_path_joins_browser_directory_and_local_name() {
+        assert_eq!(
+            transfer_upload_remote_child_path("/remote", "local.txt"),
+            "/remote/local.txt"
+        );
+        assert_eq!(
+            transfer_upload_remote_child_path("/", "local.txt"),
+            "/local.txt"
+        );
+        assert_eq!(
+            transfer_upload_remote_child_path(".", "local.txt"),
+            "local.txt"
+        );
+    }
+
+    #[test]
+    fn upload_remote_child_path_maps_multiple_local_paths_to_browser_directory() {
+        let paths = [PathBuf::from("one.txt"), PathBuf::from("two.txt")];
+        let targets = paths
+            .iter()
+            .map(|path| {
+                let name = transfer_upload_local_name(path, "uploaded_item");
+                transfer_upload_remote_child_path("/remote", &name)
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(targets, ["/remote/one.txt", "/remote/two.txt"]);
+    }
+
+    #[test]
+    fn upload_local_name_uses_fallback_for_empty_terminal_component() {
+        assert_eq!(
+            transfer_upload_local_name(&PathBuf::from("/"), "uploaded_item"),
+            "uploaded_item"
+        );
     }
 }

@@ -782,6 +782,12 @@ mod tests {
 
         assert!(state.set_terminal_file_drop_hover(Some("alpha".to_string())));
         assert!(state.terminal_file_drop_hover_matches("alpha"));
+        assert!(!state.clear_terminal_file_drop_hover_for_session("beta"));
+        assert!(state.terminal_file_drop_hover_matches("alpha"));
+        assert!(state.clear_terminal_file_drop_hover_for_session("alpha"));
+        assert!(!state.terminal_file_drop_hover_is_pending());
+
+        assert!(state.set_terminal_file_drop_hover(Some("alpha".to_string())));
         assert!(state.clear_terminal_file_drop_hover());
         assert!(!state.terminal_file_drop_hover_is_pending());
     }

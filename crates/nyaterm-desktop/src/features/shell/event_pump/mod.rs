@@ -356,6 +356,9 @@ impl NyaTermApp {
         if self.terminal.terminal_file_drop_hover_is_pending() {
             return true;
         }
+        if self.transfer.browser_external_drop_hover_is_pending() {
+            return true;
+        }
         if self.settings.summary().cursor_blink
             && !self.visible_terminal_session_ids().is_empty()
             && self

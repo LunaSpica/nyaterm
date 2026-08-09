@@ -1,6 +1,6 @@
 use gpui::{
     AnyElement, Context, IntoElement, KeyDownEvent, ListHorizontalSizingBehavior, MouseButton,
-    MouseDownEvent, SharedString, div, prelude::*, px, rgb, svg, uniform_list,
+    MouseDownEvent, SharedString, div, prelude::*, px, rgb, rgba, svg, uniform_list,
 };
 use nyaterm_core::truncate_preview;
 use nyaterm_transport::SftpFileType;
@@ -171,6 +171,7 @@ impl NyaTermApp {
             can_transfer && !self.transfer.browser_view().loading && !visible_entries.is_empty();
         let auto_sync_cwd = self.transfer_browser_auto_sync_cwd_enabled();
         let cwd_tracking_available = self.active_transfer_browser_connection_id().is_some();
+        let external_drop_hover = self.transfer.browser_view().external_drop_hover;
         let rows: AnyElement = if self.transfer.browser_view().loading {
             div()
                 .flex()
@@ -316,9 +317,22 @@ impl NyaTermApp {
             .size_full()
             .flex()
             .flex_col()
+            .relative()
             .overflow_hidden()
             .bg(transparent_surface)
             .track_focus(self.transfer.browser_view().focus)
+            .can_drop(|drag, _, _| drag.is::<gpui::ExternalPaths>())
+            .on_drag_move(cx.listener(
+                |this, event: &gpui::DragMoveEvent<gpui::ExternalPaths>, _, cx| {
+                    this.set_transfer_browser_external_drop_hover(
+                        event.bounds.contains(&event.event.position),
+                        cx,
+                    );
+                },
+            ))
+            .on_drop(cx.listener(|this, paths: &gpui::ExternalPaths, _, cx| {
+                this.handle_transfer_browser_external_file_drop(paths.paths().to_vec(), cx);
+            }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 this.handle_transfer_browser_key_down(event, window, cx);
             }))
@@ -683,5 +697,47 @@ impl NyaTermApp {
                             )),
                     ),
             )
+            .when(external_drop_hover, |this| {
+                this.child(
+                    div()
+                        .absolute()
+                        .inset_2()
+                        .rounded_lg()
+                        .border_2()
+                        .border_color(rgb(palette.link))
+                        .bg(rgba(0x3b82f624))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(
+                            div()
+                                .max_w(px(340.))
+                                .rounded_lg()
+                                .border_1()
+                                .border_color(rgb(palette.link))
+                                .bg(rgb(palette.surface))
+                                .px_6()
+                                .py_4()
+                                .shadow_lg()
+                                .flex()
+                                .flex_col()
+                                .items_center()
+                                .gap_1()
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .font_weight(gpui::FontWeight(700.))
+                                        .text_color(rgb(palette.text))
+                                        .child(self.tr("fileExplorer.externalDropOverlayTitle")),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(rgb(palette.text_muted))
+                                        .child(self.tr("fileExplorer.externalDropOverlayHint")),
+                                ),
+                        ),
+                )
+            })
     }
 }
