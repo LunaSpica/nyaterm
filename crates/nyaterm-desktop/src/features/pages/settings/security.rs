@@ -1,12 +1,11 @@
-use gpui::{Context, FontWeight, IntoElement, SharedString, div, prelude::*, px, rgb};
-use nyaterm_ui::NyaNumberInputOptions;
+use gpui::{Context, IntoElement, SharedString, div, prelude::*, px, rgb};
+use nyaterm_ui::{NyaNumberInputOptions, NyaSelectOption};
 
 use crate::features::{NyaTermApp, TextInputSetup};
 use nyaterm_ui::NyaTooltip;
 
 use super::{
-    settings_choice_chip, settings_form_row, settings_form_section, settings_switch,
-    settings_switch_with_enabled,
+    settings_form_row, settings_form_section, settings_switch, settings_switch_with_enabled,
 };
 
 impl NyaTermApp {
@@ -154,61 +153,19 @@ impl NyaTermApp {
                 palette,
                 None,
                 None,
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_3()
-                    .child(
-                        div()
-                            .min_w_0()
-                            .child(
-                                div()
-                                    .text_size(px(13.))
-                                    .font_weight(FontWeight(500.))
-                                    .text_color(rgb(palette.text))
-                                    .child(host_key_label),
-                            )
-                            .child(
-                                div()
-                                    .mt_1()
-                                    .text_size(px(11.))
-                                    .text_color(rgb(palette.text_dimmed))
-                                    .child(host_key_desc),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_wrap()
-                            .gap_1()
-                            .child(settings_choice_chip(
-                                palette,
-                                "security-host-strict",
-                                self.tr("settings.hostKeyStrict"),
-                                host_key_policy == "strict",
-                                cx.listener(|this, _, _, cx| {
-                                    this.update_host_key_policy("strict", cx);
-                                }),
-                            ))
-                            .child(settings_choice_chip(
-                                palette,
-                                "security-host-prompt",
-                                self.tr("settings.hostKeyPrompt"),
-                                host_key_policy == "prompt",
-                                cx.listener(|this, _, _, cx| {
-                                    this.update_host_key_policy("prompt", cx);
-                                }),
-                            ))
-                            .child(settings_choice_chip(
-                                palette,
-                                "security-host-accept",
-                                self.tr("settings.hostKeyAccept"),
-                                host_key_policy == "accept",
-                                cx.listener(|this, _, _, cx| {
-                                    this.update_host_key_policy("accept", cx);
-                                }),
-                            )),
-                    ),
+                self.settings_select_field(
+                    "settings.security.host-key-policy",
+                    host_key_label,
+                    Some(SharedString::from(host_key_desc)),
+                    vec![
+                        NyaSelectOption::new("strict", self.tr("settings.hostKeyStrict")),
+                        NyaSelectOption::new("prompt", self.tr("settings.hostKeyPrompt")),
+                        NyaSelectOption::new("accept", self.tr("settings.hostKeyAccept")),
+                    ],
+                    host_key_policy,
+                    false,
+                    cx,
+                ),
             ))
     }
 }

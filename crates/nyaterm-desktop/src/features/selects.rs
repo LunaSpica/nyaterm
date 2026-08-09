@@ -11,12 +11,13 @@ use gpui::{
     SharedString, Styled as _, Subscription, Window, div, px,
 };
 use nyaterm_core::RiskLevel;
+use nyaterm_transport::SftpDuplicatePolicy;
 use nyaterm_ui::{
     NYA_FORM_CONTROL_HEIGHT_PX, NyaSelect, NyaSelectEvent, NyaSelectOption, NyaSelectState,
 };
 
-use super::NyaTermApp;
-use crate::models::ConnectionEditorSelect;
+use super::{NyaTermApp, TabMouseActionTarget};
+use crate::models::{ConnectionEditorSelect, HeaderStatusMode};
 use crate::send_command::{
     SendCommandDataType, SendCommandLineEnding, SendCommandMode, SendCommandTarget,
 };
@@ -194,6 +195,59 @@ impl NyaTermApp {
                 }
             }
             "appearance-cursor-style" => self.set_cursor_style(value, cx),
+            "settings.general.language" => match value {
+                "zh-CN" | "zh" => self.update_ui_language("zh-CN", cx),
+                _ => self.update_ui_language("en", cx),
+            },
+            "settings.general.header-status" => {
+                if value == "hidden" {
+                    self.set_header_status_visible(false, cx);
+                } else {
+                    self.set_header_status_mode(HeaderStatusMode::from_setting(value), cx);
+                }
+            }
+            "settings.general.diagnostics-level" => match value {
+                "warn" => self.set_diagnostics_level("warn", cx),
+                "debug" => self.set_diagnostics_level("debug", cx),
+                _ => self.set_diagnostics_level("info", cx),
+            },
+            "settings.general.diagnostics-retention" => {
+                if let Ok(days) = value.parse::<u32>() {
+                    self.set_diagnostics_retention_days(days, cx);
+                }
+            }
+            "settings.interaction.default-encoding" => match value {
+                "GBK" => self.set_interaction_encoding("GBK", cx),
+                _ => self.set_interaction_encoding("UTF-8", cx),
+            },
+            "settings.interaction.tab-double" => {
+                self.set_tab_mouse_action(TabMouseActionTarget::Double, value, cx);
+            }
+            "settings.interaction.tab-middle" => {
+                self.set_tab_mouse_action(TabMouseActionTarget::Middle, value, cx);
+            }
+            "settings.interaction.tab-right" => {
+                self.set_tab_mouse_action(TabMouseActionTarget::Right, value, cx);
+            }
+            "settings.transfer.duplicate-strategy" => {
+                self.update_transfer_duplicate_policy(
+                    SftpDuplicatePolicy::from_legacy_value(value),
+                    cx,
+                );
+            }
+            "settings.transfer.editor-type" => match value {
+                "internal" => self.update_transfer_editor_type("internal", cx),
+                _ => self.update_transfer_editor_type("external", cx),
+            },
+            "settings.security.host-key-policy" => match value {
+                "strict" => self.update_host_key_policy("strict", cx),
+                "accept" => self.update_host_key_policy("accept", cx),
+                _ => self.update_host_key_policy("prompt", cx),
+            },
+            "settings.translation.target-language" => {
+                self.translation.select_target_language(value);
+                self.save_translation_settings(cx);
+            }
             "network-tunnel-editor-type" => self.set_network_tunnel_type(value, cx),
             "network-tunnel-editor-connection" => self.set_network_tunnel_connection(
                 (value != NO_SELECTION_VALUE).then(|| value.to_string()),

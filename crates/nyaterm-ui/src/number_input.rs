@@ -379,7 +379,12 @@ fn format_number(value: f64, options: &NyaNumberInputOptions) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{NyaNumberInputOptions, NyaNumberStep, committed_number_text, stepped_number_text};
+    use gpui::{AppContext as _, TestAppContext};
+
+    use super::{
+        NyaNumberInputOptions, NyaNumberInputState, NyaNumberStep, committed_number_text,
+        stepped_number_text,
+    };
     use crate::sizing::{NYA_FORM_CONTROL_HEIGHT_PX, form_control_size};
 
     #[test]
@@ -449,5 +454,14 @@ mod tests {
     fn number_input_uses_standard_form_control_size() {
         assert_eq!(NYA_FORM_CONTROL_HEIGHT_PX, 32.);
         assert_eq!(form_control_size(), gpui_component::Size::Medium);
+    }
+
+    #[test]
+    fn number_input_state_exposes_seed_value_before_render() {
+        let mut cx = TestAppContext::single();
+        let input =
+            cx.new(|cx| NyaNumberInputState::new(cx, "64", NyaNumberInputOptions::default()));
+
+        assert_eq!(cx.read_entity(&input, |input, cx| input.value(cx)), "64");
     }
 }

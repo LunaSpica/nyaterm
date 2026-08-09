@@ -1,12 +1,11 @@
-use gpui::{Context, IntoElement, SharedString, div, prelude::*, px, rgb};
+use gpui::{Context, IntoElement, SharedString, div, prelude::*, rgb};
+use nyaterm_ui::NyaSelectOption;
 
 use crate::features::NyaTermApp;
 use crate::models::HeaderStatusMode;
 use crate::widgets::small_button;
 
-use super::super::{
-    settings_choice_chip, settings_form_row, settings_form_section, settings_switch,
-};
+use super::super::{settings_form_row, settings_form_section, settings_switch};
 
 impl NyaTermApp {
     pub(in crate::features) fn general_settings_section(
@@ -16,12 +15,9 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         // Tauri GeneralTab: language, nested startup layout, tray, confirm, diagnostics.
         let language = self.settings.summary().language.clone();
-        let language_label = match language.as_str() {
-            "zh-CN" | "zh" => "简体中文",
-            "zh-TW" => "繁體中文",
-            "en" | "en-US" => "English",
-            "ja" => "日本語",
-            other => other,
+        let language_value = match language.as_str() {
+            "zh-CN" | "zh" => "zh-CN",
+            _ => "en",
         };
         let diagnostics_level = self.settings.summary().diagnostics_level.clone();
         let retention = self.settings.summary().diagnostics_retention_days;
@@ -29,6 +25,11 @@ impl NyaTermApp {
         let header_status_mode =
             HeaderStatusMode::from_setting(&self.settings.summary().ui_header_status_mode);
         let header_status_visible = self.settings.summary().ui_header_status_visible;
+        let header_status_value = if header_status_visible {
+            header_status_mode.persistence_id()
+        } else {
+            "hidden"
+        };
 
         div()
             .flex()
@@ -46,64 +47,38 @@ impl NyaTermApp {
                         palette,
                         self.tr("settings.language"),
                         Some(SharedString::from(self.tr("settings.languageDesc"))),
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .child(settings_choice_chip(
-                                palette,
-                                "general-lang-en",
-                                "English",
-                                matches!(language.as_str(), "en" | "en-US"),
-                                cx.listener(|this, _, _, cx| {
-                                    this.update_ui_language("en", cx);
-                                }),
-                            ))
-                            .child(settings_choice_chip(
-                                palette,
-                                "general-lang-zh",
-                                "中文",
-                                matches!(language.as_str(), "zh-CN" | "zh"),
-                                cx.listener(|this, _, _, cx| {
-                                    this.update_ui_language("zh-CN", cx);
-                                }),
-                            ))
-                            .child(
-                                div()
-                                    .text_size(px(10.))
-                                    .text_color(rgb(palette.text_dimmed))
-                                    .child(language_label.to_string()),
-                            ),
+                        self.settings_select_control(
+                            "settings.general.language",
+                            vec![
+                                NyaSelectOption::new("en", "English"),
+                                NyaSelectOption::new("zh-CN", "中文 (简体)"),
+                            ],
+                            language_value,
+                            false,
+                            cx,
+                        ),
                     ))
                     .child(settings_form_row(
                         palette,
                         self.tr("settings.headerStatus"),
                         Some(SharedString::from(self.tr("settings.headerStatusDesc"))),
-                        div()
-                            .flex()
-                            .flex_wrap()
-                            .items_center()
-                            .gap_1()
-                            .child(settings_choice_chip(
-                                palette,
-                                "general-header-status-hidden",
+                        self.settings_select_control(
+                            "settings.general.header-status",
+                            std::iter::once(NyaSelectOption::new(
+                                "hidden",
                                 self.tr("headerStatus.hidden"),
-                                !header_status_visible,
-                                cx.listener(|this, _, _, cx| {
-                                    this.set_header_status_visible(false, cx);
-                                }),
                             ))
-                            .children(HeaderStatusMode::ALL.into_iter().map(|mode| {
-                                settings_choice_chip(
-                                    palette,
-                                    format!("general-header-status-{}", mode.persistence_id()),
+                            .chain(HeaderStatusMode::ALL.into_iter().map(|mode| {
+                                NyaSelectOption::new(
+                                    mode.persistence_id(),
                                     self.tr(mode.i18n_key()),
-                                    header_status_visible && header_status_mode == mode,
-                                    cx.listener(move |this, _, _, cx| {
-                                        this.set_header_status_mode(mode, cx);
-                                    }),
                                 )
-                            })),
+                            }))
+                            .collect(),
+                            header_status_value,
+                            false,
+                            cx,
+                        ),
                     )),
             ))
             .child(settings_form_section(
@@ -190,57 +165,36 @@ impl NyaTermApp {
                         palette,
                         self.tr("settings.logLevel"),
                         Some(SharedString::from(self.tr("settings.logLevelDesc"))),
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .child(settings_choice_chip(
-                                palette,
-                                "general-diag-warn",
-                                self.tr("settings.logLevelWarn"),
-                                diagnostics_level == "warn",
-                                cx.listener(|this, _, _, cx| {
-                                    this.set_diagnostics_level("warn", cx);
-                                }),
-                            ))
-                            .child(settings_choice_chip(
-                                palette,
-                                "general-diag-info",
-                                self.tr("settings.logLevelInfo"),
-                                diagnostics_level == "info",
-                                cx.listener(|this, _, _, cx| {
-                                    this.set_diagnostics_level("info", cx);
-                                }),
-                            ))
-                            .child(settings_choice_chip(
-                                palette,
-                                "general-diag-debug",
-                                self.tr("settings.logLevelDebug"),
-                                diagnostics_level == "debug",
-                                cx.listener(|this, _, _, cx| {
-                                    this.set_diagnostics_level("debug", cx);
-                                }),
-                            )),
+                        self.settings_select_control(
+                            "settings.general.diagnostics-level",
+                            vec![
+                                NyaSelectOption::new("warn", self.tr("settings.logLevelWarn")),
+                                NyaSelectOption::new("info", self.tr("settings.logLevelInfo")),
+                                NyaSelectOption::new("debug", self.tr("settings.logLevelDebug")),
+                            ],
+                            diagnostics_level,
+                            false,
+                            cx,
+                        ),
                     ))
                     .child(settings_form_row(
                         palette,
                         self.tr("settings.logRetention"),
                         Some(SharedString::from(self.tr("settings.logRetentionDesc"))),
-                        div().flex().items_center().gap_1().children(
-                            [3_u32, 7, 14, 30].into_iter().map(|days| {
-                                let selected = retention == days;
-                                let id = format!("general-diag-retention-{days}");
-                                let label = format!("{days} {days_unit}");
-                                settings_choice_chip(
-                                    palette,
-                                    id,
-                                    label,
-                                    selected,
-                                    cx.listener(move |this, _, _, cx| {
-                                        this.set_diagnostics_retention_days(days, cx);
-                                    }),
-                                )
-                            }),
+                        self.settings_select_control(
+                            "settings.general.diagnostics-retention",
+                            [3_u32, 7, 14, 30]
+                                .into_iter()
+                                .map(|days| {
+                                    NyaSelectOption::new(
+                                        days.to_string(),
+                                        format!("{days} {days_unit}"),
+                                    )
+                                })
+                                .collect(),
+                            retention.to_string(),
+                            false,
+                            cx,
                         ),
                     ))
                     .child(settings_form_row(

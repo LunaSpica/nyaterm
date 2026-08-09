@@ -6,8 +6,7 @@ use gpui::{
 use crate::models::{SettingsTab, SnapshotPasswordPromptKind, SnapshotPasswordPromptState};
 use crate::theme::ThemePalette;
 use nyaterm_ui::{
-    NyaButton, NyaButtonVariant, NyaSettingsLayout, NyaSettingsNavGroup, NyaSettingsNavItem,
-    NyaSwitch,
+    NyaSelectOption, NyaSettingsLayout, NyaSettingsNavGroup, NyaSettingsNavItem, NyaSwitch,
 };
 
 use super::super::NyaTermApp;
@@ -393,6 +392,73 @@ impl NyaTermApp {
             SettingsTab::SyncBackup => self.cloud_sync_settings_section(cx).into_any_element(),
         }
     }
+
+    pub(in crate::features::pages::settings) fn settings_select_control<I, S>(
+        &mut self,
+        id: I,
+        options: Vec<NyaSelectOption>,
+        selected_value: S,
+        disabled: bool,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement + use<I, S>
+    where
+        I: Into<SharedString>,
+        S: Into<String>,
+    {
+        div()
+            .w(px(260.))
+            .max_w_full()
+            .child(self.form_select_control(id, options, Some(selected_value.into()), disabled, cx))
+    }
+
+    pub(in crate::features::pages::settings) fn settings_select_field<I, L, S>(
+        &mut self,
+        id: I,
+        label: L,
+        desc: Option<SharedString>,
+        options: Vec<NyaSelectOption>,
+        selected_value: S,
+        disabled: bool,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement + use<I, L, S>
+    where
+        I: Into<SharedString>,
+        L: Into<SharedString>,
+        S: Into<String>,
+    {
+        let palette = self.theme_palette();
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(
+                div()
+                    .text_size(px(13.))
+                    .font_weight(FontWeight(500.))
+                    .text_color(rgb(palette.text))
+                    .child(label.into()),
+            )
+            .when_some(desc, |this, desc| {
+                this.child(
+                    div()
+                        .text_size(px(11.))
+                        .text_color(rgb(palette.text_dimmed))
+                        .child(desc),
+                )
+            })
+            .child(
+                div()
+                    .w_full()
+                    .max_w(px(576.))
+                    .child(self.form_select_control(
+                        id,
+                        options,
+                        Some(selected_value.into()),
+                        disabled,
+                        cx,
+                    )),
+            )
+    }
 }
 
 fn settings_tab_nav_id(tab: SettingsTab) -> &'static str {
@@ -552,20 +618,4 @@ pub(super) fn settings_switch_with_enabled(
                 on_click(&ClickEvent::default(), window, cx);
             }
         })
-}
-
-/// Compact choice chips for enum-like settings.
-pub(super) fn settings_choice_chip(
-    _palette: ThemePalette,
-    id: impl Into<String>,
-    label: impl Into<SharedString>,
-    selected: bool,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    NyaButton::new(id.into(), label.into())
-        .variant(NyaButtonVariant::Ghost)
-        .selected(selected)
-        .small()
-        .compact()
-        .on_click(on_click)
 }

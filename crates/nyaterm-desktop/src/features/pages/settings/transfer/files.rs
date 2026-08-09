@@ -1,12 +1,10 @@
 use gpui::{Context, IntoElement, SharedString, div, prelude::*, px};
-use nyaterm_transport::SftpDuplicatePolicy;
+use nyaterm_ui::NyaSelectOption;
 
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, TextInputSetup, duplicate_policy_label};
 use crate::widgets::small_button;
 
-use super::super::{
-    settings_choice_chip, settings_form_row, settings_form_section, settings_switch,
-};
+use super::super::{settings_form_row, settings_form_section, settings_switch};
 
 impl NyaTermApp {
     pub(in crate::features) fn transfer_settings_section(
@@ -23,6 +21,7 @@ impl NyaTermApp {
             )
             .into_any_element();
         let policy = self.transfer.duplicate_policy();
+        let selected_policy = duplicate_policy_label(policy);
 
         div()
             .flex()
@@ -75,58 +74,21 @@ impl NyaTermApp {
                         Some(SharedString::from(
                             self.tr("settings.duplicateStrategyDesc"),
                         )),
-                        div()
-                            .flex()
-                            .flex_wrap()
-                            .gap_1()
-                            .child(settings_choice_chip(
-                                palette,
-                                "transfer-dup-ask",
-                                self.tr("settings.strategyAsk"),
-                                policy == SftpDuplicatePolicy::Ask,
-                                cx.listener(|this, _, _, cx| {
-                                    this.update_transfer_duplicate_policy(
-                                        SftpDuplicatePolicy::Ask,
-                                        cx,
-                                    );
-                                }),
-                            ))
-                            .child(settings_choice_chip(
-                                palette,
-                                "transfer-dup-overwrite",
-                                self.tr("settings.strategyOverwrite"),
-                                policy == SftpDuplicatePolicy::Overwrite,
-                                cx.listener(|this, _, _, cx| {
-                                    this.update_transfer_duplicate_policy(
-                                        SftpDuplicatePolicy::Overwrite,
-                                        cx,
-                                    );
-                                }),
-                            ))
-                            .child(settings_choice_chip(
-                                palette,
-                                "transfer-dup-skip",
-                                self.tr("settings.strategySkip"),
-                                policy == SftpDuplicatePolicy::Skip,
-                                cx.listener(|this, _, _, cx| {
-                                    this.update_transfer_duplicate_policy(
-                                        SftpDuplicatePolicy::Skip,
-                                        cx,
-                                    );
-                                }),
-                            ))
-                            .child(settings_choice_chip(
-                                palette,
-                                "transfer-dup-rename",
-                                self.tr("settings.strategyRename"),
-                                policy == SftpDuplicatePolicy::Rename,
-                                cx.listener(|this, _, _, cx| {
-                                    this.update_transfer_duplicate_policy(
-                                        SftpDuplicatePolicy::Rename,
-                                        cx,
-                                    );
-                                }),
-                            )),
+                        self.settings_select_control(
+                            "settings.transfer.duplicate-strategy",
+                            vec![
+                                NyaSelectOption::new(
+                                    "overwrite",
+                                    self.tr("settings.strategyOverwrite"),
+                                ),
+                                NyaSelectOption::new("skip", self.tr("settings.strategySkip")),
+                                NyaSelectOption::new("rename", self.tr("settings.strategyRename")),
+                                NyaSelectOption::new("ask", self.tr("settings.strategyAsk")),
+                            ],
+                            selected_policy,
+                            false,
+                            cx,
+                        ),
                     ))
                     .child(self.transfer_editor_settings_rows(cx)),
             ))

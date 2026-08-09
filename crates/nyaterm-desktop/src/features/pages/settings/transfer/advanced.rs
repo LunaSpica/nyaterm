@@ -1,11 +1,9 @@
-use gpui::{Context, IntoElement, SharedString, div, prelude::*};
+use gpui::{Context, IntoElement, SharedString, div, prelude::*, px};
 use nyaterm_ui::NyaNumberInputOptions;
 
-use crate::features::NyaTermApp;
+use crate::features::{NyaTermApp, TextInputSetup};
 
-use super::super::{
-    settings_choice_chip, settings_form_row, settings_form_section, settings_switch,
-};
+use super::super::{settings_form_row, settings_form_section, settings_switch};
 
 impl NyaTermApp {
     pub(in crate::features::pages::settings) fn transfer_advanced_settings_section(
@@ -18,6 +16,14 @@ impl NyaTermApp {
             .summary()
             .transfer_default_file_permissions
             .clone();
+        let permissions_input = self
+            .text_input_box(
+                "settings.transfer.default-permissions",
+                &permissions,
+                TextInputSetup::placeholder("644"),
+                cx,
+            )
+            .into_any_element();
 
         div().flex().flex_col().gap_3().child(settings_form_section(
             palette,
@@ -131,46 +137,7 @@ impl NyaTermApp {
                     Some(SharedString::from(
                         self.tr("settings.defaultFilePermissionsDesc"),
                     )),
-                    div()
-                        .flex()
-                        .flex_wrap()
-                        .gap_1()
-                        .child(settings_choice_chip(
-                            palette,
-                            "settings-transfer-perm-600",
-                            "600",
-                            permissions == "600",
-                            cx.listener(|this, _, _, cx| {
-                                this.update_transfer_file_permissions("600", cx);
-                            }),
-                        ))
-                        .child(settings_choice_chip(
-                            palette,
-                            "settings-transfer-perm-644",
-                            "644",
-                            permissions == "644",
-                            cx.listener(|this, _, _, cx| {
-                                this.update_transfer_file_permissions("644", cx);
-                            }),
-                        ))
-                        .child(settings_choice_chip(
-                            palette,
-                            "settings-transfer-perm-664",
-                            "664",
-                            permissions == "664",
-                            cx.listener(|this, _, _, cx| {
-                                this.update_transfer_file_permissions("664", cx);
-                            }),
-                        ))
-                        .child(settings_choice_chip(
-                            palette,
-                            "settings-transfer-perm-755",
-                            "755",
-                            permissions == "755",
-                            cx.listener(|this, _, _, cx| {
-                                this.update_transfer_file_permissions("755", cx);
-                            }),
-                        )),
+                    div().w_full().max_w(px(260.)).child(permissions_input),
                 )),
         ))
     }

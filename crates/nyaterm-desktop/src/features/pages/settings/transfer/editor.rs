@@ -1,9 +1,10 @@
 use gpui::{Context, IntoElement, SharedString, div, prelude::*, px};
+use nyaterm_ui::NyaSelectOption;
 
 use crate::features::{NyaTermApp, TextInputSetup};
 use crate::widgets::small_button;
 
-use super::super::{settings_choice_chip, settings_form_row};
+use super::super::settings_form_row;
 
 impl NyaTermApp {
     pub(in crate::features::pages::settings) fn transfer_editor_settings_rows(
@@ -25,6 +26,11 @@ impl NyaTermApp {
         } else {
             self.tr("settings.editorTypeExternal")
         };
+        let selected_editor_type = if editor_type == "internal" {
+            "internal"
+        } else {
+            "external"
+        };
 
         div()
             .flex()
@@ -34,28 +40,16 @@ impl NyaTermApp {
                 palette,
                 self.tr("settings.editorType"),
                 Some(SharedString::from(editor_type_label)),
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .gap_1()
-                    .child(settings_choice_chip(
-                        palette,
-                        "settings-transfer-editor-external",
-                        self.tr("settings.editorTypeExternal"),
-                        editor_type == "external",
-                        cx.listener(|this, _, _, cx| {
-                            this.update_transfer_editor_type("external", cx);
-                        }),
-                    ))
-                    .child(settings_choice_chip(
-                        palette,
-                        "settings-transfer-editor-internal",
-                        self.tr("settings.editorTypeInternal"),
-                        editor_type == "internal",
-                        cx.listener(|this, _, _, cx| {
-                            this.update_transfer_editor_type("internal", cx);
-                        }),
-                    )),
+                self.settings_select_control(
+                    "settings.transfer.editor-type",
+                    vec![
+                        NyaSelectOption::new("external", self.tr("settings.editorTypeExternal")),
+                        NyaSelectOption::new("internal", self.tr("settings.editorTypeInternal")),
+                    ],
+                    selected_editor_type,
+                    false,
+                    cx,
+                ),
             ))
             .when(editor_type == "external", |this| {
                 this.child(settings_form_row(

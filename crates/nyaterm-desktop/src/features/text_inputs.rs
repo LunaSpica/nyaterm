@@ -26,6 +26,7 @@ use nyaterm_ui::{
 use super::NyaTermApp;
 
 pub(in crate::features) const ORDINARY_INPUT_SHELL_PADDING_X_PX: f32 = 4.;
+pub(in crate::features) const ORDINARY_NUMBER_INPUT_WIDTH_PX: f32 = 128.;
 
 pub(in crate::features) fn ordinary_input_shell_border_color(
     palette: crate::theme::ThemePalette,
@@ -288,6 +289,8 @@ impl NyaTermApp {
         let field = self.number_input(id.clone(), seed, setup, cx);
         div()
             .id(id)
+            .w(px(ORDINARY_NUMBER_INPUT_WIDTH_PX))
+            .max_w_full()
             .h(px(NYA_FORM_CONTROL_HEIGHT_PX))
             .min_w_0()
             .flex()
@@ -479,6 +482,8 @@ impl NyaTermApp {
             self.apply_transfer_download_path(text, cx);
         } else if id.as_ref() == "settings.transfer.default-editor" {
             self.apply_transfer_default_editor(text, cx);
+        } else if id.as_ref() == "settings.transfer.default-permissions" {
+            self.apply_transfer_file_permissions(text, cx);
         }
     }
 
@@ -581,4 +586,14 @@ fn parse_u32_input(text: &str) -> Option<u32> {
 
 fn parse_u64_input(text: &str) -> Option<u64> {
     text.trim().parse::<u64>().ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ORDINARY_NUMBER_INPUT_WIDTH_PX;
+
+    #[test]
+    fn number_input_box_uses_stable_nonzero_width() {
+        assert!(ORDINARY_NUMBER_INPUT_WIDTH_PX >= 120.);
+    }
 }

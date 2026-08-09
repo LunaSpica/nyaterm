@@ -170,13 +170,13 @@ impl NyaTermApp {
         self.save_transfer_settings("transfer buffer setting saved", cx);
     }
 
-    pub(in crate::features) fn update_transfer_file_permissions(
+    pub(in crate::features) fn apply_transfer_file_permissions(
         &mut self,
-        permissions: &'static str,
+        permissions: String,
         cx: &mut Context<Self>,
     ) {
-        self.settings.set_transfer_file_permissions(permissions);
-        self.save_transfer_settings("transfer default permissions saved", cx);
+        self.settings.set_transfer_file_permissions(&permissions);
+        cx.notify();
     }
 
     pub(in crate::features) fn save_transfer_settings(

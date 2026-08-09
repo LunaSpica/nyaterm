@@ -1,10 +1,11 @@
 use gpui::{AnyElement, Context, FontWeight, IntoElement, div, prelude::*, px, rgb};
+use nyaterm_ui::NyaSelectOption;
 
 use crate::features::{NyaTermApp, TextInputSetup, secret_input_setup};
 use crate::models::TranslateInputField;
 use crate::widgets::{small_button, status_pill};
 
-use super::{settings_choice_chip, settings_form_section};
+use super::settings_form_section;
 
 impl NyaTermApp {
     fn translation_input(
@@ -77,47 +78,18 @@ impl NyaTermApp {
                 palette,
                 None,
                 None,
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_3()
-                    .child(
-                        div()
-                            .min_w_0()
-                            .child(
-                                div()
-                                    .text_size(px(13.))
-                                    .font_weight(FontWeight(500.))
-                                    .text_color(rgb(palette.text))
-                                    .child(target_language_label),
-                            )
-                            .child(
-                                div()
-                                    .mt_1()
-                                    .text_size(px(11.))
-                                    .text_color(rgb(palette.text_dimmed))
-                                    .child(target_language_desc),
-                            ),
-                    )
-                    .child(div().flex().flex_wrap().gap_1().children(
-                        translation_target_languages().iter().map(|(code, label)| {
-                            let code = *code;
-                            let label = *label;
-                            let selected = translation_settings
-                                .target_language
-                                .eq_ignore_ascii_case(code);
-                            settings_choice_chip(
-                                palette,
-                                format!("translation-target-{code}"),
-                                label,
-                                selected,
-                                cx.listener(move |this, _, _, cx| {
-                                    this.translation.select_target_language(code);
-                                    this.save_translation_settings(cx);
-                                }),
-                            )
-                        }),
-                    )),
+                self.settings_select_field(
+                    "settings.translation.target-language",
+                    target_language_label,
+                    Some(target_language_desc.into()),
+                    translation_target_languages()
+                        .iter()
+                        .map(|(code, label)| NyaSelectOption::new(*code, *label))
+                        .collect(),
+                    translation_settings.target_language.clone(),
+                    false,
+                    cx,
+                ),
             ))
             .child(settings_form_section(
                 palette,

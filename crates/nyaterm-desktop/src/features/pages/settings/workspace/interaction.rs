@@ -1,12 +1,10 @@
 use gpui::{Context, FontWeight, IntoElement, SharedString, div, prelude::*, px, rgb};
-use nyaterm_ui::NyaNumberInputOptions;
+use nyaterm_ui::{NyaNumberInputOptions, NyaSelectOption};
 
-use crate::features::{NyaTermApp, TAB_MOUSE_ACTIONS, TabMouseActionTarget, TextInputSetup};
+use crate::features::{NyaTermApp, TAB_MOUSE_ACTIONS, TextInputSetup};
 use crate::theme::ThemePalette;
 
-use super::super::{
-    settings_choice_chip, settings_form_row, settings_form_section, settings_switch,
-};
+use super::super::{settings_form_row, settings_form_section, settings_switch};
 
 impl NyaTermApp {
     pub(in crate::features) fn interaction_settings_section(
@@ -217,34 +215,28 @@ impl NyaTermApp {
                     .flex_col()
                     .gap_3()
                     .child(self.tab_mouse_action_settings_field(
-                        palette,
                         TabMouseActionPresentation {
                             label: self.tr("settings.tabDoubleClickAction"),
                             description: self.tr("settings.tabDoubleClickActionDesc"),
-                            id_prefix: "interaction-tab-double",
-                            target: TabMouseActionTarget::Double,
+                            id: "settings.interaction.tab-double",
                             current: &double_action,
                         },
                         cx,
                     ))
                     .child(self.tab_mouse_action_settings_field(
-                        palette,
                         TabMouseActionPresentation {
                             label: self.tr("settings.tabMiddleClickAction"),
                             description: self.tr("settings.tabMiddleClickActionDesc"),
-                            id_prefix: "interaction-tab-middle",
-                            target: TabMouseActionTarget::Middle,
+                            id: "settings.interaction.tab-middle",
                             current: &middle_action,
                         },
                         cx,
                     ))
                     .child(self.tab_mouse_action_settings_field(
-                        palette,
                         TabMouseActionPresentation {
                             label: self.tr("settings.tabRightClickAction"),
                             description: self.tr("settings.tabRightClickActionDesc"),
-                            id_prefix: "interaction-tab-right",
-                            target: TabMouseActionTarget::Right,
+                            id: "settings.interaction.tab-right",
                             current: &right_action,
                         },
                         cx,
@@ -254,87 +246,54 @@ impl NyaTermApp {
                 palette,
                 Some(self.tr("settings.interactionEncoding")),
                 Some(self.tr("settings.interactionEncodingDesc")),
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .child(settings_field_meta(
-                        palette,
-                        self.tr("settings.defaultEncoding"),
-                        self.tr("settings.defaultEncodingDesc"),
-                    ))
-                    .child(
-                        div()
-                            .flex()
-                            .gap_1()
-                            .child(settings_choice_chip(
-                                palette,
-                                "interaction-encoding-utf8",
-                                "UTF-8",
-                                encoding == "UTF-8",
-                                cx.listener(|this, _, _, cx| {
-                                    this.set_interaction_encoding("UTF-8", cx);
-                                }),
-                            ))
-                            .child(settings_choice_chip(
-                                palette,
-                                "interaction-encoding-gbk",
-                                "GBK",
-                                encoding == "GBK",
-                                cx.listener(|this, _, _, cx| {
-                                    this.set_interaction_encoding("GBK", cx);
-                                }),
-                            )),
-                    ),
+                self.settings_select_field(
+                    "settings.interaction.default-encoding",
+                    self.tr("settings.defaultEncoding"),
+                    Some(SharedString::from(self.tr("settings.defaultEncodingDesc"))),
+                    vec![
+                        NyaSelectOption::new("UTF-8", "UTF-8"),
+                        NyaSelectOption::new("GBK", "GBK"),
+                    ],
+                    encoding,
+                    false,
+                    cx,
+                ),
             ))
     }
 
     fn tab_mouse_action_settings_field(
         &mut self,
-        palette: ThemePalette,
         presentation: TabMouseActionPresentation<'_>,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let TabMouseActionPresentation {
             label,
             description,
-            id_prefix,
-            target,
+            id,
             current,
         } = presentation;
-        let chips = TAB_MOUSE_ACTIONS.iter().fold(
-            div().flex().flex_wrap().gap_1().max_w(px(640.)),
-            |row, action| {
-                let action_id = (*action).to_string();
-                let selected = current == *action;
-                let chip_id = format!("{id_prefix}-{action}");
-                let action_label = self.tr(tab_mouse_action_i18n_key(action));
-                row.child(settings_choice_chip(
-                    palette,
-                    chip_id,
-                    action_label,
-                    selected,
-                    cx.listener(move |this, _, _, cx| {
-                        this.set_tab_mouse_action(target, &action_id, cx);
-                    }),
-                ))
-            },
-        );
+        let selected = normalized_tab_mouse_action(current).to_string();
+        let options = TAB_MOUSE_ACTIONS
+            .iter()
+            .map(|action| NyaSelectOption::new(*action, self.tr(tab_mouse_action_i18n_key(action))))
+            .collect();
 
-        div()
-            .flex()
-            .flex_col()
-            .gap_2()
-            .child(settings_field_meta(palette, label, description))
-            .child(chips)
+        self.settings_select_field(
+            id,
+            label,
+            Some(SharedString::from(description)),
+            options,
+            selected,
+            false,
+            cx,
+        )
     }
 }
 
 struct TabMouseActionPresentation<'a> {
     label: &'static str,
     description: &'static str,
-    id_prefix: &'static str,
-    target: TabMouseActionTarget,
+    id: &'static str,
     current: &'a str,
 }
 
@@ -359,6 +318,14 @@ fn settings_field_meta(
                 .text_color(rgb(palette.text_dimmed))
                 .child(desc),
         )
+}
+
+fn normalized_tab_mouse_action(action: &str) -> &'static str {
+    TAB_MOUSE_ACTIONS
+        .iter()
+        .copied()
+        .find(|candidate| *candidate == action)
+        .unwrap_or("none")
 }
 
 fn tab_mouse_action_i18n_key(action: &str) -> &'static str {
