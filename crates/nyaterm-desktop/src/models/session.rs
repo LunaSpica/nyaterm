@@ -60,6 +60,17 @@ pub(crate) enum SessionLaunchConfig {
     Serial(SerialSessionConfig),
 }
 
+impl SessionLaunchConfig {
+    pub(crate) fn encoding(&self) -> &str {
+        match self {
+            Self::Local(config) => &config.encoding,
+            Self::Ssh(config) => &config.encoding,
+            Self::Telnet(config) => &config.encoding,
+            Self::Serial(config) => &config.encoding,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub(crate) enum QuickSwitchItem {
     Session {

@@ -541,12 +541,20 @@ impl NyaTermApp {
                         .as_ref()
                         .and_then(|pending| pending.seed_output.clone())
                     {
-                        self.seed_terminal_frame_session(&session_id, seed_output.clone());
-                        self.terminal.seed_session_view(
-                            session_id.clone(),
-                            seed_output,
-                            &self.settings.summary().interaction_default_encoding,
+                        let encoding = self
+                            .session
+                            .metadata(&session_id)
+                            .map(|metadata| metadata.launch_config.encoding().to_string())
+                            .unwrap_or_else(|| {
+                                self.settings.summary().interaction_default_encoding.clone()
+                            });
+                        self.seed_terminal_frame_session(
+                            &session_id,
+                            seed_output.clone(),
+                            &encoding,
                         );
+                        self.terminal
+                            .seed_session_view(session_id.clone(), seed_output, &encoding);
                     }
                     if let Some(after_session_id) = pending
                         .as_ref()
@@ -718,6 +726,7 @@ fn launch_config_for_session_info(info: &SessionInfo) -> SessionLaunchConfig {
             shell_path: None,
             shell_args: Vec::new(),
             working_dir: info.working_dir.clone(),
+            encoding: "UTF-8".to_string(),
             cols: info.cols,
             rows: info.rows,
             pixel_width: 0,
@@ -729,11 +738,18 @@ fn launch_config_for_session_info(info: &SessionInfo) -> SessionLaunchConfig {
                 name: info.name.clone(),
                 host: String::new(),
                 port: 23,
+                username: String::new(),
+                password: None,
+                backspace_mode: "del".to_string(),
                 raw_tcp: info.kind == SessionKind::RawTcp,
                 enter_mode: nyaterm_transport::TelnetEnterMode::default(),
+                local_echo: false,
+                local_line_edit: false,
                 force_character_at_a_time: false,
                 send_naws: false,
                 send_sga: false,
+                auto_login: nyaterm_transport::TelnetAutoLoginConfig::default(),
+                encoding: "UTF-8".to_string(),
                 cols: info.cols,
                 rows: info.rows,
             })
@@ -746,6 +762,7 @@ fn launch_config_for_session_info(info: &SessionInfo) -> SessionLaunchConfig {
             parity: "none".to_string(),
             stop_bits: "1".to_string(),
             backspace_mode: "delete".to_string(),
+            encoding: "UTF-8".to_string(),
         }),
     }
 }

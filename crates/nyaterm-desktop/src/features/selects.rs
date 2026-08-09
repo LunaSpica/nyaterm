@@ -276,6 +276,16 @@ impl NyaTermApp {
                     "connection-editor-proxy" => ConnectionEditorSelect::Proxy,
                     "connection-editor-proxy-jump" => ConnectionEditorSelect::ProxyJump,
                     "connection-editor-backspace" => ConnectionEditorSelect::Backspace,
+                    "connection-editor-encoding" => ConnectionEditorSelect::Encoding,
+                    "connection-editor-sftp-cwd-follow" => {
+                        ConnectionEditorSelect::SftpCwdFollowMode
+                    }
+                    "connection-editor-sftp-filename-encoding" => {
+                        ConnectionEditorSelect::SftpFilenameEncoding
+                    }
+                    "connection-editor-ssh-algorithm-mode" => {
+                        ConnectionEditorSelect::SshAlgorithmMode
+                    }
                     "connection-editor-telnet-enter-mode" => {
                         ConnectionEditorSelect::TelnetEnterMode
                     }

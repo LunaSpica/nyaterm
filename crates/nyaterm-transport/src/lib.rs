@@ -1,21 +1,23 @@
+use std::borrow::Cow;
 use std::collections::{HashMap, VecDeque};
 use std::future::Future;
 use std::io::{Read, Write};
 use std::net::{Shutdown, TcpStream};
 use std::pin::Pin;
 use std::process::Stdio;
+use std::str::FromStr;
 use std::sync::{
-    Arc, Mutex,
+    Arc, Mutex, OnceLock,
     atomic::{AtomicBool, Ordering},
     mpsc,
 };
 use std::thread::JoinHandle;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system};
-use russh::keys::PublicKeyBase64;
-use russh::{ChannelMsg, Disconnect, client};
-use russh_sftp::client::SftpSession;
+use regex::Regex;
+use russh::keys::{Algorithm, EcdsaCurve, HashAlg, PublicKeyBase64};
+use russh::{ChannelMsg, Disconnect, Preferred, cipher, client, kex, mac};
 use serialport::{DataBits, FlowControl, Parity, SerialPort, StopBits};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite};
 use tokio::sync::mpsc as tokio_mpsc;
@@ -29,6 +31,7 @@ mod session_types;
 mod sftp;
 mod ssh_auth;
 use ssh_auth::authenticate_ssh;
+mod ssh_shell_integration;
 mod tunnel;
 mod x11;
 
@@ -44,11 +47,12 @@ mod trzsz;
 mod zmodem;
 
 pub use session_config::{
-    LocalSessionConfig, SerialSessionConfig, SshCredentialPrompt, SshCredentialPromptKind,
+    LocalSessionConfig, SerialSessionConfig, SftpCwdFollowMode, SftpSettings, SshAlgorithmMode,
+    SshAlgorithmPreferences, SshCredentialPrompt, SshCredentialPromptKind,
     SshCredentialPromptReason, SshCredentialProvider, SshHostKey, SshHostKeyDecision,
     SshHostKeyVerifier, SshKeyAuthConfig, SshKeyboardInteractivePrompt,
     SshKeyboardInteractiveRequest, SshOtpProvider, SshProxyConfig, SshSessionConfig,
-    TelnetEnterMode, TelnetSessionConfig,
+    TelnetAutoLoginConfig, TelnetEnterMode, TelnetSessionConfig,
 };
 use session_event_queue::SessionEventQueue;
 #[cfg(test)]
@@ -58,6 +62,10 @@ use session_event_queue::{
 pub use session_types::{
     SessionDrain, SessionDrainStats, SessionError, SessionEvent, SessionInfo, SessionKind,
     TerminalTransport,
+};
+pub use sftp::{
+    SFTP_TRANSFER_CANCELLED, SftpAttributeUpdate, SftpFileEntry, SftpFileProperties, SftpFileType,
+    SftpRemoteTextFile, SftpService, SftpTransferControl, SftpWriteTextResult,
 };
 pub use sftp_transfer_types::{
     SFTP_TRANSFER_DEFAULT_BUFFER_SIZE, SFTP_TRANSFER_MAX_BUFFER_SIZE, SFTP_TRANSFER_MAX_RETRIES,
@@ -108,6 +116,12 @@ pub use remote_process::{
 pub(crate) use remote_process::{
     PROCESS_TIMEOUT, ensure_remote_command_success, exec_ssh_command, run_ssh_exec_operation,
 };
+use ssh_shell_integration::{
+    ShellKind, SshShellIntegrationState, build_legacy_ssh_ready_marker, build_ssh_ready_marker,
+    detect_ssh_shell_type, ssh_shell_injection_script,
+};
+#[cfg(test)]
+use ssh_shell_integration::{bytes_after_ssh_ready_marker, strip_ssh_ready_markers};
 pub use stats::{
     CpuInfo, DiskInfo, LoadInfo, MemoryInfo, NetworkInfo, RemoteStats, RemoteStatsService,
     SYSINFO_SCRIPT, SystemInfo, parse_stats_output,
@@ -305,125 +319,6 @@ struct ForwardedTcpIpChannel {
     originator_port: u32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SftpFileType {
-    File,
-    Directory,
-    Symlink,
-    Other,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SftpFileEntry {
-    pub name: String,
-    pub path: String,
-    pub file_type: SftpFileType,
-    pub size: Option<u64>,
-    pub permissions: Option<u32>,
-    pub owner: String,
-    pub group: String,
-    pub modified_at: Option<u32>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SftpFileProperties {
-    pub name: String,
-    pub path: String,
-    pub file_type: SftpFileType,
-    pub size: Option<u64>,
-    pub permissions: Option<u32>,
-    pub permissions_symbolic: String,
-    pub owner: String,
-    pub group: String,
-    pub uid: Option<u32>,
-    pub gid: Option<u32>,
-    pub modified_at: Option<u32>,
-    pub accessed_at: Option<u32>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct SftpAttributeUpdate {
-    pub mode: Option<u32>,
-    pub owner: Option<String>,
-    pub group: Option<String>,
-    pub recursive: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SftpRemoteTextFile {
-    pub path: String,
-    pub content: String,
-    pub size: u64,
-    pub modified_at: u64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SftpWriteTextResult {
-    Saved { modified_at: u64, size: u64 },
-    Conflict { modified_at: u64, size: u64 },
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct SftpTransferControl {
-    cancelled: Arc<AtomicBool>,
-    paused: Arc<AtomicBool>,
-}
-
-impl SftpTransferControl {
-    pub fn new() -> Self {
-        Self {
-            cancelled: Arc::new(AtomicBool::new(false)),
-            paused: Arc::new(AtomicBool::new(false)),
-        }
-    }
-
-    pub fn cancel(&self) {
-        self.cancelled.store(true, Ordering::Relaxed);
-        self.paused.store(false, Ordering::Relaxed);
-    }
-
-    pub fn is_cancelled(&self) -> bool {
-        self.cancelled.load(Ordering::Relaxed)
-    }
-
-    pub fn pause(&self) {
-        if !self.is_cancelled() {
-            self.paused.store(true, Ordering::Relaxed);
-        }
-    }
-
-    pub fn resume(&self) {
-        self.paused.store(false, Ordering::Relaxed);
-    }
-
-    pub fn is_paused(&self) -> bool {
-        self.paused.load(Ordering::Relaxed)
-    }
-
-    pub fn check_cancelled(&self) -> anyhow::Result<()> {
-        if self.is_cancelled() {
-            anyhow::bail!(SFTP_TRANSFER_CANCELLED);
-        }
-        Ok(())
-    }
-
-    async fn wait_if_paused(&self) -> anyhow::Result<()> {
-        self.check_cancelled()?;
-        while self.is_paused() {
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            self.check_cancelled()?;
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct SftpService {
-    config: SshSessionConfig,
-    multiplex: Option<SshMultiplexHandle>,
-}
-
-pub const SFTP_TRANSFER_CANCELLED: &str = "SFTP transfer cancelled";
 const MIT_MAGIC_COOKIE: &str = "MIT-MAGIC-COOKIE-1";
 const XAUTH_TIMEOUT: Duration = Duration::from_secs(2);
 
@@ -452,6 +347,10 @@ pub struct TelnetTransport {
     writer: QueuedTransportWriter,
     reader_stream: TcpStream,
     config: TelnetSessionConfig,
+    backspace_as_bs: bool,
+    local_line_buffer: Vec<u8>,
+    auto_login: Option<Arc<Mutex<TelnetAutoLoginState>>>,
+    event_queue: SessionEventQueue,
     reader_thread: Option<JoinHandle<()>>,
 }
 
@@ -566,6 +465,10 @@ struct OpenSshShellSession {
     disconnect_on_close: bool,
     x11_forwarder: Option<X11Forwarder>,
     local_notice: Option<Vec<u8>>,
+    injection_script: Option<Vec<u8>>,
+    ready_marker: Vec<u8>,
+    legacy_ready_marker: Option<Vec<u8>>,
+    shell_kind: Option<ShellKind>,
 }
 
 enum SshShellHandle {
@@ -719,6 +622,8 @@ impl SessionManager {
             rows: config.rows,
         };
 
+        let auto_login =
+            TelnetAutoLoginState::new(&config).map(|state| Arc::new(Mutex::new(state)));
         let reader_thread = spawn_tcp_reader_thread(
             session_id.clone(),
             stream
@@ -729,6 +634,7 @@ impl SessionManager {
                 })?,
             response_writer,
             config.clone(),
+            auto_login.clone(),
             self.event_queue.clone(),
         );
         let writer = QueuedTransportWriter::spawn(
@@ -742,6 +648,10 @@ impl SessionManager {
             info: info.clone(),
             writer,
             reader_stream: stream,
+            backspace_as_bs: config.backspace_mode == "ctrl_h",
+            local_line_buffer: Vec::new(),
+            auto_login,
+            event_queue: self.event_queue.clone(),
             config,
             reader_thread: Some(reader_thread),
         };
@@ -782,6 +692,12 @@ impl SessionManager {
     ) -> Result<SessionInfo, SessionError> {
         let session_id = uuid::Uuid::new_v4().to_string();
         let addr = format!("{}:{}", config.host, config.port);
+        validate_ssh_algorithm_preferences(config.ssh_algorithms.as_ref()).map_err(|source| {
+            SessionError::CreateSsh {
+                addr: addr.clone(),
+                source,
+            }
+        })?;
         let (command_tx, command_rx) = tokio_mpsc::unbounded_channel();
         let (ready_tx, ready_rx) = mpsc::channel();
         let event_queue = self.event_queue.clone();
@@ -1087,8 +1003,36 @@ impl TerminalTransport for LocalPtyTransport {
 
 impl TerminalTransport for TelnetTransport {
     fn write(&mut self, data: &[u8]) -> anyhow::Result<()> {
-        let data = normalize_telnet_input(data, &self.config);
-        self.writer.write(data)
+        if !data.is_empty()
+            && let Some(auto_login) = self.auto_login.as_ref()
+            && let Ok(mut auto_login) = auto_login.lock()
+        {
+            let _ = auto_login.handle_user_input(false);
+        }
+        let data = if self.backspace_as_bs {
+            remap_del_to_bs(data)
+        } else {
+            data.to_vec()
+        };
+        let (data, visible_echo) = if self.config.local_line_edit {
+            edit_telnet_line_input(&data, &mut self.local_line_buffer, &self.config)
+        } else {
+            let visible_echo = self
+                .config
+                .local_echo
+                .then(|| data.clone())
+                .unwrap_or_default();
+            (data, visible_echo)
+        };
+        let data = normalize_telnet_input(&data, &self.config);
+        self.writer.write(data)?;
+        if !visible_echo.is_empty() {
+            self.event_queue.push(SessionEvent::Output {
+                session_id: self.info.id.clone(),
+                data: visible_echo,
+            });
+        }
+        Ok(())
     }
 
     fn resize(
@@ -1235,6 +1179,7 @@ fn spawn_tcp_reader_thread(
     mut reader: TcpStream,
     mut response_writer: TcpStream,
     config: TelnetSessionConfig,
+    auto_login: Option<Arc<Mutex<TelnetAutoLoginState>>>,
     event_queue: SessionEventQueue,
 ) -> JoinHandle<()> {
     std::thread::spawn(move || {
@@ -1270,6 +1215,20 @@ fn spawn_tcp_reader_thread(
                         })
                     };
                     if !visible.is_empty() {
+                        if let Some(auto_login) = auto_login.as_ref()
+                            && let Ok(mut auto_login) = auto_login.lock()
+                        {
+                            for action in auto_login.handle_visible_output(&visible, &config) {
+                                match action {
+                                    TelnetAutoLoginAction::Send(payload) => {
+                                        let _ = response_writer.write_all(&payload);
+                                        let _ = response_writer.flush();
+                                    }
+                                    TelnetAutoLoginAction::Complete
+                                    | TelnetAutoLoginAction::Disable => {}
+                                }
+                            }
+                        }
                         event_queue.push(SessionEvent::Output {
                             session_id: session_id.clone(),
                             data: visible,
@@ -1294,6 +1253,191 @@ fn spawn_tcp_reader_thread(
             }
         }
     })
+}
+
+const TELNET_AUTO_LOGIN_TAIL_CHARS: usize = 2048;
+const TELNET_AUTO_LOGIN_PROMPT_WINDOW_CHARS: usize = 320;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum TelnetAutoLoginAction {
+    Send(Vec<u8>),
+    Complete,
+    Disable,
+}
+
+struct TelnetAutoLoginState {
+    username: String,
+    password: Option<String>,
+    started_at: Instant,
+    tail: String,
+    sent_wake: bool,
+    sent_username: bool,
+    sent_password: bool,
+    disabled: bool,
+    completed: bool,
+    retries: u8,
+    username_regex: Option<Regex>,
+    password_regex: Option<Regex>,
+    success_regex: Option<Regex>,
+    failure_regex: Option<Regex>,
+}
+
+impl TelnetAutoLoginState {
+    fn new(config: &TelnetSessionConfig) -> Option<Self> {
+        if !config.auto_login.enabled {
+            return None;
+        }
+        let username = config.username.trim().to_string();
+        let password = config.password.clone().filter(|value| !value.is_empty());
+        if username.is_empty() && password.is_none() {
+            return None;
+        }
+        Some(Self {
+            username,
+            password,
+            started_at: Instant::now(),
+            tail: String::new(),
+            sent_wake: false,
+            sent_username: false,
+            sent_password: false,
+            disabled: false,
+            completed: false,
+            retries: 0,
+            username_regex: compile_optional_regex(
+                config.auto_login.username_prompt_regex.as_deref(),
+            ),
+            password_regex: compile_optional_regex(
+                config.auto_login.password_prompt_regex.as_deref(),
+            ),
+            success_regex: compile_optional_regex(
+                config.auto_login.success_prompt_regex.as_deref(),
+            ),
+            failure_regex: compile_optional_regex(
+                config.auto_login.failure_prompt_regex.as_deref(),
+            ),
+        })
+    }
+
+    fn handle_visible_output(
+        &mut self,
+        visible: &[u8],
+        config: &TelnetSessionConfig,
+    ) -> Vec<TelnetAutoLoginAction> {
+        if self.disabled || self.completed {
+            return Vec::new();
+        }
+        if self.started_at.elapsed() > Duration::from_millis(config.auto_login.timeout_ms) {
+            self.disabled = true;
+            return vec![TelnetAutoLoginAction::Disable];
+        }
+
+        let text = String::from_utf8_lossy(visible);
+        self.push_tail(&text);
+        let clean = strip_telnet_auto_login_control_sequences(&self.tail);
+        let clean_input = strip_telnet_auto_login_control_sequences(&text).replace('\r', "\n");
+        let normalized = clean.replace('\r', "\n");
+        let window = last_chars(&normalized, TELNET_AUTO_LOGIN_PROMPT_WINDOW_CHARS);
+        let last_line = last_non_empty_line(&normalized);
+        let prompts = prompt_candidates(&window, &clean_input);
+
+        if self.matches_failure(&window, &last_line) {
+            if self.retries < config.auto_login.max_retries {
+                self.retries += 1;
+                self.sent_username = false;
+                self.sent_password = false;
+                self.tail.clear();
+                return Vec::new();
+            }
+            self.disabled = true;
+            return vec![TelnetAutoLoginAction::Disable];
+        }
+
+        let mut actions = Vec::new();
+        if config.auto_login.send_wake_enter
+            && !self.sent_wake
+            && default_wake_regex().is_match(&window)
+        {
+            self.sent_wake = true;
+            actions.push(TelnetAutoLoginAction::Send(telnet_auto_login_line_bytes(
+                "", config,
+            )));
+        }
+        if !self.sent_username
+            && !self.username.is_empty()
+            && self.matches_username_prompt(&prompts, &last_line)
+        {
+            self.sent_username = true;
+            actions.push(TelnetAutoLoginAction::Send(telnet_auto_login_line_bytes(
+                &self.username,
+                config,
+            )));
+        }
+        if !self.sent_password
+            && let Some(password) = self.password.as_deref()
+            && self.matches_password_prompt(&prompts)
+        {
+            self.sent_password = true;
+            actions.push(TelnetAutoLoginAction::Send(telnet_auto_login_line_bytes(
+                password, config,
+            )));
+        }
+        if (self.sent_username || self.sent_password) && self.matches_success(&last_line) {
+            self.completed = true;
+            actions.push(TelnetAutoLoginAction::Complete);
+        }
+        actions
+    }
+
+    fn handle_user_input(&mut self, automated: bool) -> Option<TelnetAutoLoginAction> {
+        if automated || self.disabled || self.completed {
+            return None;
+        }
+        self.disabled = true;
+        Some(TelnetAutoLoginAction::Disable)
+    }
+
+    fn push_tail(&mut self, text: &str) {
+        self.tail.push_str(text);
+        self.tail = last_chars(&self.tail, TELNET_AUTO_LOGIN_TAIL_CHARS);
+    }
+
+    fn matches_username_prompt(&self, prompts: &[String], last_line: &str) -> bool {
+        if last_login_regex().is_match(last_line) {
+            return false;
+        }
+        prompts.iter().any(|prompt| {
+            self.username_regex.as_ref().map_or_else(
+                || default_username_regex().is_match(prompt),
+                |regex| regex.is_match(prompt),
+            )
+        })
+    }
+
+    fn matches_password_prompt(&self, prompts: &[String]) -> bool {
+        prompts.iter().any(|prompt| {
+            self.password_regex.as_ref().map_or_else(
+                || default_password_regex().is_match(prompt),
+                |regex| regex.is_match(prompt),
+            )
+        })
+    }
+
+    fn matches_success(&self, last_line: &str) -> bool {
+        self.success_regex.as_ref().map_or_else(
+            || default_success_regex().is_match(last_line),
+            |regex| regex.is_match(last_line),
+        )
+    }
+
+    fn matches_failure(&self, text: &str, last_line: &str) -> bool {
+        self.failure_regex.as_ref().map_or_else(
+            || {
+                default_failure_regex().is_match(text)
+                    || default_failure_regex().is_match(last_line)
+            },
+            |regex| regex.is_match(text) || regex.is_match(last_line),
+        )
+    }
 }
 
 fn run_ssh_worker(
@@ -1330,7 +1474,7 @@ fn run_ssh_worker(
             return;
         }
 
-        let open_session = match open_ssh_shell(&config, multiplex.as_ref()).await {
+        let open_session = match open_ssh_shell(&session_id, &config, multiplex.as_ref()).await {
             Ok(session) => {
                 let _ = ready_tx.send(Ok(()));
                 session
@@ -1411,7 +1555,7 @@ async fn run_deferred_ssh_worker(
         disconnect_pending_ssh_shell(pending_session).await;
         return;
     }
-    match open_ssh_shell_from_pending(&config, pending_session, dimensions).await {
+    match open_ssh_shell_from_pending(&session_id, &config, pending_session, dimensions).await {
         Ok(open_session) => {
             run_open_ssh_shell_session(
                 session_id,
@@ -1467,7 +1611,13 @@ async fn run_open_ssh_shell_session(
         disconnect_on_close,
         x11_forwarder,
         local_notice,
+        injection_script,
+        ready_marker,
+        legacy_ready_marker,
+        shell_kind: _shell_kind,
     } = open_session;
+    let mut shell_integration =
+        SshShellIntegrationState::new(injection_script, ready_marker, legacy_ready_marker);
     if let Some(notice) = local_notice {
         event_queue.push(SessionEvent::Output {
             session_id: session_id.clone(),
@@ -1478,22 +1628,32 @@ async fn run_open_ssh_shell_session(
         spawn_x11_forwarder(event_queue.clone(), session_id.clone(), forwarder);
     }
 
-    while let Some(data) = pending_writes.pop_front() {
-        if let Err(error) = channel.data_bytes(data).await {
-            send_session_error(&event_queue, &session_id, error);
-            disconnect_open_ssh_shell(handle, jump_handles, disconnect_on_close).await;
-            return;
+    if shell_integration.is_normal() {
+        while let Some(data) = pending_writes.pop_front() {
+            if let Err(error) = channel.data_bytes(data).await {
+                send_session_error(&event_queue, &session_id, error);
+                disconnect_open_ssh_shell(handle, jump_handles, disconnect_on_close).await;
+                return;
+            }
         }
     }
 
+    let initial_inject_delay = tokio::time::sleep(Duration::from_millis(500));
+    tokio::pin!(initial_inject_delay);
+
     loop {
         tokio::select! {
+            _ = &mut initial_inject_delay, if shell_integration.should_inject_on_initial_delay() => {
+                shell_integration.inject(&mut channel).await;
+            }
             command = command_rx.recv() => {
                 match command {
                     Some(SshCommand::Write(data)) => {
-                        if let Err(error) = channel.data_bytes(data).await {
-                            send_session_error(&event_queue, &session_id, error);
-                            break;
+                        if shell_integration.is_suppressing() {
+                            pending_writes.push_back(data);
+                        } else if let Err(error) = channel.data_bytes(data).await {
+                                send_session_error(&event_queue, &session_id, error);
+                                break;
                         }
                     }
                     Some(SshCommand::Resize {
@@ -1525,10 +1685,23 @@ async fn run_open_ssh_shell_session(
             message = channel.wait() => {
                 match message {
                     Some(ChannelMsg::Data { data }) | Some(ChannelMsg::ExtendedData { data, .. }) => {
-                        event_queue.push(SessionEvent::Output {
-                            session_id: session_id.clone(),
-                            data: data.to_vec(),
-                        });
+                        let visible = shell_integration
+                            .filter_output(&data, &mut channel)
+                            .await;
+                        if shell_integration.is_normal() {
+                            while let Some(data) = pending_writes.pop_front() {
+                                if let Err(error) = channel.data_bytes(data).await {
+                                    send_session_error(&event_queue, &session_id, error);
+                                    break;
+                                }
+                            }
+                        }
+                        if !visible.is_empty() {
+                            event_queue.push(SessionEvent::Output {
+                                session_id: session_id.clone(),
+                                data: visible,
+                            });
+                        }
                     }
                     Some(ChannelMsg::ExitStatus { exit_status }) => {
                         event_queue.push(SessionEvent::Exited {
@@ -1568,11 +1741,18 @@ async fn run_open_ssh_shell_session(
 }
 
 async fn open_ssh_shell(
+    session_id: &str,
     config: &SshSessionConfig,
     multiplex: Option<&SshMultiplexHandle>,
 ) -> anyhow::Result<OpenSshShellSession> {
     let pending = open_pending_ssh_shell(config, multiplex).await?;
-    open_ssh_shell_from_pending(config, pending, SshPtyDimensions::from_config(config)).await
+    open_ssh_shell_from_pending(
+        session_id,
+        config,
+        pending,
+        SshPtyDimensions::from_config(config),
+    )
+    .await
 }
 
 async fn open_pending_ssh_shell(
@@ -1613,6 +1793,7 @@ async fn open_pending_ssh_shell(
 }
 
 async fn open_ssh_shell_from_pending(
+    session_id: &str,
     config: &SshSessionConfig,
     pending: PendingOpenSshShellSession,
     dimensions: SshPtyDimensions,
@@ -1624,6 +1805,17 @@ async fn open_ssh_shell_from_pending(
         x11_config,
         x11_rx,
     } = pending;
+    let ready_marker = build_ssh_ready_marker(session_id);
+    let legacy_ready_marker = build_legacy_ssh_ready_marker(&ready_marker);
+    let shell_kind = match config.sftp.cwd_follow_mode {
+        SftpCwdFollowMode::ShellIntegration => {
+            detect_ssh_shell_type(&handle, config.sftp.shell_detection_timeout_ms).await
+        }
+        SftpCwdFollowMode::Off | SftpCwdFollowMode::RcFile => None,
+    };
+    let injection_script = shell_kind
+        .and_then(|kind| ssh_shell_injection_script(kind, &ready_marker))
+        .map(String::into_bytes);
     let channel = match &mut handle {
         SshShellHandle::Dedicated(handle) => handle.channel_open_session().await?,
         SshShellHandle::Multiplexed(handle) => handle.lock().await.channel_open_session().await?,
@@ -1662,6 +1854,10 @@ async fn open_ssh_shell_from_pending(
         disconnect_on_close,
         x11_forwarder,
         local_notice,
+        injection_script,
+        ready_marker: ready_marker.into_bytes(),
+        legacy_ready_marker: legacy_ready_marker.map(String::into_bytes),
+        shell_kind,
     })
 }
 
@@ -1719,7 +1915,7 @@ impl SshPtyDimensions {
     }
 }
 
-fn ssh_client_config(config: &SshSessionConfig) -> Arc<russh::client::Config> {
+fn ssh_client_config(config: &SshSessionConfig) -> anyhow::Result<Arc<russh::client::Config>> {
     let keepalive_interval = if config.keep_alive_interval_secs == 0 {
         None
     } else {
@@ -1727,97 +1923,142 @@ fn ssh_client_config(config: &SshSessionConfig) -> Arc<russh::client::Config> {
             config.keep_alive_interval_secs,
         )))
     };
-    Arc::new(russh::client::Config {
+    let preferred = resolve_preferred_algorithms(config.ssh_algorithms.as_ref())?;
+    Ok(Arc::new(russh::client::Config {
         inactivity_timeout: None,
         keepalive_interval,
         keepalive_max: 3,
+        preferred,
         ..Default::default()
-    })
+    }))
 }
 
-fn run_sftp_operation<T, F>(operation: F) -> anyhow::Result<T>
-where
-    T: Send + 'static,
-    F: Future<Output = anyhow::Result<T>> + Send + 'static,
-{
-    let runtime = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .thread_name("nyaterm-sftp")
-        .build()
-        .map_err(|error| anyhow::anyhow!("failed to start SFTP runtime: {error}"))?;
-    runtime.block_on(operation)
+fn compatible_algorithms() -> Preferred {
+    let mut preferred = Preferred::default();
+    preferred.kex = Cow::Owned(vec![
+        kex::MLKEM768X25519_SHA256,
+        kex::CURVE25519,
+        kex::CURVE25519_PRE_RFC_8731,
+        kex::ECDH_SHA2_NISTP256,
+        kex::ECDH_SHA2_NISTP384,
+        kex::ECDH_SHA2_NISTP521,
+        kex::DH_G18_SHA512,
+        kex::DH_G17_SHA512,
+        kex::DH_G16_SHA512,
+        kex::DH_G15_SHA512,
+        kex::DH_G14_SHA256,
+        kex::DH_GEX_SHA256,
+        kex::DH_G14_SHA1,
+        kex::DH_GEX_SHA1,
+        kex::DH_G1_SHA1,
+        kex::EXTENSION_SUPPORT_AS_CLIENT,
+        kex::EXTENSION_SUPPORT_AS_SERVER,
+        kex::EXTENSION_OPENSSH_STRICT_KEX_AS_CLIENT,
+        kex::EXTENSION_OPENSSH_STRICT_KEX_AS_SERVER,
+    ]);
+    preferred.key = Cow::Owned(vec![
+        Algorithm::Ed25519,
+        Algorithm::Ecdsa {
+            curve: EcdsaCurve::NistP256,
+        },
+        Algorithm::Ecdsa {
+            curve: EcdsaCurve::NistP384,
+        },
+        Algorithm::Rsa {
+            hash: Some(HashAlg::Sha512),
+        },
+        Algorithm::Rsa {
+            hash: Some(HashAlg::Sha256),
+        },
+        Algorithm::Rsa { hash: None },
+        Algorithm::Ecdsa {
+            curve: EcdsaCurve::NistP521,
+        },
+        Algorithm::Dsa,
+    ]);
+    preferred.cipher = Cow::Owned(vec![
+        cipher::CHACHA20_POLY1305,
+        cipher::AES_256_GCM,
+        cipher::AES_128_GCM,
+        cipher::AES_256_CTR,
+        cipher::AES_192_CTR,
+        cipher::AES_128_CTR,
+        cipher::AES_256_CBC,
+        cipher::AES_192_CBC,
+        cipher::AES_128_CBC,
+        cipher::TRIPLE_DES_CBC,
+    ]);
+    preferred.mac = Cow::Owned(vec![
+        mac::HMAC_SHA512_ETM,
+        mac::HMAC_SHA256_ETM,
+        mac::HMAC_SHA512,
+        mac::HMAC_SHA256,
+        mac::HMAC_SHA1_ETM,
+        mac::HMAC_SHA1,
+    ]);
+    preferred
 }
 
-struct OpenSftpSession {
-    sftp: SftpSession,
-    connection: OpenSftpConnection,
+fn secure_algorithms() -> Preferred {
+    Preferred::default()
 }
 
-enum OpenSftpConnection {
-    Dedicated {
-        handle: client::Handle<SshClientHandler>,
-        jump_handles: Vec<client::Handle<SshClientHandler>>,
-    },
-    Multiplex,
+pub fn validate_ssh_algorithm_preferences(
+    preferences: Option<&SshAlgorithmPreferences>,
+) -> anyhow::Result<()> {
+    resolve_preferred_algorithms(preferences).map(|_| ())
 }
 
-async fn open_sftp_session(
-    config: &SshSessionConfig,
-    multiplex: Option<&SshMultiplexHandle>,
-) -> anyhow::Result<OpenSftpSession> {
-    let (channel, connection) = if let Some(multiplex) = multiplex {
-        multiplex.ensure_matches_config(config)?;
-        let handle = multiplex.target_handle();
-        let channel = {
-            let handle = handle.lock().await;
-            tokio::time::timeout(Duration::from_secs(30), handle.channel_open_session())
-                .await
-                .map_err(|_| anyhow::anyhow!("SFTP channel open timed out"))??
-        };
-        (channel, OpenSftpConnection::Multiplex)
-    } else {
-        let (handle, jump_handles) = open_authenticated_ssh_handle(config).await?;
-        let channel = tokio::time::timeout(Duration::from_secs(30), handle.channel_open_session())
-            .await
-            .map_err(|_| anyhow::anyhow!("SFTP channel open timed out"))??;
-        (
-            channel,
-            OpenSftpConnection::Dedicated {
-                handle,
-                jump_handles,
-            },
-        )
+fn resolve_preferred_algorithms(
+    preferences: Option<&SshAlgorithmPreferences>,
+) -> anyhow::Result<Preferred> {
+    let Some(preferences) = preferences else {
+        return Ok(compatible_algorithms());
     };
-    channel
-        .request_subsystem(true, "sftp")
-        .await
-        .map_err(|error| anyhow::anyhow!("failed to start SFTP subsystem: {error}"))?;
-    let sftp = tokio::time::timeout(
-        Duration::from_secs(30),
-        SftpSession::new(channel.into_stream()),
-    )
-    .await
-    .map_err(|_| anyhow::anyhow!("SFTP initialization timed out"))??;
-    Ok(OpenSftpSession { sftp, connection })
-}
-
-async fn close_sftp_session(session: OpenSftpSession) {
-    let OpenSftpSession { sftp, connection } = session;
-    let _ = sftp.close().await;
-    if let OpenSftpConnection::Dedicated {
-        handle,
-        jump_handles,
-    } = connection
-    {
-        let _ = handle
-            .disconnect(Disconnect::ByApplication, "sftp session closed", "en")
-            .await;
-        for jump_handle in jump_handles {
-            let _ = jump_handle
-                .disconnect(Disconnect::ByApplication, "sftp session closed", "en")
-                .await;
+    match preferences.mode {
+        SshAlgorithmMode::Compatible => Ok(compatible_algorithms()),
+        SshAlgorithmMode::Secure => Ok(secure_algorithms()),
+        SshAlgorithmMode::Custom => {
+            let mut preferred = Preferred::default();
+            preferred.kex = Cow::Owned(parse_required_list(
+                &preferences.kex,
+                "key exchanges",
+                |value| kex::Name::try_from(value).ok(),
+            )?);
+            preferred.cipher = Cow::Owned(parse_required_list(
+                &preferences.ciphers,
+                "ciphers",
+                |value| cipher::Name::try_from(value).ok(),
+            )?);
+            preferred.mac = Cow::Owned(parse_required_list(&preferences.macs, "MACs", |value| {
+                mac::Name::try_from(value).ok()
+            })?);
+            preferred.key = Cow::Owned(parse_required_list(
+                &preferences.host_keys,
+                "host keys",
+                |value| Algorithm::from_str(value).ok(),
+            )?);
+            Ok(preferred)
         }
     }
+}
+
+fn parse_required_list<T, F>(values: &[String], label: &str, mut parse: F) -> anyhow::Result<Vec<T>>
+where
+    F: FnMut(&str) -> Option<T>,
+{
+    if values.is_empty() {
+        return Err(anyhow::anyhow!(
+            "SSH algorithm list '{label}' must not be empty"
+        ));
+    }
+    values
+        .iter()
+        .map(|value| {
+            parse(value)
+                .ok_or_else(|| anyhow::anyhow!("Unsupported SSH algorithm '{value}' in {label}"))
+        })
+        .collect()
 }
 
 type SshHandleChain = (
@@ -1875,7 +2116,7 @@ fn open_authenticated_ssh_handle_with_sender_registry(
             let mut handle = tokio::time::timeout(
                 Duration::from_secs(30),
                 client::connect_stream(
-                    ssh_client_config(config),
+                    ssh_client_config(config)?,
                     direct_channel.into_stream(),
                     SshClientHandler {
                         host: config.host.clone(),
@@ -1919,7 +2160,7 @@ async fn connect_ssh_transport(
     };
     let Some(proxy) = config.proxy.as_ref() else {
         return client::connect(
-            ssh_client_config(config),
+            ssh_client_config(config)?,
             (config.host.as_str(), config.port),
             handler,
         )
@@ -1947,7 +2188,7 @@ async fn connect_ssh_transport(
                 _ => tokio_socks::tcp::Socks5Stream::connect(proxy_addr.as_str(), target).await,
             }
             .map_err(|error| anyhow::anyhow!("SOCKS5 proxy connection failed: {error}"))?;
-            client::connect_stream(ssh_client_config(config), stream.into_inner(), handler)
+            client::connect_stream(ssh_client_config(config)?, stream.into_inner(), handler)
                 .await
                 .map_err(|error| anyhow::anyhow!("SSH connection via SOCKS5 proxy failed: {error}"))
         }
@@ -1976,7 +2217,7 @@ async fn connect_ssh_transport(
                 }
             }
             .map_err(|error| anyhow::anyhow!("HTTP proxy tunnel failed: {error}"))?;
-            client::connect_stream(ssh_client_config(config), stream, handler)
+            client::connect_stream(ssh_client_config(config)?, stream, handler)
                 .await
                 .map_err(|error| anyhow::anyhow!("SSH connection via HTTP proxy failed: {error}"))
         }
@@ -1988,7 +2229,7 @@ async fn connect_ssh_transport(
                 &config.username,
             )
             .await?;
-            client::connect_stream(ssh_client_config(config), stream, handler)
+            client::connect_stream(ssh_client_config(config)?, stream, handler)
                 .await
                 .map_err(|error| anyhow::anyhow!("SSH connection via ProxyCommand failed: {error}"))
         }
@@ -2488,6 +2729,232 @@ fn normalize_telnet_input(data: &[u8], config: &TelnetSessionConfig) -> Vec<u8> 
         }
     }
     normalized
+}
+
+fn edit_telnet_line_input(
+    data: &[u8],
+    line_buffer: &mut Vec<u8>,
+    config: &TelnetSessionConfig,
+) -> (Vec<u8>, Vec<u8>) {
+    let mut send = Vec::new();
+    let mut echo = Vec::new();
+    let mut index = 0;
+    while index < data.len() {
+        let byte = data[index];
+        match byte {
+            b'\r' | b'\n' => {
+                send.extend_from_slice(line_buffer);
+                send.push(byte);
+                line_buffer.clear();
+                if config.local_echo {
+                    echo.extend_from_slice(b"\r\n");
+                }
+                if byte == b'\r' && index + 1 < data.len() && data[index + 1] == b'\n' {
+                    index += 1;
+                }
+            }
+            b'\x08' | b'\x7f' => {
+                if line_buffer.pop().is_some() && config.local_echo {
+                    echo.extend_from_slice(b"\x08 \x08");
+                }
+            }
+            _ => {
+                line_buffer.push(byte);
+                if config.local_echo {
+                    echo.push(byte);
+                }
+            }
+        }
+        index += 1;
+    }
+    (send, echo)
+}
+
+#[cfg(test)]
+fn has_username_prompt(text: &str) -> bool {
+    let normalized = strip_telnet_auto_login_control_sequences(text).replace('\r', "\n");
+    let last_line = last_non_empty_line(&normalized);
+    !last_login_regex().is_match(&last_line)
+        && prompt_candidates(&normalized, &normalized)
+            .iter()
+            .any(|prompt| default_username_regex().is_match(prompt))
+}
+
+#[cfg(test)]
+fn has_password_prompt(text: &str) -> bool {
+    let normalized = strip_telnet_auto_login_control_sequences(text).replace('\r', "\n");
+    prompt_candidates(&normalized, &normalized)
+        .iter()
+        .any(|prompt| default_password_regex().is_match(prompt))
+}
+
+fn compile_optional_regex(pattern: Option<&str>) -> Option<Regex> {
+    let trimmed = pattern?.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    Regex::new(trimmed).ok()
+}
+
+fn telnet_auto_login_line_bytes(value: &str, config: &TelnetSessionConfig) -> Vec<u8> {
+    let mut data = value.as_bytes().to_vec();
+    data.push(b'\r');
+    normalize_telnet_input(&data, config)
+}
+
+fn last_chars(value: &str, max_chars: usize) -> String {
+    let len = value.chars().count();
+    if len <= max_chars {
+        return value.to_string();
+    }
+    value.chars().skip(len - max_chars).collect()
+}
+
+fn last_non_empty_line(value: &str) -> String {
+    value
+        .lines()
+        .rev()
+        .find(|line| !line.trim().is_empty())
+        .unwrap_or_default()
+        .trim()
+        .to_string()
+}
+
+fn prompt_candidates(window: &str, current_input: &str) -> Vec<String> {
+    let mut prompts = Vec::new();
+    for source in [window, current_input] {
+        for line in source.lines() {
+            let prompt = line.trim();
+            push_prompt_candidate(&mut prompts, prompt);
+            push_prompt_suffix_candidates(&mut prompts, prompt);
+        }
+    }
+    prompts
+}
+
+fn push_prompt_candidate(prompts: &mut Vec<String>, prompt: &str) {
+    if !prompt.is_empty() && !prompts.iter().any(|existing| existing == prompt) {
+        prompts.push(prompt.to_string());
+    }
+}
+
+fn push_prompt_suffix_candidates(prompts: &mut Vec<String>, prompt: &str) {
+    const KEYWORDS: &[&str] = &[
+        "user name",
+        "username",
+        "login",
+        "logon",
+        "account",
+        "userid",
+        "user id",
+        "user",
+        "password",
+        "passwd",
+        "passcode",
+        "passphrase",
+        "pin",
+        "用户名",
+        "帐号",
+        "账号",
+        "登录",
+        "登入",
+        "密码",
+        "口令",
+    ];
+
+    let lower = prompt.to_lowercase();
+    for keyword in KEYWORDS {
+        let mut search_start = 0;
+        while let Some(offset) = lower[search_start..].find(keyword) {
+            let start = search_start + offset;
+            push_prompt_candidate(prompts, prompt[start..].trim());
+            search_start = start + keyword.len();
+            if search_start >= lower.len() {
+                break;
+            }
+        }
+    }
+}
+
+fn default_username_regex() -> &'static Regex {
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+    REGEX.get_or_init(|| {
+        Regex::new(
+            r"(?i)^\s*(?:[^\r\n:：>]{1,80}\s+)?(?:user\s*name|username|login|logon|account|userid|user\s*id|user|用户名|帐号|账号|登录|登入)\s*[:：>]\s*$",
+        )
+        .expect("default username prompt regex")
+    })
+}
+
+fn last_login_regex() -> &'static Regex {
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+    REGEX
+        .get_or_init(|| Regex::new(r"(?i)\b(?:last|previous)\s+login\b").expect("last login regex"))
+}
+
+fn default_password_regex() -> &'static Regex {
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+    REGEX.get_or_init(|| {
+        Regex::new(
+            r"(?i)(?:^|[\r\n])\s*(?:input\s+)?(?:password|passwd|passcode|passphrase|pin|密码|口令)\s*[:：>]?\s*$",
+        )
+        .expect("default password prompt regex")
+    })
+}
+
+fn default_wake_regex() -> &'static Regex {
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+    REGEX.get_or_init(|| {
+        Regex::new(r"(?i)(press\s+(?:return|<enter>|\[enter\]|enter|any\s+key))")
+            .expect("default wake prompt regex")
+    })
+}
+
+fn default_success_regex() -> &'static Regex {
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+    REGEX.get_or_init(|| Regex::new(r"[$#>]\s*$").expect("default success prompt regex"))
+}
+
+fn default_failure_regex() -> &'static Regex {
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+    REGEX.get_or_init(|| {
+        Regex::new(
+            r"(?i)(login\s+incorrect|authentication\s+failed|access\s+denied|密码错误|认证失败)",
+        )
+        .expect("default failure prompt regex")
+    })
+}
+
+fn strip_telnet_auto_login_control_sequences(text: &str) -> String {
+    let mut stripped = String::with_capacity(text.len());
+    let bytes = text.as_bytes();
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == 0x1b {
+            index += 1;
+            if index < bytes.len() && bytes[index] == b'[' {
+                index += 1;
+                while index < bytes.len() {
+                    let byte = bytes[index];
+                    index += 1;
+                    if (0x40..=0x7e).contains(&byte) {
+                        break;
+                    }
+                }
+            } else {
+                index += 1;
+            }
+            continue;
+        }
+        let Some(ch) = text[index..].chars().next() else {
+            break;
+        };
+        if ch != '\u{7f}' && (!ch.is_control() || matches!(ch, '\r' | '\n' | '\t')) {
+            stripped.push(ch);
+        }
+        index += ch.len_utf8();
+    }
+    stripped
 }
 
 fn build_command(config: &LocalSessionConfig) -> CommandBuilder {

@@ -1051,6 +1051,7 @@ fn prepare_termius_connections(
                 backspace_mode: "del".to_string(),
                 ai_execution_profile: AiExecutionProfile::Auto,
                 x11_forwarding: false,
+                encoding: String::new(),
             },
             group_path,
             description: Some("Imported from Termius".to_string()),

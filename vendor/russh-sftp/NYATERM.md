@@ -24,6 +24,21 @@ includes the request lifecycle and file-handle fixes from NyaTerm Tauri commits
 
 NyaTerm also retains the compatibility APIs used by its transport boundary:
 `File::read_at`, `SftpSession::symlink_openssh`, and server-limit accessors.
+For the saved-connection SFTP filename encoding parity work, NyaTerm extends
+the raw/session/fs client APIs so remote path fields can be sent and received
+as raw `Vec<u8>` values. The original `String` APIs remain available and
+delegate through UTF-8 bytes for compatibility, while NyaTerm transport uses
+the new bytes APIs to apply per-connection UTF-8/GBK/GB2312/GB18030 path
+codecs before packets are serialized. Server-side path packets are bridged
+back to the upstream `Handler` string interface with lossy UTF-8 conversion so
+the vendored server API remains source-compatible.
+
+The raw path bytes change is intentionally limited to SFTP protocol path
+fields and high-level path operations (`open`, `opendir`, `stat`, `lstat`,
+`setstat`, `realpath`, `readlink`, `rename`, `remove`, `mkdir`, `rmdir`, and
+`symlink`). It does not change handle bytes, file contents, OpenSSH extension
+payload schemas, or NyaTerm UI path joining semantics.
+
 The vendor tests use the sibling patched `vendor/russh` path. The workspace
 `Cargo.lock` is retained despite the upstream library ignore rule so vendored
 validation resolves reproducibly. The upstream `.git` metadata is excluded
@@ -41,3 +56,10 @@ cargo test -p nyaterm-transport                               # 147 passed
 
 The SFTP service E2E test was skipped because `NYATERM_TEST_SFTP_*` and a
 disposable remote directory were not configured.
+
+Additional validation on 2026-08-09 after the raw path bytes API expansion:
+
+```text
+cargo test -p nyaterm-transport  # 160 passed, 1 ignored
+cargo test -p nyaterm-desktop    # 819 passed, 3 ignored
+```

@@ -925,8 +925,22 @@ impl NyaTermApp {
         let label = self.settings.summary().interaction_default_encoding.clone();
         self.terminal.view.screen.set_encoding(&label);
         self.terminal.view.output_decoder.set_encoding(&label);
-        for view in self.terminal.view.views.values_mut() {
-            view.set_encoding(&label);
+        let session_encodings = self
+            .session
+            .metadata_entries()
+            .map(|(session_id, metadata)| {
+                (
+                    session_id.to_string(),
+                    metadata.launch_config.encoding().to_string(),
+                )
+            })
+            .collect::<std::collections::HashMap<_, _>>();
+        for (session_id, view) in &mut self.terminal.view.views {
+            let encoding = session_encodings
+                .get(session_id)
+                .map(String::as_str)
+                .unwrap_or(label.as_str());
+            view.set_encoding(encoding);
         }
         self.sync_session_event_bridge_config();
     }

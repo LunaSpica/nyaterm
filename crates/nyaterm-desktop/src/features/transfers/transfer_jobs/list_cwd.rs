@@ -1,6 +1,7 @@
 use std::time::{Duration, Instant};
 
 use gpui::{Context, Window};
+use nyaterm_transport::SftpCwdFollowMode;
 
 use crate::features::NyaTermApp;
 use crate::features::transfers::{session_sftp_service, session_ssh_process_service};
@@ -163,6 +164,50 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
+        if !config.sftp.enabled {
+            self.transfer.browser.status = "SFTP is disabled for this connection".to_string();
+            self.transfer.browser.loading = false;
+            self.transfer.browser.error = Some("SFTP is disabled for this connection".to_string());
+            self.shell
+                .set_status("SFTP is disabled for this connection".to_string());
+            cx.notify();
+            return;
+        }
+        let shell_cwd = match config.sftp.cwd_follow_mode {
+            SftpCwdFollowMode::Off => {
+                self.transfer.browser.status =
+                    "SFTP cwd follow is disabled for this connection".to_string();
+                self.transfer.browser.loading = false;
+                self.transfer.browser.error =
+                    Some("SFTP cwd follow is disabled for this connection".to_string());
+                self.shell
+                    .set_status("SFTP cwd follow is disabled for this connection".to_string());
+                cx.notify();
+                return;
+            }
+            SftpCwdFollowMode::ShellIntegration => {
+                let cwd = self
+                    .session
+                    .active_id_owned()
+                    .and_then(|session_id| self.session.cwd(&session_id).map(str::to_string))
+                    .map(|cwd| cwd.trim().to_string())
+                    .filter(|cwd| cwd.starts_with('/'));
+                let Some(cwd) = cwd else {
+                    self.transfer.browser.status =
+                        "remote cwd is not available from shell integration".to_string();
+                    self.transfer.browser.loading = false;
+                    self.transfer.browser.error =
+                        Some("remote cwd is not available from shell integration".to_string());
+                    self.shell.set_status(
+                        "remote cwd is not available from shell integration".to_string(),
+                    );
+                    cx.notify();
+                    return;
+                };
+                Some(cwd)
+            }
+            SftpCwdFollowMode::RcFile => None,
+        };
         let multiplex = self.session.active_ssh_multiplex_handle();
         self.transfer.browser.auto_sync_cwd_last_at = Some(Instant::now());
         let id = self.transfer.next_transfer_job_id("sftp-sync-cwd");
@@ -191,27 +236,37 @@ impl NyaTermApp {
         let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
             let result = (|| {
-                let output = session_ssh_process_service(config.clone(), multiplex.clone())
-                    .map_err(|error| error.to_string())?
-                    .run_command("pwd -P", Duration::from_secs(10))
-                    .map_err(|error| error.to_string())?;
-                if output.exit_status.is_some_and(|status| status != 0) {
-                    let detail = output
-                        .stderr
-                        .trim()
-                        .lines()
-                        .next()
-                        .or_else(|| output.stdout.trim().lines().next())
-                        .unwrap_or("remote pwd failed");
-                    return Err(detail.to_string());
-                }
-                let remote_path = output
-                    .stdout
-                    .lines()
-                    .map(str::trim)
-                    .find(|line| line.starts_with('/'))
-                    .ok_or_else(|| "remote pwd did not return an absolute path".to_string())?
-                    .to_string();
+                let remote_path = match shell_cwd {
+                    Some(cwd) => cwd,
+                    None => {
+                        let timeout = Duration::from_millis(
+                            config.sftp.shell_detection_timeout_ms.clamp(100, 60_000),
+                        );
+                        let output = session_ssh_process_service(config.clone(), multiplex.clone())
+                            .map_err(|error| error.to_string())?
+                            .run_command("pwd -P", timeout)
+                            .map_err(|error| error.to_string())?;
+                        if output.exit_status.is_some_and(|status| status != 0) {
+                            let detail = output
+                                .stderr
+                                .trim()
+                                .lines()
+                                .next()
+                                .or_else(|| output.stdout.trim().lines().next())
+                                .unwrap_or("remote pwd failed");
+                            return Err(detail.to_string());
+                        }
+                        output
+                            .stdout
+                            .lines()
+                            .map(str::trim)
+                            .find(|line| line.starts_with('/'))
+                            .ok_or_else(|| {
+                                "remote pwd did not return an absolute path".to_string()
+                            })?
+                            .to_string()
+                    }
+                };
                 let entries = session_sftp_service(config, multiplex)
                     .map_err(|error| error.to_string())?
                     .list_dir(&remote_path)

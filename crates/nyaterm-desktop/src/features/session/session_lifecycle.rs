@@ -254,11 +254,13 @@ impl NyaTermApp {
         }
 
         let banner = "\r\n\x1b[31m[Session disconnected]\x1b[0m\r\n\x1b[33m[Press Enter to reconnect]\x1b[0m\r\n";
-        self.terminal.append_session_text_or_create(
-            session_id,
-            &self.settings.summary().interaction_default_encoding,
-            banner,
-        );
+        let encoding = self
+            .session
+            .metadata(session_id)
+            .map(|metadata| metadata.launch_config.encoding().to_string())
+            .unwrap_or_else(|| self.settings.summary().interaction_default_encoding.clone());
+        self.terminal
+            .append_session_text_or_create(session_id, &encoding, banner);
 
         if self.session.active_id() == Some(session_id) {
             self.terminal.clear_active_session_assist();

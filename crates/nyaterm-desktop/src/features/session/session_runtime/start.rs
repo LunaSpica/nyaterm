@@ -5,10 +5,11 @@ use std::time::Instant;
 use gpui::{Context, Window};
 use nyaterm_core::{
     AiExecutionProfile, ConnectionAuth, ConnectionStore, ConnectionType, SavedConnection,
+    SftpCwdFollowMode, SftpSettings, SshAlgorithmMode, SshAlgorithmPreferences,
 };
 use nyaterm_transport::{
     LocalSessionConfig, SerialSessionConfig, SessionKind, SshKeyAuthConfig, SshProxyConfig,
-    SshSessionConfig, TelnetSessionConfig,
+    SshSessionConfig, TelnetAutoLoginConfig, TelnetSessionConfig,
 };
 
 use super::super::NativeHostKeyVerifier;
@@ -26,6 +27,7 @@ pub(in crate::features) struct SshSessionConfigBuildContext {
     pub(in crate::features) portable_key_path: Option<PathBuf>,
     pub(in crate::features) host_key_policy: String,
     pub(in crate::features) x11_display: String,
+    pub(in crate::features) default_encoding: String,
     pub(in crate::features) keep_alive_interval_secs: u32,
     pub(in crate::features) host_key_prompts: Arc<HostKeyPromptBroker>,
     pub(in crate::features) credential_prompts: Arc<CredentialPromptBroker>,
@@ -95,7 +97,9 @@ impl NyaTermApp {
                 shell_args,
                 working_dir,
                 ai_execution_profile,
+                encoding,
             } => {
+                let encoding = resolve_effective_connection_encoding(&encoding, self);
                 let mut config = LocalSessionConfig {
                     name: connection.name.clone(),
                     shell_path: non_empty_string(shell_path),
@@ -103,6 +107,7 @@ impl NyaTermApp {
                     working_dir: working_dir
                         .filter(|value| !value.trim().is_empty())
                         .map(Into::into),
+                    encoding,
                     cols: 80,
                     rows: 24,
                     pixel_width: 0,
@@ -127,17 +132,32 @@ impl NyaTermApp {
                 force_character_at_a_time,
                 send_naws,
                 send_sga,
+                username,
+                backspace_mode,
+                auto_login,
+                encoding,
+                local_echo,
+                local_line_edit,
                 ..
             } => {
+                let password = load_telnet_connection_password(self, connection.auth.as_ref());
+                let encoding = resolve_effective_connection_encoding(&encoding, self);
                 let config = TelnetSessionConfig {
                     name: connection.name.clone(),
                     host,
                     port,
+                    username,
+                    password,
+                    backspace_mode,
                     raw_tcp: raw_tcp_cli,
                     enter_mode: parse_telnet_enter_mode(&enter_mode),
+                    local_echo,
+                    local_line_edit,
                     force_character_at_a_time,
                     send_naws,
                     send_sga,
+                    auto_login: map_telnet_auto_login_config(&auto_login),
+                    encoding,
                     cols: 80,
                     rows: 24,
                 };
@@ -169,7 +189,9 @@ impl NyaTermApp {
                 stop_bits,
                 ai_execution_profile,
                 backspace_mode,
+                encoding,
             } => {
+                let encoding = resolve_effective_connection_encoding(&encoding, self);
                 let config = SerialSessionConfig {
                     name: connection.name.clone(),
                     port_name,
@@ -178,6 +200,7 @@ impl NyaTermApp {
                     parity,
                     stop_bits,
                     backspace_mode,
+                    encoding,
                 };
                 self.begin_background_session_start(
                     connection.name,
@@ -283,6 +306,7 @@ impl NyaTermApp {
             portable_key_path: self.runtime.portable_key_path().map(ToOwned::to_owned),
             host_key_policy: self.settings.summary().host_key_policy.clone(),
             x11_display: self.settings.summary().x11_display.clone(),
+            default_encoding: self.settings.summary().interaction_default_encoding.clone(),
             keep_alive_interval_secs: self.settings.summary().terminal_keep_alive_interval,
             host_key_prompts: self.session.prompts.host_key_broker(),
             credential_prompts: self.session.prompts.credential_broker(),
@@ -327,6 +351,7 @@ pub(in crate::features) fn build_ssh_session_config_with_context(
         backspace_mode,
         ai_execution_profile: _,
         x11_forwarding,
+        encoding,
     } = connection.config.clone()
     else {
         return Err("only SSH connections can be used for SSH sessions".to_string());
@@ -337,6 +362,11 @@ pub(in crate::features) fn build_ssh_session_config_with_context(
     let key_auth = load_ssh_key_auth_with_context(context, auth.key_id.as_deref(), &auth.mode)?;
     let proxy_jump = load_proxy_jump_config_with_context(context, connection, visited_proxy_jumps)?;
     let proxy = load_proxy_config_with_context(context, connection)?;
+    let encoding = if encoding.trim().is_empty() {
+        context.default_encoding.clone()
+    } else {
+        encoding
+    };
 
     Ok(SshSessionConfig {
         name: connection.name.clone(),
@@ -354,6 +384,12 @@ pub(in crate::features) fn build_ssh_session_config_with_context(
         term: "xterm-256color".to_string(),
         x11_forwarding,
         x11_display: context.x11_display.clone(),
+        encoding,
+        ssh_algorithms: connection
+            .ssh_algorithms
+            .as_ref()
+            .map(map_ssh_algorithm_preferences),
+        sftp: map_sftp_settings(&connection.sftp),
         deferred_pty: true,
         keep_alive_interval_secs: context.keep_alive_interval_secs,
         cols: 80,
@@ -408,6 +444,91 @@ fn load_ssh_connection_password_with_context(
         .filter(|value| !value.trim().is_empty())
         .ok_or_else(|| format!("saved password '{password_id}' is empty or locked"))?;
     Ok(Some(password))
+}
+
+fn load_telnet_connection_password(
+    app: &NyaTermApp,
+    auth: Option<&ConnectionAuth>,
+) -> Option<String> {
+    let auth = auth?;
+    if auth.mode == "none" {
+        return None;
+    }
+    if let Some(password) = auth
+        .password
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+    {
+        return (!auth.has_password).then(|| password.to_string());
+    }
+    let password_id = auth
+        .password_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())?;
+    ConnectionStore::open_with_portable_key_path(
+        app.runtime.config_dir(),
+        app.runtime.portable_key_path().map(ToOwned::to_owned),
+    )
+    .ok()?
+    .load_decrypted_password_by_id(password_id)
+    .ok()??
+    .password
+    .filter(|value| !value.trim().is_empty())
+}
+
+fn resolve_effective_connection_encoding(value: &str, app: &NyaTermApp) -> String {
+    if value.trim().is_empty() {
+        app.settings.summary().interaction_default_encoding.clone()
+    } else {
+        value.trim().to_string()
+    }
+}
+
+fn map_ssh_algorithm_preferences(
+    preferences: &SshAlgorithmPreferences,
+) -> nyaterm_transport::SshAlgorithmPreferences {
+    nyaterm_transport::SshAlgorithmPreferences {
+        mode: match preferences.mode {
+            SshAlgorithmMode::Compatible => nyaterm_transport::SshAlgorithmMode::Compatible,
+            SshAlgorithmMode::Secure => nyaterm_transport::SshAlgorithmMode::Secure,
+            SshAlgorithmMode::Custom => nyaterm_transport::SshAlgorithmMode::Custom,
+        },
+        kex: preferences.kex.clone(),
+        ciphers: preferences.ciphers.clone(),
+        macs: preferences.macs.clone(),
+        host_keys: preferences.host_keys.clone(),
+    }
+}
+
+fn map_sftp_settings(settings: &SftpSettings) -> nyaterm_transport::SftpSettings {
+    nyaterm_transport::SftpSettings {
+        enabled: settings.enabled,
+        cwd_follow_mode: match settings.cwd_follow_mode {
+            SftpCwdFollowMode::Off => nyaterm_transport::SftpCwdFollowMode::Off,
+            SftpCwdFollowMode::ShellIntegration => {
+                nyaterm_transport::SftpCwdFollowMode::ShellIntegration
+            }
+            SftpCwdFollowMode::RcFile => nyaterm_transport::SftpCwdFollowMode::RcFile,
+        },
+        shell_detection_timeout_ms: settings.shell_detection_timeout_ms,
+        filename_encoding: settings.filename_encoding.clone(),
+    }
+}
+
+fn map_telnet_auto_login_config(
+    config: &nyaterm_core::TelnetAutoLoginConfig,
+) -> TelnetAutoLoginConfig {
+    TelnetAutoLoginConfig {
+        enabled: config.enabled,
+        send_wake_enter: config.send_wake_enter,
+        timeout_ms: config.timeout_ms,
+        username_prompt_regex: config.username_prompt_regex.clone(),
+        password_prompt_regex: config.password_prompt_regex.clone(),
+        success_prompt_regex: config.success_prompt_regex.clone(),
+        failure_prompt_regex: config.failure_prompt_regex.clone(),
+        max_retries: config.max_retries,
+    }
 }
 
 fn load_ssh_key_auth_with_context(
@@ -524,7 +645,8 @@ mod tests {
     use std::sync::Arc;
 
     use nyaterm_core::{
-        AiExecutionProfile, ConnectionAuth, ConnectionStore, ConnectionType, SavedConnection, uuid,
+        AiExecutionProfile, ConnectionAuth, ConnectionStore, ConnectionType, SavedConnection,
+        SftpCwdFollowMode, SftpSettings, SshAlgorithmMode, SshAlgorithmPreferences, uuid,
     };
 
     use super::{
@@ -550,6 +672,7 @@ mod tests {
             portable_key_path: None,
             host_key_policy: "accept".to_string(),
             x11_display: String::new(),
+            default_encoding: "UTF-8".to_string(),
             keep_alive_interval_secs: 30,
             host_key_prompts: Arc::new(HostKeyPromptBroker::default()),
             credential_prompts: Arc::new(CredentialPromptBroker::default()),
@@ -632,6 +755,7 @@ mod tests {
                 backspace_mode: "del".to_string(),
                 ai_execution_profile: AiExecutionProfile::Posix,
                 x11_forwarding: false,
+                encoding: String::new(),
             },
             group_id: None,
             description: None,
@@ -642,6 +766,8 @@ mod tests {
                 mode: "none".to_string(),
                 ..ConnectionAuth::default()
             }),
+            ssh_algorithms: None,
+            sftp: Default::default(),
             network: None,
             post_login: None,
             created_at_ms: None,
@@ -653,6 +779,70 @@ mod tests {
             build_ssh_session_config_with_context(&connection, &mut Vec::new(), &context).unwrap();
 
         assert_eq!(config.keep_alive_interval_secs, 45);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn ssh_session_config_maps_encoding_algorithms_and_sftp_settings() {
+        let dir = unique_temp_dir("ssh-mapping");
+        let mut context = test_ssh_build_context(dir.clone());
+        context.default_encoding = "GB18030".to_string();
+        let connection = SavedConnection {
+            id: "conn-1".to_string(),
+            name: "SSH".to_string(),
+            config: ConnectionType::Ssh {
+                host: "example.com".to_string(),
+                port: 22,
+                username: "user".to_string(),
+                backspace_mode: "del".to_string(),
+                ai_execution_profile: AiExecutionProfile::Posix,
+                x11_forwarding: false,
+                encoding: String::new(),
+            },
+            group_id: None,
+            description: None,
+            sort_order: 0,
+            icon: None,
+            icon_auto_detect: None,
+            auth: Some(ConnectionAuth {
+                mode: "none".to_string(),
+                ..ConnectionAuth::default()
+            }),
+            ssh_algorithms: Some(SshAlgorithmPreferences {
+                mode: SshAlgorithmMode::Secure,
+                ..Default::default()
+            }),
+            sftp: SftpSettings {
+                enabled: false,
+                cwd_follow_mode: SftpCwdFollowMode::RcFile,
+                shell_detection_timeout_ms: 5000,
+                filename_encoding: "GBK".to_string(),
+            },
+            network: None,
+            post_login: None,
+            created_at_ms: None,
+            updated_at_ms: None,
+            last_used_at_ms: None,
+        };
+
+        let config =
+            build_ssh_session_config_with_context(&connection, &mut Vec::new(), &context).unwrap();
+
+        assert_eq!(config.encoding, "GB18030");
+        assert_eq!(
+            config
+                .ssh_algorithms
+                .as_ref()
+                .map(|preferences| preferences.mode),
+            Some(nyaterm_transport::SshAlgorithmMode::Secure)
+        );
+        assert!(!config.sftp.enabled);
+        assert_eq!(
+            config.sftp.cwd_follow_mode,
+            nyaterm_transport::SftpCwdFollowMode::RcFile
+        );
+        assert_eq!(config.sftp.shell_detection_timeout_ms, 5000);
+        assert_eq!(config.sftp.filename_encoding, "GBK");
         let _ = std::fs::remove_dir_all(dir);
     }
 }

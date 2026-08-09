@@ -144,20 +144,29 @@ pub(super) fn connection_editor_ssh_section(
     let behavior_tabs = NyaTabs::new("connection-advanced-behavior-tabs")
         .items([
             NyaTabItem::new(tr("dialog.commandExecution")),
+            NyaTabItem::new(tr("dialog.encodingSettings")),
+            NyaTabItem::new("SFTP"),
             NyaTabItem::new(tr("dialog.x11Forwarding")),
             NyaTabItem::new(tr("dialog.backspaceMode")),
+            NyaTabItem::new(tr("dialog.sshAlgorithms")),
         ])
         .selected_index(match editor.advanced_behavior_tab {
             ConnectionEditorAdvancedTab::PostLogin => 0,
-            ConnectionEditorAdvancedTab::X11 => 1,
-            ConnectionEditorAdvancedTab::Backspace => 2,
+            ConnectionEditorAdvancedTab::Terminal => 1,
+            ConnectionEditorAdvancedTab::Sftp => 2,
+            ConnectionEditorAdvancedTab::X11 => 3,
+            ConnectionEditorAdvancedTab::Backspace => 4,
+            ConnectionEditorAdvancedTab::Algorithms => 5,
             _ => 0,
         })
         .on_select(cx.listener(|this, index, _, cx| {
             let tab = match *index {
                 0 => ConnectionEditorAdvancedTab::PostLogin,
-                1 => ConnectionEditorAdvancedTab::X11,
-                _ => ConnectionEditorAdvancedTab::Backspace,
+                1 => ConnectionEditorAdvancedTab::Terminal,
+                2 => ConnectionEditorAdvancedTab::Sftp,
+                3 => ConnectionEditorAdvancedTab::X11,
+                4 => ConnectionEditorAdvancedTab::Backspace,
+                _ => ConnectionEditorAdvancedTab::Algorithms,
             };
             this.set_connection_editor_advanced_tab(tab, cx);
         }));
@@ -458,6 +467,78 @@ pub(super) fn connection_editor_ssh_section(
                         },
                     )
                     .when(
+                        editor.advanced_behavior_tab == ConnectionEditorAdvancedTab::Terminal,
+                        |this| {
+                            this.child(ssh_advanced_content(
+                                palette,
+                                tr("dialog.encodingSettings"),
+                                tr("connection.encodingFollowGlobal"),
+                                connection_editor_select(
+                                    ConnectionEditorRenderContext {
+                                        palette,
+                                        fields,
+                                        cx,
+                                    },
+                                    "connection-editor-ssh-encoding",
+                                    tr("connection.encoding"),
+                                    ConnectionEditorSelect::Encoding,
+                                ),
+                            ))
+                        },
+                    )
+                    .when(
+                        editor.advanced_behavior_tab == ConnectionEditorAdvancedTab::Sftp,
+                        |this| {
+                            this.child(ssh_advanced_content(
+                                palette,
+                                tr("dialog.sftpAdvanced"),
+                                tr("dialog.sftpAdvancedDesc"),
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_2()
+                                    .child(toggle_chip(
+                                        palette,
+                                        tr("dialog.enabled"),
+                                        editor.sftp_enabled,
+                                        cx.listener(|this, _, _, cx| {
+                                            this.toggle_connection_editor_flag(
+                                                ConnectionEditorToggle::SftpEnabled,
+                                                cx,
+                                            );
+                                        }),
+                                    ))
+                                    .child(connection_editor_select(
+                                        ConnectionEditorRenderContext {
+                                            palette,
+                                            fields,
+                                            cx,
+                                        },
+                                        "connection-editor-sftp-cwd",
+                                        tr("dialog.sftpCwdFollowMode"),
+                                        ConnectionEditorSelect::SftpCwdFollowMode,
+                                    ))
+                                    .child(editor_field(
+                                        palette,
+                                        tr("dialog.sftpShellDetectionTimeout"),
+                                        ConnectionEditorField::SftpShellDetectionTimeout,
+                                        fields,
+                                        cx,
+                                    ))
+                                    .child(connection_editor_select(
+                                        ConnectionEditorRenderContext {
+                                            palette,
+                                            fields,
+                                            cx,
+                                        },
+                                        "connection-editor-sftp-filename-encoding",
+                                        tr("dialog.sftpFilenameEncoding"),
+                                        ConnectionEditorSelect::SftpFilenameEncoding,
+                                    )),
+                            ))
+                        },
+                    )
+                    .when(
                         editor.advanced_behavior_tab == ConnectionEditorAdvancedTab::X11,
                         |this| {
                             this.child(ssh_advanced_content(
@@ -494,6 +575,26 @@ pub(super) fn connection_editor_ssh_section(
                                     "connection-editor-backspace",
                                     tr("dialog.backspaceMode"),
                                     ConnectionEditorSelect::Backspace,
+                                ),
+                            ))
+                        },
+                    )
+                    .when(
+                        editor.advanced_behavior_tab == ConnectionEditorAdvancedTab::Algorithms,
+                        |this| {
+                            this.child(ssh_advanced_content(
+                                palette,
+                                tr("dialog.sshAlgorithms"),
+                                tr("dialog.sshAlgorithmsDesc"),
+                                connection_editor_select(
+                                    ConnectionEditorRenderContext {
+                                        palette,
+                                        fields,
+                                        cx,
+                                    },
+                                    "connection-editor-ssh-algorithm-mode",
+                                    tr("dialog.algorithmMode"),
+                                    ConnectionEditorSelect::SshAlgorithmMode,
                                 ),
                             ))
                         },

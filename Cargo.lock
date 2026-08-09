@@ -4986,6 +4986,7 @@ dependencies = [
  "async-http-proxy",
  "base64 0.22.1",
  "dirs",
+ "encoding_rs",
  "flate2",
  "md5",
  "portable-pty",

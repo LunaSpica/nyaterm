@@ -9,8 +9,8 @@ impl NyaTermApp {
         session_id: &str,
         metadata: SessionRuntimeMetadata,
     ) {
+        let encoding = metadata.launch_config.encoding().to_string();
         self.session.register_session_metadata(session_id, metadata);
-        let encoding = self.settings.summary().interaction_default_encoding.clone();
         self.terminal.ensure_frame_session(
             session_id.to_string(),
             encoding,

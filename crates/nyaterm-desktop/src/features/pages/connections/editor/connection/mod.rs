@@ -462,6 +462,68 @@ impl NyaTermApp {
             )
         })
         .collect::<Vec<_>>();
+        let encoding_options = ["global", "UTF-8", "GBK", "GB2312", "GB18030"]
+            .into_iter()
+            .map(|value| {
+                let label = if value == "global" {
+                    self.tr("connection.encodingFollowGlobal").to_string()
+                } else {
+                    value.to_string()
+                };
+                ConnectionEditorChoice::new(
+                    Some(value.to_string()),
+                    label,
+                    editor.encoding == value,
+                )
+            })
+            .collect::<Vec<_>>();
+        let sftp_cwd_options = [
+            ("off", self.tr("dialog.sftpCwdFollowOff")),
+            (
+                "shell_integration",
+                self.tr("dialog.sftpCwdFollowShellIntegration"),
+            ),
+            ("rc_file", self.tr("dialog.sftpCwdFollowRcFile")),
+        ]
+        .into_iter()
+        .map(|(value, label)| {
+            ConnectionEditorChoice::new(
+                Some(value.to_string()),
+                label,
+                editor.sftp_cwd_follow_mode == value,
+            )
+        })
+        .collect::<Vec<_>>();
+        let sftp_filename_encoding_options = ["terminal", "UTF-8", "GBK", "GB2312", "GB18030"]
+            .into_iter()
+            .map(|value| {
+                let label = if value == "terminal" {
+                    self.tr("dialog.sftpFilenameEncodingFollowTerminal")
+                        .to_string()
+                } else {
+                    value.to_string()
+                };
+                ConnectionEditorChoice::new(
+                    Some(value.to_string()),
+                    label,
+                    editor.sftp_filename_encoding == value,
+                )
+            })
+            .collect::<Vec<_>>();
+        let ssh_algorithm_mode_options = [
+            ("compatible", self.tr("dialog.algorithmModeCompatible")),
+            ("secure", self.tr("dialog.algorithmModeSecure")),
+            ("custom", self.tr("dialog.algorithmModeCustom")),
+        ]
+        .into_iter()
+        .map(|(value, label)| {
+            ConnectionEditorChoice::new(
+                Some(value.to_string()),
+                label,
+                editor.ssh_algorithm_mode == value,
+            )
+        })
+        .collect::<Vec<_>>();
         let mut serial_port_options = Vec::new();
         if !editor.serial_port.is_empty()
             && !self
@@ -576,6 +638,27 @@ impl NyaTermApp {
             (
                 ConnectionEditorSelect::Backspace,
                 backspace_options.as_slice(),
+                String::new(),
+            ),
+            (
+                ConnectionEditorSelect::Encoding,
+                encoding_options.as_slice(),
+                self.tr("connection.encodingFollowGlobal").to_string(),
+            ),
+            (
+                ConnectionEditorSelect::SftpCwdFollowMode,
+                sftp_cwd_options.as_slice(),
+                String::new(),
+            ),
+            (
+                ConnectionEditorSelect::SftpFilenameEncoding,
+                sftp_filename_encoding_options.as_slice(),
+                self.tr("dialog.sftpFilenameEncodingFollowTerminal")
+                    .to_string(),
+            ),
+            (
+                ConnectionEditorSelect::SshAlgorithmMode,
+                ssh_algorithm_mode_options.as_slice(),
                 String::new(),
             ),
             (
@@ -1009,7 +1092,7 @@ impl NyaTermApp {
     }
 }
 
-fn connection_editor_select_keys() -> [ConnectionEditorSelect; 14] {
+fn connection_editor_select_keys() -> [ConnectionEditorSelect; 18] {
     [
         ConnectionEditorSelect::Group,
         ConnectionEditorSelect::SavedPassword,
@@ -1018,6 +1101,10 @@ fn connection_editor_select_keys() -> [ConnectionEditorSelect; 14] {
         ConnectionEditorSelect::Proxy,
         ConnectionEditorSelect::ProxyJump,
         ConnectionEditorSelect::Backspace,
+        ConnectionEditorSelect::Encoding,
+        ConnectionEditorSelect::SftpCwdFollowMode,
+        ConnectionEditorSelect::SftpFilenameEncoding,
+        ConnectionEditorSelect::SshAlgorithmMode,
         ConnectionEditorSelect::TelnetEnterMode,
         ConnectionEditorSelect::Shell,
         ConnectionEditorSelect::SerialPort,
@@ -1040,6 +1127,10 @@ fn connection_editor_select_id(select: ConnectionEditorSelect) -> &'static str {
         ConnectionEditorSelect::Proxy => "connection-editor-proxy",
         ConnectionEditorSelect::ProxyJump => "connection-editor-proxy-jump",
         ConnectionEditorSelect::Backspace => "connection-editor-backspace",
+        ConnectionEditorSelect::Encoding => "connection-editor-encoding",
+        ConnectionEditorSelect::SftpCwdFollowMode => "connection-editor-sftp-cwd-follow",
+        ConnectionEditorSelect::SftpFilenameEncoding => "connection-editor-sftp-filename-encoding",
+        ConnectionEditorSelect::SshAlgorithmMode => "connection-editor-ssh-algorithm-mode",
         ConnectionEditorSelect::TelnetEnterMode => "connection-editor-telnet-enter-mode",
         ConnectionEditorSelect::Shell => "connection-editor-shell",
         ConnectionEditorSelect::SerialPort => "connection-editor-serial-port",
@@ -1702,6 +1793,16 @@ mod tests {
             proxy_jump_id: None,
             x11_forwarding: false,
             backspace_mode: "del".to_string(),
+            encoding: "global".to_string(),
+            sftp_enabled: true,
+            sftp_cwd_follow_mode: "shell_integration".to_string(),
+            sftp_shell_detection_timeout_ms: "3000".to_string(),
+            sftp_filename_encoding: "terminal".to_string(),
+            ssh_algorithm_mode: "compatible".to_string(),
+            ssh_algorithm_kex: Vec::new(),
+            ssh_algorithm_ciphers: Vec::new(),
+            ssh_algorithm_macs: Vec::new(),
+            ssh_algorithm_host_keys: Vec::new(),
             shell_path: String::new(),
             shell_args: String::new(),
             working_dir: String::new(),
@@ -1717,6 +1818,14 @@ mod tests {
             force_character_at_a_time: false,
             send_naws: true,
             send_sga: true,
+            telnet_auto_login_enabled: true,
+            telnet_auto_login_send_wake_enter: true,
+            telnet_auto_login_timeout_ms: "60000".to_string(),
+            telnet_auto_login_username_prompt_regex: String::new(),
+            telnet_auto_login_password_prompt_regex: String::new(),
+            telnet_auto_login_success_prompt_regex: String::new(),
+            telnet_auto_login_failure_prompt_regex: String::new(),
+            telnet_auto_login_max_retries: "0".to_string(),
             post_login_enabled: false,
             post_login_command: String::new(),
             post_login_delay_ms: "0".to_string(),

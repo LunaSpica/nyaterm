@@ -124,6 +124,18 @@ pub(super) fn set_connection_editor_select_value(
         ConnectionEditorSelect::Backspace => {
             editor.backspace_mode = value.unwrap_or_else(|| "del".to_string());
         }
+        ConnectionEditorSelect::Encoding => {
+            editor.encoding = value.unwrap_or_else(|| "global".to_string());
+        }
+        ConnectionEditorSelect::SftpCwdFollowMode => {
+            editor.sftp_cwd_follow_mode = value.unwrap_or_else(|| "shell_integration".to_string());
+        }
+        ConnectionEditorSelect::SftpFilenameEncoding => {
+            editor.sftp_filename_encoding = value.unwrap_or_else(|| "terminal".to_string());
+        }
+        ConnectionEditorSelect::SshAlgorithmMode => {
+            editor.ssh_algorithm_mode = value.unwrap_or_else(|| "compatible".to_string());
+        }
         ConnectionEditorSelect::TelnetEnterMode => {
             editor.telnet_enter_mode = value.unwrap_or_else(|| "cr".to_string());
         }
@@ -180,6 +192,9 @@ pub(super) fn set_connection_editor_advanced_tab(
         | ConnectionEditorAdvancedTab::JumpHost
         | ConnectionEditorAdvancedTab::TwoFactor => editor.advanced_network_tab = tab,
         ConnectionEditorAdvancedTab::PostLogin
+        | ConnectionEditorAdvancedTab::Terminal
+        | ConnectionEditorAdvancedTab::Sftp
+        | ConnectionEditorAdvancedTab::Algorithms
         | ConnectionEditorAdvancedTab::X11
         | ConnectionEditorAdvancedTab::Backspace => editor.advanced_behavior_tab = tab,
     }
@@ -272,6 +287,7 @@ pub(super) fn toggle_connection_editor_flag(
             editor.auto_fill_otp = editor.otp_id.is_some() && !editor.auto_fill_otp;
         }
         ConnectionEditorToggle::X11 => editor.x11_forwarding = !editor.x11_forwarding,
+        ConnectionEditorToggle::SftpEnabled => editor.sftp_enabled = !editor.sftp_enabled,
         ConnectionEditorToggle::RawTcp => {
             editor.raw_tcp_cli = !editor.raw_tcp_cli;
             if editor.raw_tcp_cli {
@@ -294,6 +310,12 @@ pub(super) fn toggle_connection_editor_flag(
             if !editor.raw_tcp_cli {
                 editor.send_sga = !editor.send_sga;
             }
+        }
+        ConnectionEditorToggle::TelnetAutoLoginEnabled => {
+            editor.telnet_auto_login_enabled = !editor.telnet_auto_login_enabled;
+        }
+        ConnectionEditorToggle::TelnetAutoLoginSendWakeEnter => {
+            editor.telnet_auto_login_send_wake_enter = !editor.telnet_auto_login_send_wake_enter;
         }
         ConnectionEditorToggle::PostLogin => {
             editor.post_login_enabled = !editor.post_login_enabled;
@@ -482,6 +504,48 @@ pub(super) fn editor_field_seeds(
             false,
             "",
         ),
+        (
+            ConnectionEditorField::SftpShellDetectionTimeout,
+            draft.sftp_shell_detection_timeout_ms.clone(),
+            false,
+            "",
+        ),
+        (
+            ConnectionEditorField::TelnetAutoLoginTimeout,
+            draft.telnet_auto_login_timeout_ms.clone(),
+            false,
+            "",
+        ),
+        (
+            ConnectionEditorField::TelnetAutoLoginUsernamePrompt,
+            draft.telnet_auto_login_username_prompt_regex.clone(),
+            false,
+            "",
+        ),
+        (
+            ConnectionEditorField::TelnetAutoLoginPasswordPrompt,
+            draft.telnet_auto_login_password_prompt_regex.clone(),
+            false,
+            "",
+        ),
+        (
+            ConnectionEditorField::TelnetAutoLoginSuccessPrompt,
+            draft.telnet_auto_login_success_prompt_regex.clone(),
+            false,
+            "",
+        ),
+        (
+            ConnectionEditorField::TelnetAutoLoginFailurePrompt,
+            draft.telnet_auto_login_failure_prompt_regex.clone(),
+            false,
+            "",
+        ),
+        (
+            ConnectionEditorField::TelnetAutoLoginMaxRetries,
+            draft.telnet_auto_login_max_retries.clone(),
+            false,
+            "",
+        ),
     ]
 }
 
@@ -510,5 +574,26 @@ pub(super) fn set_connection_editor_field_text(
         ConnectionEditorField::BaudRate => draft.baud_rate = text,
         ConnectionEditorField::PostLoginCommand => draft.post_login_command = text,
         ConnectionEditorField::PostLoginDelay => draft.post_login_delay_ms = text,
+        ConnectionEditorField::SftpShellDetectionTimeout => {
+            draft.sftp_shell_detection_timeout_ms = text
+        }
+        ConnectionEditorField::TelnetAutoLoginTimeout => {
+            draft.telnet_auto_login_timeout_ms = text;
+        }
+        ConnectionEditorField::TelnetAutoLoginUsernamePrompt => {
+            draft.telnet_auto_login_username_prompt_regex = text;
+        }
+        ConnectionEditorField::TelnetAutoLoginPasswordPrompt => {
+            draft.telnet_auto_login_password_prompt_regex = text;
+        }
+        ConnectionEditorField::TelnetAutoLoginSuccessPrompt => {
+            draft.telnet_auto_login_success_prompt_regex = text;
+        }
+        ConnectionEditorField::TelnetAutoLoginFailurePrompt => {
+            draft.telnet_auto_login_failure_prompt_regex = text;
+        }
+        ConnectionEditorField::TelnetAutoLoginMaxRetries => {
+            draft.telnet_auto_login_max_retries = text;
+        }
     }
 }

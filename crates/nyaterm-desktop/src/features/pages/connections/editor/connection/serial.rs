@@ -125,4 +125,14 @@ pub(super) fn connection_editor_serial_section(
                         )),
                 ),
         )
+        .child(connection_editor_select(
+            ConnectionEditorRenderContext {
+                palette,
+                fields,
+                cx,
+            },
+            "connection-editor-serial-encoding",
+            tr("connection.encoding"),
+            ConnectionEditorSelect::Encoding,
+        ))
 }

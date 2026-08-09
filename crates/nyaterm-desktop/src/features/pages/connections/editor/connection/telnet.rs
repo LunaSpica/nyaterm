@@ -7,7 +7,10 @@ use gpui::{
 };
 
 use crate::features::{ConnectionEditorToggle, NyaTermApp};
-use crate::models::{ConnectionEditorField, ConnectionEditorSelect, ConnectionEditorTelnetTab};
+use crate::models::{
+    ConnectionEditorField, ConnectionEditorPasswordSource, ConnectionEditorSelect,
+    ConnectionEditorTelnetTab,
+};
 use nyaterm_ui::{NyaSwitch, NyaTabItem, NyaTabs};
 
 use super::super::super::list::{
@@ -84,6 +87,42 @@ pub(super) fn connection_editor_telnet_section(
         fields,
     } = section;
     let tr = |key: &'static str| crate::i18n::text(language, key);
+    let auth_values = vec!["none".to_string(), "password".to_string()];
+    let auth_tabs = NyaTabs::new("connection-telnet-auth-tabs")
+        .items([
+            NyaTabItem::new(tr("dialog.noAuthentication")),
+            NyaTabItem::new(tr("dialog.password")),
+        ])
+        .selected_index(if editor.auth_mode == "none" { 0 } else { 1 })
+        .on_select(cx.listener(move |this, index: &usize, _, cx| {
+            let Some(value) = auth_values.get(*index) else {
+                return;
+            };
+            this.set_connection_editor_select_value(
+                ConnectionEditorSelect::Authentication,
+                Some(value.as_str()),
+                cx,
+            );
+        }));
+    let password_source_tabs = NyaTabs::new("connection-telnet-password-source-tabs")
+        .items([
+            NyaTabItem::new(tr("dialog.askWhenConnecting")),
+            NyaTabItem::new(tr("dialog.directPassword")),
+            NyaTabItem::new(tr("dialog.savedPassword")),
+        ])
+        .selected_index(match editor.password_source {
+            ConnectionEditorPasswordSource::Ask => 0,
+            ConnectionEditorPasswordSource::Direct => 1,
+            ConnectionEditorPasswordSource::Saved => 2,
+        })
+        .on_select(cx.listener(|this, index, _, cx| {
+            let source = match *index {
+                0 => ConnectionEditorPasswordSource::Ask,
+                1 => ConnectionEditorPasswordSource::Direct,
+                _ => ConnectionEditorPasswordSource::Saved,
+            };
+            this.set_connection_editor_password_source(source, cx);
+        }));
     let tabs = NyaTabs::new("connection-telnet-tabs")
         .items([
             NyaTabItem::new(tr("dialog.telnetInputSettings")),
@@ -126,6 +165,56 @@ pub(super) fn connection_editor_telnet_section(
                     fields,
                     cx,
                 ))),
+        )
+        .child(editor_field(
+            palette,
+            tr("dialog.username"),
+            ConnectionEditorField::Username,
+            fields,
+            cx,
+        ))
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(rgb(palette.text_muted))
+                        .child(tr("dialog.authentication")),
+                )
+                .child(auth_tabs)
+                .when(editor.auth_mode != "none", |this| {
+                    this.child(password_source_tabs)
+                        .when(
+                            editor.password_source == ConnectionEditorPasswordSource::Direct,
+                            |this| {
+                                this.child(editor_field(
+                                    palette,
+                                    tr("dialog.password"),
+                                    ConnectionEditorField::Password,
+                                    fields,
+                                    cx,
+                                ))
+                            },
+                        )
+                        .when(
+                            editor.password_source == ConnectionEditorPasswordSource::Saved,
+                            |this| {
+                                this.child(connection_editor_select(
+                                    ConnectionEditorRenderContext {
+                                        palette,
+                                        fields,
+                                        cx,
+                                    },
+                                    "connection-editor-telnet-saved-password",
+                                    tr("dialog.savedPassword"),
+                                    ConnectionEditorSelect::SavedPassword,
+                                ))
+                            },
+                        )
+                }),
         )
         .child(
             div()
@@ -177,7 +266,7 @@ pub(super) fn connection_editor_telnet_section(
                                 .child(
                                     div()
                                         .grid()
-                                        .grid_cols(2)
+                                        .grid_cols(3)
                                         .gap_2()
                                         .child(connection_editor_select(
                                             ConnectionEditorRenderContext {
@@ -198,6 +287,16 @@ pub(super) fn connection_editor_telnet_section(
                                             "connection-editor-telnet-enter-mode",
                                             tr("dialog.telnetEnterMode"),
                                             ConnectionEditorSelect::TelnetEnterMode,
+                                        ))
+                                        .child(connection_editor_select(
+                                            ConnectionEditorRenderContext {
+                                                palette,
+                                                fields,
+                                                cx,
+                                            },
+                                            "connection-editor-telnet-encoding",
+                                            tr("connection.encoding"),
+                                            ConnectionEditorSelect::Encoding,
                                         )),
                                 ),
                         )
@@ -310,6 +409,102 @@ pub(super) fn connection_editor_telnet_section(
                                                     cx,
                                                 );
                                             }),
+                                        )),
+                                )
+                                .child(
+                                    div()
+                                        .mt_3()
+                                        .flex()
+                                        .flex_col()
+                                        .gap_2()
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .font_weight(FontWeight(600.))
+                                                .text_color(rgb(palette.text))
+                                                .child("Auto Login"),
+                                        )
+                                        .child(
+                                            div()
+                                                .grid()
+                                                .grid_cols(2)
+                                                .gap_2()
+                                                .child(telnet_switch_row(
+                                                    palette,
+                                                    "connection-telnet-auto-login-enabled",
+                                                    "Enabled",
+                                                    "Detect login prompts and send saved credentials",
+                                                    editor.telnet_auto_login_enabled,
+                                                    true,
+                                                    cx.listener(|this, _, _, cx| {
+                                                        this.toggle_connection_editor_flag(
+                                                            ConnectionEditorToggle::TelnetAutoLoginEnabled,
+                                                            cx,
+                                                        );
+                                                    }),
+                                                ))
+                                                .child(telnet_switch_row(
+                                                    palette,
+                                                    "connection-telnet-auto-login-wake",
+                                                    "Wake Enter",
+                                                    "Send Enter once when a wake prompt is detected",
+                                                    editor.telnet_auto_login_send_wake_enter,
+                                                    editor.telnet_auto_login_enabled,
+                                                    cx.listener(|this, _, _, cx| {
+                                                        this.toggle_connection_editor_flag(
+                                                            ConnectionEditorToggle::TelnetAutoLoginSendWakeEnter,
+                                                            cx,
+                                                        );
+                                                    }),
+                                                )),
+                                        )
+                                        .child(
+                                            div()
+                                                .grid()
+                                                .grid_cols(2)
+                                                .gap_2()
+                                                .child(editor_stepper_field(
+                                                    palette,
+                                                    "Timeout (ms)",
+                                                    ConnectionEditorField::TelnetAutoLoginTimeout,
+                                                    fields,
+                                                    cx,
+                                                ))
+                                                .child(editor_stepper_field(
+                                                    palette,
+                                                    "Max Retries",
+                                                    ConnectionEditorField::TelnetAutoLoginMaxRetries,
+                                                    fields,
+                                                    cx,
+                                                )),
+                                        )
+                                        .child(editor_field(
+                                            palette,
+                                            "Username Prompt Regex",
+                                            ConnectionEditorField::TelnetAutoLoginUsernamePrompt,
+                                            fields,
+                                            cx,
+                                        ))
+                                        .child(editor_field(
+                                            palette,
+                                            "Password Prompt Regex",
+                                            ConnectionEditorField::TelnetAutoLoginPasswordPrompt,
+                                            fields,
+                                            cx,
+                                        ))
+                                        .child(editor_field(
+                                            palette,
+                                            "Success Prompt Regex",
+                                            ConnectionEditorField::TelnetAutoLoginSuccessPrompt,
+                                            fields,
+                                            cx,
+                                        ))
+                                        .child(editor_field(
+                                            palette,
+                                            "Failure Prompt Regex",
+                                            ConnectionEditorField::TelnetAutoLoginFailurePrompt,
+                                            fields,
+                                            cx,
                                         )),
                                 ),
                         )

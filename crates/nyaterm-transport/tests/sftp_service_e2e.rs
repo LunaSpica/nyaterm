@@ -4,8 +4,8 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use nyaterm_transport::{
-    SftpFileType, SftpService, SftpWriteTextResult, SshCredentialProvider, SshHostKey,
-    SshHostKeyDecision, SshHostKeyVerifier, SshOtpProvider, SshSessionConfig,
+    SftpFileType, SftpService, SftpSettings, SftpWriteTextResult, SshCredentialProvider,
+    SshHostKey, SshHostKeyDecision, SshHostKeyVerifier, SshOtpProvider, SshSessionConfig,
 };
 
 struct AcceptEphemeralHostKey;
@@ -39,6 +39,9 @@ fn test_config() -> SshSessionConfig {
         term: "xterm-256color".to_string(),
         x11_forwarding: false,
         x11_display: String::new(),
+        encoding: "UTF-8".to_string(),
+        ssh_algorithms: None,
+        sftp: SftpSettings::default(),
         deferred_pty: true,
         keep_alive_interval_secs: 0,
         cols: 80,

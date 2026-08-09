@@ -1,7 +1,8 @@
 use gpui::Context;
 use nyaterm_core::{
     AiExecutionProfile, ConnectionAuth, ConnectionNetwork, ConnectionPostLogin, ConnectionStore,
-    ConnectionType, Group, SavedConnection, StorageError, uuid,
+    ConnectionType, Group, SavedConnection, SftpCwdFollowMode, SftpSettings, SshAlgorithmMode,
+    SshAlgorithmPreferences, StorageError, TelnetAutoLoginConfig, uuid,
 };
 
 use crate::features::NyaTermApp;
@@ -27,6 +28,12 @@ pub(super) fn connection_editor_from_saved(
             command: String::new(),
             delay_ms: 1000,
         });
+    let sftp = connection.sftp.clone();
+    let ssh_algorithms = connection.ssh_algorithms.clone().unwrap_or_default();
+    let telnet_auto_login = match &connection.config {
+        ConnectionType::Telnet { auto_login, .. } => auto_login.clone(),
+        _ => TelnetAutoLoginConfig::default(),
+    };
     let password_source = if auth.password_id.is_some() {
         ConnectionEditorPasswordSource::Saved
     } else if auth.password.is_some() || auth.has_password {
@@ -61,6 +68,20 @@ pub(super) fn connection_editor_from_saved(
         proxy_jump_id: network.proxy_jump_id,
         x11_forwarding: false,
         backspace_mode: "del".to_string(),
+        encoding: "global".to_string(),
+        sftp_enabled: sftp.enabled,
+        sftp_cwd_follow_mode: sftp_cwd_follow_mode_value(sftp.cwd_follow_mode),
+        sftp_shell_detection_timeout_ms: sftp.shell_detection_timeout_ms.to_string(),
+        sftp_filename_encoding: if sftp.filename_encoding.is_empty() {
+            "terminal".to_string()
+        } else {
+            sftp.filename_encoding
+        },
+        ssh_algorithm_mode: ssh_algorithm_mode_value(ssh_algorithms.mode),
+        ssh_algorithm_kex: ssh_algorithms.kex,
+        ssh_algorithm_ciphers: ssh_algorithms.ciphers,
+        ssh_algorithm_macs: ssh_algorithms.macs,
+        ssh_algorithm_host_keys: ssh_algorithms.host_keys,
         shell_path: String::new(),
         shell_args: String::new(),
         working_dir: String::new(),
@@ -76,6 +97,22 @@ pub(super) fn connection_editor_from_saved(
         force_character_at_a_time: false,
         send_naws: true,
         send_sga: true,
+        telnet_auto_login_enabled: telnet_auto_login.enabled,
+        telnet_auto_login_send_wake_enter: telnet_auto_login.send_wake_enter,
+        telnet_auto_login_timeout_ms: telnet_auto_login.timeout_ms.to_string(),
+        telnet_auto_login_username_prompt_regex: telnet_auto_login
+            .username_prompt_regex
+            .unwrap_or_default(),
+        telnet_auto_login_password_prompt_regex: telnet_auto_login
+            .password_prompt_regex
+            .unwrap_or_default(),
+        telnet_auto_login_success_prompt_regex: telnet_auto_login
+            .success_prompt_regex
+            .unwrap_or_default(),
+        telnet_auto_login_failure_prompt_regex: telnet_auto_login
+            .failure_prompt_regex
+            .unwrap_or_default(),
+        telnet_auto_login_max_retries: telnet_auto_login.max_retries.to_string(),
         post_login_enabled: post_login.enabled,
         post_login_command: post_login.command,
         post_login_delay_ms: post_login.delay_ms.to_string(),
@@ -95,6 +132,7 @@ pub(super) fn connection_editor_from_saved(
             username,
             backspace_mode,
             x11_forwarding,
+            encoding,
             ..
         } => {
             editor.host = host;
@@ -102,20 +140,24 @@ pub(super) fn connection_editor_from_saved(
             editor.username = username;
             editor.backspace_mode = backspace_mode;
             editor.x11_forwarding = x11_forwarding;
+            editor.encoding = encoding_to_editor_value(&encoding);
         }
         ConnectionType::LocalTerminal {
             shell_path,
             shell_args,
             working_dir,
+            encoding,
             ..
         } => {
             editor.shell_path = shell_path;
             editor.shell_args = shell_args;
             editor.working_dir = working_dir.unwrap_or_default();
+            editor.encoding = encoding_to_editor_value(&encoding);
         }
         ConnectionType::Telnet {
             host,
             port,
+            username,
             raw_tcp_cli,
             enter_mode,
             local_echo,
@@ -124,10 +166,12 @@ pub(super) fn connection_editor_from_saved(
             send_naws,
             send_sga,
             backspace_mode,
+            encoding,
             ..
         } => {
             editor.host = host;
             editor.port = port.to_string();
+            editor.username = username;
             editor.raw_tcp_cli = raw_tcp_cli;
             editor.telnet_enter_mode = enter_mode;
             editor.local_echo = local_echo;
@@ -136,6 +180,7 @@ pub(super) fn connection_editor_from_saved(
             editor.send_naws = send_naws;
             editor.send_sga = send_sga;
             editor.backspace_mode = backspace_mode;
+            editor.encoding = encoding_to_editor_value(&encoding);
         }
         ConnectionType::Serial {
             port_name,
@@ -144,6 +189,7 @@ pub(super) fn connection_editor_from_saved(
             parity,
             stop_bits,
             backspace_mode,
+            encoding,
             ..
         } => {
             editor.serial_port = port_name;
@@ -152,9 +198,59 @@ pub(super) fn connection_editor_from_saved(
             editor.parity = parity;
             editor.stop_bits = stop_bits;
             editor.backspace_mode = backspace_mode;
+            editor.encoding = encoding_to_editor_value(&encoding);
         }
     }
     editor
+}
+
+fn encoding_to_editor_value(value: &str) -> String {
+    if value.trim().is_empty() {
+        "global".to_string()
+    } else {
+        value.trim().to_string()
+    }
+}
+
+fn editor_encoding_to_saved(value: &str) -> String {
+    match value.trim() {
+        "" | "global" => String::new(),
+        value => value.to_string(),
+    }
+}
+
+fn sftp_cwd_follow_mode_value(value: SftpCwdFollowMode) -> String {
+    match value {
+        SftpCwdFollowMode::Off => "off",
+        SftpCwdFollowMode::ShellIntegration => "shell_integration",
+        SftpCwdFollowMode::RcFile => "rc_file",
+    }
+    .to_string()
+}
+
+fn parse_sftp_cwd_follow_mode(value: &str) -> SftpCwdFollowMode {
+    match value {
+        "off" => SftpCwdFollowMode::Off,
+        "rc_file" => SftpCwdFollowMode::RcFile,
+        _ => SftpCwdFollowMode::ShellIntegration,
+    }
+}
+
+fn ssh_algorithm_mode_value(value: SshAlgorithmMode) -> String {
+    match value {
+        SshAlgorithmMode::Compatible => "compatible",
+        SshAlgorithmMode::Secure => "secure",
+        SshAlgorithmMode::Custom => "custom",
+    }
+    .to_string()
+}
+
+fn parse_ssh_algorithm_mode(value: &str) -> SshAlgorithmMode {
+    match value {
+        "secure" => SshAlgorithmMode::Secure,
+        "custom" => SshAlgorithmMode::Custom,
+        _ => SshAlgorithmMode::Compatible,
+    }
 }
 
 pub(super) fn build_saved_connection_from_editor(
@@ -178,6 +274,7 @@ pub(super) fn build_saved_connection_from_editor(
                 backspace_mode: non_empty_or(editor.backspace_mode.clone(), "del"),
                 ai_execution_profile: AiExecutionProfile::Auto,
                 x11_forwarding: editor.x11_forwarding,
+                encoding: editor_encoding_to_saved(&editor.encoding),
             }
         }
         ConnectionKindTab::Local => {
@@ -190,6 +287,7 @@ pub(super) fn build_saved_connection_from_editor(
                 shell_args: editor.shell_args.trim().to_string(),
                 working_dir: non_empty_optional(&editor.working_dir),
                 ai_execution_profile: AiExecutionProfile::Posix,
+                encoding: editor_encoding_to_saved(&editor.encoding),
             }
         }
         ConnectionKindTab::Telnet => {
@@ -201,6 +299,7 @@ pub(super) fn build_saved_connection_from_editor(
             ConnectionType::Telnet {
                 host,
                 port,
+                username: editor.username.trim().to_string(),
                 ai_execution_profile: AiExecutionProfile::Auto,
                 backspace_mode: non_empty_or(editor.backspace_mode.clone(), "del"),
                 raw_tcp_cli: editor.raw_tcp_cli,
@@ -210,6 +309,34 @@ pub(super) fn build_saved_connection_from_editor(
                 force_character_at_a_time: editor.force_character_at_a_time,
                 send_naws: editor.send_naws,
                 send_sga: editor.send_sga,
+                auto_login: TelnetAutoLoginConfig {
+                    enabled: editor.telnet_auto_login_enabled,
+                    send_wake_enter: editor.telnet_auto_login_send_wake_enter,
+                    timeout_ms: editor
+                        .telnet_auto_login_timeout_ms
+                        .trim()
+                        .parse::<u64>()
+                        .unwrap_or(60_000)
+                        .clamp(100, 600_000),
+                    username_prompt_regex: non_empty_optional(
+                        &editor.telnet_auto_login_username_prompt_regex,
+                    ),
+                    password_prompt_regex: non_empty_optional(
+                        &editor.telnet_auto_login_password_prompt_regex,
+                    ),
+                    success_prompt_regex: non_empty_optional(
+                        &editor.telnet_auto_login_success_prompt_regex,
+                    ),
+                    failure_prompt_regex: non_empty_optional(
+                        &editor.telnet_auto_login_failure_prompt_regex,
+                    ),
+                    max_retries: editor
+                        .telnet_auto_login_max_retries
+                        .trim()
+                        .parse::<u8>()
+                        .unwrap_or(0),
+                },
+                encoding: editor_encoding_to_saved(&editor.encoding),
             }
         }
         ConnectionKindTab::Serial => {
@@ -239,6 +366,7 @@ pub(super) fn build_saved_connection_from_editor(
                 stop_bits: non_empty_or(editor.stop_bits.clone(), "1"),
                 ai_execution_profile: AiExecutionProfile::Auto,
                 backspace_mode: non_empty_or(editor.backspace_mode.clone(), "del"),
+                encoding: editor_encoding_to_saved(&editor.encoding),
             }
         }
     };
@@ -255,6 +383,18 @@ pub(super) fn build_saved_connection_from_editor(
         if delay > 60_000 {
             return Err("Post-login delay must be between 0 and 60000 ms".to_string());
         }
+        let sftp_timeout = editor
+            .sftp_shell_detection_timeout_ms
+            .trim()
+            .parse::<u64>()
+            .map_err(|_| {
+                "SFTP shell detection timeout must be between 100 and 60000 ms".to_string()
+            })?;
+        if !(100..=60_000).contains(&sftp_timeout) {
+            return Err(
+                "SFTP shell detection timeout must be between 100 and 60000 ms".to_string(),
+            );
+        }
     }
 
     let name = if editor.name.trim().is_empty() {
@@ -270,16 +410,17 @@ pub(super) fn build_saved_connection_from_editor(
     };
 
     let auth = match editor.kind {
-        ConnectionKindTab::Ssh => {
+        ConnectionKindTab::Ssh | ConnectionKindTab::Telnet => {
             let password = editor.password.trim().to_string();
             let existing = editor.existing_password.clone();
             let mode = match editor.auth_mode.as_str() {
                 "password" => "password".to_string(),
                 "key"
-                    if editor
-                        .key_id
-                        .as_deref()
-                        .is_some_and(|value| !value.trim().is_empty()) =>
+                    if editor.kind == ConnectionKindTab::Ssh
+                        && editor
+                            .key_id
+                            .as_deref()
+                            .is_some_and(|value| !value.trim().is_empty()) =>
                 {
                     "key".to_string()
                 }
@@ -309,11 +450,15 @@ pub(super) fn build_saved_connection_from_editor(
                             .filter(|value| !value.trim().is_empty())
                     })
                     .flatten(),
-                otp_id: editor
-                    .otp_id
-                    .clone()
-                    .filter(|value| !value.trim().is_empty()),
-                auto_fill_otp: editor.auto_fill_otp,
+                otp_id: (editor.kind == ConnectionKindTab::Ssh)
+                    .then(|| {
+                        editor
+                            .otp_id
+                            .clone()
+                            .filter(|value| !value.trim().is_empty())
+                    })
+                    .flatten(),
+                auto_fill_otp: editor.kind == ConnectionKindTab::Ssh && editor.auto_fill_otp,
                 has_password: false,
                 mode,
             })
@@ -360,6 +505,36 @@ pub(super) fn build_saved_connection_from_editor(
     } else {
         None
     };
+    let ssh_algorithms = if editor.kind == ConnectionKindTab::Ssh {
+        let preferences = SshAlgorithmPreferences {
+            mode: parse_ssh_algorithm_mode(&editor.ssh_algorithm_mode),
+            kex: editor.ssh_algorithm_kex.clone(),
+            ciphers: editor.ssh_algorithm_ciphers.clone(),
+            macs: editor.ssh_algorithm_macs.clone(),
+            host_keys: editor.ssh_algorithm_host_keys.clone(),
+        };
+        (preferences != SshAlgorithmPreferences::default()).then_some(preferences)
+    } else {
+        None
+    };
+    let sftp = if editor.kind == ConnectionKindTab::Ssh {
+        SftpSettings {
+            enabled: editor.sftp_enabled,
+            cwd_follow_mode: parse_sftp_cwd_follow_mode(&editor.sftp_cwd_follow_mode),
+            shell_detection_timeout_ms: editor
+                .sftp_shell_detection_timeout_ms
+                .trim()
+                .parse::<u64>()
+                .unwrap_or(3000)
+                .clamp(100, 60_000),
+            filename_encoding: match editor.sftp_filename_encoding.trim() {
+                "" | "terminal" | "global" => String::new(),
+                value => value.to_string(),
+            },
+        }
+    } else {
+        SftpSettings::default()
+    };
 
     Ok(SavedConnection {
         id: editor.id.clone().unwrap_or_else(uuid),
@@ -380,6 +555,8 @@ pub(super) fn build_saved_connection_from_editor(
         auth,
         network,
         post_login,
+        ssh_algorithms,
+        sftp,
         created_at_ms: None,
         updated_at_ms: None,
         last_used_at_ms: None,
@@ -408,7 +585,10 @@ pub(super) fn non_empty_or(value: String, fallback: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use nyaterm_core::{AiExecutionProfile, ConnectionAuth, ConnectionType, SavedConnection};
+    use nyaterm_core::{
+        AiExecutionProfile, ConnectionAuth, ConnectionType, SavedConnection, SftpCwdFollowMode,
+        SftpSettings, SshAlgorithmMode, SshAlgorithmPreferences,
+    };
 
     use crate::models::ConnectionEditorPasswordSource;
 
@@ -424,6 +604,7 @@ mod tests {
                 shell_args: String::new(),
                 working_dir: None,
                 ai_execution_profile: AiExecutionProfile::Posix,
+                encoding: String::new(),
             },
             group_id: None,
             description: None,
@@ -431,6 +612,8 @@ mod tests {
             icon: Some("linux".to_string()),
             icon_auto_detect: None,
             auth: None,
+            ssh_algorithms: None,
+            sftp: Default::default(),
             network: None,
             post_login: None,
             created_at_ms: None,
@@ -456,6 +639,7 @@ mod tests {
                 backspace_mode: "del".to_string(),
                 ai_execution_profile: AiExecutionProfile::Auto,
                 x11_forwarding: false,
+                encoding: String::new(),
             },
             group_id: None,
             description: None,
@@ -467,6 +651,8 @@ mod tests {
                 password_id: Some("password-1".to_string()),
                 ..ConnectionAuth::default()
             }),
+            ssh_algorithms: None,
+            sftp: Default::default(),
             network: None,
             post_login: None,
             created_at_ms: None,
@@ -489,6 +675,57 @@ mod tests {
     }
 
     #[test]
+    fn connection_editor_round_trip_preserves_ssh_encoding_sftp_and_algorithms() {
+        let connection = SavedConnection {
+            id: "connection-ssh".to_string(),
+            name: "SSH".to_string(),
+            config: ConnectionType::Ssh {
+                host: "example.com".to_string(),
+                port: 22,
+                username: "root".to_string(),
+                backspace_mode: "del".to_string(),
+                ai_execution_profile: AiExecutionProfile::Auto,
+                x11_forwarding: false,
+                encoding: "GBK".to_string(),
+            },
+            group_id: None,
+            description: None,
+            sort_order: 0,
+            icon: None,
+            icon_auto_detect: None,
+            auth: None,
+            ssh_algorithms: Some(SshAlgorithmPreferences {
+                mode: SshAlgorithmMode::Custom,
+                kex: vec!["curve25519-sha256".to_string()],
+                ciphers: vec!["aes128-ctr".to_string()],
+                macs: vec!["hmac-sha2-256".to_string()],
+                host_keys: vec!["ssh-ed25519".to_string()],
+            }),
+            sftp: SftpSettings {
+                enabled: false,
+                cwd_follow_mode: SftpCwdFollowMode::RcFile,
+                shell_detection_timeout_ms: 5000,
+                filename_encoding: "GB18030".to_string(),
+            },
+            network: None,
+            post_login: None,
+            created_at_ms: None,
+            updated_at_ms: None,
+            last_used_at_ms: None,
+        };
+
+        let editor = connection_editor_from_saved(connection.clone(), false);
+        let saved = build_saved_connection_from_editor(&editor).expect("valid connection");
+
+        assert_eq!(saved.ssh_algorithms, connection.ssh_algorithms);
+        assert_eq!(saved.sftp, connection.sftp);
+        match saved.config {
+            ConnectionType::Ssh { encoding, .. } => assert_eq!(encoding, "GBK"),
+            other => panic!("expected SSH connection, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn connection_editor_round_trip_preserves_telnet_behavior() {
         let connection = SavedConnection {
             id: "connection-telnet".to_string(),
@@ -496,6 +733,7 @@ mod tests {
             config: ConnectionType::Telnet {
                 host: "device.local".to_string(),
                 port: 2323,
+                username: String::new(),
                 ai_execution_profile: AiExecutionProfile::Auto,
                 backspace_mode: "ctrl_h".to_string(),
                 raw_tcp_cli: true,
@@ -505,6 +743,8 @@ mod tests {
                 force_character_at_a_time: true,
                 send_naws: false,
                 send_sga: false,
+                auto_login: Default::default(),
+                encoding: String::new(),
             },
             group_id: None,
             description: None,
@@ -512,6 +752,8 @@ mod tests {
             icon: None,
             icon_auto_detect: None,
             auth: None,
+            ssh_algorithms: None,
+            sftp: Default::default(),
             network: None,
             post_login: None,
             created_at_ms: None,
@@ -537,6 +779,73 @@ mod tests {
         assert!(force_character_at_a_time);
         assert!(!send_naws);
         assert!(!send_sga);
+    }
+
+    #[test]
+    fn connection_editor_saves_telnet_username_password_and_encoding() {
+        let connection = SavedConnection {
+            id: "connection-telnet".to_string(),
+            name: "Telnet".to_string(),
+            config: ConnectionType::Telnet {
+                host: "device.local".to_string(),
+                port: 23,
+                username: "operator".to_string(),
+                ai_execution_profile: AiExecutionProfile::Auto,
+                backspace_mode: "del".to_string(),
+                raw_tcp_cli: false,
+                enter_mode: "cr".to_string(),
+                local_echo: true,
+                local_line_edit: true,
+                force_character_at_a_time: false,
+                send_naws: true,
+                send_sga: true,
+                auto_login: Default::default(),
+                encoding: "GB18030".to_string(),
+            },
+            group_id: None,
+            description: None,
+            sort_order: 0,
+            icon: None,
+            icon_auto_detect: None,
+            auth: Some(ConnectionAuth {
+                mode: "password".to_string(),
+                password: Some("secret".to_string()),
+                ..ConnectionAuth::default()
+            }),
+            ssh_algorithms: None,
+            sftp: Default::default(),
+            network: None,
+            post_login: None,
+            created_at_ms: None,
+            updated_at_ms: None,
+            last_used_at_ms: None,
+        };
+
+        let editor = connection_editor_from_saved(connection, false);
+        let saved = build_saved_connection_from_editor(&editor).expect("valid connection");
+
+        match saved.config {
+            ConnectionType::Telnet {
+                username,
+                encoding,
+                local_echo,
+                local_line_edit,
+                ..
+            } => {
+                assert_eq!(username, "operator");
+                assert_eq!(encoding, "GB18030");
+                assert!(local_echo);
+                assert!(local_line_edit);
+            }
+            other => panic!("expected Telnet connection, got {other:?}"),
+        }
+        assert_eq!(
+            saved
+                .auth
+                .as_ref()
+                .and_then(|auth| auth.password.as_deref()),
+            Some("secret")
+        );
     }
 }
 
@@ -623,12 +932,15 @@ impl NyaTermApp {
 pub(in crate::features) enum ConnectionEditorToggle {
     AutoFillOtp,
     X11,
+    SftpEnabled,
     RawTcp,
     LocalEcho,
     LocalLineEdit,
     ForceCharacterAtATime,
     SendNaws,
     SendSga,
+    TelnetAutoLoginEnabled,
+    TelnetAutoLoginSendWakeEnter,
     PostLogin,
     Advanced,
 }

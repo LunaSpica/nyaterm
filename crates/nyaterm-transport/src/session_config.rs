@@ -9,6 +9,7 @@ pub struct LocalSessionConfig {
     pub shell_path: Option<String>,
     pub shell_args: Vec<String>,
     pub working_dir: Option<PathBuf>,
+    pub encoding: String,
     pub cols: u16,
     pub rows: u16,
     /// Total terminal pixel width (cols * cell_width). Zero means unknown.
@@ -30,13 +31,47 @@ pub struct TelnetSessionConfig {
     pub name: String,
     pub host: String,
     pub port: u16,
+    pub username: String,
+    pub password: Option<String>,
+    pub backspace_mode: String,
     pub raw_tcp: bool,
     pub enter_mode: TelnetEnterMode,
+    pub local_echo: bool,
+    pub local_line_edit: bool,
     pub force_character_at_a_time: bool,
     pub send_naws: bool,
     pub send_sga: bool,
+    pub auto_login: TelnetAutoLoginConfig,
+    pub encoding: String,
     pub cols: u16,
     pub rows: u16,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TelnetAutoLoginConfig {
+    pub enabled: bool,
+    pub send_wake_enter: bool,
+    pub timeout_ms: u64,
+    pub username_prompt_regex: Option<String>,
+    pub password_prompt_regex: Option<String>,
+    pub success_prompt_regex: Option<String>,
+    pub failure_prompt_regex: Option<String>,
+    pub max_retries: u8,
+}
+
+impl Default for TelnetAutoLoginConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            send_wake_enter: true,
+            timeout_ms: 60_000,
+            username_prompt_regex: None,
+            password_prompt_regex: None,
+            success_prompt_regex: None,
+            failure_prompt_regex: None,
+            max_retries: 0,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -48,6 +83,51 @@ pub struct SerialSessionConfig {
     pub parity: String,
     pub stop_bits: String,
     pub backspace_mode: String,
+    pub encoding: String,
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum SshAlgorithmMode {
+    #[default]
+    Compatible,
+    Secure,
+    Custom,
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct SshAlgorithmPreferences {
+    pub mode: SshAlgorithmMode,
+    pub kex: Vec<String>,
+    pub ciphers: Vec<String>,
+    pub macs: Vec<String>,
+    pub host_keys: Vec<String>,
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum SftpCwdFollowMode {
+    Off,
+    #[default]
+    ShellIntegration,
+    RcFile,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SftpSettings {
+    pub enabled: bool,
+    pub cwd_follow_mode: SftpCwdFollowMode,
+    pub shell_detection_timeout_ms: u64,
+    pub filename_encoding: String,
+}
+
+impl Default for SftpSettings {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            cwd_follow_mode: SftpCwdFollowMode::ShellIntegration,
+            shell_detection_timeout_ms: 3000,
+            filename_encoding: String::new(),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -67,6 +147,9 @@ pub struct SshSessionConfig {
     pub term: String,
     pub x11_forwarding: bool,
     pub x11_display: String,
+    pub encoding: String,
+    pub ssh_algorithms: Option<SshAlgorithmPreferences>,
+    pub sftp: SftpSettings,
     pub deferred_pty: bool,
     /// Seconds between SSH keepalive packets. Zero disables keepalive.
     pub keep_alive_interval_secs: u32,
@@ -142,6 +225,9 @@ impl std::fmt::Debug for SshSessionConfig {
             .field("term", &self.term)
             .field("x11_forwarding", &self.x11_forwarding)
             .field("x11_display", &self.x11_display)
+            .field("encoding", &self.encoding)
+            .field("ssh_algorithms", &self.ssh_algorithms)
+            .field("sftp", &self.sftp)
             .field("deferred_pty", &self.deferred_pty)
             .field("keep_alive_interval_secs", &self.keep_alive_interval_secs)
             .field("cols", &self.cols)
@@ -272,6 +358,7 @@ impl Default for SerialSessionConfig {
             parity: "none".to_string(),
             stop_bits: "1".to_string(),
             backspace_mode: "ctrl_h".to_string(),
+            encoding: "UTF-8".to_string(),
         }
     }
 }
@@ -294,6 +381,9 @@ impl Default for SshSessionConfig {
             term: "xterm-256color".to_string(),
             x11_forwarding: false,
             x11_display: String::new(),
+            encoding: "UTF-8".to_string(),
+            ssh_algorithms: None,
+            sftp: SftpSettings::default(),
             deferred_pty: false,
             keep_alive_interval_secs: 30,
             cols: 80,
@@ -313,11 +403,18 @@ impl Default for TelnetSessionConfig {
             name: "Telnet".to_string(),
             host: String::new(),
             port: 23,
+            username: String::new(),
+            password: None,
+            backspace_mode: "del".to_string(),
             raw_tcp: false,
             enter_mode: TelnetEnterMode::Cr,
+            local_echo: false,
+            local_line_edit: false,
             force_character_at_a_time: false,
             send_naws: true,
             send_sga: true,
+            auto_login: TelnetAutoLoginConfig::default(),
+            encoding: "UTF-8".to_string(),
             cols: 80,
             rows: 24,
         }
@@ -331,6 +428,7 @@ impl Default for LocalSessionConfig {
             shell_path: None,
             shell_args: Vec::new(),
             working_dir: None,
+            encoding: "UTF-8".to_string(),
             cols: 80,
             rows: 24,
             pixel_width: 0,

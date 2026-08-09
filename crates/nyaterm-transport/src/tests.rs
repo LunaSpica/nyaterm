@@ -10,11 +10,13 @@ use super::{
     DO, ForwardedTcpIpDispatch, IAC, LocalSessionConfig, OPT_SUPPRESS_GO_AHEAD,
     QueuedTransportWriter, SESSION_EVENT_QUEUE_OUTPUT_EVENT_LIMIT,
     SESSION_EVENT_QUEUE_OUTPUT_LIMIT, SerialSessionConfig, SessionError, SessionEvent,
-    SessionEventQueue, SessionManager, SshCommand, SshKeyAuthConfig, SshProxyConfig,
-    SshPtyDimensions, SshSessionConfig, TelnetSessionConfig, WILL,
-    drain_deferred_ssh_open_commands, expand_proxy_command, forwarded_tcpip_sender_for,
-    is_process_list_unsupported, local_pty_size, normalize_process_signal, parse_process_output,
-    remap_del_to_bs, run_local_command, ssh_client_config, ssh_host_identifier,
+    SessionEventQueue, SessionManager, SftpService, SftpSettings, SshAlgorithmMode,
+    SshAlgorithmPreferences, SshCommand, SshKeyAuthConfig, SshProxyConfig, SshPtyDimensions,
+    SshSessionConfig, TelnetSessionConfig, WILL, cipher, drain_deferred_ssh_open_commands,
+    expand_proxy_command, forwarded_tcpip_sender_for, has_password_prompt, has_username_prompt,
+    is_process_list_unsupported, kex, local_pty_size, mac, normalize_process_signal,
+    parse_process_output, remap_del_to_bs, run_local_command, ssh_client_config,
+    ssh_host_identifier, validate_ssh_algorithm_preferences,
 };
 
 /// A push must hand the event straight to a parked consumer. Before the
@@ -181,6 +183,7 @@ fn local_session_echoes_output() {
             rows: 24,
             pixel_width: 0,
             pixel_height: 0,
+            ..Default::default()
         })
         .expect("local session");
 
@@ -217,6 +220,7 @@ fn local_session_info_preserves_working_dir() {
             rows: 24,
             pixel_width: 0,
             pixel_height: 0,
+            ..Default::default()
         })
         .expect("local session");
     let sessions = manager.list_sessions().expect("sessions");
@@ -400,6 +404,181 @@ fn serial_backspace_mode_remaps_delete_to_ctrl_h() {
 }
 
 #[test]
+fn telnet_local_line_edit_buffers_until_enter_and_echoes_locally() {
+    let config = TelnetSessionConfig {
+        local_echo: true,
+        local_line_edit: true,
+        ..Default::default()
+    };
+    let mut buffer = Vec::new();
+
+    let (send, echo) = super::edit_telnet_line_input(b"hel", &mut buffer, &config);
+    assert!(send.is_empty());
+    assert_eq!(echo, b"hel");
+    assert_eq!(buffer, b"hel");
+
+    let (send, echo) = super::edit_telnet_line_input(b"lo\x08p\r", &mut buffer, &config);
+    assert_eq!(send, b"hellp\r");
+    assert_eq!(echo, b"lo\x08 \x08p\r\n");
+    assert!(buffer.is_empty());
+}
+
+#[test]
+fn telnet_prompt_detection_handles_credentials_and_avoids_last_login() {
+    assert!(has_username_prompt("router login: "));
+    assert!(has_username_prompt("Username:"));
+    assert!(!has_username_prompt("Last login: Wed Jul 15"));
+    assert!(has_password_prompt("Password: "));
+    assert!(has_password_prompt("输入密码："));
+}
+
+#[test]
+fn telnet_auto_login_sends_username_and_password_prompts() {
+    let config = TelnetSessionConfig {
+        username: "operator".to_string(),
+        password: Some("secret".to_string()),
+        ..Default::default()
+    };
+    let mut state = super::TelnetAutoLoginState::new(&config).expect("auto login state");
+
+    let username_payload = state
+        .handle_visible_output(b"router login: ", &config)
+        .into_iter()
+        .find_map(|action| match action {
+            super::TelnetAutoLoginAction::Send(payload) => Some(payload),
+            _ => None,
+        })
+        .expect("username payload");
+    let password_payload = state
+        .handle_visible_output(b"Password: ", &config)
+        .into_iter()
+        .find_map(|action| match action {
+            super::TelnetAutoLoginAction::Send(payload) => Some(payload),
+            _ => None,
+        })
+        .expect("password payload");
+
+    assert_eq!(username_payload, b"operator\r");
+    assert_eq!(password_payload, b"secret\r");
+    assert!(
+        state
+            .handle_visible_output(b"Password: ", &config)
+            .is_empty()
+    );
+}
+
+fn telnet_send_payloads(actions: Vec<super::TelnetAutoLoginAction>) -> Vec<Vec<u8>> {
+    actions
+        .into_iter()
+        .filter_map(|action| match action {
+            super::TelnetAutoLoginAction::Send(payload) => Some(payload),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn telnet_auto_login_handles_split_and_chinese_prompts() {
+    let config = TelnetSessionConfig {
+        username: "admin".to_string(),
+        password: Some("sekret".to_string()),
+        ..Default::default()
+    };
+    let mut state = super::TelnetAutoLoginState::new(&config).expect("auto login state");
+
+    assert!(telnet_send_payloads(state.handle_visible_output(b"User", &config)).is_empty());
+    assert_eq!(
+        telnet_send_payloads(state.handle_visible_output(b"name: ", &config)),
+        vec![b"admin\r".to_vec()]
+    );
+    assert_eq!(
+        telnet_send_payloads(state.handle_visible_output("请输入密码：".as_bytes(), &config)),
+        vec![b"sekret\r".to_vec()]
+    );
+}
+
+#[test]
+fn telnet_auto_login_wakes_prompt_and_ignores_last_login() {
+    let config = TelnetSessionConfig {
+        username: "admin".to_string(),
+        password: Some("sekret".to_string()),
+        ..Default::default()
+    };
+    let mut state = super::TelnetAutoLoginState::new(&config).expect("auto login state");
+
+    assert_eq!(
+        telnet_send_payloads(state.handle_visible_output(b"Press Enter to continue", &config)),
+        vec![b"\r".to_vec()]
+    );
+    assert!(
+        telnet_send_payloads(
+            state.handle_visible_output(b"Last login: Wed Jul 15 10:00:00\r\n", &config)
+        )
+        .is_empty()
+    );
+    assert_eq!(
+        telnet_send_payloads(state.handle_visible_output(b"router login: ", &config)),
+        vec![b"admin\r".to_vec()]
+    );
+}
+
+#[test]
+fn telnet_auto_login_retries_failure_and_disables_after_manual_input() {
+    let config = TelnetSessionConfig {
+        username: "admin".to_string(),
+        password: Some("wrong".to_string()),
+        auto_login: super::TelnetAutoLoginConfig {
+            max_retries: 1,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let mut state = super::TelnetAutoLoginState::new(&config).expect("auto login state");
+
+    assert_eq!(
+        telnet_send_payloads(state.handle_visible_output(b"login: ", &config)),
+        vec![b"admin\r".to_vec()]
+    );
+    assert_eq!(
+        telnet_send_payloads(state.handle_visible_output(b"Password", &config)),
+        vec![b"wrong\r".to_vec()]
+    );
+    assert!(
+        state
+            .handle_visible_output(b"Login incorrect\r\n", &config)
+            .is_empty()
+    );
+    assert_eq!(
+        telnet_send_payloads(state.handle_visible_output(b"login: ", &config)),
+        vec![b"admin\r".to_vec()]
+    );
+    assert!(matches!(
+        state.handle_user_input(false),
+        Some(super::TelnetAutoLoginAction::Disable)
+    ));
+    assert!(
+        state
+            .handle_visible_output(b"Password: ", &config)
+            .is_empty()
+    );
+}
+
+#[test]
+fn sftp_service_rejects_operations_when_disabled() {
+    let service = SftpService::new(SshSessionConfig {
+        sftp: SftpSettings {
+            enabled: false,
+            ..Default::default()
+        },
+        ..Default::default()
+    });
+
+    let error = service.list_dir("/").expect_err("SFTP disabled");
+
+    assert!(error.to_string().contains("SFTP is disabled"));
+}
+
+#[test]
 fn ssh_refused_connection_reports_create_error() {
     let listener = TcpListener::bind("127.0.0.1:0").expect("listener");
     let port = listener.local_addr().expect("addr").port();
@@ -429,6 +608,53 @@ fn ssh_host_identifier_uses_openssh_port_format() {
     assert_eq!(
         ssh_host_identifier("example.com", 2222),
         "[example.com]:2222"
+    );
+}
+
+#[test]
+fn ssh_shell_integration_script_emits_osc7_and_ready_marker() {
+    let ready = super::build_ssh_ready_marker("session-1");
+    let script =
+        super::ssh_shell_injection_script(super::ShellKind::Bash, &ready).expect("bash script");
+
+    assert!(script.contains("printf '\\033]7;file://%s%s\\007'"));
+    assert!(script.contains("NyaTermCommand"));
+    assert!(script.contains("NyaTermReady:session-1"));
+}
+
+#[test]
+fn ssh_ready_marker_helpers_strip_current_and_legacy_markers() {
+    let ready = super::build_ssh_ready_marker("session-1").into_bytes();
+    let legacy = super::build_legacy_ssh_ready_marker("\x1b]7777;NyaTermReady:session-1\x07")
+        .expect("legacy marker")
+        .into_bytes();
+    let payload = [
+        b"before".as_slice(),
+        ready.as_slice(),
+        b"middle".as_slice(),
+        legacy.as_slice(),
+        b"after".as_slice(),
+    ]
+    .concat();
+
+    assert_eq!(
+        super::strip_ssh_ready_markers(&payload, &ready, Some(&legacy)),
+        b"beforemiddleafter"
+    );
+}
+
+#[test]
+fn ssh_ready_marker_detection_returns_bytes_after_marker() {
+    let ready = super::build_ssh_ready_marker("session-1").into_bytes();
+    let mut split = b"echoed injection".to_vec();
+    split.extend_from_slice(&ready[..8]);
+    assert!(super::bytes_after_ssh_ready_marker(&split, &ready, None).is_none());
+    split.extend_from_slice(&ready[8..]);
+    split.extend_from_slice(b"prompt$ ");
+
+    assert_eq!(
+        super::bytes_after_ssh_ready_marker(&split, &ready, None),
+        Some(b"prompt$ ".as_slice())
     );
 }
 
@@ -563,7 +789,7 @@ fn ssh_client_config_disables_idle_timeout_and_maps_keepalive() {
         ..Default::default()
     };
 
-    let client_config = ssh_client_config(&config);
+    let client_config = ssh_client_config(&config).expect("client config");
 
     assert_eq!(client_config.inactivity_timeout, None);
     assert_eq!(
@@ -576,10 +802,56 @@ fn ssh_client_config_disables_idle_timeout_and_maps_keepalive() {
         keep_alive_interval_secs: 0,
         ..Default::default()
     };
-    let disabled_client_config = ssh_client_config(&disabled);
+    let disabled_client_config = ssh_client_config(&disabled).expect("disabled client config");
 
     assert_eq!(disabled_client_config.inactivity_timeout, None);
     assert_eq!(disabled_client_config.keepalive_interval, None);
+}
+
+#[test]
+fn ssh_client_config_maps_custom_algorithm_preferences() {
+    let preferences = SshAlgorithmPreferences {
+        mode: SshAlgorithmMode::Custom,
+        kex: vec!["curve25519-sha256".to_string()],
+        ciphers: vec!["aes128-ctr".to_string()],
+        macs: vec!["hmac-sha2-256".to_string()],
+        host_keys: vec!["ssh-ed25519".to_string()],
+    };
+    let config = SshSessionConfig {
+        ssh_algorithms: Some(preferences),
+        ..Default::default()
+    };
+
+    let client_config = ssh_client_config(&config).expect("client config");
+
+    assert_eq!(client_config.preferred.kex.as_ref(), &[kex::CURVE25519]);
+    assert_eq!(
+        client_config.preferred.cipher.as_ref(),
+        &[cipher::AES_128_CTR]
+    );
+    assert_eq!(client_config.preferred.mac.as_ref(), &[mac::HMAC_SHA256]);
+    assert_eq!(
+        client_config.preferred.key.as_ref(),
+        &[russh::keys::Algorithm::Ed25519]
+    );
+}
+
+#[test]
+fn ssh_algorithm_validation_rejects_empty_or_unknown_custom_lists() {
+    let empty = SshAlgorithmPreferences {
+        mode: SshAlgorithmMode::Custom,
+        ..Default::default()
+    };
+    assert!(validate_ssh_algorithm_preferences(Some(&empty)).is_err());
+
+    let unknown = SshAlgorithmPreferences {
+        mode: SshAlgorithmMode::Custom,
+        kex: vec!["not-a-kex".to_string()],
+        ciphers: vec!["aes128-ctr".to_string()],
+        macs: vec!["hmac-sha2-256".to_string()],
+        host_keys: vec!["ssh-ed25519".to_string()],
+    };
+    assert!(validate_ssh_algorithm_preferences(Some(&unknown)).is_err());
 }
 
 #[test]

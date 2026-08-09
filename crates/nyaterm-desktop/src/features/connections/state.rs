@@ -1488,6 +1488,14 @@ fn connection_editor_number_options(field: ConnectionEditorField) -> Option<NyaN
                 .range(0.0, 60_000.0)
                 .step(1.0),
         ),
+        ConnectionEditorField::TelnetAutoLoginTimeout => Some(
+            NyaNumberInputOptions::default()
+                .range(100.0, 600_000.0)
+                .step(100.0),
+        ),
+        ConnectionEditorField::TelnetAutoLoginMaxRetries => {
+            Some(NyaNumberInputOptions::default().range(0.0, 10.0).step(1.0))
+        }
         ConnectionEditorField::BaudRate => Some(
             NyaNumberInputOptions::default()
                 .range(50.0, 4_000_000.0)

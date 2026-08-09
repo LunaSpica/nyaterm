@@ -16,6 +16,114 @@ pub enum AiExecutionProfile {
     Disabled,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SshAlgorithmMode {
+    #[default]
+    Compatible,
+    Secure,
+    Custom,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct SshAlgorithmPreferences {
+    #[serde(default)]
+    pub mode: SshAlgorithmMode,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub kex: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ciphers: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub macs: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub host_keys: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SftpCwdFollowMode {
+    Off,
+    #[default]
+    ShellIntegration,
+    RcFile,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SftpSettings {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub cwd_follow_mode: SftpCwdFollowMode,
+    #[serde(
+        default = "default_sftp_shell_detection_timeout_ms",
+        skip_serializing_if = "is_default_sftp_shell_detection_timeout_ms"
+    )]
+    pub shell_detection_timeout_ms: u64,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub filename_encoding: String,
+}
+
+impl Default for SftpSettings {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            cwd_follow_mode: SftpCwdFollowMode::ShellIntegration,
+            shell_detection_timeout_ms: default_sftp_shell_detection_timeout_ms(),
+            filename_encoding: String::new(),
+        }
+    }
+}
+
+pub const MIN_SFTP_SHELL_DETECTION_TIMEOUT_MS: u64 = 100;
+pub const MAX_SFTP_SHELL_DETECTION_TIMEOUT_MS: u64 = 60_000;
+
+pub fn validate_sftp_settings(settings: &SftpSettings) -> Result<(), String> {
+    if !(MIN_SFTP_SHELL_DETECTION_TIMEOUT_MS..=MAX_SFTP_SHELL_DETECTION_TIMEOUT_MS)
+        .contains(&settings.shell_detection_timeout_ms)
+    {
+        return Err(format!(
+            "SFTP shell detection timeout must be between {} and {} ms",
+            MIN_SFTP_SHELL_DETECTION_TIMEOUT_MS, MAX_SFTP_SHELL_DETECTION_TIMEOUT_MS
+        ));
+    }
+    Ok(())
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TelnetAutoLoginConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default = "default_true")]
+    pub send_wake_enter: bool,
+    #[serde(default = "default_telnet_auto_login_timeout_ms")]
+    pub timeout_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub username_prompt_regex: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub password_prompt_regex: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub success_prompt_regex: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failure_prompt_regex: Option<String>,
+    #[serde(default)]
+    pub max_retries: u8,
+}
+
+impl Default for TelnetAutoLoginConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            send_wake_enter: true,
+            timeout_ms: default_telnet_auto_login_timeout_ms(),
+            username_prompt_regex: None,
+            password_prompt_regex: None,
+            success_prompt_regex: None,
+            failure_prompt_regex: None,
+            max_retries: 0,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ConnectionType {
@@ -31,6 +139,8 @@ pub enum ConnectionType {
         ai_execution_profile: AiExecutionProfile,
         #[serde(default)]
         x11_forwarding: bool,
+        #[serde(default)]
+        encoding: String,
     },
     LocalTerminal {
         #[serde(default)]
@@ -41,11 +151,15 @@ pub enum ConnectionType {
         working_dir: Option<String>,
         #[serde(default)]
         ai_execution_profile: AiExecutionProfile,
+        #[serde(default)]
+        encoding: String,
     },
     Telnet {
         host: String,
         #[serde(default = "default_telnet_port")]
         port: u16,
+        #[serde(default)]
+        username: String,
         #[serde(default)]
         ai_execution_profile: AiExecutionProfile,
         #[serde(default = "default_backspace_mode_telnet")]
@@ -64,6 +178,10 @@ pub enum ConnectionType {
         send_naws: bool,
         #[serde(default = "default_true")]
         send_sga: bool,
+        #[serde(default, skip_serializing_if = "is_default_telnet_auto_login_config")]
+        auto_login: TelnetAutoLoginConfig,
+        #[serde(default)]
+        encoding: String,
     },
     Serial {
         port_name: String,
@@ -79,6 +197,8 @@ pub enum ConnectionType {
         ai_execution_profile: AiExecutionProfile,
         #[serde(default = "default_backspace_mode_serial")]
         backspace_mode: String,
+        #[serde(default)]
+        encoding: String,
     },
 }
 
@@ -529,6 +649,10 @@ pub struct SavedConnection {
     pub network: Option<ConnectionNetwork>,
     #[serde(default)]
     pub post_login: Option<ConnectionPostLogin>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh_algorithms: Option<SshAlgorithmPreferences>,
+    #[serde(default, skip_serializing_if = "is_default_sftp_settings")]
+    pub sftp: SftpSettings,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub created_at_ms: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1490,8 +1614,28 @@ fn default_telnet_enter_mode() -> String {
     "cr".to_string()
 }
 
+fn default_telnet_auto_login_timeout_ms() -> u64 {
+    60_000
+}
+
 fn default_true() -> bool {
     true
+}
+
+pub fn default_sftp_shell_detection_timeout_ms() -> u64 {
+    3000
+}
+
+fn is_default_sftp_shell_detection_timeout_ms(value: &u64) -> bool {
+    *value == default_sftp_shell_detection_timeout_ms()
+}
+
+fn is_default_sftp_settings(value: &SftpSettings) -> bool {
+    value == &SftpSettings::default()
+}
+
+fn is_default_telnet_auto_login_config(value: &TelnetAutoLoginConfig) -> bool {
+    value == &TelnetAutoLoginConfig::default()
 }
 
 fn default_auth_mode() -> String {
@@ -1569,6 +1713,180 @@ mod tests {
     }
 
     #[test]
+    fn legacy_connections_default_new_tauri_compatibility_fields() {
+        let json = r#"{
+            "sessions": [
+                {"id":"ssh","name":"SSH","type":"ssh","host":"10.0.0.8"},
+                {"id":"local","name":"Local","type":"local_terminal"},
+                {"id":"telnet","name":"Telnet","type":"telnet","host":"10.0.0.9"},
+                {"id":"serial","name":"Serial","type":"serial","port_name":"COM1"}
+            ],
+            "groups": []
+        }"#;
+
+        let config: SessionsConfig = serde_json::from_str(json).expect("valid sessions config");
+
+        assert_eq!(config.connections.len(), 4);
+        for connection in &config.connections {
+            assert!(connection.ssh_algorithms.is_none());
+            assert_eq!(connection.sftp, SftpSettings::default());
+        }
+        match &config.connections[0].config {
+            ConnectionType::Ssh { encoding, .. } => assert_eq!(encoding, ""),
+            other => panic!("expected SSH connection, got {other:?}"),
+        }
+        match &config.connections[1].config {
+            ConnectionType::LocalTerminal { encoding, .. } => assert_eq!(encoding, ""),
+            other => panic!("expected local connection, got {other:?}"),
+        }
+        match &config.connections[2].config {
+            ConnectionType::Telnet {
+                username, encoding, ..
+            } => {
+                assert_eq!(username, "");
+                assert_eq!(encoding, "");
+            }
+            other => panic!("expected Telnet connection, got {other:?}"),
+        }
+        match &config.connections[3].config {
+            ConnectionType::Serial { encoding, .. } => assert_eq!(encoding, ""),
+            other => panic!("expected serial connection, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn tauri_ssh_algorithm_sftp_and_encoding_fields_round_trip() {
+        let json = r#"{
+            "id":"ssh-tauri",
+            "name":"SSH",
+            "type":"ssh",
+            "host":"example.com",
+            "port":2222,
+            "username":"deploy",
+            "encoding":"GBK",
+            "ssh_algorithms":{
+                "mode":"custom",
+                "kex":["curve25519-sha256"],
+                "ciphers":["aes128-ctr"],
+                "macs":["hmac-sha2-256"],
+                "host_keys":["ssh-ed25519"]
+            },
+            "sftp":{
+                "enabled":false,
+                "cwd_follow_mode":"rc_file",
+                "shell_detection_timeout_ms":5000,
+                "filename_encoding":"GB18030"
+            }
+        }"#;
+
+        let connection: SavedConnection = serde_json::from_str(json).expect("valid connection");
+
+        match &connection.config {
+            ConnectionType::Ssh { encoding, .. } => assert_eq!(encoding, "GBK"),
+            other => panic!("expected SSH connection, got {other:?}"),
+        }
+        assert_eq!(
+            connection.ssh_algorithms,
+            Some(SshAlgorithmPreferences {
+                mode: SshAlgorithmMode::Custom,
+                kex: vec!["curve25519-sha256".to_string()],
+                ciphers: vec!["aes128-ctr".to_string()],
+                macs: vec!["hmac-sha2-256".to_string()],
+                host_keys: vec!["ssh-ed25519".to_string()],
+            })
+        );
+        assert_eq!(
+            connection.sftp,
+            SftpSettings {
+                enabled: false,
+                cwd_follow_mode: SftpCwdFollowMode::RcFile,
+                shell_detection_timeout_ms: 5000,
+                filename_encoding: "GB18030".to_string(),
+            }
+        );
+
+        let round_trip: SavedConnection =
+            serde_json::from_str(&serde_json::to_string(&connection).expect("serialize"))
+                .expect("reload");
+        assert_eq!(round_trip, connection);
+    }
+
+    #[test]
+    fn tauri_telnet_username_auth_and_encoding_fields_round_trip() {
+        let json = r#"{
+            "id":"telnet-tauri",
+            "name":"Telnet",
+            "type":"telnet",
+            "host":"10.0.0.9",
+            "port":23,
+            "username":"operator",
+            "encoding":"GB18030",
+            "local_echo":true,
+            "local_line_edit":true,
+            "auth":{
+                "mode":"password",
+                "password":"secret"
+            }
+        }"#;
+
+        let connection: SavedConnection = serde_json::from_str(json).expect("valid connection");
+
+        match &connection.config {
+            ConnectionType::Telnet {
+                username,
+                encoding,
+                local_echo,
+                local_line_edit,
+                ..
+            } => {
+                assert_eq!(username, "operator");
+                assert_eq!(encoding, "GB18030");
+                assert!(*local_echo);
+                assert!(*local_line_edit);
+            }
+            other => panic!("expected Telnet connection, got {other:?}"),
+        }
+        assert_eq!(
+            connection
+                .auth
+                .as_ref()
+                .and_then(|auth| auth.password.as_deref()),
+            Some("secret")
+        );
+
+        let round_trip: SavedConnection =
+            serde_json::from_str(&serde_json::to_string(&connection).expect("serialize"))
+                .expect("reload");
+        assert_eq!(round_trip, connection);
+    }
+
+    #[test]
+    fn validates_sftp_shell_detection_timeout_range() {
+        for value in [
+            MIN_SFTP_SHELL_DETECTION_TIMEOUT_MS,
+            default_sftp_shell_detection_timeout_ms(),
+            MAX_SFTP_SHELL_DETECTION_TIMEOUT_MS,
+        ] {
+            let settings = SftpSettings {
+                shell_detection_timeout_ms: value,
+                ..Default::default()
+            };
+            assert!(validate_sftp_settings(&settings).is_ok());
+        }
+
+        for value in [
+            MIN_SFTP_SHELL_DETECTION_TIMEOUT_MS - 1,
+            MAX_SFTP_SHELL_DETECTION_TIMEOUT_MS + 1,
+        ] {
+            let settings = SftpSettings {
+                shell_detection_timeout_ms: value,
+                ..Default::default()
+            };
+            assert!(validate_sftp_settings(&settings).is_err());
+        }
+    }
+
+    #[test]
     fn local_terminal_endpoint_uses_shell_and_working_dir() {
         let connection = SavedConnection {
             id: "local-1".to_string(),
@@ -1578,6 +1896,7 @@ mod tests {
                 shell_args: String::new(),
                 working_dir: Some("/data".to_string()),
                 ai_execution_profile: AiExecutionProfile::Auto,
+                encoding: String::new(),
             },
             group_id: None,
             description: None,
@@ -1585,6 +1904,8 @@ mod tests {
             icon: None,
             icon_auto_detect: None,
             auth: None,
+            ssh_algorithms: None,
+            sftp: Default::default(),
             network: None,
             post_login: None,
             created_at_ms: None,

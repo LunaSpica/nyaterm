@@ -121,4 +121,14 @@ pub(super) fn connection_editor_local_section(
                     }),
                 )),
         )
+        .child(connection_editor_select(
+            ConnectionEditorRenderContext {
+                palette,
+                fields,
+                cx,
+            },
+            "connection-editor-local-encoding",
+            tr("connection.encoding"),
+            ConnectionEditorSelect::Encoding,
+        ))
 }

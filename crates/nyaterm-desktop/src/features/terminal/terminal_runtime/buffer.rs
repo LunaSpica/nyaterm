@@ -581,11 +581,12 @@ impl NyaTermApp {
         &self,
         session_id: &str,
         output: String,
+        encoding: &str,
     ) {
         self.terminal.view.frame_pipeline.seed_session(
             session_id.to_string(),
             output,
-            self.settings.summary().interaction_default_encoding.clone(),
+            encoding.to_string(),
             self.terminal_scrollback_line_limit(),
         );
     }
