@@ -10,13 +10,13 @@ use std::sync::{
     Arc, Mutex as StdMutex,
     atomic::{AtomicBool, AtomicU64, Ordering},
 };
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use encoding_rs::{Encoding, GB18030, GBK, UTF_8};
 use russh::{Disconnect, client};
-use russh_sftp::client::SftpSession;
+use russh_sftp::client::{Config as SftpClientConfig, SftpSession};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::sync::mpsc;
+use tokio::sync::{Semaphore, mpsc};
 use tokio::task::JoinSet;
 
 use super::{
@@ -27,6 +27,23 @@ use super::{
 };
 
 pub const SFTP_TRANSFER_CANCELLED: &str = "SFTP transfer cancelled";
+
+const SFTP_MIN_REQUEST_KIB: usize = 64;
+const SFTP_MAX_REQUEST_KIB: usize = 256;
+const SFTP_WRITE_PIPELINE_TARGET_KIB: usize = 2048;
+const SFTP_MIN_CONCURRENT_WRITES: usize = 8;
+const SFTP_MAX_CONCURRENT_WRITES: usize = 16;
+const SFTP_PACKET_OVERHEAD_RESERVE: usize = 1024;
+const SFTP_SMALL_FILE_THRESHOLD: u64 = 512 * 1024;
+const SFTP_DEFAULT_SMALL_FILE_CONCURRENCY: usize = 16;
+const SFTP_MAX_SMALL_FILE_CONCURRENCY: usize = 16;
+const SFTP_SMALL_FILE_WORKERS_PER_SESSION: usize = 8;
+const SFTP_DEFAULT_SESSION_POOL_SIZE: usize = 2;
+const SFTP_MAX_SESSION_POOL_SIZE: usize = 4;
+const SFTP_LARGE_FILE_CONCURRENCY: usize = 2;
+const SFTP_HANDLE_RESERVE: usize = 8;
+const SFTP_DIRECTORY_STALL_TIMEOUT: Duration = Duration::from_secs(60);
+const SFTP_PROGRESS_INTERVAL: Duration = Duration::from_millis(50);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SftpFileType {
@@ -176,6 +193,14 @@ async fn open_sftp_session(
     config: &SshSessionConfig,
     multiplex: Option<&SshMultiplexHandle>,
 ) -> anyhow::Result<OpenSftpSession> {
+    open_sftp_session_with_client_config(config, multiplex, SftpClientConfig::default()).await
+}
+
+async fn open_sftp_session_with_client_config(
+    config: &SshSessionConfig,
+    multiplex: Option<&SshMultiplexHandle>,
+    client_config: SftpClientConfig,
+) -> anyhow::Result<OpenSftpSession> {
     let (channel, connection) = if let Some(multiplex) = multiplex {
         multiplex.ensure_matches_config(config)?;
         let handle = multiplex.target_handle();
@@ -205,7 +230,7 @@ async fn open_sftp_session(
         .map_err(|error| anyhow::anyhow!("failed to start SFTP subsystem: {error}"))?;
     let sftp = tokio::time::timeout(
         Duration::from_secs(30),
-        SftpSession::new(channel.into_stream()),
+        SftpSession::new_with_config(channel.into_stream(), client_config),
     )
     .await
     .map_err(|_| anyhow::anyhow!("SFTP initialization timed out"))??;
@@ -218,6 +243,10 @@ async fn open_sftp_session(
 async fn close_sftp_session(session: OpenSftpSession) {
     let OpenSftpSession { sftp, connection } = session;
     let _ = sftp.close().await;
+    close_sftp_connection(connection).await;
+}
+
+async fn close_sftp_connection(connection: OpenSftpConnection) {
     if let OpenSftpConnection::Dedicated {
         handle,
         jump_handles,
@@ -230,6 +259,167 @@ async fn close_sftp_session(session: OpenSftpSession) {
             let _ = jump_handle
                 .disconnect(Disconnect::ByApplication, "sftp session closed", "en")
                 .await;
+        }
+    }
+}
+
+fn sftp_pipeline_config(options: &SftpTransferOptions) -> (usize, usize) {
+    let request_kib =
+        (options.buffer_size_bytes() / 1024).clamp(SFTP_MIN_REQUEST_KIB, SFTP_MAX_REQUEST_KIB);
+    let max_concurrent_writes = SFTP_WRITE_PIPELINE_TARGET_KIB
+        .div_ceil(request_kib)
+        .clamp(SFTP_MIN_CONCURRENT_WRITES, SFTP_MAX_CONCURRENT_WRITES);
+    (request_kib, max_concurrent_writes)
+}
+
+fn sftp_payload_size(request_kib: usize) -> usize {
+    (request_kib * 1024)
+        .saturating_sub(SFTP_PACKET_OVERHEAD_RESERVE)
+        .max(32 * 1024)
+}
+
+fn sftp_upload_buffer_size(options: &SftpTransferOptions) -> usize {
+    let (request_kib, _) = sftp_pipeline_config(options);
+    sftp_payload_size(request_kib)
+}
+
+fn sftp_client_config_for_options(options: &SftpTransferOptions) -> SftpClientConfig {
+    let (request_kib, max_concurrent_writes) = sftp_pipeline_config(options);
+    SftpClientConfig {
+        max_packet_len: (request_kib * 1024) as u32,
+        max_concurrent_writes,
+        ..SftpClientConfig::default()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct SftpDirectoryConcurrency {
+    session_pool_size: usize,
+    small_file_concurrency: usize,
+    large_file_concurrency: usize,
+}
+
+fn sftp_directory_concurrency(
+    max_open_handles: Option<u64>,
+    options: &SftpTransferOptions,
+) -> SftpDirectoryConcurrency {
+    let configured_threads = options.directory_upload_threads();
+    let requested_small_file_concurrency =
+        if configured_threads < super::SFTP_TRANSFER_DEFAULT_DIRECTORY_UPLOAD_THREADS {
+            configured_threads
+        } else {
+            SFTP_DEFAULT_SMALL_FILE_CONCURRENCY
+        };
+    let server_limit = max_open_handles
+        .map(|handles| handles.saturating_sub(SFTP_HANDLE_RESERVE as u64) as usize)
+        .unwrap_or(requested_small_file_concurrency)
+        .max(1);
+    let session_pool_size = SFTP_DEFAULT_SESSION_POOL_SIZE
+        .min(SFTP_MAX_SESSION_POOL_SIZE)
+        .min(server_limit)
+        .max(1);
+    let small_file_concurrency = server_limit
+        .min(session_pool_size * SFTP_SMALL_FILE_WORKERS_PER_SESSION)
+        .min(SFTP_MAX_SMALL_FILE_CONCURRENCY)
+        .min(requested_small_file_concurrency)
+        .max(1);
+    let large_file_concurrency = SFTP_LARGE_FILE_CONCURRENCY
+        .min(small_file_concurrency)
+        .max(1);
+
+    SftpDirectoryConcurrency {
+        session_pool_size,
+        small_file_concurrency,
+        large_file_concurrency,
+    }
+}
+
+fn directory_upload_worker_count(
+    file_count: usize,
+    concurrency: SftpDirectoryConcurrency,
+) -> usize {
+    if file_count == 0 {
+        0
+    } else {
+        file_count.min(concurrency.small_file_concurrency)
+    }
+}
+
+fn sftp_session_pool_index(worker_index: usize, session_count: usize) -> usize {
+    worker_index % session_count.max(1)
+}
+
+fn is_sftp_large_file(size: u64) -> bool {
+    size > SFTP_SMALL_FILE_THRESHOLD
+}
+
+#[derive(Clone)]
+struct SftpSessionPool {
+    sessions: Arc<Vec<Arc<PooledSftpSession>>>,
+}
+
+struct PooledSftpSession {
+    sftp: Arc<SftpSession>,
+    connection: StdMutex<Option<OpenSftpConnection>>,
+}
+
+impl PooledSftpSession {
+    fn from_open_session(session: OpenSftpSession) -> Self {
+        Self {
+            sftp: session.sftp,
+            connection: StdMutex::new(Some(session.connection)),
+        }
+    }
+
+    async fn close(&self) {
+        let connection = self
+            .connection
+            .lock()
+            .ok()
+            .and_then(|mut guard| guard.take());
+        let _ = self.sftp.close().await;
+        if let Some(connection) = connection {
+            close_sftp_connection(connection).await;
+        }
+    }
+}
+
+impl SftpSessionPool {
+    async fn open(
+        config: &SshSessionConfig,
+        multiplex: Option<&SshMultiplexHandle>,
+        size: usize,
+        client_config: SftpClientConfig,
+    ) -> anyhow::Result<Self> {
+        let mut sessions = Vec::with_capacity(size);
+        for _ in 0..size {
+            match open_sftp_session_with_client_config(config, multiplex, client_config.clone())
+                .await
+            {
+                Ok(session) => {
+                    sessions.push(Arc::new(PooledSftpSession::from_open_session(session)))
+                }
+                Err(error) => {
+                    for session in sessions {
+                        session.close().await;
+                    }
+                    return Err(error);
+                }
+            }
+        }
+        Ok(Self {
+            sessions: Arc::new(sessions),
+        })
+    }
+
+    fn session_for(&self, worker_index: usize) -> Arc<PooledSftpSession> {
+        let index = sftp_session_pool_index(worker_index, self.sessions.len());
+        Arc::clone(&self.sessions[index])
+    }
+
+    async fn close_all(self) {
+        for session in self.sessions.iter() {
+            session.close().await;
         }
     }
 }
@@ -1032,7 +1222,12 @@ impl SftpService {
                 control.check_cancelled()?;
                 let result = async {
                     let codec = SftpPathCodec::from_ssh_config(&config)?;
-                    let session = open_sftp_session(&config, multiplex.as_ref()).await?;
+                    let session = open_sftp_session_with_client_config(
+                        &config,
+                        multiplex.as_ref(),
+                        sftp_client_config_for_options(&options),
+                    )
+                    .await?;
                     let bytes = upload_local_file(
                         &session.sftp,
                         &codec,
@@ -1167,7 +1362,12 @@ impl SftpService {
                 control.check_cancelled()?;
                 let result = async {
                     let codec = SftpPathCodec::from_ssh_config(&config)?;
-                    let session = open_sftp_session(&config, multiplex.as_ref()).await?;
+                    let session = open_sftp_session_with_client_config(
+                        &config,
+                        multiplex.as_ref(),
+                        sftp_client_config_for_options(path_options.transfer_options()),
+                    )
+                    .await?;
                     let sftp = Arc::clone(&session.sftp);
                     control.wait_if_paused().await?;
                     let Some(remote_target) = resolve_remote_write_target(
@@ -1193,6 +1393,8 @@ impl SftpService {
                         upload_local_directory(
                             Arc::clone(&sftp),
                             &codec,
+                            &config,
+                            multiplex.as_ref(),
                             &local_path,
                             &remote_target,
                             &control,
@@ -1727,7 +1929,7 @@ where
     let local_metadata = local.metadata().await.ok();
     let total_bytes = local_metadata.as_ref().map(|metadata| metadata.len());
     let mut remote = sftp.create_bytes(codec.encode_path(remote_path)?).await?;
-    let mut buffer = vec![0_u8; options.buffer_size_bytes()];
+    let mut buffer = vec![0_u8; sftp_upload_buffer_size(options)];
     let mut bytes = 0_u64;
     progress(SftpTransferProgress {
         remote_path: remote_path.to_string(),
@@ -1795,6 +1997,8 @@ struct LocalDirectoryUploadEntry {
 async fn upload_local_directory<F>(
     sftp: Arc<SftpSession>,
     codec: &SftpPathCodec,
+    config: &SshSessionConfig,
+    multiplex: Option<&SshMultiplexHandle>,
     local_path: &Path,
     remote_path: &str,
     control: &SftpTransferControl,
@@ -1805,6 +2009,7 @@ where
     F: FnMut(SftpTransferProgress) + Send,
 {
     control.wait_if_paused().await?;
+    let max_open_handles = sftp.max_open_handles();
     let inventory = collect_local_directory_upload_inventory(local_path, control).await?;
     let entries = plan_local_directory_upload_entries(
         &sftp,
@@ -1815,7 +2020,17 @@ where
         path_options,
     )
     .await?;
-    upload_local_directory_entries(sftp, *codec, entries, control, path_options, progress).await
+    upload_local_directory_entries(
+        config,
+        multiplex,
+        *codec,
+        entries,
+        max_open_handles,
+        control,
+        path_options,
+        progress,
+    )
+    .await
 }
 
 async fn collect_local_directory_upload_inventory(
@@ -1946,9 +2161,11 @@ async fn plan_local_directory_upload_entries(
 }
 
 async fn upload_local_directory_entries<F>(
-    sftp: Arc<SftpSession>,
+    config: &SshSessionConfig,
+    multiplex: Option<&SshMultiplexHandle>,
     codec: SftpPathCodec,
     entries: Vec<LocalDirectoryUploadEntry>,
+    max_open_handles: Option<u64>,
     control: &SftpTransferControl,
     path_options: &SftpPathTransferOptions,
     progress: &mut F,
@@ -1960,25 +2177,34 @@ where
     let expected_bytes = entries
         .iter()
         .fold(0_u64, |total, entry| total.saturating_add(entry.size));
-    let worker_count =
-        directory_upload_worker_count(entries.len(), path_options.transfer_options());
+    let concurrency = sftp_directory_concurrency(max_open_handles, path_options.transfer_options());
+    let worker_count = directory_upload_worker_count(entries.len(), concurrency);
     if worker_count == 0 {
         return Ok(0);
     }
+    let pool = SftpSessionPool::open(
+        config,
+        multiplex,
+        concurrency.session_pool_size,
+        sftp_client_config_for_options(path_options.transfer_options()),
+    )
+    .await?;
 
     let queue = Arc::new(StdMutex::new(VecDeque::from(entries)));
     let bytes_transferred = Arc::new(AtomicU64::new(0));
     let item_count_completed = Arc::new(AtomicU64::new(0));
+    let large_lane = Arc::new(Semaphore::new(concurrency.large_file_concurrency));
     let (progress_tx, mut progress_rx) = mpsc::unbounded_channel();
     let mut workers = JoinSet::new();
 
-    for _ in 0..worker_count {
-        let worker_sftp = Arc::clone(&sftp);
+    for worker_index in 0..worker_count {
+        let worker_sftp = pool.session_for(worker_index);
         let worker_queue = Arc::clone(&queue);
         let worker_control = control.clone();
         let worker_options = path_options.transfer_options().clone();
         let worker_bytes_transferred = Arc::clone(&bytes_transferred);
         let worker_item_count_completed = Arc::clone(&item_count_completed);
+        let worker_large_lane = Arc::clone(&large_lane);
         let worker_progress_tx = progress_tx.clone();
         workers.spawn(async move {
             loop {
@@ -1987,8 +2213,13 @@ where
                 let Some(entry) = entry else {
                     break;
                 };
+                let _large_permit = if is_sftp_large_file(entry.size) {
+                    Some(worker_large_lane.acquire().await?)
+                } else {
+                    None
+                };
                 upload_local_directory_entry(
-                    Arc::clone(&worker_sftp),
+                    Arc::clone(&worker_sftp.sftp),
                     codec,
                     entry,
                     worker_control.clone(),
@@ -2006,13 +2237,29 @@ where
     }
     drop(progress_tx);
 
+    let mut pending_progress = None;
+    let mut last_progress_emit = Instant::now();
+    let mut last_progress_snapshot =
+        directory_upload_progress_snapshot(&bytes_transferred, &item_count_completed);
+    let mut last_progress_at = Instant::now();
+    let mut watchdog = tokio::time::interval(Duration::from_secs(1));
+    watchdog.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     let mut remaining_workers = worker_count;
     let mut progress_closed = false;
+    let result = async {
     while remaining_workers > 0 {
         tokio::select! {
             progress_update = progress_rx.recv(), if !progress_closed => {
                 if let Some(progress_update) = progress_update {
-                    progress(progress_update);
+                    let should_emit = last_progress_emit.elapsed() >= SFTP_PROGRESS_INTERVAL
+                        || progress_update.item_count_completed == progress_update.item_count_total;
+                    if should_emit {
+                        progress(progress_update);
+                        last_progress_emit = Instant::now();
+                        pending_progress = None;
+                    } else {
+                        pending_progress = Some(progress_update);
+                    }
                 } else {
                     progress_closed = true;
                 }
@@ -2033,12 +2280,43 @@ where
                     None => break,
                 }
             }
+            _ = watchdog.tick() => {
+                let current_snapshot =
+                    directory_upload_progress_snapshot(&bytes_transferred, &item_count_completed);
+                if control.is_paused() {
+                    last_progress_snapshot = current_snapshot;
+                    last_progress_at = Instant::now();
+                } else if control.is_cancelled() {
+                    workers.abort_all();
+                    return Err(anyhow::anyhow!(SFTP_TRANSFER_CANCELLED));
+                } else if current_snapshot != last_progress_snapshot {
+                    last_progress_snapshot = current_snapshot;
+                    last_progress_at = Instant::now();
+                } else if directory_upload_stalled(
+                    false,
+                    false,
+                    last_progress_snapshot,
+                    current_snapshot,
+                    last_progress_at.elapsed(),
+                    item_count_total,
+                ) {
+                    workers.abort_all();
+                    return Err(anyhow::anyhow!("SFTP transfer stalled"));
+                }
+            }
         }
+    }
+    if let Some(progress_update) = pending_progress.take() {
+        progress(progress_update);
     }
     while let Ok(progress_update) = progress_rx.try_recv() {
         progress(progress_update);
     }
     Ok(bytes_transferred.load(Ordering::Relaxed))
+    }
+    .await;
+    pool.close_all().await;
+    result
 }
 
 fn next_local_directory_upload_entry(
@@ -2068,6 +2346,9 @@ async fn upload_local_directory_entry(
     let progress_local_path = entry.local_path.clone();
     let mut aggregate_progress = |current: SftpTransferProgress| {
         let delta = current.bytes_transferred.saturating_sub(last_file_bytes);
+        if delta == 0 {
+            return;
+        }
         last_file_bytes = current.bytes_transferred;
         let aggregate_bytes = bytes_transferred
             .fetch_add(delta, Ordering::Relaxed)
@@ -2107,14 +2388,6 @@ async fn upload_local_directory_entry(
     Ok(())
 }
 
-fn directory_upload_worker_count(file_count: usize, options: &SftpTransferOptions) -> usize {
-    if file_count == 0 {
-        0
-    } else {
-        file_count.min(options.directory_upload_threads())
-    }
-}
-
 fn directory_upload_aggregate_progress(
     current: SftpTransferProgress,
     aggregate_bytes: u64,
@@ -2130,6 +2403,37 @@ fn directory_upload_aggregate_progress(
         item_count_completed: Some(item_count_completed.min(item_count_total)),
         item_count_total: Some(item_count_total),
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct DirectoryUploadProgressSnapshot {
+    bytes: u64,
+    completed_items: u64,
+}
+
+fn directory_upload_progress_snapshot(
+    bytes_transferred: &AtomicU64,
+    item_count_completed: &AtomicU64,
+) -> DirectoryUploadProgressSnapshot {
+    DirectoryUploadProgressSnapshot {
+        bytes: bytes_transferred.load(Ordering::Relaxed),
+        completed_items: item_count_completed.load(Ordering::Relaxed),
+    }
+}
+
+fn directory_upload_stalled(
+    paused: bool,
+    cancelled: bool,
+    last_progress: DirectoryUploadProgressSnapshot,
+    current_progress: DirectoryUploadProgressSnapshot,
+    idle_for: Duration,
+    item_count_total: u64,
+) -> bool {
+    !paused
+        && !cancelled
+        && current_progress == last_progress
+        && current_progress.completed_items < item_count_total
+        && idle_for >= SFTP_DIRECTORY_STALL_TIMEOUT
 }
 
 async fn resolve_remote_upload_write_target(
@@ -2505,15 +2809,118 @@ mod tests {
     #[test]
     fn directory_upload_worker_count_uses_file_count_and_configured_limit() {
         let default_options = SftpTransferOptions::default();
-        assert_eq!(directory_upload_worker_count(0, &default_options), 0);
-        assert_eq!(directory_upload_worker_count(1, &default_options), 1);
-        assert_eq!(directory_upload_worker_count(10, &default_options), 3);
+        let default_concurrency = sftp_directory_concurrency(None, &default_options);
+        assert_eq!(directory_upload_worker_count(0, default_concurrency), 0);
+        assert_eq!(directory_upload_worker_count(1, default_concurrency), 1);
+        assert_eq!(directory_upload_worker_count(10, default_concurrency), 10);
+        assert_eq!(directory_upload_worker_count(20, default_concurrency), 16);
 
         let two_workers = SftpTransferOptions::default().with_directory_upload_threads(2);
-        assert_eq!(directory_upload_worker_count(10, &two_workers), 2);
+        let two_worker_concurrency = sftp_directory_concurrency(None, &two_workers);
+        assert_eq!(directory_upload_worker_count(10, two_worker_concurrency), 2);
 
         let capped = SftpTransferOptions::default().with_directory_upload_threads(99);
-        assert_eq!(directory_upload_worker_count(20, &capped), 10);
+        let capped_concurrency = sftp_directory_concurrency(None, &capped);
+        assert_eq!(directory_upload_worker_count(20, capped_concurrency), 16);
+    }
+
+    #[test]
+    fn sftp_pipeline_config_clamps_request_size_and_write_pipeline() {
+        let small = SftpTransferOptions::default().with_buffer_size_bytes(8 * 1024);
+        assert_eq!(sftp_pipeline_config(&small), (64, 16));
+        assert_eq!(sftp_upload_buffer_size(&small), 64 * 1024 - 1024);
+
+        let large = SftpTransferOptions::default().with_buffer_size_bytes(512 * 1024);
+        assert_eq!(sftp_pipeline_config(&large), (256, 8));
+        let config = sftp_client_config_for_options(&large);
+        assert_eq!(config.max_packet_len, 256 * 1024);
+        assert_eq!(config.max_concurrent_writes, 8);
+    }
+
+    #[test]
+    fn sftp_directory_concurrency_respects_server_handle_budget() {
+        let default_options = SftpTransferOptions::default();
+        assert_eq!(
+            sftp_directory_concurrency(None, &default_options),
+            SftpDirectoryConcurrency {
+                session_pool_size: 2,
+                small_file_concurrency: 16,
+                large_file_concurrency: 2,
+            }
+        );
+        assert_eq!(
+            sftp_directory_concurrency(Some(10), &default_options),
+            SftpDirectoryConcurrency {
+                session_pool_size: 2,
+                small_file_concurrency: 2,
+                large_file_concurrency: 2,
+            }
+        );
+        assert_eq!(
+            sftp_directory_concurrency(
+                Some(128),
+                &SftpTransferOptions::default().with_directory_upload_threads(1),
+            )
+            .small_file_concurrency,
+            1
+        );
+    }
+
+    #[test]
+    fn sftp_session_pool_index_round_robins_workers() {
+        let assignments = (0..6)
+            .map(|worker| sftp_session_pool_index(worker, 2))
+            .collect::<Vec<_>>();
+        assert_eq!(assignments, vec![0, 1, 0, 1, 0, 1]);
+    }
+
+    #[test]
+    fn sftp_large_file_lane_uses_small_file_threshold() {
+        assert!(!is_sftp_large_file(SFTP_SMALL_FILE_THRESHOLD));
+        assert!(is_sftp_large_file(SFTP_SMALL_FILE_THRESHOLD + 1));
+    }
+
+    #[test]
+    fn directory_upload_stall_detection_ignores_pause_and_cancel() {
+        let snapshot = DirectoryUploadProgressSnapshot {
+            bytes: 128,
+            completed_items: 1,
+        };
+        assert!(directory_upload_stalled(
+            false,
+            false,
+            snapshot,
+            snapshot,
+            SFTP_DIRECTORY_STALL_TIMEOUT,
+            2,
+        ));
+        assert!(!directory_upload_stalled(
+            true,
+            false,
+            snapshot,
+            snapshot,
+            SFTP_DIRECTORY_STALL_TIMEOUT,
+            2,
+        ));
+        assert!(!directory_upload_stalled(
+            false,
+            true,
+            snapshot,
+            snapshot,
+            SFTP_DIRECTORY_STALL_TIMEOUT,
+            2,
+        ));
+        assert!(!directory_upload_stalled(
+            false,
+            false,
+            snapshot,
+            DirectoryUploadProgressSnapshot {
+                bytes: 256,
+                completed_items: 1,
+            },
+            SFTP_DIRECTORY_STALL_TIMEOUT,
+            2,
+        ));
     }
 
     #[test]
