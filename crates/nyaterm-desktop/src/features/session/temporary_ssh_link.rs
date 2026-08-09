@@ -205,6 +205,12 @@ impl NyaTermApp {
     }
 
     fn temporary_ssh_session_config(&self, parsed: TemporarySshLinkConfig) -> SshSessionConfig {
+        let keep_alive_interval_secs =
+            if self.settings.summary().terminal_keep_alive_mode == "disabled" {
+                0
+            } else {
+                self.settings.summary().terminal_keep_alive_interval
+            };
         SshSessionConfig {
             name: parsed.name,
             host: parsed.host,
@@ -225,7 +231,7 @@ impl NyaTermApp {
             ssh_algorithms: None,
             sftp: nyaterm_transport::SftpSettings::default(),
             deferred_pty: true,
-            keep_alive_interval_secs: self.settings.summary().terminal_keep_alive_interval,
+            keep_alive_interval_secs,
             cols: 80,
             rows: 24,
             pixel_width: 0,

@@ -16,7 +16,7 @@ use crate::features::shell::event_pump::helpers::{
 use crate::features::{
     NyaTermApp, TextInputSetup, credential_prompt_target, keyboard_interactive_prompt_target,
 };
-use crate::models::NavItem;
+use crate::models::{HeaderStatusMode, NavItem};
 
 mod bridge;
 mod helpers;
@@ -510,7 +510,36 @@ impl NyaTermApp {
         {
             self.refresh_stats(window, cx);
             dirty = true;
-        } else if right_panel == Some(NavItem::Processes)
+        }
+
+        if (right_panel == Some(NavItem::Stats) || self.header_status_needs_gpu())
+            && self.settings.summary().ui_show_gpu_monitor
+            && !self.remote_ops.gpu_is_pending()
+            && remote_refresh_due(
+                self.remote_ops.gpu_last_refresh_at(),
+                self.settings.summary().ui_gpu_monitor_interval.max(1),
+            )
+        {
+            self.refresh_gpu(window, cx);
+            dirty = true;
+        }
+
+        if (right_panel == Some(NavItem::Stats) || self.header_status_needs_npu())
+            && self.settings.summary().ui_show_ascend_npu_monitor
+            && !self.remote_ops.npu_is_pending()
+            && remote_refresh_due(
+                self.remote_ops.npu_last_refresh_at(),
+                self.settings
+                    .summary()
+                    .ui_ascend_npu_monitor_interval
+                    .max(1),
+            )
+        {
+            self.refresh_npu(window, cx);
+            dirty = true;
+        }
+
+        if right_panel == Some(NavItem::Processes)
             && self.settings.summary().ui_show_process_manager
             && !self.remote_ops.process_is_pending()
             && remote_refresh_due(
@@ -550,6 +579,18 @@ impl NyaTermApp {
             dirty = true;
         }
         dirty
+    }
+
+    fn header_status_needs_gpu(&self) -> bool {
+        self.settings.summary().ui_header_status_visible
+            && HeaderStatusMode::from_setting(&self.settings.summary().ui_header_status_mode)
+                == HeaderStatusMode::Gpu
+    }
+
+    fn header_status_needs_npu(&self) -> bool {
+        self.settings.summary().ui_header_status_visible
+            && HeaderStatusMode::from_setting(&self.settings.summary().ui_header_status_mode)
+                == HeaderStatusMode::Npu
     }
 
     fn pending_session_auth_wait(&self) -> Option<PendingSessionAuthWait> {

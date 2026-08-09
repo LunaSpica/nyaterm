@@ -1,5 +1,6 @@
 use gpui::{Context, FontWeight, IntoElement, SharedString, div, prelude::*, px, rgb, svg};
 use nyaterm_core::truncate_preview;
+use nyaterm_transport::{RemoteGpuOverview, RemoteNpuOverview};
 
 use crate::features::{
     NyaTermApp, format_file_size, format_rate, format_uptime, gpui_code_font_family,
@@ -61,8 +62,25 @@ impl NyaTermApp {
         let memory_label = self.tr("resourceMonitor.memory").to_string();
         let available_label = self.tr("resourceMonitor.available").to_string();
         let cached_label = self.tr("resourceMonitor.cached").to_string();
+        let gpu_label = self.tr("resourceMonitor.gpu").to_string();
+        let npu_label = self.tr("resourceMonitor.npu").to_string();
+        let driver_label = self.tr("resourceMonitor.driver").to_string();
+        let cuda_label = self.tr("resourceMonitor.cuda").to_string();
+        let cann_label = self.tr("resourceMonitor.cann").to_string();
+        let temp_label = self.tr("resourceMonitor.temperature").to_string();
+        let power_label = self.tr("resourceMonitor.power").to_string();
+        let processes_label = self.tr("resourceMonitor.processes").to_string();
         let network_label = self.tr("resourceMonitor.network").to_string();
         let disk_label = self.tr("resourceMonitor.disk").to_string();
+        let gpu_state = self.remote_ops.gpu_presentation();
+        let npu_state = self.remote_ops.npu_presentation();
+        let accelerator_common = ResourceAcceleratorCommonLabels {
+            memory: memory_label.clone(),
+            temp: temp_label,
+            power: power_label,
+            processes: processes_label,
+            loading: self.tr("common.loading").to_string(),
+        };
 
         let mut network_rows = div().flex().flex_col();
         if stats.networks.is_empty() {
@@ -331,10 +349,68 @@ impl NyaTermApp {
                                     )),
                             ),
                     ))
+                    .when(self.settings.summary().ui_show_gpu_monitor, |this| {
+                        this.child(resource_section_card(
+                            palette,
+                            gpu_label,
+                            resource_gpu_rows(
+                                palette,
+                                gpu_state.data.as_ref(),
+                                &gpu_state.status,
+                                gpu_state.pending,
+                                ResourceGpuLabels {
+                                    common: accelerator_common.clone(),
+                                    driver: driver_label.clone(),
+                                    cuda: cuda_label,
+                                },
+                            ),
+                        ))
+                    })
+                    .when(
+                        self.settings.summary().ui_show_ascend_npu_monitor,
+                        |this| {
+                            this.child(resource_section_card(
+                                palette,
+                                npu_label,
+                                resource_npu_rows(
+                                    palette,
+                                    npu_state.data.as_ref(),
+                                    &npu_state.status,
+                                    npu_state.pending,
+                                    ResourceNpuLabels {
+                                        common: accelerator_common,
+                                        driver: driver_label,
+                                        cann: cann_label,
+                                    },
+                                ),
+                            ))
+                        },
+                    )
                     .child(resource_section_card(palette, network_label, network_rows))
                     .child(resource_section_card(palette, disk_label, disk_rows)),
             )
     }
+}
+
+#[derive(Clone)]
+struct ResourceAcceleratorCommonLabels {
+    memory: String,
+    temp: String,
+    power: String,
+    processes: String,
+    loading: String,
+}
+
+struct ResourceGpuLabels {
+    common: ResourceAcceleratorCommonLabels,
+    driver: String,
+    cuda: String,
+}
+
+struct ResourceNpuLabels {
+    common: ResourceAcceleratorCommonLabels,
+    driver: String,
+    cann: String,
 }
 
 fn resource_section_card(
@@ -644,6 +720,249 @@ fn resource_disk_row(
                     format_file_size(Some(available)),
                 )),
         )
+}
+
+fn resource_gpu_rows(
+    palette: crate::theme::ThemePalette,
+    overview: Option<&RemoteGpuOverview>,
+    status: &str,
+    pending: bool,
+    labels: ResourceGpuLabels,
+) -> gpui::Div {
+    let Some(overview) = overview else {
+        return resource_status_value(palette, pending_status(status, pending, &labels.common));
+    };
+    if !overview.available {
+        return resource_status_value(palette, status_value(status));
+    }
+
+    let mut rows = div().flex().flex_col().gap_2();
+    rows = rows.child(
+        div()
+            .flex()
+            .flex_wrap()
+            .gap_x_3()
+            .gap_y_1()
+            .when(!overview.driver_version.trim().is_empty(), |this| {
+                this.child(resource_metric_chip(
+                    palette,
+                    labels.driver.clone(),
+                    overview.driver_version.clone(),
+                ))
+            })
+            .when(!overview.cuda_version.trim().is_empty(), |this| {
+                this.child(resource_metric_chip(
+                    palette,
+                    labels.cuda.clone(),
+                    overview.cuda_version.clone(),
+                ))
+            }),
+    );
+
+    if overview.gpus.is_empty() {
+        return rows.child(resource_empty_value(palette));
+    }
+
+    let total = overview.gpus.len();
+    for (index, gpu) in overview.gpus.iter().enumerate() {
+        let process_count = overview
+            .processes
+            .iter()
+            .filter(|process| process.gpu_index == Some(gpu.index))
+            .count();
+        rows = rows.child(resource_accelerator_row(
+            palette,
+            &format!("{} {}", gpu.index, gpu.name),
+            gpu.utilization_gpu_percent,
+            gpu.memory_used_mb,
+            gpu.memory_total_mb,
+            gpu.temperature_c,
+            gpu.power_draw_w,
+            process_count,
+            labels.common.clone(),
+            ResourceRowPosition {
+                first: index == 0,
+                last: index + 1 == total,
+            },
+        ));
+    }
+    rows
+}
+
+fn resource_npu_rows(
+    palette: crate::theme::ThemePalette,
+    overview: Option<&RemoteNpuOverview>,
+    status: &str,
+    pending: bool,
+    labels: ResourceNpuLabels,
+) -> gpui::Div {
+    let Some(overview) = overview else {
+        return resource_status_value(palette, pending_status(status, pending, &labels.common));
+    };
+    if !overview.available {
+        return resource_status_value(palette, status_value(status));
+    }
+
+    let mut rows = div().flex().flex_col().gap_2();
+    rows = rows.child(
+        div()
+            .flex()
+            .flex_wrap()
+            .gap_x_3()
+            .gap_y_1()
+            .when(!overview.driver_version.trim().is_empty(), |this| {
+                this.child(resource_metric_chip(
+                    palette,
+                    labels.driver.clone(),
+                    overview.driver_version.clone(),
+                ))
+            })
+            .when(!overview.cann_version.trim().is_empty(), |this| {
+                this.child(resource_metric_chip(
+                    palette,
+                    labels.cann.clone(),
+                    overview.cann_version.clone(),
+                ))
+            }),
+    );
+
+    if overview.npus.is_empty() {
+        return rows.child(resource_empty_value(palette));
+    }
+
+    let total = overview.npus.len();
+    for (index, npu) in overview.npus.iter().enumerate() {
+        let process_count = overview
+            .processes
+            .iter()
+            .filter(|process| process.npu_index == npu.index && process.chip_id == npu.chip_id)
+            .count();
+        rows = rows.child(resource_accelerator_row(
+            palette,
+            &format!("{} {}", npu.index, npu.name),
+            npu.utilization_aicore_percent,
+            npu.memory_used_mb,
+            npu.memory_total_mb,
+            npu.temperature_c,
+            npu.power_draw_w,
+            process_count,
+            labels.common.clone(),
+            ResourceRowPosition {
+                first: index == 0,
+                last: index + 1 == total,
+            },
+        ));
+    }
+    rows
+}
+
+fn resource_accelerator_row(
+    palette: crate::theme::ThemePalette,
+    name: &str,
+    utilization_percent: Option<f64>,
+    memory_used_mb: u64,
+    memory_total_mb: u64,
+    temperature_c: Option<f64>,
+    power_draw_w: Option<f64>,
+    process_count: usize,
+    labels: ResourceAcceleratorCommonLabels,
+    position: ResourceRowPosition,
+) -> gpui::Div {
+    let ResourceRowPosition { first, last } = position;
+    let ratio = utilization_percent.unwrap_or(0.) / 100.;
+    div()
+        .when(!first, |this| this.pt_1())
+        .when(!last, |this| {
+            this.pb_2().border_b_1().border_color(rgb(palette.border))
+        })
+        .flex()
+        .flex_col()
+        .gap_1()
+        .child(
+            div()
+                .flex()
+                .items_baseline()
+                .justify_between()
+                .gap_2()
+                .child(
+                    div()
+                        .min_w_0()
+                        .flex_1()
+                        .font_family(crate::features::gpui_code_font_family())
+                        .text_size(px(12.))
+                        .font_weight(FontWeight(600.))
+                        .text_color(rgb(palette.text))
+                        .overflow_hidden()
+                        .child(truncate_preview(name, 42)),
+                )
+                .child(
+                    div()
+                        .font_family(crate::features::gpui_code_font_family())
+                        .text_size(px(12.))
+                        .font_weight(FontWeight(700.))
+                        .text_color(usage_color(palette, ratio))
+                        .child(match utilization_percent {
+                            Some(value) => format!("{value:.0}%"),
+                            None => "-".to_string(),
+                        }),
+                ),
+        )
+        .child(resource_progress_bar(palette, ratio))
+        .child(
+            div()
+                .flex()
+                .flex_wrap()
+                .gap_x_3()
+                .gap_y_1()
+                .child(resource_metric_chip(
+                    palette,
+                    labels.memory,
+                    format!("{memory_used_mb}/{memory_total_mb} MiB"),
+                ))
+                .when_some(temperature_c, |this, value| {
+                    this.child(resource_metric_chip(
+                        palette,
+                        labels.temp.clone(),
+                        format!("{value:.0}C"),
+                    ))
+                })
+                .when_some(power_draw_w, |this, value| {
+                    this.child(resource_metric_chip(
+                        palette,
+                        labels.power.clone(),
+                        format!("{value:.0}W"),
+                    ))
+                })
+                .child(resource_metric_chip(
+                    palette,
+                    labels.processes,
+                    process_count.to_string(),
+                )),
+        )
+}
+
+fn pending_status(status: &str, pending: bool, labels: &ResourceAcceleratorCommonLabels) -> String {
+    if pending {
+        labels.loading.clone()
+    } else {
+        status_value(status)
+    }
+}
+
+fn status_value(status: &str) -> String {
+    if status.trim().is_empty() {
+        "-".to_string()
+    } else {
+        status.to_string()
+    }
+}
+
+fn resource_status_value(palette: crate::theme::ThemePalette, message: String) -> gpui::Div {
+    div()
+        .py_2()
+        .text_size(px(12.))
+        .text_color(rgb(palette.text_dimmed))
+        .child(message)
 }
 
 fn rate_value(

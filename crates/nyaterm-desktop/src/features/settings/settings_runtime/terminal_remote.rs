@@ -61,6 +61,24 @@ impl NyaTermApp {
         self.save_terminal_settings(cx);
     }
 
+    pub(in crate::features) fn set_terminal_keep_alive_mode(
+        &mut self,
+        mode: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.set_terminal_keep_alive_mode(mode);
+        self.save_terminal_settings(cx);
+    }
+
+    pub(in crate::features) fn apply_terminal_timestamp_format(
+        &mut self,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.set_terminal_timestamp_format(text);
+        self.save_terminal_settings(cx);
+    }
+
     pub(in crate::features) fn toggle_terminal_workspace_padding(
         &mut self,
         cx: &mut Context<Self>,
@@ -108,6 +126,34 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.settings.set_remote_stats_interval(value);
+        self.save_terminal_settings(cx);
+    }
+
+    pub(in crate::features) fn toggle_gpu_monitor_panel(&mut self, cx: &mut Context<Self>) {
+        self.settings.toggle_gpu_monitor_panel();
+        self.save_terminal_settings(cx);
+    }
+
+    pub(in crate::features) fn set_gpu_monitor_interval(
+        &mut self,
+        value: u32,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.set_gpu_monitor_interval(value);
+        self.save_terminal_settings(cx);
+    }
+
+    pub(in crate::features) fn toggle_ascend_npu_monitor_panel(&mut self, cx: &mut Context<Self>) {
+        self.settings.toggle_ascend_npu_monitor_panel();
+        self.save_terminal_settings(cx);
+    }
+
+    pub(in crate::features) fn set_ascend_npu_monitor_interval(
+        &mut self,
+        value: u32,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.set_ascend_npu_monitor_interval(value);
         self.save_terminal_settings(cx);
     }
 

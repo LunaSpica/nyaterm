@@ -6,16 +6,27 @@ pub(crate) enum HeaderStatusMode {
     Session,
     Resources,
     Host,
+    Gpu,
+    Npu,
     DateTime,
 }
 
 impl HeaderStatusMode {
-    pub(crate) const ALL: [Self; 4] = [Self::Session, Self::Resources, Self::Host, Self::DateTime];
+    pub(crate) const ALL: [Self; 6] = [
+        Self::Session,
+        Self::Resources,
+        Self::Host,
+        Self::Gpu,
+        Self::Npu,
+        Self::DateTime,
+    ];
 
     pub(crate) fn from_setting(value: &str) -> Self {
         match value.trim() {
             "resources" => Self::Resources,
             "host" => Self::Host,
+            "gpu" => Self::Gpu,
+            "npu" => Self::Npu,
             "datetime" => Self::DateTime,
             _ => Self::Session,
         }
@@ -26,6 +37,8 @@ impl HeaderStatusMode {
             Self::Session => "session",
             Self::Resources => "resources",
             Self::Host => "host",
+            Self::Gpu => "gpu",
+            Self::Npu => "npu",
             Self::DateTime => "datetime",
         }
     }
@@ -35,6 +48,8 @@ impl HeaderStatusMode {
             Self::Session => "headerStatus.session",
             Self::Resources => "headerStatus.resources",
             Self::Host => "headerStatus.host",
+            Self::Gpu => "headerStatus.gpu",
+            Self::Npu => "headerStatus.npu",
             Self::DateTime => "headerStatus.datetime",
         }
     }
@@ -44,6 +59,8 @@ impl HeaderStatusMode {
             Self::Session => "icons/sessions.svg",
             Self::Resources => "icons/resources.svg",
             Self::Host => "icons/conn/server.svg",
+            Self::Gpu => "icons/resources.svg",
+            Self::Npu => "icons/resources.svg",
             Self::DateTime => "icons/history.svg",
         }
     }

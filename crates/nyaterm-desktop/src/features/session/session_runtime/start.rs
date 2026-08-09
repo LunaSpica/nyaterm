@@ -301,13 +301,19 @@ impl NyaTermApp {
     pub(in crate::features) fn ssh_session_config_build_context(
         &self,
     ) -> SshSessionConfigBuildContext {
+        let keep_alive_interval_secs =
+            if self.settings.summary().terminal_keep_alive_mode == "disabled" {
+                0
+            } else {
+                self.settings.summary().terminal_keep_alive_interval
+            };
         SshSessionConfigBuildContext {
             config_dir: self.runtime.config_dir().to_path_buf(),
             portable_key_path: self.runtime.portable_key_path().map(ToOwned::to_owned),
             host_key_policy: self.settings.summary().host_key_policy.clone(),
             x11_display: self.settings.summary().x11_display.clone(),
             default_encoding: self.settings.summary().interaction_default_encoding.clone(),
-            keep_alive_interval_secs: self.settings.summary().terminal_keep_alive_interval,
+            keep_alive_interval_secs,
             host_key_prompts: self.session.prompts.host_key_broker(),
             credential_prompts: self.session.prompts.credential_broker(),
             otp_provider: self.session.prompts.otp_provider(),

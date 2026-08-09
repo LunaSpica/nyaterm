@@ -2,10 +2,10 @@ use regex::RegexBuilder;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::fmt::Write as FmtWrite;
-use std::fs::{self, File};
+use std::fs::{self, File, OpenOptions};
 use std::io::{BufWriter, Write};
 use std::mem;
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 use std::time::Instant;
 use thiserror::Error;
@@ -15,6 +15,60 @@ pub const DEFAULT_MEMORY_LIMIT_BYTES: usize = 5 * 1024 * 1024;
 pub const DEFAULT_HISTORY_SEARCH_LINES: usize = 30_000;
 pub const MAX_HISTORY_SEARCH_LINES: usize = 100_000;
 pub const DEFAULT_HISTORY_SEARCH_LIMIT: usize = 100;
+pub const DEFAULT_RECORDING_PATH_TEMPLATE: &str =
+    "{group}/{session}/{yyyy}-{MM}-{dd}/{HH}-{mm}-{ss}-{SSS}-{session_short_id}.log";
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum RecordingMode {
+    #[default]
+    Transcript,
+    Raw,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum ExistingFileBehavior {
+    #[default]
+    Unique,
+    Append,
+    Overwrite,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub enum RecordingRotationPolicy {
+    #[default]
+    Session,
+    Daily,
+    Size {
+        max_bytes: u64,
+    },
+}
+
+#[derive(Clone, Debug)]
+pub struct RecordingContext {
+    pub session_id: String,
+    pub session_name: String,
+    pub connection_id: Option<String>,
+    pub connection_name: Option<String>,
+    pub group_path: Option<String>,
+    pub protocol: String,
+    pub host: Option<String>,
+    pub port: Option<u16>,
+    pub username: Option<String>,
+    pub started_at: OffsetDateTime,
+}
+
+#[derive(Clone, Debug)]
+pub struct RecordingProfile {
+    pub mode: RecordingMode,
+    pub base_path: PathBuf,
+    pub path_template: String,
+    pub include_timestamps: bool,
+    pub include_io_labels: bool,
+    pub include_session_metadata: bool,
+    pub rotation: RecordingRotationPolicy,
+    pub existing_file_behavior: ExistingFileBehavior,
+    pub include_binary_transfer_payloads: bool,
+}
 
 #[derive(Debug, Error)]
 pub enum RecordingError {
@@ -101,35 +155,109 @@ pub struct TerminalHistorySearchResult {
 struct FileRecording {
     writer: BufWriter<File>,
     file_path: PathBuf,
-    include_io_labels: bool,
-    include_timestamps: bool,
+    profile: RecordingProfile,
+    context: RecordingContext,
+    written_bytes: u64,
+    size_rotation_index: u64,
+    daily_key: String,
 }
 
 impl FileRecording {
     fn new(
         file: File,
         file_path: PathBuf,
-        include_io_labels: bool,
-        include_timestamps: bool,
+        profile: RecordingProfile,
+        context: RecordingContext,
     ) -> Self {
+        let daily_key = recording_day_key(context.started_at);
         Self {
             writer: BufWriter::new(file),
             file_path,
-            include_io_labels,
-            include_timestamps,
+            profile,
+            context,
+            written_bytes: 0,
+            size_rotation_index: 0,
+            daily_key,
         }
     }
 
     fn write_record(&mut self, record: &TranscriptRecord) {
-        let _ = self.writer.write_all(
-            record
-                .format(self.include_io_labels, self.include_timestamps)
-                .as_bytes(),
-        );
+        if self.profile.mode != RecordingMode::Transcript {
+            return;
+        }
+        let data = record
+            .format(
+                self.profile.include_io_labels,
+                self.profile.include_timestamps,
+            )
+            .into_bytes();
+        self.write_bytes(&data);
+    }
+
+    fn write_raw(&mut self, data: &[u8]) {
+        if self.profile.mode != RecordingMode::Raw || data.is_empty() {
+            return;
+        }
+        self.write_bytes(data);
+    }
+
+    fn write_bytes(&mut self, data: &[u8]) {
+        self.maybe_rotate(data.len() as u64);
+        if self.writer.write_all(data).is_ok() {
+            self.written_bytes = self.written_bytes.saturating_add(data.len() as u64);
+        }
     }
 
     fn finish(&mut self) {
+        if self.profile.mode == RecordingMode::Transcript && self.profile.include_session_metadata {
+            let footer = format_session_footer(&self.context, "Stopped").into_bytes();
+            let _ = self.writer.write_all(&footer);
+        }
         let _ = self.writer.flush();
+    }
+
+    fn maybe_rotate(&mut self, incoming_bytes: u64) {
+        let rotate = match self.profile.rotation {
+            RecordingRotationPolicy::Session => false,
+            RecordingRotationPolicy::Daily => {
+                let now = OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc());
+                let next_key = recording_day_key(now);
+                if next_key == self.daily_key {
+                    false
+                } else {
+                    self.context.started_at = now;
+                    self.daily_key = next_key;
+                    true
+                }
+            }
+            RecordingRotationPolicy::Size { max_bytes } => {
+                max_bytes > 0 && self.written_bytes.saturating_add(incoming_bytes) >= max_bytes
+            }
+        };
+        if !rotate {
+            return;
+        }
+
+        self.size_rotation_index = self.size_rotation_index.saturating_add(1);
+        let suffix = matches!(self.profile.rotation, RecordingRotationPolicy::Size { .. })
+            .then_some(self.size_rotation_index);
+        let Ok(path) = resolve_recording_path(&self.profile, &self.context, suffix)
+            .and_then(|path| open_collision_safe_path(&path, self.profile.existing_file_behavior))
+        else {
+            return;
+        };
+        let _ = self.writer.flush();
+        let Ok(file) = open_recording_file(&path, self.profile.existing_file_behavior) else {
+            return;
+        };
+        self.writer = BufWriter::new(file);
+        self.file_path = path;
+        self.written_bytes = 0;
+        if self.profile.mode == RecordingMode::Transcript && self.profile.include_session_metadata {
+            let header = format_session_header(&self.context).into_bytes();
+            let _ = self.writer.write_all(&header);
+            self.written_bytes = self.written_bytes.saturating_add(header.len() as u64);
+        }
     }
 }
 
@@ -173,8 +301,8 @@ impl SessionCaptureState {
         &mut self,
         file: File,
         file_path: PathBuf,
-        include_io_labels: bool,
-        include_timestamps: bool,
+        profile: RecordingProfile,
+        context: RecordingContext,
     ) -> Result<(), RecordingError> {
         if self.recording.is_some() {
             return Err(RecordingError::Config(
@@ -182,12 +310,7 @@ impl SessionCaptureState {
             ));
         }
         self.flush_output_lines(true);
-        self.recording = Some(FileRecording::new(
-            file,
-            file_path,
-            include_io_labels,
-            include_timestamps,
-        ));
+        self.recording = Some(FileRecording::new(file, file_path, profile, context));
         Ok(())
     }
 
@@ -270,6 +393,12 @@ impl SessionCaptureState {
         if data.is_empty() {
             return;
         }
+        if let Some(recording) = self.recording.as_mut()
+            && recording.profile.mode == RecordingMode::Raw
+        {
+            recording.write_raw(data);
+            return;
+        }
 
         self.commit_partial_input();
         self.flush_output_lines(true);
@@ -277,6 +406,12 @@ impl SessionCaptureState {
     }
 
     fn write_output(&mut self, data: &str) {
+        if let Some(recording) = self.recording.as_mut()
+            && recording.profile.mode == RecordingMode::Raw
+        {
+            recording.write_raw(data.as_bytes());
+            return;
+        }
         let mut sanitized = strip_terminal_control_sequences(data);
         if sanitized.is_empty() {
             return;
@@ -447,8 +582,56 @@ impl RecordingManager {
         include_io_labels: bool,
         include_timestamps: bool,
     ) -> Result<(), RecordingError> {
-        let path = prepare_output_file_path(file_path)?;
-        let file = File::create(&path)?;
+        let path = PathBuf::from(file_path);
+        let base_path = path
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| PathBuf::from("."));
+        let file_name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("recording.log")
+            .to_string();
+        let profile = RecordingProfile {
+            mode: RecordingMode::Transcript,
+            base_path,
+            path_template: file_name,
+            include_timestamps,
+            include_io_labels,
+            include_session_metadata: false,
+            rotation: RecordingRotationPolicy::Session,
+            existing_file_behavior: ExistingFileBehavior::Overwrite,
+            include_binary_transfer_payloads: false,
+        };
+        let context = RecordingContext {
+            session_id: session_id.to_string(),
+            session_name: safe_recording_name(session_id),
+            connection_id: None,
+            connection_name: None,
+            group_path: None,
+            protocol: "terminal".to_string(),
+            host: None,
+            port: None,
+            username: None,
+            started_at: OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc()),
+        };
+        self.start_with_profile(session_id, context, profile, Some(path))
+            .map(|_| ())
+    }
+
+    pub fn start_with_profile(
+        &self,
+        session_id: &str,
+        context: RecordingContext,
+        profile: RecordingProfile,
+        explicit_path: Option<PathBuf>,
+    ) -> Result<String, RecordingError> {
+        let requested_path = match explicit_path {
+            Some(path) => path,
+            None => resolve_recording_path(&profile, &context, None)?,
+        };
+        let path = open_collision_safe_path(&requested_path, profile.existing_file_behavior)?;
+        let file = open_recording_file(&path, profile.existing_file_behavior)?;
         let memory_limit_bytes = *lock_recover(&self.memory_limit_bytes);
 
         let mut sessions = lock_recover(&self.sessions);
@@ -456,7 +639,14 @@ impl RecordingManager {
             .entry(session_id.to_string())
             .or_insert_with(|| SessionCaptureState::new(memory_limit_bytes));
         state.set_memory_limit(memory_limit_bytes);
-        state.start_recording(file, path, include_io_labels, include_timestamps)
+        state.start_recording(file, path.clone(), profile.clone(), context.clone())?;
+        if profile.mode == RecordingMode::Transcript
+            && profile.include_session_metadata
+            && let Some(recording) = state.recording.as_mut()
+        {
+            recording.write_bytes(format_session_header(&context).as_bytes());
+        }
+        Ok(path.to_string_lossy().to_string())
     }
 
     pub fn stop(&self, session_id: &str) -> Result<String, RecordingError> {
@@ -668,6 +858,188 @@ fn prepare_output_file_path(file_path: &str) -> Result<PathBuf, RecordingError> 
     Ok(path)
 }
 
+fn resolve_recording_path(
+    profile: &RecordingProfile,
+    context: &RecordingContext,
+    size_suffix: Option<u64>,
+) -> Result<PathBuf, RecordingError> {
+    let expanded = expand_recording_template(&profile.path_template, profile.mode, context);
+    let mut path = PathBuf::new();
+    for part in PathBuf::from(expanded).components() {
+        match part {
+            Component::Normal(segment) => {
+                let segment = sanitize_path_segment(&segment.to_string_lossy());
+                if !segment.is_empty() {
+                    path.push(segment);
+                }
+            }
+            Component::CurDir => {}
+            Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
+                path.push("safe");
+            }
+        }
+    }
+    if path.as_os_str().is_empty() {
+        path.push(default_template_for_mode(profile.mode));
+    }
+    if let Some(index) = size_suffix {
+        path = append_numbered_suffix(path, index);
+    }
+    Ok(profile.base_path.join(path))
+}
+
+fn expand_recording_template(
+    template: &str,
+    mode: RecordingMode,
+    context: &RecordingContext,
+) -> String {
+    let mut expanded = if template.trim().is_empty() {
+        default_template_for_mode(mode)
+    } else {
+        template.to_string()
+    };
+    let replacements = [
+        ("session", context.session_name.clone()),
+        ("session_id", context.session_id.clone()),
+        ("session_short_id", short_session_id(&context.session_id)),
+        (
+            "connection_id",
+            context.connection_id.clone().unwrap_or_default(),
+        ),
+        (
+            "connection",
+            context.connection_name.clone().unwrap_or_default(),
+        ),
+        ("group", context.group_path.clone().unwrap_or_default()),
+        ("protocol", context.protocol.clone()),
+        ("host", context.host.clone().unwrap_or_default()),
+        (
+            "port",
+            context
+                .port
+                .map_or_else(String::new, |port| port.to_string()),
+        ),
+        ("username", context.username.clone().unwrap_or_default()),
+        ("yyyy", format_time(context.started_at, "yyyy")),
+        ("MM", format_time(context.started_at, "MM")),
+        ("dd", format_time(context.started_at, "dd")),
+        ("HH", format_time(context.started_at, "HH")),
+        ("mm", format_time(context.started_at, "mm")),
+        ("ss", format_time(context.started_at, "ss")),
+        ("SSS", format_time(context.started_at, "SSS")),
+    ];
+    for (key, value) in replacements {
+        expanded = expanded.replace(&format!("{{{key}}}"), &value);
+    }
+    expanded = expanded.replace(
+        "{session_id:8}",
+        short_session_id(&context.session_id).as_str(),
+    );
+    if mode == RecordingMode::Raw && expanded.ends_with(".log") && !expanded.ends_with(".raw.log") {
+        expanded.truncate(expanded.len() - ".log".len());
+        expanded.push_str(".raw.log");
+    }
+    expanded
+}
+
+fn default_template_for_mode(mode: RecordingMode) -> String {
+    match mode {
+        RecordingMode::Transcript => DEFAULT_RECORDING_PATH_TEMPLATE.to_string(),
+        RecordingMode::Raw => {
+            "{group}/{session}/{yyyy}-{MM}-{dd}/{HH}-{mm}-{ss}-{SSS}-{session_short_id}.raw.log"
+                .to_string()
+        }
+    }
+}
+
+fn sanitize_path_segment(segment: &str) -> String {
+    let trimmed = segment.trim();
+    if trimmed.is_empty() || trimmed == "." || trimmed == ".." {
+        return String::new();
+    }
+    let mut safe = String::new();
+    let mut last_was_replacement = false;
+    for ch in trimmed.chars() {
+        let invalid = matches!(ch, '<' | '>' | ':' | '"' | '|' | '?' | '*' | '\0')
+            || matches!(ch, '/' | '\\')
+            || ch.is_control();
+        if invalid {
+            if !last_was_replacement {
+                safe.push('_');
+                last_was_replacement = true;
+            }
+        } else {
+            safe.push(ch);
+            last_was_replacement = false;
+        }
+    }
+    let safe = safe.trim_matches([' ', '.']).to_string();
+    if safe.is_empty() {
+        "session".to_string()
+    } else {
+        safe
+    }
+}
+
+fn open_collision_safe_path(
+    requested: &Path,
+    behavior: ExistingFileBehavior,
+) -> Result<PathBuf, RecordingError> {
+    prepare_output_file_path(&requested.to_string_lossy())?;
+    if behavior != ExistingFileBehavior::Unique || !requested.exists() {
+        return Ok(requested.to_path_buf());
+    }
+    for index in 1..10_000u64 {
+        let candidate = append_numbered_suffix(requested.to_path_buf(), index);
+        if !candidate.exists() {
+            prepare_output_file_path(&candidate.to_string_lossy())?;
+            return Ok(candidate);
+        }
+    }
+    Err(RecordingError::Config(
+        "failed to find a unique recording file name".to_string(),
+    ))
+}
+
+fn open_recording_file(
+    path: &Path,
+    behavior: ExistingFileBehavior,
+) -> Result<File, RecordingError> {
+    let mut options = OpenOptions::new();
+    options.write(true).create(true);
+    match behavior {
+        ExistingFileBehavior::Unique => {
+            options.create_new(true);
+        }
+        ExistingFileBehavior::Append => {
+            options.append(true);
+        }
+        ExistingFileBehavior::Overwrite => {
+            options.truncate(true);
+        }
+    }
+    options.open(path).map_err(RecordingError::Io)
+}
+
+fn append_numbered_suffix(mut path: PathBuf, index: u64) -> PathBuf {
+    let parent = path.parent().map(Path::to_path_buf).unwrap_or_default();
+    let stem = path
+        .file_stem()
+        .map(|stem| stem.to_string_lossy().to_string())
+        .unwrap_or_else(|| "recording".to_string());
+    let extension = path
+        .extension()
+        .map(|ext| ext.to_string_lossy().to_string());
+    let mut filename = format!("{stem}-{index}");
+    if let Some(extension) = extension {
+        filename.push('.');
+        filename.push_str(&extension);
+    }
+    path = parent;
+    path.push(filename);
+    path
+}
+
 fn format_record_parts(
     timestamp: &str,
     label: &str,
@@ -689,6 +1061,82 @@ fn chrono_timestamp() -> String {
         "[year]-[month]-[day] [hour]:[minute]:[second].[subsecond digits:3]"
     ))
     .unwrap_or_else(|_| "1970-01-01 00:00:00.000".to_string())
+}
+
+fn format_time(time: OffsetDateTime, token: &str) -> String {
+    match token {
+        "yyyy" => time.year().to_string(),
+        "MM" => format!("{:02}", u8::from(time.month())),
+        "dd" => format!("{:02}", time.day()),
+        "HH" => format!("{:02}", time.hour()),
+        "mm" => format!("{:02}", time.minute()),
+        "ss" => format!("{:02}", time.second()),
+        "SSS" => format!("{:03}", time.millisecond()),
+        _ => String::new(),
+    }
+}
+
+fn recording_day_key(time: OffsetDateTime) -> String {
+    format!(
+        "{}-{:02}-{:02}",
+        time.year(),
+        u8::from(time.month()),
+        time.day()
+    )
+}
+
+fn short_session_id(session_id: &str) -> String {
+    session_id.chars().take(8).collect()
+}
+
+fn format_session_header(context: &RecordingContext) -> String {
+    let mut lines = vec![
+        "========== NyaTerm Session ==========".to_string(),
+        format!("Session: {}", context.session_name),
+        format!("Protocol: {}", context.protocol),
+    ];
+    if let Some(connection_id) = context
+        .connection_id
+        .as_deref()
+        .filter(|value| !value.is_empty())
+    {
+        lines.push(format!("Connection ID: {connection_id}"));
+    }
+    if let Some(host) = context.host.as_ref() {
+        let host_line = context
+            .port
+            .map_or_else(|| host.clone(), |port| format!("{host}:{port}"));
+        lines.push(format!("Host: {host_line}"));
+    }
+    if let Some(username) = context.username.as_ref().filter(|value| !value.is_empty()) {
+        lines.push(format!("User: {username}"));
+    }
+    lines.push(format!(
+        "Started: {}",
+        context
+            .started_at
+            .format(time::macros::format_description!(
+                "[year]-[month]-[day] [hour]:[minute]:[second]"
+            ))
+            .unwrap_or_else(|_| "unknown".to_string())
+    ));
+    lines.push("======================================".to_string());
+    lines.push(String::new());
+    lines.join("\n")
+}
+
+fn format_session_footer(context: &RecordingContext, reason: &str) -> String {
+    let stopped_at = OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc());
+    let duration = stopped_at - context.started_at;
+    format!(
+        "\n========== NyaTerm Session End ==========\nStopped: {}\nReason: {reason}\nDuration: {}s\n=========================================\n",
+        stopped_at
+            .format(time::macros::format_description!(
+                "[year]-[month]-[day] [hour]:[minute]:[second]"
+            ))
+            .unwrap_or_else(|_| "unknown".to_string()),
+        duration.whole_seconds().max(0)
+    )
 }
 
 fn format_raw_input_bytes(data: &[u8]) -> String {

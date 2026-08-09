@@ -4,7 +4,8 @@ use std::collections::HashMap;
 
 use gpui::FocusHandle;
 use nyaterm_core::{
-    AppSettingsSummary, KeywordHighlightConfig, KeywordHighlightRule, SearchEngineConfig,
+    AppSettingsSummary, ExistingFileBehavior, KeywordHighlightConfig, KeywordHighlightRule,
+    RecordingMode, RecordingRotationPolicy, SearchEngineConfig,
 };
 
 use crate::models::{
@@ -250,8 +251,18 @@ impl SettingsFeatureState {
         self.summary.interaction_copy_on_select = !self.summary.interaction_copy_on_select;
     }
 
+    pub(in crate::features) fn toggle_osc52_clipboard_write(&mut self) {
+        self.summary.interaction_allow_osc52_clipboard_write =
+            !self.summary.interaction_allow_osc52_clipboard_write;
+    }
+
     pub(in crate::features) fn toggle_interaction_right_click_paste(&mut self) {
         self.summary.interaction_right_click_paste = !self.summary.interaction_right_click_paste;
+    }
+
+    pub(in crate::features) fn toggle_terminal_zoom_enabled(&mut self) {
+        self.summary.interaction_terminal_zoom_enabled =
+            !self.summary.interaction_terminal_zoom_enabled;
     }
 
     pub(in crate::features) fn toggle_command_suggestions(&mut self) -> bool {
@@ -320,6 +331,22 @@ impl SettingsFeatureState {
         self.summary.terminal_keep_alive_interval = value.clamp(0, 600);
     }
 
+    pub(in crate::features) fn set_terminal_keep_alive_mode(&mut self, mode: &str) {
+        self.summary.terminal_keep_alive_mode = match mode {
+            "strict" | "disabled" => mode.to_string(),
+            _ => "compatible".to_string(),
+        };
+    }
+
+    pub(in crate::features) fn set_terminal_timestamp_format(&mut self, text: String) {
+        let trimmed = text.trim();
+        self.summary.terminal_timestamp_format = if trimmed.is_empty() {
+            nyaterm_core::DEFAULT_TERMINAL_TIMESTAMP_FORMAT.to_string()
+        } else {
+            trimmed.chars().take(64).collect()
+        };
+    }
+
     pub(in crate::features) fn toggle_terminal_workspace_padding(&mut self) {
         self.summary.terminal_show_workspace_padding =
             !self.summary.terminal_show_workspace_padding;
@@ -353,6 +380,22 @@ impl SettingsFeatureState {
 
     pub(in crate::features) fn set_remote_stats_interval(&mut self, value: u32) {
         self.summary.ui_remote_stats_interval = value.clamp(1, 60);
+    }
+
+    pub(in crate::features) fn toggle_gpu_monitor_panel(&mut self) {
+        self.summary.ui_show_gpu_monitor = !self.summary.ui_show_gpu_monitor;
+    }
+
+    pub(in crate::features) fn set_gpu_monitor_interval(&mut self, value: u32) {
+        self.summary.ui_gpu_monitor_interval = value.clamp(3, 120);
+    }
+
+    pub(in crate::features) fn toggle_ascend_npu_monitor_panel(&mut self) {
+        self.summary.ui_show_ascend_npu_monitor = !self.summary.ui_show_ascend_npu_monitor;
+    }
+
+    pub(in crate::features) fn set_ascend_npu_monitor_interval(&mut self, value: u32) {
+        self.summary.ui_ascend_npu_monitor_interval = value.clamp(3, 120);
     }
 
     pub(in crate::features) fn toggle_process_manager_panel(&mut self) {
@@ -394,12 +437,55 @@ impl SettingsFeatureState {
         self.summary.recording_auto_start = !self.summary.recording_auto_start;
     }
 
+    pub(in crate::features) fn set_recording_default_mode(&mut self, mode: RecordingMode) {
+        self.summary.recording_default_mode = mode;
+    }
+
+    pub(in crate::features) fn set_recording_path_template(&mut self, template: String) {
+        let trimmed = template.trim();
+        self.summary.recording_path_template = if trimmed.is_empty() {
+            nyaterm_core::DEFAULT_RECORDING_PATH_TEMPLATE.to_string()
+        } else {
+            trimmed.to_string()
+        };
+    }
+
     pub(in crate::features) fn toggle_recording_io_labels(&mut self) {
         self.summary.recording_include_io_labels = !self.summary.recording_include_io_labels;
     }
 
     pub(in crate::features) fn toggle_recording_timestamps(&mut self) {
         self.summary.recording_include_timestamps = !self.summary.recording_include_timestamps;
+    }
+
+    pub(in crate::features) fn toggle_recording_session_metadata(&mut self) {
+        self.summary.recording_include_session_metadata =
+            !self.summary.recording_include_session_metadata;
+    }
+
+    pub(in crate::features) fn set_recording_rotation(
+        &mut self,
+        rotation: RecordingRotationPolicy,
+    ) {
+        self.summary.recording_rotation = rotation;
+    }
+
+    pub(in crate::features) fn set_recording_rotation_size_mib(&mut self, value_mib: u64) {
+        self.summary.recording_rotation = RecordingRotationPolicy::Size {
+            max_bytes: value_mib.clamp(1, 102_400) * 1024 * 1024,
+        };
+    }
+
+    pub(in crate::features) fn set_recording_existing_file_behavior(
+        &mut self,
+        behavior: ExistingFileBehavior,
+    ) {
+        self.summary.recording_existing_file_behavior = behavior;
+    }
+
+    pub(in crate::features) fn toggle_recording_binary_transfer_payloads(&mut self) {
+        self.summary.recording_include_binary_transfer_payloads =
+            !self.summary.recording_include_binary_transfer_payloads;
     }
 
     pub(in crate::features) fn set_recording_memory_limit_mib(&mut self, value_mib: u64) {

@@ -289,6 +289,12 @@ impl NyaTermApp {
         delta: i16,
         cx: &mut Context<Self>,
     ) {
+        if !self.settings.summary().interaction_terminal_zoom_enabled {
+            self.shell
+                .set_status("Terminal zoom is disabled in Settings".to_string());
+            cx.notify();
+            return;
+        }
         let next = (self.settings.summary().terminal_font_size as i16 + delta)
             .clamp(TERMINAL_FONT_SIZE_MIN, TERMINAL_FONT_SIZE_MAX);
         if !self.settings.set_terminal_font_size(next as u16) {
@@ -312,6 +318,12 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn reset_terminal_font_size(&mut self, cx: &mut Context<Self>) {
+        if !self.settings.summary().interaction_terminal_zoom_enabled {
+            self.shell
+                .set_status("Terminal zoom is disabled in Settings".to_string());
+            cx.notify();
+            return;
+        }
         let default_size = AppSettingsSummary::default().terminal_font_size;
         if !self.settings.set_terminal_font_size(default_size) {
             return;

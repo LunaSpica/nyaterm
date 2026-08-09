@@ -1095,6 +1095,38 @@ fn default_restorable_split_ratio() -> f64 {
     0.5
 }
 
+pub const DEFAULT_RECORDING_PATH_TEMPLATE: &str =
+    "{group}/{session}/{yyyy}-{MM}-{dd}/{HH}-{mm}-{ss}-{SSS}-{session_short_id}.log";
+pub const DEFAULT_TERMINAL_TIMESTAMP_FORMAT: &str = "[HH:mm:ss]";
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum RecordingMode {
+    #[default]
+    Transcript,
+    Raw,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ExistingFileBehavior {
+    #[default]
+    Unique,
+    Append,
+    Overwrite,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case", tag = "type")]
+pub enum RecordingRotationPolicy {
+    #[default]
+    Session,
+    Daily,
+    Size {
+        max_bytes: u64,
+    },
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AppSettingsSummary {
     pub theme: String,
@@ -1138,7 +1170,11 @@ pub struct AppSettingsSummary {
     pub terminal_font_weight_bold: u16,
     pub x11_display: String,
     pub terminal_scrollback_lines: u32,
+    #[serde(default = "default_terminal_keep_alive_mode")]
+    pub terminal_keep_alive_mode: String,
     pub terminal_keep_alive_interval: u32,
+    #[serde(default = "default_terminal_timestamp_format")]
+    pub terminal_timestamp_format: String,
     pub terminal_hardware_acceleration: bool,
     pub terminal_show_workspace_padding: bool,
     pub terminal_show_line_numbers: bool,
@@ -1158,6 +1194,14 @@ pub struct AppSettingsSummary {
     pub search_custom_engines: Vec<SearchEngineConfig>,
     pub ui_show_remote_stats: bool,
     pub ui_remote_stats_interval: u32,
+    #[serde(default)]
+    pub ui_show_gpu_monitor: bool,
+    #[serde(default = "default_hardware_monitor_interval")]
+    pub ui_gpu_monitor_interval: u32,
+    #[serde(default)]
+    pub ui_show_ascend_npu_monitor: bool,
+    #[serde(default = "default_hardware_monitor_interval")]
+    pub ui_ascend_npu_monitor_interval: u32,
     pub ui_show_process_manager: bool,
     pub ui_process_manager_interval: u32,
     pub ui_show_docker_manager: bool,
@@ -1225,7 +1269,11 @@ pub struct AppSettingsSummary {
     #[serde(default)]
     pub ui_panel_stack_sizes: HashMap<String, u32>,
     pub interaction_copy_on_select: bool,
+    #[serde(default)]
+    pub interaction_allow_osc52_clipboard_write: bool,
     pub interaction_right_click_paste: bool,
+    #[serde(default = "default_true")]
+    pub interaction_terminal_zoom_enabled: bool,
     pub interaction_command_suggestions_enabled: bool,
     pub interaction_command_suggestion_min_chars: u32,
     pub interaction_command_suggestion_max_chars: u32,
@@ -1252,8 +1300,20 @@ pub struct AppSettingsSummary {
     pub transfer_resume_broken_transfer: bool,
     pub recording_path: String,
     pub recording_auto_start: bool,
+    #[serde(default)]
+    pub recording_default_mode: RecordingMode,
+    #[serde(default = "default_recording_path_template")]
+    pub recording_path_template: String,
     pub recording_include_io_labels: bool,
     pub recording_include_timestamps: bool,
+    #[serde(default = "default_true")]
+    pub recording_include_session_metadata: bool,
+    #[serde(default)]
+    pub recording_rotation: RecordingRotationPolicy,
+    #[serde(default)]
+    pub recording_existing_file_behavior: ExistingFileBehavior,
+    #[serde(default)]
+    pub recording_include_binary_transfer_payloads: bool,
     pub recording_memory_limit_bytes: u64,
     pub diagnostics_level: String,
     pub diagnostics_retention_days: u32,
@@ -1341,7 +1401,9 @@ impl Default for AppSettingsSummary {
             terminal_font_weight_bold: default_terminal_font_weight_bold(),
             x11_display: String::new(),
             terminal_scrollback_lines: 5000,
+            terminal_keep_alive_mode: default_terminal_keep_alive_mode(),
             terminal_keep_alive_interval: 30,
+            terminal_timestamp_format: default_terminal_timestamp_format(),
             terminal_hardware_acceleration: true,
             terminal_show_workspace_padding: false,
             terminal_show_line_numbers: false,
@@ -1355,6 +1417,10 @@ impl Default for AppSettingsSummary {
             search_custom_engines: default_search_engines(),
             ui_show_remote_stats: true,
             ui_remote_stats_interval: 3,
+            ui_show_gpu_monitor: false,
+            ui_gpu_monitor_interval: 3,
+            ui_show_ascend_npu_monitor: false,
+            ui_ascend_npu_monitor_interval: 3,
             ui_show_process_manager: true,
             ui_process_manager_interval: 5,
             ui_show_docker_manager: true,
@@ -1389,7 +1455,9 @@ impl Default for AppSettingsSummary {
             ui_right_open_panels: Vec::new(),
             ui_panel_stack_sizes: HashMap::new(),
             interaction_copy_on_select: false,
+            interaction_allow_osc52_clipboard_write: false,
             interaction_right_click_paste: false,
+            interaction_terminal_zoom_enabled: true,
             interaction_command_suggestions_enabled: true,
             interaction_command_suggestion_min_chars: 2,
             interaction_command_suggestion_max_chars: 64,
@@ -1416,8 +1484,14 @@ impl Default for AppSettingsSummary {
             transfer_resume_broken_transfer: true,
             recording_path: String::new(),
             recording_auto_start: false,
+            recording_default_mode: RecordingMode::Transcript,
+            recording_path_template: default_recording_path_template(),
             recording_include_io_labels: true,
             recording_include_timestamps: true,
+            recording_include_session_metadata: true,
+            recording_rotation: RecordingRotationPolicy::Session,
+            recording_existing_file_behavior: ExistingFileBehavior::Unique,
+            recording_include_binary_transfer_payloads: false,
             recording_memory_limit_bytes: 5 * 1024 * 1024,
             diagnostics_level: "info".to_string(),
             diagnostics_retention_days: 7,
@@ -1496,6 +1570,22 @@ fn default_quick_cmd_sort_mode() -> String {
 
 fn default_header_status_mode() -> String {
     "session".to_string()
+}
+
+fn default_terminal_keep_alive_mode() -> String {
+    "compatible".to_string()
+}
+
+fn default_terminal_timestamp_format() -> String {
+    DEFAULT_TERMINAL_TIMESTAMP_FORMAT.to_string()
+}
+
+fn default_hardware_monitor_interval() -> u32 {
+    3
+}
+
+fn default_recording_path_template() -> String {
+    DEFAULT_RECORDING_PATH_TEMPLATE.to_string()
 }
 
 fn default_saved_connections_sort_mode() -> String {

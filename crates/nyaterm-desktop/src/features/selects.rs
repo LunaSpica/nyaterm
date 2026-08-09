@@ -10,7 +10,7 @@ use gpui::{
     App, AppContext, Context, Entity, InteractiveElement as _, IntoElement, ParentElement as _,
     SharedString, Styled as _, Subscription, Window, div, px,
 };
-use nyaterm_core::RiskLevel;
+use nyaterm_core::{ExistingFileBehavior, RecordingMode, RecordingRotationPolicy, RiskLevel};
 use nyaterm_transport::SftpDuplicatePolicy;
 use nyaterm_ui::{
     NYA_FORM_CONTROL_HEIGHT_PX, NyaSelect, NyaSelectEvent, NyaSelectOption, NyaSelectState,
@@ -216,6 +216,11 @@ impl NyaTermApp {
                     self.set_diagnostics_retention_days(days, cx);
                 }
             }
+            "settings.terminal.keep-alive-mode" => match value {
+                "strict" => self.set_terminal_keep_alive_mode("strict", cx),
+                "disabled" => self.set_terminal_keep_alive_mode("disabled", cx),
+                _ => self.set_terminal_keep_alive_mode("compatible", cx),
+            },
             "settings.interaction.default-encoding" => match value {
                 "GBK" => self.set_interaction_encoding("GBK", cx),
                 _ => self.set_interaction_encoding("UTF-8", cx),
@@ -238,6 +243,35 @@ impl NyaTermApp {
             "settings.transfer.editor-type" => match value {
                 "internal" => self.update_transfer_editor_type("internal", cx),
                 _ => self.update_transfer_editor_type("external", cx),
+            },
+            "settings.recording.default-mode" => match value {
+                "raw" => self.set_recording_default_mode(RecordingMode::Raw, cx),
+                _ => self.set_recording_default_mode(RecordingMode::Transcript, cx),
+            },
+            "settings.recording.rotation" => match value {
+                "daily" => self.set_recording_rotation(RecordingRotationPolicy::Daily, cx),
+                "size" => {
+                    let bytes = match self.settings.summary().recording_rotation {
+                        RecordingRotationPolicy::Size { max_bytes } => max_bytes,
+                        _ => 50 * 1024 * 1024,
+                    };
+                    self.set_recording_rotation(
+                        RecordingRotationPolicy::Size { max_bytes: bytes },
+                        cx,
+                    );
+                }
+                _ => self.set_recording_rotation(RecordingRotationPolicy::Session, cx),
+            },
+            "settings.recording.existing-file" => match value {
+                "append" => {
+                    self.set_recording_existing_file_behavior(ExistingFileBehavior::Append, cx)
+                }
+                "overwrite" => {
+                    self.set_recording_existing_file_behavior(ExistingFileBehavior::Overwrite, cx)
+                }
+                _ => {
+                    self.set_recording_existing_file_behavior(ExistingFileBehavior::Unique, cx);
+                }
             },
             "settings.security.host-key-policy" => match value {
                 "strict" => self.update_host_key_policy("strict", cx),

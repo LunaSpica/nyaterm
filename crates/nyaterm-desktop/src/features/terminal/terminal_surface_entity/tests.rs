@@ -124,14 +124,9 @@ fn painted_hit_test_grid_bounds_match_the_rendered_grid_layout() {
 #[test]
 fn painted_hit_test_grid_bounds_start_after_the_rendered_gutter() {
     let snapshot = TerminalScreen::default().viewport_snapshot(0);
-    let expected_gutter = terminal_gutter_metrics(
-        8.0,
-        false,
-        false,
-        true,
-        terminal_line_number_digits(&snapshot),
-    )
-    .total_width();
+    let expected_gutter =
+        terminal_gutter_metrics(8.0, false, 10, true, terminal_line_number_digits(&snapshot))
+            .total_width();
     let grid_bounds = rendered_terminal_grid_bounds(true);
 
     assert_eq!(grid_bounds.origin, point(px(expected_gutter), px(0.0)));

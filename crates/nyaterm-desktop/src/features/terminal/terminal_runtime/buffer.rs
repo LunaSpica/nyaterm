@@ -1403,9 +1403,18 @@ impl NyaTermApp {
     ) {
         if let Some(cx) = cx {
             if let Some(text) = clipboard_store.take() {
-                cx.write_to_clipboard(ClipboardItem::new_string(text));
-                self.shell
-                    .set_status("OSC 52 clipboard updated".to_string());
+                if self
+                    .settings
+                    .summary()
+                    .interaction_allow_osc52_clipboard_write
+                {
+                    cx.write_to_clipboard(ClipboardItem::new_string(text));
+                    self.shell
+                        .set_status("OSC 52 clipboard updated".to_string());
+                } else {
+                    self.shell
+                        .set_status("OSC 52 clipboard write blocked by settings".to_string());
+                }
             }
             if !clipboard_loads.is_empty() {
                 let clipboard_text = cx

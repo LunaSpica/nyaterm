@@ -5,7 +5,9 @@ use gpui::{
 use nyaterm_terminal::{TerminalScreen, TerminalSnapshot};
 
 use crate::features::NyaTermApp;
-use crate::features::formatting::format_terminal_line_timestamp_ms;
+use crate::features::formatting::{
+    format_terminal_line_timestamp_ms_with_format, terminal_timestamp_format_width_chars,
+};
 use crate::features::terminal::terminal_runtime::{
     TerminalScrollVisualState, terminal_display_offset_from_state,
     terminal_local_scroll_delta_lines_from_state, terminal_scroll_needs_text_first_repaint,
@@ -187,6 +189,7 @@ pub(in crate::features) struct TerminalSurfacePaintChrome {
     pub show_line_numbers: bool,
     pub show_timestamps: bool,
     pub show_timestamp_ms: bool,
+    pub timestamp_format: String,
     pub is_active: bool,
 }
 
@@ -295,6 +298,7 @@ pub(in crate::features) struct TerminalSurface {
     show_line_numbers: bool,
     show_timestamps: bool,
     show_timestamp_ms: bool,
+    timestamp_format: String,
     scroll_offset: usize,
     scroll_residual_lines: f32,
     display_offset: usize,
@@ -359,6 +363,7 @@ impl TerminalSurface {
             show_line_numbers: false,
             show_timestamps: false,
             show_timestamp_ms: false,
+            timestamp_format: nyaterm_core::DEFAULT_TERMINAL_TIMESTAMP_FORMAT.to_string(),
             scroll_offset: 0,
             scroll_residual_lines: 0.0,
             display_offset: 0,
@@ -1217,6 +1222,7 @@ impl TerminalSurface {
             show_line_numbers,
             show_timestamps,
             show_timestamp_ms,
+            timestamp_format,
             is_active,
         } = chrome;
         let cell_width = cell_width.max(1.0);
@@ -1232,6 +1238,7 @@ impl TerminalSurface {
             && self.show_line_numbers == show_line_numbers
             && self.show_timestamps == show_timestamps
             && self.show_timestamp_ms == show_timestamp_ms
+            && self.timestamp_format == timestamp_format
             && self.is_active == is_active;
         if state_matches {
             return false;
@@ -1247,6 +1254,7 @@ impl TerminalSurface {
         self.show_line_numbers = show_line_numbers;
         self.show_timestamps = show_timestamps;
         self.show_timestamp_ms = show_timestamp_ms;
+        self.timestamp_format = timestamp_format;
         self.is_active = is_active;
         true
     }
@@ -2412,10 +2420,12 @@ impl Render for TerminalSurface {
             let gutter_metrics = terminal_gutter_metrics(
                 cell_w,
                 self.show_timestamps,
-                self.show_timestamp_ms,
+                terminal_timestamp_format_width_chars(&self.timestamp_format),
                 self.show_line_numbers,
                 terminal_line_number_digits(snapshot.as_ref()),
             );
+            let timestamp_width_chars =
+                terminal_timestamp_format_width_chars(&self.timestamp_format);
             let line_number_digits = terminal_line_number_digits(snapshot.as_ref());
             let ts_w = gutter_metrics.timestamp_width;
             let ln_w = gutter_metrics.line_number_width;
@@ -2439,14 +2449,13 @@ impl Render for TerminalSurface {
                 let ts_label = if self.show_timestamps && has_rendered_row && !is_wrapped {
                     snapshot_row
                         .and_then(|row| row.timestamp_ms)
-                        .map(|ms| format_terminal_line_timestamp_ms(ms, self.show_timestamp_ms))
-                        .unwrap_or_else(|| {
-                            if self.show_timestamp_ms {
-                                "             ".to_string()
-                            } else {
-                                "          ".to_string()
-                            }
+                        .map(|ms| {
+                            format_terminal_line_timestamp_ms_with_format(
+                                ms,
+                                &self.timestamp_format,
+                            )
                         })
+                        .unwrap_or_else(|| " ".repeat(timestamp_width_chars))
                 } else {
                     String::new()
                 };

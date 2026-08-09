@@ -1,5 +1,5 @@
 use gpui::Context;
-use nyaterm_core::ConnectionStore;
+use nyaterm_core::{ConnectionStore, ExistingFileBehavior, RecordingMode, RecordingRotationPolicy};
 use nyaterm_transport::SftpDuplicatePolicy;
 
 use crate::features::{NyaTermApp, duplicate_policy_label};
@@ -43,6 +43,24 @@ impl NyaTermApp {
         self.save_recording_settings(cx);
     }
 
+    pub(in crate::features) fn set_recording_default_mode(
+        &mut self,
+        mode: RecordingMode,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.set_recording_default_mode(mode);
+        self.save_recording_settings(cx);
+    }
+
+    pub(in crate::features) fn apply_recording_path_template(
+        &mut self,
+        template: String,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.set_recording_path_template(template);
+        self.save_recording_settings(cx);
+    }
+
     pub(in crate::features) fn toggle_recording_io_labels(&mut self, cx: &mut Context<Self>) {
         self.settings.toggle_recording_io_labels();
         self.save_recording_settings(cx);
@@ -50,6 +68,49 @@ impl NyaTermApp {
 
     pub(in crate::features) fn toggle_recording_timestamps(&mut self, cx: &mut Context<Self>) {
         self.settings.toggle_recording_timestamps();
+        self.save_recording_settings(cx);
+    }
+
+    pub(in crate::features) fn toggle_recording_session_metadata(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.toggle_recording_session_metadata();
+        self.save_recording_settings(cx);
+    }
+
+    pub(in crate::features) fn set_recording_rotation(
+        &mut self,
+        rotation: RecordingRotationPolicy,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.set_recording_rotation(rotation);
+        self.save_recording_settings(cx);
+    }
+
+    pub(in crate::features) fn set_recording_rotation_size_mib(
+        &mut self,
+        value_mib: u64,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.set_recording_rotation_size_mib(value_mib);
+        self.save_recording_settings(cx);
+    }
+
+    pub(in crate::features) fn set_recording_existing_file_behavior(
+        &mut self,
+        behavior: ExistingFileBehavior,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.set_recording_existing_file_behavior(behavior);
+        self.save_recording_settings(cx);
+    }
+
+    pub(in crate::features) fn toggle_recording_binary_transfer_payloads(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        self.settings.toggle_recording_binary_transfer_payloads();
         self.save_recording_settings(cx);
     }
 

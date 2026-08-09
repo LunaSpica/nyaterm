@@ -2,7 +2,8 @@ use std::path::PathBuf;
 
 use crate::{
     AiExecutionProfile, CloudSyncSettings, CloudSyncState, CommandHistoryEntry, ConnectionAuth,
-    ConnectionType, OtpEntry, SearchEngineConfig, SshKey, export_quick_commands_json,
+    ConnectionType, ExistingFileBehavior, OtpEntry, RecordingMode, RecordingRotationPolicy,
+    SearchEngineConfig, SshKey, export_quick_commands_json,
 };
 use aes_gcm::{Aes256Gcm, Key, KeyInit, aead::Aead};
 use base64::{Engine, engine::general_purpose::STANDARD as B64};
@@ -1323,17 +1324,30 @@ fn app_settings_summary_reads_and_updates_host_key_policy() {
             "transfer_buffer_size": 64,
             "default_file_permissions": "664",
             "preserve_timestamps": false,
-            "resume_broken_transfer": false,
-            "recording_path": "/tmp/nyaterm-recordings",
-            "recording_auto_start": true,
-            "recording_include_io_labels": false,
-            "recording_include_timestamps": false,
-            "recording_memory_limit_bytes": 1048576
+            "resume_broken_transfer": false
+        },
+        "recording": {
+            "base_path": "/tmp/nyaterm-recordings",
+            "auto_start": true,
+            "default_mode": "raw",
+            "path_template": "{session}/{yyyy}-{MM}-{dd}.raw.log",
+            "include_session_metadata": false,
+            "rotation": {
+                "type": "size",
+                "max_bytes": 2097152
+            },
+            "existing_file_behavior": "append",
+            "include_binary_transfer_payloads": true,
+            "include_io_labels": false,
+            "include_timestamps": false,
+            "memory_limit_bytes": 1048576
         },
         "terminal": {
             "x11_display": "localhost:1",
             "scrollback_lines": 8000,
+            "keep_alive_mode": "strict",
             "keep_alive_interval": 45,
+            "timestamp_format": "YYYY-MM-DD HH:mm:ss",
             "hardware_acceleration": false,
             "show_workspace_padding": true,
             "show_line_numbers": true,
@@ -1347,6 +1361,10 @@ fn app_settings_summary_reads_and_updates_host_key_policy() {
             "language": "zh-CN",
             "show_remote_stats": false,
             "remote_stats_interval": 9,
+            "show_gpu_monitor": true,
+            "gpu_monitor_interval": 7,
+            "show_ascend_npu_monitor": true,
+            "ascend_npu_monitor_interval": 8,
             "show_process_manager": false,
             "process_manager_interval": 11,
             "show_docker_manager": false,
@@ -1369,6 +1387,8 @@ fn app_settings_summary_reads_and_updates_host_key_policy() {
             "command_suggestion_max_chars": 80,
             "word_separators": " .,:",
             "duplicate_session_command_delay_ms": 1500,
+            "allow_osc52_clipboard_write": true,
+            "terminal_zoom_enabled": false,
             "alt_as_meta": true,
             "mac_ime_compatibility": false,
             "tab_double_click_action": "duplicate_session",
@@ -1397,7 +1417,9 @@ fn app_settings_summary_reads_and_updates_host_key_policy() {
     assert_eq!(summary.terminal_font_size, 14);
     assert_eq!(summary.x11_display, "localhost:1");
     assert_eq!(summary.terminal_scrollback_lines, 8000);
+    assert_eq!(summary.terminal_keep_alive_mode, "strict");
     assert_eq!(summary.terminal_keep_alive_interval, 45);
+    assert_eq!(summary.terminal_timestamp_format, "YYYY-MM-DD HH:mm:ss");
     assert!(!summary.terminal_hardware_acceleration);
     assert!(summary.terminal_show_workspace_padding);
     assert!(summary.terminal_show_line_numbers);
@@ -1408,6 +1430,10 @@ fn app_settings_summary_reads_and_updates_host_key_policy() {
     assert!(summary.terminal_low_latency_mode);
     assert!(!summary.ui_show_remote_stats);
     assert_eq!(summary.ui_remote_stats_interval, 9);
+    assert!(summary.ui_show_gpu_monitor);
+    assert_eq!(summary.ui_gpu_monitor_interval, 7);
+    assert!(summary.ui_show_ascend_npu_monitor);
+    assert_eq!(summary.ui_ascend_npu_monitor_interval, 8);
     assert!(!summary.ui_show_process_manager);
     assert_eq!(summary.ui_process_manager_interval, 11);
     assert!(!summary.ui_show_docker_manager);
@@ -1444,6 +1470,8 @@ fn app_settings_summary_reads_and_updates_host_key_policy() {
     );
     assert!(summary.interaction_copy_on_select);
     assert!(summary.interaction_right_click_paste);
+    assert!(summary.interaction_allow_osc52_clipboard_write);
+    assert!(!summary.interaction_terminal_zoom_enabled);
     assert!(!summary.interaction_command_suggestions_enabled);
     assert_eq!(summary.interaction_command_suggestion_min_chars, 3);
     assert_eq!(summary.interaction_command_suggestion_max_chars, 80);
@@ -1473,6 +1501,21 @@ fn app_settings_summary_reads_and_updates_host_key_policy() {
     assert!(!summary.transfer_resume_broken_transfer);
     assert_eq!(summary.recording_path, "/tmp/nyaterm-recordings");
     assert!(summary.recording_auto_start);
+    assert_eq!(summary.recording_default_mode, RecordingMode::Raw);
+    assert_eq!(
+        summary.recording_path_template,
+        "{session}/{yyyy}-{MM}-{dd}.raw.log"
+    );
+    assert!(!summary.recording_include_session_metadata);
+    assert_eq!(
+        summary.recording_rotation,
+        RecordingRotationPolicy::Size { max_bytes: 2097152 }
+    );
+    assert_eq!(
+        summary.recording_existing_file_behavior,
+        ExistingFileBehavior::Append
+    );
+    assert!(summary.recording_include_binary_transfer_payloads);
     assert!(!summary.recording_include_io_labels);
     assert!(!summary.recording_include_timestamps);
     assert_eq!(summary.recording_memory_limit_bytes, 1048576);
@@ -1681,20 +1724,32 @@ fn app_settings_summary_reads_and_updates_host_key_policy() {
 
     let mut terminal_update = updated.clone();
     terminal_update.terminal_scrollback_lines = 12_000;
+    terminal_update.terminal_keep_alive_mode = "disabled".to_string();
     terminal_update.terminal_keep_alive_interval = 20;
+    terminal_update.terminal_timestamp_format = "[HH:mm:ss.SSS]".to_string();
     terminal_update.terminal_show_multi_line_paste_dialog = true;
     terminal_update.terminal_low_latency_mode = true;
     terminal_update.ui_show_remote_stats = true;
     terminal_update.ui_remote_stats_interval = 4;
+    terminal_update.ui_show_gpu_monitor = true;
+    terminal_update.ui_gpu_monitor_interval = 10;
+    terminal_update.ui_show_ascend_npu_monitor = true;
+    terminal_update.ui_ascend_npu_monitor_interval = 12;
     let saved_terminal = store
         .save_terminal_settings(&terminal_update)
         .expect("save terminal settings");
     assert_eq!(saved_terminal.terminal_scrollback_lines, 12_000);
+    assert_eq!(saved_terminal.terminal_keep_alive_mode, "disabled");
     assert_eq!(saved_terminal.terminal_keep_alive_interval, 20);
+    assert_eq!(saved_terminal.terminal_timestamp_format, "[HH:mm:ss.SSS]");
     assert!(saved_terminal.terminal_show_multi_line_paste_dialog);
     assert!(saved_terminal.terminal_low_latency_mode);
     assert!(saved_terminal.ui_show_remote_stats);
     assert_eq!(saved_terminal.ui_remote_stats_interval, 4);
+    assert!(saved_terminal.ui_show_gpu_monitor);
+    assert_eq!(saved_terminal.ui_gpu_monitor_interval, 10);
+    assert!(saved_terminal.ui_show_ascend_npu_monitor);
+    assert_eq!(saved_terminal.ui_ascend_npu_monitor_interval, 12);
     let stored = store
         .load_settings_value()
         .expect("stored terminal settings");
@@ -1705,6 +1760,18 @@ fn app_settings_summary_reads_and_updates_host_key_policy() {
     assert_eq!(
         json_path(&stored, &["ui", "remote_stats_interval"]).and_then(|value| value.as_u64()),
         Some(4)
+    );
+    assert_eq!(
+        json_path(&stored, &["terminal", "keep_alive_mode"]).and_then(|value| value.as_str()),
+        Some("disabled")
+    );
+    assert_eq!(
+        json_path(&stored, &["terminal", "timestamp_format"]).and_then(|value| value.as_str()),
+        Some("[HH:mm:ss.SSS]")
+    );
+    assert_eq!(
+        json_path(&stored, &["ui", "gpu_monitor_interval"]).and_then(|value| value.as_u64()),
+        Some(10)
     );
     assert_eq!(
         json_path(&stored, &["terminal", "low_latency_mode"]).and_then(|value| value.as_bool()),
@@ -1756,6 +1823,8 @@ fn app_settings_summary_reads_and_updates_host_key_policy() {
     interaction_update.interaction_command_suggestion_min_chars = 4;
     interaction_update.interaction_command_suggestion_max_chars = 120;
     interaction_update.interaction_duplicate_session_command_delay_ms = 2_500;
+    interaction_update.interaction_allow_osc52_clipboard_write = false;
+    interaction_update.interaction_terminal_zoom_enabled = true;
     interaction_update.interaction_alt_as_meta = false;
     interaction_update.interaction_tab_double_click_action = "reconnect_session".to_string();
     interaction_update.interaction_default_encoding = "utf-8".to_string();
@@ -1775,6 +1844,8 @@ fn app_settings_summary_reads_and_updates_host_key_policy() {
         saved_interaction.interaction_duplicate_session_command_delay_ms,
         2_500
     );
+    assert!(!saved_interaction.interaction_allow_osc52_clipboard_write);
+    assert!(saved_interaction.interaction_terminal_zoom_enabled);
     assert!(!saved_interaction.interaction_alt_as_meta);
     assert_eq!(
         saved_interaction.interaction_tab_double_click_action,
@@ -1788,6 +1859,12 @@ fn app_settings_summary_reads_and_updates_host_key_policy() {
     let mut recording_update = normalized.clone();
     recording_update.recording_path = "/var/log/nyaterm".to_string();
     recording_update.recording_auto_start = false;
+    recording_update.recording_default_mode = RecordingMode::Raw;
+    recording_update.recording_path_template = "{host}/{session}.raw.log".to_string();
+    recording_update.recording_include_session_metadata = false;
+    recording_update.recording_rotation = RecordingRotationPolicy::Daily;
+    recording_update.recording_existing_file_behavior = ExistingFileBehavior::Overwrite;
+    recording_update.recording_include_binary_transfer_payloads = true;
     recording_update.recording_include_io_labels = true;
     recording_update.recording_include_timestamps = true;
     recording_update.recording_memory_limit_bytes = 2 * 1024 * 1024;
@@ -1796,11 +1873,46 @@ fn app_settings_summary_reads_and_updates_host_key_policy() {
         .expect("save recording settings");
     assert_eq!(saved_recording.recording_path, "/var/log/nyaterm");
     assert!(!saved_recording.recording_auto_start);
+    assert_eq!(saved_recording.recording_default_mode, RecordingMode::Raw);
+    assert_eq!(
+        saved_recording.recording_path_template,
+        "{host}/{session}.raw.log"
+    );
+    assert!(!saved_recording.recording_include_session_metadata);
+    assert_eq!(
+        saved_recording.recording_rotation,
+        RecordingRotationPolicy::Daily
+    );
+    assert_eq!(
+        saved_recording.recording_existing_file_behavior,
+        ExistingFileBehavior::Overwrite
+    );
+    assert!(saved_recording.recording_include_binary_transfer_payloads);
     assert!(saved_recording.recording_include_io_labels);
     assert!(saved_recording.recording_include_timestamps);
     assert_eq!(
         saved_recording.recording_memory_limit_bytes,
         2 * 1024 * 1024
+    );
+    let stored = store
+        .load_settings_value()
+        .expect("stored recording settings");
+    assert_eq!(
+        json_path(&stored, &["recording", "base_path"]).and_then(|value| value.as_str()),
+        Some("/var/log/nyaterm")
+    );
+    assert_eq!(
+        json_path(&stored, &["recording", "default_mode"]).and_then(|value| value.as_str()),
+        Some("raw")
+    );
+    assert_eq!(
+        json_path(&stored, &["recording", "existing_file_behavior"])
+            .and_then(|value| value.as_str()),
+        Some("overwrite")
+    );
+    assert_eq!(
+        json_path(&stored, &["transfer", "recording_auto_start"]),
+        None
     );
 
     let mut lock_update = saved_recording.clone();

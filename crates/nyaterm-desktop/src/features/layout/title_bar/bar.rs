@@ -305,6 +305,104 @@ impl NyaTermApp {
                     label,
                 }
             }
+            HeaderStatusMode::Gpu => HeaderStatusContent {
+                icon_path: mode.icon_path(),
+                label: self.gpu_header_label(),
+            },
+            HeaderStatusMode::Npu => HeaderStatusContent {
+                icon_path: mode.icon_path(),
+                label: self.npu_header_label(),
+            },
+        }
+    }
+
+    fn gpu_header_label(&self) -> String {
+        if self.session.active_ssh_config().is_none() {
+            return self.tr("panel.resourceMonitorNoSession").to_string();
+        }
+        if !self.settings.summary().ui_show_gpu_monitor {
+            return self.tr("panel.gpuMonitorDisabled").to_string();
+        }
+        let gpu = self.remote_ops.gpu_presentation();
+        if let Some(overview) = gpu.data {
+            if !overview.available {
+                return "NVIDIA GPU unavailable".to_string();
+            }
+            let used = overview
+                .gpus
+                .iter()
+                .map(|gpu| gpu.memory_used_mb)
+                .sum::<u64>();
+            let total = overview
+                .gpus
+                .iter()
+                .map(|gpu| gpu.memory_total_mb)
+                .sum::<u64>();
+            let avg_util = average_optional_percent(
+                overview
+                    .gpus
+                    .iter()
+                    .filter_map(|gpu| gpu.utilization_gpu_percent),
+            );
+            return format!(
+                "GPU {} · {:.0}% · {}/{} MiB",
+                overview.gpus.len(),
+                avg_util,
+                used,
+                total
+            );
+        }
+        if gpu.pending {
+            self.tr("common.loading").to_string()
+        } else if gpu.consecutive_refresh_failures > 0 {
+            gpu.status
+        } else {
+            self.tr("common.loading").to_string()
+        }
+    }
+
+    fn npu_header_label(&self) -> String {
+        if self.session.active_ssh_config().is_none() {
+            return self.tr("panel.resourceMonitorNoSession").to_string();
+        }
+        if !self.settings.summary().ui_show_ascend_npu_monitor {
+            return self.tr("panel.npuMonitorDisabled").to_string();
+        }
+        let npu = self.remote_ops.npu_presentation();
+        if let Some(overview) = npu.data {
+            if !overview.available {
+                return "Ascend NPU unavailable".to_string();
+            }
+            let used = overview
+                .npus
+                .iter()
+                .map(|npu| npu.memory_used_mb)
+                .sum::<u64>();
+            let total = overview
+                .npus
+                .iter()
+                .map(|npu| npu.memory_total_mb)
+                .sum::<u64>();
+            let avg_util = average_optional_percent(
+                overview
+                    .npus
+                    .iter()
+                    .filter_map(|npu| npu.utilization_aicore_percent),
+            );
+            return format!(
+                "NPU {} · {:.0}% · {}/{} MiB",
+                overview.npus.len(),
+                avg_util,
+                used,
+                total
+            );
+        }
+        if npu.pending {
+            self.tr("common.loading").to_string()
+        } else if npu.consecutive_refresh_failures > 0 {
+            npu.status
+        } else {
+            self.tr("common.loading").to_string()
         }
     }
 
@@ -507,6 +605,16 @@ fn format_header_datetime(datetime: OffsetDateTime, language: &str) -> String {
     } else {
         format!("{weekday}, {date_time}")
     }
+}
+
+fn average_optional_percent(values: impl Iterator<Item = f64>) -> f64 {
+    let mut total = 0.;
+    let mut count = 0.;
+    for value in values {
+        total += value.clamp(0., 100.);
+        count += 1.;
+    }
+    if count > 0. { total / count } else { 0. }
 }
 
 fn localized_weekday(weekday: Weekday, language: &str) -> &'static str {

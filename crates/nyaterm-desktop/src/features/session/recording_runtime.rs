@@ -1,8 +1,19 @@
+use std::path::PathBuf;
+
 use gpui::{AppContext, Context};
+use nyaterm_core::{
+    AppSettingsSummary, ExistingFileBehavior as CoreExistingFileBehavior,
+    RecordingMode as CoreRecordingMode, RecordingRotationPolicy as CoreRecordingRotationPolicy,
+};
+use nyaterm_transport::{
+    ExistingFileBehavior as TransportExistingFileBehavior, RecordingContext, RecordingMode,
+    RecordingProfile, RecordingRotationPolicy as TransportRecordingRotationPolicy,
+};
+use time::OffsetDateTime;
 
 use crate::features::NyaTermApp;
 use crate::features::formatting::recording_file_path;
-use crate::models::{RecordingPathPromptKind, RecordingPathPromptResult};
+use crate::models::{RecordingPathPromptKind, RecordingPathPromptResult, SessionLaunchConfig};
 
 impl NyaTermApp {
     pub(in crate::features) fn prompt_recording_path_for_session(
@@ -101,30 +112,38 @@ impl NyaTermApp {
     }
 
     fn start_recording_to_path(&mut self, session_id: &str, path: String, cx: &mut Context<Self>) {
+        self.start_recording_with_profile(session_id, Some(PathBuf::from(path)), cx);
+    }
+
+    fn start_recording_with_profile(
+        &mut self,
+        session_id: &str,
+        explicit_path: Option<PathBuf>,
+        cx: &mut Context<Self>,
+    ) {
         if !self.recording.begin_action(session_id, "record") {
             self.shell
                 .set_status("recording operation already in progress".to_string());
             cx.notify();
             return;
         }
+        let Some((context, profile)) = self.recording_profile_for_session(session_id) else {
+            self.recording.finish_action(session_id);
+            self.shell
+                .set_status("recording start failed: session no longer exists".to_string());
+            cx.notify();
+            return;
+        };
         self.shell.set_status("starting recording".to_string());
         let manager = self.recording.manager_for_job();
         let writer = self.recording.writer();
         let job_session_id = session_id.to_string();
         let memory_limit = self.settings.summary().recording_memory_limit_bytes as usize;
-        let include_io_labels = self.settings.summary().recording_include_io_labels;
-        let include_timestamps = self.settings.summary().recording_include_timestamps;
         let task = cx.background_spawn(async move {
             writer.flush();
             manager.set_memory_limit(memory_limit);
             manager
-                .start(
-                    &job_session_id,
-                    &path,
-                    include_io_labels,
-                    include_timestamps,
-                )
-                .map(|()| path)
+                .start_with_profile(&job_session_id, context, profile, explicit_path)
                 .map_err(|error| error.to_string())
         });
         let result_session_id = session_id.to_string();
@@ -262,12 +281,8 @@ impl NyaTermApp {
         if !self.settings.summary().recording_auto_start {
             return;
         }
-        let path = recording_file_path(
-            self.settings.summary(),
-            self.runtime.config_dir(),
-            session_name,
-        );
-        self.start_recording_to_path(session_id, path.display().to_string(), cx);
+        let _ = session_name;
+        self.start_recording_with_profile(session_id, None, cx);
     }
 
     pub(in crate::features) fn cleanup_recording_for_session(&mut self, session_id: &str) {
@@ -282,5 +297,112 @@ impl NyaTermApp {
         self.mark_user_activity();
         self.recording.set_search_draft(text);
         cx.notify();
+    }
+}
+
+impl NyaTermApp {
+    fn recording_profile_for_session(
+        &self,
+        session_id: &str,
+    ) -> Option<(RecordingContext, RecordingProfile)> {
+        let metadata = self.session.metadata(session_id)?;
+        if metadata.disconnected {
+            return None;
+        }
+        let summary = self.settings.summary();
+        let (session_name, protocol, host, port, username) =
+            recording_launch_context(&metadata.launch_config);
+        let context = RecordingContext {
+            session_id: session_id.to_string(),
+            session_name,
+            connection_id: metadata.source_connection_id.clone(),
+            connection_name: metadata.source_connection_id.clone(),
+            group_path: None,
+            protocol,
+            host,
+            port,
+            username,
+            started_at: OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc()),
+        };
+        let profile = RecordingProfile {
+            mode: map_recording_mode(summary.recording_default_mode),
+            base_path: recording_base_path(summary, self.runtime.config_dir()),
+            path_template: summary.recording_path_template.clone(),
+            include_timestamps: summary.recording_include_timestamps,
+            include_io_labels: summary.recording_include_io_labels,
+            include_session_metadata: summary.recording_include_session_metadata,
+            rotation: map_recording_rotation(&summary.recording_rotation),
+            existing_file_behavior: map_existing_file_behavior(
+                summary.recording_existing_file_behavior,
+            ),
+            include_binary_transfer_payloads: summary.recording_include_binary_transfer_payloads,
+        };
+        Some((context, profile))
+    }
+}
+
+fn recording_base_path(settings: &AppSettingsSummary, config_dir: &std::path::Path) -> PathBuf {
+    if settings.recording_path.trim().is_empty() {
+        dirs::download_dir().unwrap_or_else(|| config_dir.join("recordings"))
+    } else {
+        PathBuf::from(settings.recording_path.trim())
+    }
+}
+
+fn recording_launch_context(
+    launch_config: &SessionLaunchConfig,
+) -> (String, String, Option<String>, Option<u16>, Option<String>) {
+    match launch_config {
+        SessionLaunchConfig::Local(config) => {
+            (config.name.clone(), "local".to_string(), None, None, None)
+        }
+        SessionLaunchConfig::Ssh(config) => (
+            config.name.clone(),
+            "ssh".to_string(),
+            Some(config.host.clone()),
+            Some(config.port),
+            Some(config.username.clone()),
+        ),
+        SessionLaunchConfig::Telnet(config) => (
+            config.name.clone(),
+            "telnet".to_string(),
+            Some(config.host.clone()),
+            Some(config.port),
+            Some(config.username.clone()),
+        ),
+        SessionLaunchConfig::Serial(config) => (
+            config.name.clone(),
+            "serial".to_string(),
+            Some(config.port_name.clone()),
+            None,
+            None,
+        ),
+    }
+}
+
+fn map_recording_mode(mode: CoreRecordingMode) -> RecordingMode {
+    match mode {
+        CoreRecordingMode::Raw => RecordingMode::Raw,
+        CoreRecordingMode::Transcript => RecordingMode::Transcript,
+    }
+}
+
+fn map_existing_file_behavior(behavior: CoreExistingFileBehavior) -> TransportExistingFileBehavior {
+    match behavior {
+        CoreExistingFileBehavior::Append => TransportExistingFileBehavior::Append,
+        CoreExistingFileBehavior::Overwrite => TransportExistingFileBehavior::Overwrite,
+        CoreExistingFileBehavior::Unique => TransportExistingFileBehavior::Unique,
+    }
+}
+
+fn map_recording_rotation(
+    rotation: &CoreRecordingRotationPolicy,
+) -> TransportRecordingRotationPolicy {
+    match rotation {
+        CoreRecordingRotationPolicy::Daily => TransportRecordingRotationPolicy::Daily,
+        CoreRecordingRotationPolicy::Size { max_bytes } => TransportRecordingRotationPolicy::Size {
+            max_bytes: *max_bytes,
+        },
+        CoreRecordingRotationPolicy::Session => TransportRecordingRotationPolicy::Session,
     }
 }

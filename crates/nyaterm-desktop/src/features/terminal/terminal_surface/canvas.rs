@@ -9,7 +9,9 @@ use nyaterm_terminal::{TerminalScreen, TerminalSnapshot};
 use nyaterm_ui::NyaContextMenu;
 
 use crate::features::NyaTermApp;
-use crate::features::formatting::format_terminal_line_timestamp_ms;
+use crate::features::formatting::{
+    format_terminal_line_timestamp_ms_with_format, terminal_timestamp_format_width_chars,
+};
 use crate::features::terminal::terminal_runtime::TerminalMouseReportRequest;
 use crate::features::terminal::terminal_selection_runtime::{
     terminal_bounds_tracker, terminal_gutter_metrics, terminal_line_number_digits,
@@ -289,7 +291,8 @@ impl NyaTermApp {
         let viewport_snapshot_duration = snapshot_stage_started_at.elapsed();
         let show_line_numbers = self.settings.summary().terminal_show_line_numbers;
         let show_timestamps = self.settings.summary().terminal_show_timestamps;
-        let show_timestamp_ms = self.settings.summary().terminal_show_timestamp_milliseconds;
+        let timestamp_format = self.settings.summary().terminal_timestamp_format.clone();
+        let timestamp_width_chars = terminal_timestamp_format_width_chars(&timestamp_format);
         let gutter_enabled = show_line_numbers || show_timestamps;
         // Prefer remote cursor visibility/shape from the terminal model; settings
         // supply the default paint style when the model reports a block cursor.
@@ -497,7 +500,7 @@ impl NyaTermApp {
             let gutter_metrics = terminal_gutter_metrics(
                 cell_w,
                 show_timestamps,
-                show_timestamp_ms,
+                timestamp_width_chars,
                 show_line_numbers,
                 line_number_digits,
             );
@@ -518,14 +521,10 @@ impl NyaTermApp {
                 let ts_label = if show_timestamps && has_rendered_row && !is_wrapped {
                     snapshot_row
                         .and_then(|row| row.timestamp_ms)
-                        .map(|ms| format_terminal_line_timestamp_ms(ms, show_timestamp_ms))
-                        .unwrap_or_else(|| {
-                            if show_timestamp_ms {
-                                "             ".to_string()
-                            } else {
-                                "          ".to_string()
-                            }
+                        .map(|ms| {
+                            format_terminal_line_timestamp_ms_with_format(ms, &timestamp_format)
                         })
+                        .unwrap_or_else(|| " ".repeat(timestamp_width_chars))
                 } else {
                     String::new()
                 };

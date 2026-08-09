@@ -197,20 +197,154 @@ pub(in crate::features) fn format_cloud_provider(provider: &str) -> String {
     }
 }
 
-pub(in crate::features) fn format_terminal_line_timestamp_ms(
+pub(in crate::features) fn format_terminal_line_timestamp_ms_with_format(
     timestamp_ms: u64,
-    include_milliseconds: bool,
+    format: &str,
 ) -> String {
+    let format = normalized_terminal_timestamp_format(format);
     let secs = (timestamp_ms / 1000) as i64;
     let millis = timestamp_ms % 1000;
-    let hours = ((secs % 86_400) / 3_600).rem_euclid(24);
-    let minutes = ((secs % 3_600) / 60).rem_euclid(60);
-    let seconds = (secs % 60).rem_euclid(60);
-    if include_milliseconds {
-        format!("[{hours:02}:{minutes:02}:{seconds:02}.{millis:03}]")
-    } else {
-        format!("[{hours:02}:{minutes:02}:{seconds:02}]")
+    let datetime = time::OffsetDateTime::from_unix_timestamp(secs)
+        .ok()
+        .and_then(|datetime| {
+            time::UtcOffset::current_local_offset()
+                .ok()
+                .map(|offset| datetime.to_offset(offset))
+        })
+        .or_else(|| time::OffsetDateTime::from_unix_timestamp(secs).ok());
+    let Some(datetime) = datetime else {
+        return " ".repeat(terminal_timestamp_format_width_chars(format));
+    };
+
+    render_terminal_timestamp_format(
+        format,
+        datetime.year(),
+        datetime.month() as u8,
+        datetime.day(),
+        datetime.hour(),
+        datetime.minute(),
+        datetime.second(),
+        millis,
+    )
+}
+
+pub(in crate::features) fn terminal_timestamp_format_width_chars(format: &str) -> usize {
+    let format = normalized_terminal_timestamp_format(format);
+    let mut chars = 0;
+    let mut rest = format;
+    while !rest.is_empty() {
+        if let Some((token, width)) = terminal_timestamp_token_width(rest) {
+            chars += width;
+            rest = &rest[token.len()..];
+        } else {
+            let Some(ch) = rest.chars().next() else {
+                break;
+            };
+            chars += 1;
+            rest = &rest[ch.len_utf8()..];
+        }
     }
+    chars.clamp(1, 64)
+}
+
+fn normalized_terminal_timestamp_format(format: &str) -> &str {
+    let trimmed = format.trim();
+    if trimmed.is_empty() {
+        nyaterm_core::DEFAULT_TERMINAL_TIMESTAMP_FORMAT
+    } else {
+        trimmed
+    }
+}
+
+fn terminal_timestamp_token_width(input: &str) -> Option<(&'static str, usize)> {
+    [
+        ("YYYY", 4),
+        ("SSS", 3),
+        ("YY", 2),
+        ("MM", 2),
+        ("DD", 2),
+        ("HH", 2),
+        ("mm", 2),
+        ("ss", 2),
+        ("SS", 2),
+        ("M", 2),
+        ("D", 2),
+        ("H", 2),
+        ("m", 2),
+        ("s", 2),
+        ("S", 1),
+    ]
+    .into_iter()
+    .find(|(token, _)| input.starts_with(token))
+}
+
+fn render_terminal_timestamp_format(
+    format: &str,
+    year: i32,
+    month: u8,
+    day: u8,
+    hour: u8,
+    minute: u8,
+    second: u8,
+    millis: u64,
+) -> String {
+    let mut out = String::with_capacity(terminal_timestamp_format_width_chars(format));
+    let mut rest = format;
+    while !rest.is_empty() {
+        if rest.starts_with("YYYY") {
+            out.push_str(&format!("{year:04}"));
+            rest = &rest[4..];
+        } else if rest.starts_with("YY") {
+            out.push_str(&format!("{:02}", year.rem_euclid(100)));
+            rest = &rest[2..];
+        } else if rest.starts_with("MM") {
+            out.push_str(&format!("{month:02}"));
+            rest = &rest[2..];
+        } else if rest.starts_with('M') {
+            out.push_str(&month.to_string());
+            rest = &rest[1..];
+        } else if rest.starts_with("DD") {
+            out.push_str(&format!("{day:02}"));
+            rest = &rest[2..];
+        } else if rest.starts_with('D') {
+            out.push_str(&day.to_string());
+            rest = &rest[1..];
+        } else if rest.starts_with("HH") {
+            out.push_str(&format!("{hour:02}"));
+            rest = &rest[2..];
+        } else if rest.starts_with('H') {
+            out.push_str(&hour.to_string());
+            rest = &rest[1..];
+        } else if rest.starts_with("mm") {
+            out.push_str(&format!("{minute:02}"));
+            rest = &rest[2..];
+        } else if rest.starts_with('m') {
+            out.push_str(&minute.to_string());
+            rest = &rest[1..];
+        } else if rest.starts_with("ss") {
+            out.push_str(&format!("{second:02}"));
+            rest = &rest[2..];
+        } else if rest.starts_with('s') {
+            out.push_str(&second.to_string());
+            rest = &rest[1..];
+        } else if rest.starts_with("SSS") {
+            out.push_str(&format!("{millis:03}"));
+            rest = &rest[3..];
+        } else if rest.starts_with("SS") {
+            out.push_str(&format!("{:02}", millis / 10));
+            rest = &rest[2..];
+        } else if rest.starts_with('S') {
+            out.push_str(&(millis / 100).to_string());
+            rest = &rest[1..];
+        } else {
+            let Some(ch) = rest.chars().next() else {
+                break;
+            };
+            out.push(ch);
+            rest = &rest[ch.len_utf8()..];
+        }
+    }
+    out
 }
 
 pub(in crate::features) fn format_history_timestamp_ms(timestamp_ms: u64) -> String {

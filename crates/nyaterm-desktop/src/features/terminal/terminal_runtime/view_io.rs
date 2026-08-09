@@ -714,6 +714,7 @@ impl NyaTermApp {
         let show_line_numbers = self.settings.summary().terminal_show_line_numbers;
         let show_timestamps = self.settings.summary().terminal_show_timestamps;
         let show_timestamp_ms = self.settings.summary().terminal_show_timestamp_milliseconds;
+        let timestamp_format = self.settings.summary().terminal_timestamp_format.clone();
         let (cell_w, cell_h) = self
             .terminal
             .layout
@@ -821,6 +822,7 @@ impl NyaTermApp {
                 show_line_numbers,
                 show_timestamps,
                 show_timestamp_ms,
+                timestamp_format: timestamp_format.clone(),
                 is_active,
             });
             changed |= surface.set_protocol_state(protocol_state);
@@ -1011,6 +1013,7 @@ impl NyaTermApp {
         let show_line_numbers = self.settings.summary().terminal_show_line_numbers;
         let show_timestamps = self.settings.summary().terminal_show_timestamps;
         let show_timestamp_ms = self.settings.summary().terminal_show_timestamp_milliseconds;
+        let timestamp_format = self.settings.summary().terminal_timestamp_format.clone();
         let (cell_w, cell_h) = self
             .terminal
             .layout
@@ -1075,6 +1078,7 @@ impl NyaTermApp {
                     show_line_numbers,
                     show_timestamps,
                     show_timestamp_ms,
+                    timestamp_format: timestamp_format.clone(),
                     is_active,
                 });
                 changed |= surface.set_protocol_state(protocol_state);
@@ -1351,6 +1355,7 @@ impl NyaTermApp {
                 show_line_numbers,
                 show_timestamps,
                 show_timestamp_ms,
+                timestamp_format,
                 is_active,
             });
             changed |= surface.set_protocol_state(protocol_state);

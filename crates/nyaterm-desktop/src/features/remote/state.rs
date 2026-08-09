@@ -10,11 +10,14 @@ use std::sync::{Arc, mpsc};
 use std::time::Instant;
 
 use nyaterm_transport::{
-    DockerComposeService, DockerContainerDetails, RemoteDockerOverview, RemoteProcess, RemoteStats,
+    DockerComposeService, DockerContainerDetails, RemoteDockerOverview, RemoteGpuOverview,
+    RemoteNpuOverview, RemoteProcess, RemoteStats,
 };
 
 use crate::features::formatting::docker_compose_project_key;
-use crate::features::{DockerJobResult, ProcessJobResult, StatsJobResult};
+use crate::features::{
+    DockerJobResult, GpuJobResult, NpuJobResult, ProcessJobResult, StatsJobResult,
+};
 use crate::models::{DockerTab, RemoteProcessSortDirection, RemoteProcessSortKey};
 
 pub(in crate::features) struct RemoteJobTicket<Event> {
@@ -114,6 +117,8 @@ pub(in crate::features) struct RemoteOpsFeatureState {
     docker: DockerPaneState,
     process: ProcessPaneState,
     stats: StatsPaneState,
+    gpu: AcceleratorPaneState<RemoteGpuOverview, GpuJobResult>,
+    npu: AcceleratorPaneState<RemoteNpuOverview, NpuJobResult>,
 }
 
 /// Focus handles the Remote page needs at construction time.
@@ -160,6 +165,12 @@ struct StatsPaneState {
     pub cpu_expanded: bool,
 }
 
+struct AcceleratorPaneState<Data, Event> {
+    job: RemoteJobState<Event>,
+    pub data: Option<Data>,
+    pub status: String,
+}
+
 #[derive(Clone)]
 pub(in crate::features) struct DockerPresentationState {
     pub overview: Option<RemoteDockerOverview>,
@@ -199,6 +210,22 @@ pub(in crate::features) struct StatsPresentationState {
     pub data: Option<RemoteStats>,
     pub status: String,
     pub cpu_expanded: bool,
+    pub pending: bool,
+    pub consecutive_refresh_failures: u8,
+}
+
+#[derive(Clone)]
+pub(in crate::features) struct GpuPresentationState {
+    pub data: Option<RemoteGpuOverview>,
+    pub status: String,
+    pub pending: bool,
+    pub consecutive_refresh_failures: u8,
+}
+
+#[derive(Clone)]
+pub(in crate::features) struct NpuPresentationState {
+    pub data: Option<RemoteNpuOverview>,
+    pub status: String,
     pub pending: bool,
     pub consecutive_refresh_failures: u8,
 }
@@ -244,6 +271,8 @@ impl RemoteOpsFeatureState {
                 status: "start an SSH session to inspect remote stats".to_string(),
                 cpu_expanded: false,
             },
+            gpu: AcceleratorPaneState::new("start an SSH session to inspect NVIDIA GPU"),
+            npu: AcceleratorPaneState::new("start an SSH session to inspect Ascend NPU"),
         }
     }
 
@@ -251,6 +280,10 @@ impl RemoteOpsFeatureState {
         self.process.reset_for_session_switch();
         self.stats.reset_for_session_switch();
         self.docker.reset_for_session_switch();
+        self.gpu
+            .reset_for_session_switch("start an SSH session to inspect NVIDIA GPU");
+        self.npu
+            .reset_for_session_switch("start an SSH session to inspect Ascend NPU");
     }
 
     pub(in crate::features) fn docker_presentation(&self) -> DockerPresentationState {
@@ -299,6 +332,24 @@ impl RemoteOpsFeatureState {
         }
     }
 
+    pub(in crate::features) fn gpu_presentation(&self) -> GpuPresentationState {
+        GpuPresentationState {
+            data: self.gpu.data.clone(),
+            status: self.gpu.status.clone(),
+            pending: self.gpu.is_pending(),
+            consecutive_refresh_failures: self.gpu.consecutive_refresh_failures(),
+        }
+    }
+
+    pub(in crate::features) fn npu_presentation(&self) -> NpuPresentationState {
+        NpuPresentationState {
+            data: self.npu.data.clone(),
+            status: self.npu.status.clone(),
+            pending: self.npu.is_pending(),
+            consecutive_refresh_failures: self.npu.consecutive_refresh_failures(),
+        }
+    }
+
     pub(in crate::features) fn docker_status(&self) -> &str {
         &self.docker.status
     }
@@ -323,8 +374,28 @@ impl RemoteOpsFeatureState {
         self.stats.status = status.into();
     }
 
+    pub(in crate::features) fn gpu_status(&self) -> &str {
+        &self.gpu.status
+    }
+
+    pub(in crate::features) fn set_gpu_status(&mut self, status: impl Into<String>) {
+        self.gpu.status = status.into();
+    }
+
+    pub(in crate::features) fn npu_status(&self) -> &str {
+        &self.npu.status
+    }
+
+    pub(in crate::features) fn set_npu_status(&mut self, status: impl Into<String>) {
+        self.npu.status = status.into();
+    }
+
     pub(in crate::features) fn has_pending_job(&self) -> bool {
-        self.docker.is_pending() || self.process.is_pending() || self.stats.is_pending()
+        self.docker.is_pending()
+            || self.process.is_pending()
+            || self.stats.is_pending()
+            || self.gpu.is_pending()
+            || self.npu.is_pending()
     }
 
     pub(in crate::features) fn loaded_process_count(&self) -> Option<usize> {
@@ -369,6 +440,14 @@ impl RemoteOpsFeatureState {
         self.stats.is_pending()
     }
 
+    pub(in crate::features) fn gpu_is_pending(&self) -> bool {
+        self.gpu.is_pending()
+    }
+
+    pub(in crate::features) fn npu_is_pending(&self) -> bool {
+        self.npu.is_pending()
+    }
+
     pub(in crate::features) fn docker_last_refresh_at(&self) -> Option<Instant> {
         self.docker.last_refresh_at()
     }
@@ -379,6 +458,14 @@ impl RemoteOpsFeatureState {
 
     pub(in crate::features) fn stats_last_refresh_at(&self) -> Option<Instant> {
         self.stats.last_refresh_at()
+    }
+
+    pub(in crate::features) fn gpu_last_refresh_at(&self) -> Option<Instant> {
+        self.gpu.last_refresh_at()
+    }
+
+    pub(in crate::features) fn npu_last_refresh_at(&self) -> Option<Instant> {
+        self.npu.last_refresh_at()
     }
 
     pub(in crate::features) fn docker_details_refresh(&self) -> Option<(String, Instant)> {
@@ -735,6 +822,92 @@ impl RemoteOpsFeatureState {
         }
         failures
     }
+
+    pub(in crate::features) fn gpu_is_pending_for(&self, session_id: &str) -> bool {
+        self.gpu.is_pending_for(session_id)
+    }
+
+    pub(in crate::features) fn begin_gpu_job(
+        &mut self,
+        session_id: String,
+    ) -> RemoteJobTicket<GpuJobResult> {
+        self.gpu.begin_job(session_id)
+    }
+
+    pub(in crate::features) fn mark_gpu_refresh_started(&mut self) {
+        self.gpu.mark_refresh_started();
+    }
+
+    pub(in crate::features) fn next_gpu_event(&self) -> Option<GpuJobResult> {
+        self.gpu.next_event()
+    }
+
+    pub(in crate::features) fn complete_gpu_event(
+        &mut self,
+        job_id: u64,
+        session_id: &str,
+    ) -> bool {
+        self.gpu.complete_event(job_id, session_id)
+    }
+
+    pub(in crate::features) fn reset_gpu_refresh_failures(&mut self) {
+        self.gpu.reset_refresh_failures();
+    }
+
+    pub(in crate::features) fn apply_gpu(&mut self, overview: RemoteGpuOverview) {
+        self.gpu.data = Some(overview);
+    }
+
+    pub(in crate::features) fn record_gpu_refresh_failure(&mut self) -> u8 {
+        let failures = self.gpu.record_refresh_failure();
+        if failures >= 3 {
+            self.gpu.data = None;
+        }
+        failures
+    }
+
+    pub(in crate::features) fn npu_is_pending_for(&self, session_id: &str) -> bool {
+        self.npu.is_pending_for(session_id)
+    }
+
+    pub(in crate::features) fn begin_npu_job(
+        &mut self,
+        session_id: String,
+    ) -> RemoteJobTicket<NpuJobResult> {
+        self.npu.begin_job(session_id)
+    }
+
+    pub(in crate::features) fn mark_npu_refresh_started(&mut self) {
+        self.npu.mark_refresh_started();
+    }
+
+    pub(in crate::features) fn next_npu_event(&self) -> Option<NpuJobResult> {
+        self.npu.next_event()
+    }
+
+    pub(in crate::features) fn complete_npu_event(
+        &mut self,
+        job_id: u64,
+        session_id: &str,
+    ) -> bool {
+        self.npu.complete_event(job_id, session_id)
+    }
+
+    pub(in crate::features) fn reset_npu_refresh_failures(&mut self) {
+        self.npu.reset_refresh_failures();
+    }
+
+    pub(in crate::features) fn apply_npu(&mut self, overview: RemoteNpuOverview) {
+        self.npu.data = Some(overview);
+    }
+
+    pub(in crate::features) fn record_npu_refresh_failure(&mut self) -> u8 {
+        let failures = self.npu.record_refresh_failure();
+        if failures >= 3 {
+            self.npu.data = None;
+        }
+        failures
+    }
 }
 
 impl DockerPaneState {
@@ -1029,6 +1202,62 @@ impl StatsPaneState {
         self.job.reset_for_session_switch();
         self.data = None;
         self.status = "start an SSH session to inspect remote stats".to_string();
+    }
+}
+
+impl<Data, Event> AcceleratorPaneState<Data, Event> {
+    fn new(status: &str) -> Self {
+        Self {
+            job: RemoteJobState::new(),
+            data: None,
+            status: status.to_string(),
+        }
+    }
+
+    fn is_pending(&self) -> bool {
+        self.job.is_pending()
+    }
+
+    fn last_refresh_at(&self) -> Option<Instant> {
+        self.job.last_refresh_at()
+    }
+
+    fn consecutive_refresh_failures(&self) -> u8 {
+        self.job.consecutive_refresh_failures()
+    }
+
+    fn is_pending_for(&self, session_id: &str) -> bool {
+        self.job.is_pending_for(session_id)
+    }
+
+    fn begin_job(&mut self, session_id: String) -> RemoteJobTicket<Event> {
+        self.job.begin(session_id)
+    }
+
+    fn mark_refresh_started(&mut self) {
+        self.job.mark_refresh_started();
+    }
+
+    fn next_event(&self) -> Option<Event> {
+        self.job.try_recv()
+    }
+
+    fn complete_event(&mut self, job_id: u64, session_id: &str) -> bool {
+        self.job.complete_if_matches(job_id, session_id)
+    }
+
+    fn reset_refresh_failures(&mut self) {
+        self.job.reset_refresh_failures();
+    }
+
+    fn record_refresh_failure(&mut self) -> u8 {
+        self.job.record_refresh_failure(false)
+    }
+
+    fn reset_for_session_switch(&mut self, status: &str) {
+        self.job.reset_for_session_switch();
+        self.data = None;
+        self.status = status.to_string();
     }
 }
 

@@ -22,6 +22,8 @@ use serialport::{DataBits, FlowControl, Parity, SerialPort, StopBits};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite};
 use tokio::sync::mpsc as tokio_mpsc;
 
+mod ascend_npu;
+mod gpu;
 mod local_fs;
 mod recording;
 mod remote_process;
@@ -94,6 +96,10 @@ mod stats;
 
 mod docker;
 
+pub use ascend_npu::{
+    ASCEND_NPU_OVERVIEW_SCRIPT, RemoteNpu, RemoteNpuOverview, RemoteNpuProcess, RemoteNpuService,
+    parse_npu_overview_output,
+};
 pub use docker::{
     DOCKER_COMPOSE_PROJECTS_SCRIPT, DOCKER_IMAGES_SCRIPT, DOCKER_NETWORKS_SCRIPT,
     DOCKER_OVERVIEW_SCRIPT, DOCKER_VOLUMES_SCRIPT, DockerComposeProject, DockerComposeService,
@@ -104,11 +110,17 @@ pub use docker::{
     parse_docker_images_output, parse_docker_networks_output, parse_docker_overview_output,
     parse_docker_stats_output, parse_docker_volumes_output,
 };
+pub use gpu::{
+    GPU_OVERVIEW_SCRIPT, RemoteGpu, RemoteGpuOverview, RemoteGpuProcess, RemoteGpuService,
+    parse_gpu_overview_output,
+};
 pub use local_fs::{LocalDirectoryChild, LocalFileService};
 pub use recording::{
     DEFAULT_HISTORY_SEARCH_LIMIT, DEFAULT_HISTORY_SEARCH_LINES, DEFAULT_MEMORY_LIMIT_BYTES,
-    MAX_HISTORY_SEARCH_LINES, RecordingError, RecordingManager, TerminalHistorySearchRequest,
-    TerminalHistorySearchResponse, TerminalHistorySearchResult, safe_recording_name,
+    ExistingFileBehavior, MAX_HISTORY_SEARCH_LINES, RecordingContext, RecordingError,
+    RecordingManager, RecordingMode, RecordingProfile, RecordingRotationPolicy,
+    TerminalHistorySearchRequest, TerminalHistorySearchResponse, TerminalHistorySearchResult,
+    safe_recording_name,
 };
 pub use remote_process::{
     PROCESS_LIST_SCRIPT, PROCESS_LIST_UNSUPPORTED_ERROR, PROCESS_LIST_UNSUPPORTED_MARKER,

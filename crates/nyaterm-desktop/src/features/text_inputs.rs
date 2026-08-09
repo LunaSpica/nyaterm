@@ -474,10 +474,14 @@ impl NyaTermApp {
             self.apply_interaction_word_separators(text, cx);
         } else if id.as_ref() == "settings.terminal.x11-display" {
             self.apply_terminal_x11_display(text, cx);
+        } else if id.as_ref() == "settings.terminal.timestamp-format" {
+            self.apply_terminal_timestamp_format(text, cx);
         } else if id.as_ref() == "settings.security.master-password" {
             self.apply_settings_master_password(text, cx);
         } else if id.as_ref() == "settings.recording.path" {
             self.apply_recording_path(text, cx);
+        } else if id.as_ref() == "settings.recording.path-template" {
+            self.apply_recording_path_template(text, cx);
         } else if id.as_ref() == "settings.transfer.download-path" {
             self.apply_transfer_download_path(text, cx);
         } else if id.as_ref() == "settings.transfer.default-editor" {
@@ -501,9 +505,12 @@ impl NyaTermApp {
             "terminal-scrollback-lines" => self.set_terminal_scrollback_lines(value, cx),
             "terminal-keep-alive-interval" => self.set_terminal_keep_alive_interval(value, cx),
             "remote-stats-interval" => self.set_remote_stats_interval(value, cx),
+            "gpu-monitor-interval" => self.set_gpu_monitor_interval(value, cx),
+            "ascend-npu-monitor-interval" => self.set_ascend_npu_monitor_interval(value, cx),
             "process-manager-interval" => self.set_process_manager_interval(value, cx),
             "docker-manager-interval" => self.set_docker_manager_interval(value, cx),
             "recording-memory-limit" => self.set_recording_memory_limit(value as u64, cx),
+            "recording-rotation-size" => self.set_recording_rotation_size_mib(value as u64, cx),
             "transfer-download-threads" => self.set_transfer_download_threads(value, cx),
             "transfer-upload-threads" => self.set_transfer_upload_threads(value, cx),
             "transfer-max-retries" => self.set_transfer_max_retries(value, cx),

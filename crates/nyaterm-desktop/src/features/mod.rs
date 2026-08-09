@@ -70,9 +70,9 @@ pub(in crate::features) use remote::{RemoteOpsFeatureFocus, RemoteOpsFeatureStat
 pub(in crate::features) use runtime_jobs::{
     ActivitySide, AiAgentBackgroundTarget, AiAgentLoopState, AiAgentStepStatus, AiAgentStepView,
     AiChatJobOutput, AiChatJobResult, AiChatWorkerEvent, AiDiscoveryJobResult,
-    CommandPersistenceRequest, CommandPersistenceResult, DockerJobResult, ProcessJobResult,
-    SessionStartResult, SessionStartSuccess, StatsJobResult, TunnelJobOutput, TunnelJobResult,
-    spawn_command_persistence_worker,
+    CommandPersistenceRequest, CommandPersistenceResult, DockerJobResult, GpuJobResult,
+    NpuJobResult, ProcessJobResult, SessionStartResult, SessionStartSuccess, StatsJobResult,
+    TunnelJobOutput, TunnelJobResult, spawn_command_persistence_worker,
 };
 pub(in crate::features) use selects::{FOLLOW_UI_THEME_VALUE, NO_SELECTION_VALUE, SelectRegistry};
 pub(in crate::features) use session::{

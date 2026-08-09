@@ -82,6 +82,23 @@ impl NyaTermApp {
                     ))
                     .child(settings_form_row(
                         palette,
+                        self.tr("settings.allowOsc52ClipboardWrite"),
+                        Some(SharedString::from(
+                            self.tr("settings.allowOsc52ClipboardWriteDesc"),
+                        )),
+                        settings_switch(
+                            palette,
+                            "interaction-osc52-clipboard",
+                            self.settings
+                                .summary()
+                                .interaction_allow_osc52_clipboard_write,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_osc52_clipboard_write(cx);
+                            }),
+                        ),
+                    ))
+                    .child(settings_form_row(
+                        palette,
                         self.tr("settings.rightClickPaste"),
                         Some(SharedString::from(self.tr("settings.rightClickPasteDesc"))),
                         settings_switch(
@@ -93,6 +110,26 @@ impl NyaTermApp {
                             }),
                         ),
                     )),
+            ))
+            .child(settings_form_section(
+                palette,
+                Some(self.tr("settings.terminalZoomEnabled")),
+                Some(self.tr("settings.terminalZoomEnabledDesc")),
+                settings_form_row(
+                    palette,
+                    self.tr("settings.terminalZoomEnabled"),
+                    Some(SharedString::from(
+                        self.tr("settings.terminalZoomEnabledDesc"),
+                    )),
+                    settings_switch(
+                        palette,
+                        "interaction-terminal-zoom",
+                        self.settings.summary().interaction_terminal_zoom_enabled,
+                        cx.listener(|this, _, _, cx| {
+                            this.toggle_terminal_zoom_enabled(cx);
+                        }),
+                    ),
+                ),
             ))
             .child(settings_form_section(
                 palette,

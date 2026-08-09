@@ -7,8 +7,9 @@ use nyaterm_core::{
     ConnectionStore,
 };
 use nyaterm_transport::{
-    DockerComposeService, DockerContainerDetails, RemoteDockerOverview, RemoteProcess, RemoteStats,
-    SessionInfo, SessionKind, SshMultiplexHandle, SshSessionConfig, SshTunnelInfo,
+    DockerComposeService, DockerContainerDetails, RemoteDockerOverview, RemoteGpuOverview,
+    RemoteNpuOverview, RemoteProcess, RemoteStats, SessionInfo, SessionKind, SshMultiplexHandle,
+    SshSessionConfig, SshTunnelInfo,
 };
 
 use crate::models::SessionLaunchConfig;
@@ -52,6 +53,20 @@ pub(in crate::features) struct StatsJobResult {
     pub(in crate::features) job_id: u64,
     pub(in crate::features) session_id: String,
     pub(in crate::features) result: Result<RemoteStats, String>,
+}
+
+#[derive(Debug)]
+pub(in crate::features) struct GpuJobResult {
+    pub(in crate::features) job_id: u64,
+    pub(in crate::features) session_id: String,
+    pub(in crate::features) result: Result<RemoteGpuOverview, String>,
+}
+
+#[derive(Debug)]
+pub(in crate::features) struct NpuJobResult {
+    pub(in crate::features) job_id: u64,
+    pub(in crate::features) session_id: String,
+    pub(in crate::features) result: Result<RemoteNpuOverview, String>,
 }
 
 #[derive(Debug)]

@@ -6,6 +6,7 @@ use nyaterm_core::TerminalViewportInsets;
 use nyaterm_terminal::TerminalSnapshot;
 
 use crate::features::NyaTermApp;
+use crate::features::formatting::terminal_timestamp_format_width_chars;
 use crate::features::terminal::terminal_surface_entity::{
     TerminalVisualScrollGeometry, terminal_effective_visual_scroll_offset_px,
     terminal_snapshot_anchor_row_for_display_offset,
@@ -100,7 +101,9 @@ impl NyaTermApp {
         terminal_gutter_metrics(
             cell_w,
             self.settings.summary().terminal_show_timestamps,
-            self.settings.summary().terminal_show_timestamp_milliseconds,
+            terminal_timestamp_format_width_chars(
+                &self.settings.summary().terminal_timestamp_format,
+            ),
             self.settings.summary().terminal_show_line_numbers,
             terminal_line_number_digits(snapshot.as_ref()),
         )
@@ -271,7 +274,9 @@ impl NyaTermApp {
         let gutter = terminal_gutter_metrics(
             fallback_cell_w,
             self.settings.summary().terminal_show_timestamps,
-            self.settings.summary().terminal_show_timestamp_milliseconds,
+            terminal_timestamp_format_width_chars(
+                &self.settings.summary().terminal_timestamp_format,
+            ),
             self.settings.summary().terminal_show_line_numbers,
             terminal_line_number_digits(snapshot.as_ref()),
         )
@@ -416,14 +421,13 @@ impl TerminalGutterMetrics {
 pub(in crate::features) fn terminal_gutter_metrics(
     cell_width: f32,
     show_timestamps: bool,
-    show_timestamp_ms: bool,
+    timestamp_width_chars: usize,
     show_line_numbers: bool,
     line_number_digits: usize,
 ) -> TerminalGutterMetrics {
     let cell_width = cell_width.max(1.0);
     let timestamp_width = if show_timestamps {
-        let chars = if show_timestamp_ms { 14.0 } else { 10.0 };
-        (cell_width * chars).ceil() + 2.0
+        (cell_width * timestamp_width_chars.clamp(1, 64) as f32).ceil() + 2.0
     } else {
         0.0
     };
@@ -556,7 +560,7 @@ mod tests {
     }
     #[test]
     fn gutter_metrics_use_same_widths_for_ms_timestamps_and_total_hit_area() {
-        let metrics = terminal_gutter_metrics(8.0, true, true, true, 5);
+        let metrics = terminal_gutter_metrics(8.0, true, 14, true, 5);
 
         assert_eq!(metrics.timestamp_width, 114.0);
         assert_eq!(metrics.line_number_width, 42.0);
@@ -567,7 +571,7 @@ mod tests {
 
     #[test]
     fn gutter_metrics_expand_with_large_terminal_font() {
-        let metrics = terminal_gutter_metrics(18.0, true, false, true, 5);
+        let metrics = terminal_gutter_metrics(18.0, true, 10, true, 5);
 
         assert!(metrics.timestamp_width > 120.0);
         assert!(metrics.line_number_width > 70.0);

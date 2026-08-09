@@ -128,11 +128,21 @@ impl NyaTermApp {
         self.save_interaction_settings(cx);
     }
 
+    pub(in crate::features) fn toggle_osc52_clipboard_write(&mut self, cx: &mut Context<Self>) {
+        self.settings.toggle_osc52_clipboard_write();
+        self.save_interaction_settings(cx);
+    }
+
     pub(in crate::features) fn toggle_interaction_right_click_paste(
         &mut self,
         cx: &mut Context<Self>,
     ) {
         self.settings.toggle_interaction_right_click_paste();
+        self.save_interaction_settings(cx);
+    }
+
+    pub(in crate::features) fn toggle_terminal_zoom_enabled(&mut self, cx: &mut Context<Self>) {
+        self.settings.toggle_terminal_zoom_enabled();
         self.save_interaction_settings(cx);
     }
 

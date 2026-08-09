@@ -12,7 +12,11 @@ use super::{
     SETTINGS_TABLE, StorageError, TEXT_DOCS_TABLE, json_bool, json_path, json_string_vec,
     set_nested_json_value, write_json_in_txn,
 };
-use crate::{AppSettingsSummary, CredentialCrypto, SearchEngineConfig, default_search_engines};
+use crate::{
+    AppSettingsSummary, CredentialCrypto, DEFAULT_RECORDING_PATH_TEMPLATE,
+    DEFAULT_TERMINAL_TIMESTAMP_FORMAT, ExistingFileBehavior, RecordingMode,
+    RecordingRotationPolicy, SearchEngineConfig, default_search_engines,
+};
 
 impl ConnectionStore {
     pub fn load_app_settings_summary(&self) -> Result<AppSettingsSummary, StorageError> {
@@ -113,12 +117,22 @@ impl ConnectionStore {
             x11_display: json_string(&value, &["terminal", "x11_display"], ""),
             terminal_scrollback_lines: json_u32(&value, &["terminal", "scrollback_lines"], 5000)
                 .clamp(100, 100_000),
+            terminal_keep_alive_mode: normalize_keep_alive_mode(&json_string(
+                &value,
+                &["terminal", "keep_alive_mode"],
+                "compatible",
+            )),
             terminal_keep_alive_interval: json_u32(
                 &value,
                 &["terminal", "keep_alive_interval"],
                 30,
             )
             .min(600),
+            terminal_timestamp_format: normalize_timestamp_format(&json_string(
+                &value,
+                &["terminal", "timestamp_format"],
+                DEFAULT_TERMINAL_TIMESTAMP_FORMAT,
+            )),
             terminal_hardware_acceleration: json_bool(
                 &value,
                 &["terminal", "hardware_acceleration"],
@@ -161,6 +175,20 @@ impl ConnectionStore {
             ui_show_remote_stats: json_bool(&value, &["ui", "show_remote_stats"], true),
             ui_remote_stats_interval: json_u32(&value, &["ui", "remote_stats_interval"], 3)
                 .clamp(1, 60),
+            ui_show_gpu_monitor: json_bool(&value, &["ui", "show_gpu_monitor"], false),
+            ui_gpu_monitor_interval: json_u32(&value, &["ui", "gpu_monitor_interval"], 3)
+                .clamp(3, 120),
+            ui_show_ascend_npu_monitor: json_bool(
+                &value,
+                &["ui", "show_ascend_npu_monitor"],
+                false,
+            ),
+            ui_ascend_npu_monitor_interval: json_u32(
+                &value,
+                &["ui", "ascend_npu_monitor_interval"],
+                3,
+            )
+            .clamp(3, 120),
             ui_show_process_manager: json_bool(&value, &["ui", "show_process_manager"], true),
             ui_process_manager_interval: json_u32(&value, &["ui", "process_manager_interval"], 5)
                 .clamp(3, 120),
@@ -267,10 +295,20 @@ impl ConnectionStore {
                 &["interaction", "copy_on_select"],
                 false,
             ),
+            interaction_allow_osc52_clipboard_write: json_bool(
+                &value,
+                &["interaction", "allow_osc52_clipboard_write"],
+                false,
+            ),
             interaction_right_click_paste: json_bool(
                 &value,
                 &["interaction", "right_click_paste"],
                 false,
+            ),
+            interaction_terminal_zoom_enabled: json_bool(
+                &value,
+                &["interaction", "terminal_zoom_enabled"],
+                true,
             ),
             interaction_command_suggestions_enabled: json_bool(
                 &value,
@@ -371,21 +409,39 @@ impl ConnectionStore {
                 &["transfer", "resume_broken_transfer"],
                 true,
             ),
-            recording_path: json_string(&value, &["transfer", "recording_path"], ""),
-            recording_auto_start: json_bool(&value, &["transfer", "recording_auto_start"], false),
+            recording_path: json_string(&value, &["recording", "base_path"], ""),
+            recording_auto_start: json_bool(&value, &["recording", "auto_start"], false),
+            recording_default_mode: load_recording_mode(&value),
+            recording_path_template: normalize_recording_path_template(&json_string(
+                &value,
+                &["recording", "path_template"],
+                DEFAULT_RECORDING_PATH_TEMPLATE,
+            )),
             recording_include_io_labels: json_bool(
                 &value,
-                &["transfer", "recording_include_io_labels"],
+                &["recording", "include_io_labels"],
                 true,
             ),
             recording_include_timestamps: json_bool(
                 &value,
-                &["transfer", "recording_include_timestamps"],
+                &["recording", "include_timestamps"],
                 true,
+            ),
+            recording_include_session_metadata: json_bool(
+                &value,
+                &["recording", "include_session_metadata"],
+                true,
+            ),
+            recording_rotation: load_recording_rotation(&value),
+            recording_existing_file_behavior: load_existing_file_behavior(&value),
+            recording_include_binary_transfer_payloads: json_bool(
+                &value,
+                &["recording", "include_binary_transfer_payloads"],
+                false,
             ),
             recording_memory_limit_bytes: json_u64(
                 &value,
-                &["transfer", "recording_memory_limit_bytes"],
+                &["recording", "memory_limit_bytes"],
                 5 * 1024 * 1024,
             ),
             diagnostics_level: {
@@ -491,27 +547,57 @@ impl ConnectionStore {
         let mut value = self.load_settings_value()?;
         set_nested_json_string(
             &mut value,
-            &["transfer", "recording_path"],
+            &["recording", "base_path"],
             settings.recording_path.clone(),
         );
         set_nested_json_value(
             &mut value,
-            &["transfer", "recording_auto_start"],
+            &["recording", "auto_start"],
             serde_json::Value::Bool(settings.recording_auto_start),
+        );
+        set_nested_json_string(
+            &mut value,
+            &["recording", "default_mode"],
+            recording_mode_value(settings.recording_default_mode).to_string(),
+        );
+        set_nested_json_string(
+            &mut value,
+            &["recording", "path_template"],
+            normalize_recording_path_template(&settings.recording_path_template),
         );
         set_nested_json_value(
             &mut value,
-            &["transfer", "recording_include_io_labels"],
+            &["recording", "include_io_labels"],
             serde_json::Value::Bool(settings.recording_include_io_labels),
         );
         set_nested_json_value(
             &mut value,
-            &["transfer", "recording_include_timestamps"],
+            &["recording", "include_timestamps"],
             serde_json::Value::Bool(settings.recording_include_timestamps),
         );
         set_nested_json_value(
             &mut value,
-            &["transfer", "recording_memory_limit_bytes"],
+            &["recording", "include_session_metadata"],
+            serde_json::Value::Bool(settings.recording_include_session_metadata),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["recording", "rotation"],
+            recording_rotation_value(&settings.recording_rotation),
+        );
+        set_nested_json_string(
+            &mut value,
+            &["recording", "existing_file_behavior"],
+            existing_file_behavior_value(settings.recording_existing_file_behavior).to_string(),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["recording", "include_binary_transfer_payloads"],
+            serde_json::Value::Bool(settings.recording_include_binary_transfer_payloads),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["recording", "memory_limit_bytes"],
             serde_json::Value::from(settings.recording_memory_limit_bytes),
         );
         self.save_settings_value(&value)?;
@@ -924,10 +1010,20 @@ impl ConnectionStore {
             &["terminal", "scrollback_lines"],
             serde_json::Value::from(settings.terminal_scrollback_lines.clamp(100, 100_000)),
         );
+        set_nested_json_string(
+            &mut value,
+            &["terminal", "keep_alive_mode"],
+            normalize_keep_alive_mode(&settings.terminal_keep_alive_mode),
+        );
         set_nested_json_value(
             &mut value,
             &["terminal", "keep_alive_interval"],
             serde_json::Value::from(settings.terminal_keep_alive_interval.min(600)),
+        );
+        set_nested_json_string(
+            &mut value,
+            &["terminal", "timestamp_format"],
+            normalize_timestamp_format(&settings.terminal_timestamp_format),
         );
         set_nested_json_value(
             &mut value,
@@ -1000,6 +1096,26 @@ impl ConnectionStore {
         );
         set_nested_json_value(
             &mut value,
+            &["ui", "show_gpu_monitor"],
+            serde_json::Value::Bool(settings.ui_show_gpu_monitor),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["ui", "gpu_monitor_interval"],
+            serde_json::Value::from(settings.ui_gpu_monitor_interval.clamp(3, 120)),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["ui", "show_ascend_npu_monitor"],
+            serde_json::Value::Bool(settings.ui_show_ascend_npu_monitor),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["ui", "ascend_npu_monitor_interval"],
+            serde_json::Value::from(settings.ui_ascend_npu_monitor_interval.clamp(3, 120)),
+        );
+        set_nested_json_value(
+            &mut value,
             &["ui", "show_process_manager"],
             serde_json::Value::Bool(settings.ui_show_process_manager),
         );
@@ -1040,8 +1156,18 @@ impl ConnectionStore {
         );
         set_nested_json_value(
             &mut value,
+            &["interaction", "allow_osc52_clipboard_write"],
+            serde_json::Value::Bool(settings.interaction_allow_osc52_clipboard_write),
+        );
+        set_nested_json_value(
+            &mut value,
             &["interaction", "right_click_paste"],
             serde_json::Value::Bool(settings.interaction_right_click_paste),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["interaction", "terminal_zoom_enabled"],
+            serde_json::Value::Bool(settings.interaction_terminal_zoom_enabled),
         );
         set_nested_json_value(
             &mut value,
@@ -1541,6 +1667,92 @@ fn load_search_engines(value: &serde_json::Value) -> Vec<SearchEngineConfig> {
     engines
 }
 
+fn normalize_keep_alive_mode(mode: &str) -> String {
+    match mode.trim() {
+        "strict" | "disabled" => mode.trim().to_string(),
+        _ => "compatible".to_string(),
+    }
+}
+
+fn normalize_timestamp_format(format: &str) -> String {
+    let trimmed = format.trim();
+    if trimmed.is_empty() {
+        return DEFAULT_TERMINAL_TIMESTAMP_FORMAT.to_string();
+    }
+    trimmed.chars().take(64).collect()
+}
+
+fn normalize_recording_path_template(template: &str) -> String {
+    let trimmed = template.trim();
+    if trimmed.is_empty() {
+        DEFAULT_RECORDING_PATH_TEMPLATE.to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+fn load_recording_mode(value: &serde_json::Value) -> RecordingMode {
+    match json_string(value, &["recording", "default_mode"], "transcript").as_str() {
+        "raw" => RecordingMode::Raw,
+        _ => RecordingMode::Transcript,
+    }
+}
+
+fn recording_mode_value(mode: RecordingMode) -> &'static str {
+    match mode {
+        RecordingMode::Transcript => "transcript",
+        RecordingMode::Raw => "raw",
+    }
+}
+
+fn load_existing_file_behavior(value: &serde_json::Value) -> ExistingFileBehavior {
+    match json_string(value, &["recording", "existing_file_behavior"], "unique").as_str() {
+        "append" => ExistingFileBehavior::Append,
+        "overwrite" => ExistingFileBehavior::Overwrite,
+        _ => ExistingFileBehavior::Unique,
+    }
+}
+
+fn existing_file_behavior_value(behavior: ExistingFileBehavior) -> &'static str {
+    match behavior {
+        ExistingFileBehavior::Unique => "unique",
+        ExistingFileBehavior::Append => "append",
+        ExistingFileBehavior::Overwrite => "overwrite",
+    }
+}
+
+fn load_recording_rotation(value: &serde_json::Value) -> RecordingRotationPolicy {
+    let Some(raw) = json_path(value, &["recording", "rotation"]) else {
+        return RecordingRotationPolicy::Session;
+    };
+    let rotation_type = raw
+        .get("type")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("session");
+    match rotation_type {
+        "daily" => RecordingRotationPolicy::Daily,
+        "size" => RecordingRotationPolicy::Size {
+            max_bytes: raw
+                .get("max_bytes")
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(50 * 1024 * 1024)
+                .max(1),
+        },
+        _ => RecordingRotationPolicy::Session,
+    }
+}
+
+fn recording_rotation_value(rotation: &RecordingRotationPolicy) -> serde_json::Value {
+    match rotation {
+        RecordingRotationPolicy::Session => serde_json::json!({ "type": "session" }),
+        RecordingRotationPolicy::Daily => serde_json::json!({ "type": "daily" }),
+        RecordingRotationPolicy::Size { max_bytes } => serde_json::json!({
+            "type": "size",
+            "max_bytes": (*max_bytes).max(1),
+        }),
+    }
+}
+
 fn normalize_host_key_policy(policy: &str) -> String {
     match policy {
         "strict" | "accept" | "prompt" => policy.to_string(),
@@ -1641,7 +1853,7 @@ fn set_nested_json_bool(value: &mut serde_json::Value, path: &[&str], new_value:
 /// The title bar's centre reading, defaulting to the session it always showed.
 fn normalize_header_status_mode(value: &str) -> String {
     match value.trim() {
-        "resources" | "host" | "datetime" => value.trim().to_string(),
+        "resources" | "host" | "datetime" | "gpu" | "npu" => value.trim().to_string(),
         _ => "session".to_string(),
     }
 }

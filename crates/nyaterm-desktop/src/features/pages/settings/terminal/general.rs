@@ -2,7 +2,7 @@ use gpui::{
     App, ClickEvent, Context, FontWeight, IntoElement, SharedString, Window, div, prelude::*, px,
     rgb,
 };
-use nyaterm_ui::NyaNumberInputOptions;
+use nyaterm_ui::{NyaNumberInputOptions, NyaSelectOption};
 
 use crate::features::{NyaTermApp, TextInputSetup};
 use crate::theme::ThemePalette;
@@ -22,6 +22,14 @@ impl NyaTermApp {
                 "settings.terminal.x11-display",
                 &self.settings.summary().x11_display.clone(),
                 TextInputSetup::placeholder(self.tr("settings.x11DisplayPlaceholder")),
+                cx,
+            )
+            .into_any_element();
+        let timestamp_format_input = self
+            .text_input_box(
+                "settings.terminal.timestamp-format",
+                &self.settings.summary().terminal_timestamp_format.clone(),
+                TextInputSetup::placeholder("[HH:mm:ss]"),
                 cx,
             )
             .into_any_element();
@@ -53,6 +61,33 @@ impl NyaTermApp {
                             NyaNumberInputOptions::default()
                                 .range(100.0, 100_000.0)
                                 .step(100.0),
+                            cx,
+                        ),
+                    ))
+                    .child(settings_form_row(
+                        palette,
+                        self.tr("settings.keepAliveMode"),
+                        Some(SharedString::from(
+                            self.tr("settings.keepAliveModeCompatibleDescription"),
+                        )),
+                        self.settings_select_control(
+                            "settings.terminal.keep-alive-mode",
+                            vec![
+                                NyaSelectOption::new(
+                                    "compatible",
+                                    self.tr("settings.keepAliveModeCompatible"),
+                                ),
+                                NyaSelectOption::new(
+                                    "strict",
+                                    self.tr("settings.keepAliveModeStrict"),
+                                ),
+                                NyaSelectOption::new(
+                                    "disabled",
+                                    self.tr("settings.keepAliveModeDisabled"),
+                                ),
+                            ],
+                            self.settings.summary().terminal_keep_alive_mode.clone(),
+                            false,
                             cx,
                         ),
                     ))
@@ -155,7 +190,21 @@ impl NyaTermApp {
                         ),
                     ))
                     .when(self.settings.summary().terminal_show_timestamps, |this| {
-                        this.child(settings_form_row(
+                        this.child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap_2()
+                                .child(terminal_settings_field_meta(
+                                    palette,
+                                    self.tr("settings.timestampFormat"),
+                                    self.tr("settings.timestampFormatDesc"),
+                                ))
+                                .child(
+                                    div().w_full().max_w(px(520.)).child(timestamp_format_input),
+                                ),
+                        )
+                        .child(settings_form_row(
                             palette,
                             self.tr("settings.showTimestampMilliseconds"),
                             Some(SharedString::from(
@@ -229,6 +278,72 @@ impl NyaTermApp {
                                     .to_string()
                                     .as_str(),
                                 NyaNumberInputOptions::default().range(1.0, 60.0).step(1.0),
+                                cx,
+                            ),
+                        ))
+                    })
+                    .child(settings_form_row(
+                        palette,
+                        self.tr("settings.showGpuMonitor"),
+                        Some(SharedString::from(self.tr("settings.showGpuMonitorDesc"))),
+                        settings_switch(
+                            palette,
+                            "terminal-gpu-monitor",
+                            self.settings.summary().ui_show_gpu_monitor,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_gpu_monitor_panel(cx);
+                            }),
+                        ),
+                    ))
+                    .when(self.settings.summary().ui_show_gpu_monitor, |this| {
+                        this.child(settings_form_row(
+                            palette,
+                            self.tr("settings.gpuMonitorInterval"),
+                            Some(SharedString::from(
+                                self.tr("settings.gpuMonitorIntervalDesc"),
+                            )),
+                            self.number_input_box(
+                                "settings.number.gpu-monitor-interval",
+                                self.settings
+                                    .summary()
+                                    .ui_gpu_monitor_interval
+                                    .to_string()
+                                    .as_str(),
+                                NyaNumberInputOptions::default().range(3.0, 120.0).step(1.0),
+                                cx,
+                            ),
+                        ))
+                    })
+                    .child(settings_form_row(
+                        palette,
+                        self.tr("settings.showAscendNpuMonitor"),
+                        Some(SharedString::from(
+                            self.tr("settings.showAscendNpuMonitorDesc"),
+                        )),
+                        settings_switch(
+                            palette,
+                            "terminal-ascend-npu-monitor",
+                            self.settings.summary().ui_show_ascend_npu_monitor,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_ascend_npu_monitor_panel(cx);
+                            }),
+                        ),
+                    ))
+                    .when(self.settings.summary().ui_show_ascend_npu_monitor, |this| {
+                        this.child(settings_form_row(
+                            palette,
+                            self.tr("settings.ascendNpuMonitorInterval"),
+                            Some(SharedString::from(
+                                self.tr("settings.ascendNpuMonitorIntervalDesc"),
+                            )),
+                            self.number_input_box(
+                                "settings.number.ascend-npu-monitor-interval",
+                                self.settings
+                                    .summary()
+                                    .ui_ascend_npu_monitor_interval
+                                    .to_string()
+                                    .as_str(),
+                                NyaNumberInputOptions::default().range(3.0, 120.0).step(1.0),
                                 cx,
                             ),
                         ))
