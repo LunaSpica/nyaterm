@@ -139,11 +139,7 @@ impl SshShellIntegrationState {
         self.suppressed_visible_bytes = 0;
     }
 
-    pub(super) async fn filter_output(
-        &mut self,
-        bytes: &[u8],
-        _channel: &mut russh::Channel<client::Msg>,
-    ) -> SshIntegrationOutput {
+    pub(super) fn filter_output(&mut self, bytes: &[u8]) -> SshIntegrationOutput {
         match self.phase {
             SshShellIntegrationPhase::Normal => self.stripper.push(bytes).into_output(),
             SshShellIntegrationPhase::WaitInitial => self.stripper.push(bytes).into_output(),
@@ -886,4 +882,136 @@ fn find_subsequence(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     haystack
         .windows(needle.len())
         .position(|window| window == needle)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::{Duration, Instant};
+
+    use base64::Engine;
+    use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+
+    use super::{
+        SshShellIntegrationPhase, SshShellIntegrationState, build_legacy_ssh_ready_marker,
+        build_ssh_ready_marker,
+    };
+
+    fn shell_integration_state(session_id: &str) -> SshShellIntegrationState {
+        let ready_marker = build_ssh_ready_marker(session_id);
+        let legacy_ready_marker = build_legacy_ssh_ready_marker(&ready_marker);
+        SshShellIntegrationState::new(
+            Some(b"inject-script\n".to_vec()),
+            ready_marker,
+            legacy_ready_marker,
+        )
+    }
+
+    fn mark_injection_sent(state: &mut SshShellIntegrationState) {
+        state.phase = SshShellIntegrationPhase::Suppressing;
+        state.pending_script = None;
+        state.suppress_started_at = Some(Instant::now());
+    }
+
+    #[test]
+    fn wait_initial_passes_first_output_and_keeps_injection_pending() {
+        let mut state = shell_integration_state("session-1");
+
+        let output = state.filter_output(b"Welcome to Ubuntu\r\nLast login: today\r\n");
+
+        assert_eq!(
+            output.visible,
+            b"Welcome to Ubuntu\r\nLast login: today\r\n"
+        );
+        assert!(output.cwd_paths.is_empty());
+        assert!(output.accepted_commands.is_empty());
+        assert!(state.is_waiting_initial());
+        assert!(state.should_inject_on_initial_delay());
+    }
+
+    #[test]
+    fn suppressing_discards_visible_output_until_ready_marker() {
+        let mut state = shell_integration_state("session-1");
+        mark_injection_sent(&mut state);
+
+        let before_ready = state.filter_output(b"echoed injection and stale prompt# ");
+
+        assert!(before_ready.visible.is_empty());
+        assert!(before_ready.cwd_paths.is_empty());
+        assert!(before_ready.accepted_commands.is_empty());
+        assert!(state.is_suppressing());
+    }
+
+    #[test]
+    fn ready_marker_enters_normal_and_preserves_only_visible_after_ready() {
+        let mut state = shell_integration_state("session-1");
+        mark_injection_sent(&mut state);
+        let command = BASE64_STANDARD.encode("git status");
+
+        let output = state.filter_output(
+            format!(
+                "old prompt# \x1b]7;file://host/home/user\x07\
+                 \x1b]7777;NyaTermCommand:{command}\x07\
+                 \x1b]7777;NyaTermReady:session-1\x07prompt# "
+            )
+            .as_bytes(),
+        );
+
+        assert_eq!(output.visible, b"prompt# ");
+        assert_eq!(output.cwd_paths, vec!["/home/user".to_string()]);
+        assert_eq!(output.accepted_commands, vec!["git status".to_string()]);
+        assert!(state.is_normal());
+    }
+
+    #[test]
+    fn tauri_parity_keeps_motd_discards_injection_noise_and_shows_final_prompt() {
+        let mut state = shell_integration_state("session-1");
+        let mut visible = Vec::new();
+
+        let initial = state.filter_output(b"Welcome to Ubuntu\r\nLast login: today\r\n");
+        visible.extend_from_slice(&initial.visible);
+        assert!(state.is_waiting_initial());
+
+        mark_injection_sent(&mut state);
+        let stale_prompt = state.filter_output(b"root@host:~# ");
+        visible.extend_from_slice(&stale_prompt.visible);
+
+        let ready = state.filter_output(b"\x1b]7777;NyaTermReady:session-1\x07root@host:~# ");
+        visible.extend_from_slice(&ready.visible);
+
+        assert_eq!(
+            visible,
+            b"Welcome to Ubuntu\r\nLast login: today\r\nroot@host:~# "
+        );
+        assert_eq!(count_subsequence(&visible, b"root@host:~# "), 1);
+        assert!(state.is_normal());
+    }
+
+    #[test]
+    fn initial_delay_can_still_inject_when_remote_outputs_nothing() {
+        let state = shell_integration_state("session-1");
+
+        assert!(state.should_inject_on_initial_delay());
+        assert!(state.is_waiting_initial());
+    }
+
+    #[test]
+    fn suppressing_timeout_discards_buffered_output_and_enters_normal() {
+        let mut state = shell_integration_state("session-1");
+        mark_injection_sent(&mut state);
+        state.suppress_started_at = Some(Instant::now() - Duration::from_secs(31));
+
+        let output = state.filter_output(b"stale prompt# ");
+
+        assert!(output.visible.is_empty());
+        assert!(output.cwd_paths.is_empty());
+        assert!(output.accepted_commands.is_empty());
+        assert!(state.is_normal());
+    }
+
+    fn count_subsequence(haystack: &[u8], needle: &[u8]) -> usize {
+        haystack
+            .windows(needle.len())
+            .filter(|window| *window == needle)
+            .count()
+    }
 }

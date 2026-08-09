@@ -1653,6 +1653,14 @@ async fn run_open_ssh_shell_session(
                 inject_timeout
                     .as_mut()
                     .reset(tokio::time::Instant::now() + Duration::from_secs(30));
+                if shell_integration.is_normal() {
+                    while let Some(data) = pending_writes.pop_front() {
+                        if let Err(error) = channel.data_bytes(data).await {
+                            send_session_error(&event_queue, &session_id, error);
+                            break;
+                        }
+                    }
+                }
             }
             _ = &mut inject_timeout, if shell_integration.is_suppressing() => {
                 let output = shell_integration.force_normal_after_timeout();
@@ -1667,7 +1675,7 @@ async fn run_open_ssh_shell_session(
             command = command_rx.recv() => {
                 match command {
                     Some(SshCommand::Write(data)) => {
-                        if shell_integration.is_suppressing() {
+                        if !shell_integration.is_normal() {
                             pending_writes.push_back(data);
                         } else if let Err(error) = channel.data_bytes(data).await {
                                 send_session_error(&event_queue, &session_id, error);
@@ -1704,13 +1712,13 @@ async fn run_open_ssh_shell_session(
                 match message {
                     Some(ChannelMsg::Data { data }) | Some(ChannelMsg::ExtendedData { data, .. }) => {
                         let was_waiting_initial = shell_integration.is_waiting_initial();
-                        let output = shell_integration
-                            .filter_output(&data, &mut channel)
-                            .await;
+                        let output = shell_integration.filter_output(&data);
+                        push_ssh_integration_output(&event_queue, &session_id, output);
                         if was_waiting_initial && shell_integration.is_waiting_initial() {
-                            initial_inject_delay
+                            shell_integration.inject(&mut channel).await;
+                            inject_timeout
                                 .as_mut()
-                                .reset(tokio::time::Instant::now() + Duration::from_millis(500));
+                                .reset(tokio::time::Instant::now() + Duration::from_secs(30));
                         }
                         if shell_integration.is_normal() {
                             while let Some(data) = pending_writes.pop_front() {
@@ -1720,7 +1728,6 @@ async fn run_open_ssh_shell_session(
                                 }
                             }
                         }
-                        push_ssh_integration_output(&event_queue, &session_id, output);
                     }
                     Some(ChannelMsg::ExitStatus { exit_status }) => {
                         event_queue.push(SessionEvent::Exited {
@@ -1851,25 +1858,6 @@ async fn open_ssh_shell_from_pending(
     } = pending;
     let ready_marker = build_ssh_ready_marker(session_id);
     let legacy_ready_marker = build_legacy_ssh_ready_marker(&ready_marker);
-    let shell_kind = match config.sftp.cwd_follow_mode {
-        SftpCwdFollowMode::ShellIntegration | SftpCwdFollowMode::RcFile => {
-            detect_ssh_shell_type(&handle, config.sftp.shell_detection_timeout_ms).await
-        }
-        SftpCwdFollowMode::Off => None,
-    };
-    let injection_script = match shell_kind {
-        Some(kind) => {
-            build_ssh_shell_integration_script(
-                &handle,
-                kind,
-                &ready_marker,
-                config.sftp.cwd_follow_mode,
-                config.sftp.shell_detection_timeout_ms,
-            )
-            .await
-        }
-        None => None,
-    };
     let channel = match &mut handle {
         SshShellHandle::Dedicated(handle) => handle.channel_open_session().await?,
         SshShellHandle::Multiplexed(handle) => handle.lock().await.channel_open_session().await?,
@@ -1897,6 +1885,25 @@ async fn open_ssh_shell_from_pending(
         )
         .await?;
     channel.request_shell(true).await?;
+    let shell_kind = match config.sftp.cwd_follow_mode {
+        SftpCwdFollowMode::ShellIntegration | SftpCwdFollowMode::RcFile => {
+            detect_ssh_shell_type(&handle, config.sftp.shell_detection_timeout_ms).await
+        }
+        SftpCwdFollowMode::Off => None,
+    };
+    let injection_script = match shell_kind {
+        Some(kind) => {
+            build_ssh_shell_integration_script(
+                &handle,
+                kind,
+                &ready_marker,
+                config.sftp.cwd_follow_mode,
+                config.sftp.shell_detection_timeout_ms,
+            )
+            .await
+        }
+        None => None,
+    };
     let handle = match handle {
         SshShellHandle::Dedicated(handle) => Some(handle),
         SshShellHandle::Multiplexed(_) => None,
