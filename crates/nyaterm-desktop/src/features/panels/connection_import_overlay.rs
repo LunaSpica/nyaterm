@@ -44,7 +44,7 @@ impl NyaTermApp {
                     .child(connection_import_source_card(
                         palette,
                         "connection-import-nyaterm",
-                        "icons/logo.svg",
+                        "color/app/nyaterm.svg",
                         "NyaTerm",
                         ".nya",
                         cx.listener(|this, _, window, cx| {

@@ -35,6 +35,11 @@ pub(in crate::features) fn color_icon(path: &'static str, size_px: f32) -> Img {
     img(path).size(px(size_px)).flex_none()
 }
 
+/// Full-color NyaTerm application icon, matching the Tauri app icon.
+pub(in crate::features) fn nyaterm_app_icon(size_px: f32) -> Img {
+    color_icon("color/app/nyaterm.svg", size_px)
+}
+
 /// Activity-bar icon.
 pub(in crate::features) fn activity_icon(
     path: &'static str,

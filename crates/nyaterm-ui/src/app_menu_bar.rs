@@ -563,9 +563,9 @@ mod tests {
                                 vec![
                                     NyaMenuItem::action(if enabled { "On" } else { "Off" })
                                         .icon(if enabled {
-                                            "icons/state-on.svg"
+                                            "icons/check.svg"
                                         } else {
-                                            "icons/state-off.svg"
+                                            "icons/close.svg"
                                         })
                                         .shortcut(if enabled { "Ctrl+1" } else { "Ctrl+0" })
                                         .disabled(enabled)
@@ -587,7 +587,7 @@ mod tests {
             entry.read_with(cx, |entry, _| entry.items[0].test_presentation()),
             (
                 "Off".to_string(),
-                Some("icons/state-off.svg".to_string()),
+                Some("icons/close.svg".to_string()),
                 Some("Ctrl+0".to_string()),
                 false,
                 false,
@@ -602,7 +602,7 @@ mod tests {
             entry.read_with(cx, |entry, _| entry.items[0].test_presentation()),
             (
                 "On".to_string(),
-                Some("icons/state-on.svg".to_string()),
+                Some("icons/check.svg".to_string()),
                 Some("Ctrl+1".to_string()),
                 true,
                 true,

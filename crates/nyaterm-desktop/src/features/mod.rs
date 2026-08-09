@@ -111,6 +111,6 @@ pub(in crate::features) use update::UpdateFeatureState;
 pub(in crate::features) use view_widgets::{
     bounded_dialog_width, child_window_header, child_window_titlebar, color_icon,
     connection_type_icon, dialog_action_button, logo_mark, modal_dialog_shell, mono_icon,
-    panel_header_with_actions, stats_progress_bar, themed_icon, transfer_entry_icon,
-    window_control_button,
+    nyaterm_app_icon, panel_header_with_actions, stats_progress_bar, themed_icon,
+    transfer_entry_icon, window_control_button,
 };

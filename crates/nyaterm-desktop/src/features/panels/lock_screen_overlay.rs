@@ -4,7 +4,7 @@ use gpui::{
 };
 use nyaterm_ui::NyaInput;
 
-use crate::features::view_widgets::window_control_button;
+use crate::features::view_widgets::{nyaterm_app_icon, window_control_button};
 use crate::features::{NyaTermApp, TextInputSetup};
 use crate::widgets::small_button;
 
@@ -121,17 +121,11 @@ impl NyaTermApp {
                                         div()
                                             .size(px(82.))
                                             .rounded_lg()
-                                            .bg(rgb(palette.success))
                                             .shadow_lg()
                                             .flex()
                                             .items_center()
                                             .justify_center()
-                                            .child(
-                                                svg()
-                                                    .size(px(68.))
-                                                    .path("icons/logo.svg")
-                                                    .text_color(rgb(0x062018)),
-                                            ),
+                                            .child(nyaterm_app_icon(82.)),
                                     )
                                     .child(
                                         div()

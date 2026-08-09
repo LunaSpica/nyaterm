@@ -1,7 +1,7 @@
-use gpui::{AnyElement, Context, FontWeight, IntoElement, Window, div, prelude::*, px, rgb, svg};
+use gpui::{AnyElement, Context, FontWeight, IntoElement, Window, div, prelude::*, px, rgb};
 use nyaterm_ui::{NyaButton, NyaDialogWindowExt as _};
 
-use crate::features::NyaTermApp;
+use crate::features::{NyaTermApp, nyaterm_app_icon};
 
 impl NyaTermApp {
     pub(in crate::features) fn open_about(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -28,12 +28,7 @@ impl NyaTermApp {
             .flex_col()
             .items_center()
             .gap_4()
-            .child(
-                svg()
-                    .size(px(96.))
-                    .path("icons/logo.svg")
-                    .text_color(rgb(palette.link)),
-            )
+            .child(nyaterm_app_icon(96.))
             .child(
                 div()
                     .text_size(px(18.))
