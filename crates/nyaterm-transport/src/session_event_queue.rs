@@ -187,12 +187,18 @@ impl SessionEventQueueInner {
         let mut stats = SessionDrainStats::default();
         for _ in 0..max_events {
             if let Some(max_output_bytes) = max_output_bytes {
-                if stats.drained_output_bytes >= max_output_bytes && stats.drained_events > 0 {
+                if stats.drained_output_bytes >= max_output_bytes
+                    && stats.drained_events > 0
+                    && matches!(self.events.front(), Some(SessionEvent::Output { .. }))
+                {
                     break;
                 }
                 let remaining_output_budget =
                     max_output_bytes.saturating_sub(stats.drained_output_bytes);
-                if remaining_output_budget == 0 && stats.drained_events > 0 {
+                if remaining_output_budget == 0
+                    && stats.drained_events > 0
+                    && matches!(self.events.front(), Some(SessionEvent::Output { .. }))
+                {
                     break;
                 }
                 if remaining_output_budget == 0
@@ -232,7 +238,10 @@ impl SessionEventQueueInner {
                 SessionEvent::OutputDropped { bytes, .. } => {
                     stats.dropped_output_bytes = stats.dropped_output_bytes.saturating_add(*bytes);
                 }
-                SessionEvent::Exited { .. } | SessionEvent::Error { .. } => {}
+                SessionEvent::CwdChanged { .. }
+                | SessionEvent::CommandAccepted { .. }
+                | SessionEvent::Exited { .. }
+                | SessionEvent::Error { .. } => {}
             }
             events.push(event);
         }

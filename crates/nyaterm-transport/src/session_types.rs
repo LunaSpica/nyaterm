@@ -25,6 +25,8 @@ pub enum SessionKind {
 pub enum SessionEvent {
     Output { session_id: String, data: Vec<u8> },
     OutputDropped { session_id: String, bytes: usize },
+    CwdChanged { session_id: String, cwd: String },
+    CommandAccepted { session_id: String, command: String },
     Exited { session_id: String, reason: String },
     Error { session_id: String, message: String },
 }

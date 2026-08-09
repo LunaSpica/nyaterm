@@ -413,7 +413,10 @@ impl SessionEventBridgeQueueInner {
         let mut drained_events = 0usize;
         let mut drained_output_bytes = 0usize;
         for _ in 0..max_events {
-            if drained_output_bytes >= max_output_bytes && drained_events > 0 {
+            if drained_output_bytes >= max_output_bytes
+                && drained_events > 0
+                && matches!(self.events.front(), Some(SessionEvent::Output { .. }))
+            {
                 break;
             }
             let remaining_output_budget = max_output_bytes.saturating_sub(drained_output_bytes);
@@ -451,7 +454,10 @@ impl SessionEventBridgeQueueInner {
                 SessionEvent::OutputDropped { bytes, .. } => {
                     stats.dropped_output_bytes = stats.dropped_output_bytes.saturating_add(*bytes);
                 }
-                SessionEvent::Exited { .. } | SessionEvent::Error { .. } => {}
+                SessionEvent::CwdChanged { .. }
+                | SessionEvent::CommandAccepted { .. }
+                | SessionEvent::Exited { .. }
+                | SessionEvent::Error { .. } => {}
             }
             events.push(event);
         }
@@ -568,6 +574,22 @@ fn run_session_event_bridge(
                         .ui_queue
                         .push(SessionEvent::OutputDropped { session_id, bytes });
                 }
+                SessionEvent::CwdChanged { session_id, cwd } => {
+                    flush_bridge_direct_outputs(&frame_pipeline, &mut pending_direct_outputs);
+                    state
+                        .ui_queue
+                        .push(SessionEvent::CwdChanged { session_id, cwd });
+                }
+                SessionEvent::CommandAccepted {
+                    session_id,
+                    command,
+                } => {
+                    flush_bridge_direct_outputs(&frame_pipeline, &mut pending_direct_outputs);
+                    state.ui_queue.push(SessionEvent::CommandAccepted {
+                        session_id,
+                        command,
+                    });
+                }
                 SessionEvent::Exited { session_id, reason } => {
                     flush_bridge_direct_outputs(&frame_pipeline, &mut pending_direct_outputs);
                     sideband_probe_sessions.remove(&session_id);
@@ -681,11 +703,12 @@ mod tests {
     use super::{
         SESSION_EVENT_BRIDGE_DIRECT_OUTPUT_BACKPRESSURE,
         SESSION_EVENT_BRIDGE_SIDEBAND_PROBE_EVENTS, SESSION_EVENT_BRIDGE_SIDEBAND_PROBE_WINDOW,
-        SessionEventBridgeControlSnapshot, bridge_arm_sideband_probe,
+        SessionEventBridgeControlSnapshot, SessionEventBridgeQueue, bridge_arm_sideband_probe,
         bridge_consume_sideband_probe, bridge_output_can_go_direct, bridge_output_is_backpressured,
         bridge_output_may_contain_sideband_trigger, bridge_should_pause_source_drain,
         bridge_sideband_probe_active,
     };
+    use nyaterm_transport::SessionEvent;
 
     #[test]
     fn bridge_direct_policy_rejects_sideband_triggers() {
@@ -744,6 +767,31 @@ mod tests {
             &control,
             "s1",
             true
+        ));
+    }
+
+    #[test]
+    fn bridge_ui_queue_drains_metadata_when_output_budget_is_zero() {
+        let queue = SessionEventBridgeQueue::new();
+        queue.push(SessionEvent::CwdChanged {
+            session_id: "s1".to_string(),
+            cwd: "/srv/app".to_string(),
+        });
+        queue.push(SessionEvent::CommandAccepted {
+            session_id: "s1".to_string(),
+            command: "cargo test".to_string(),
+        });
+
+        let drain = queue.drain_with_output_budget(8, 0);
+
+        assert_eq!(drain.events.len(), 2);
+        assert!(matches!(
+            &drain.events[0],
+            SessionEvent::CwdChanged { cwd, .. } if cwd == "/srv/app"
+        ));
+        assert!(matches!(
+            &drain.events[1],
+            SessionEvent::CommandAccepted { command, .. } if command == "cargo test"
         ));
     }
 

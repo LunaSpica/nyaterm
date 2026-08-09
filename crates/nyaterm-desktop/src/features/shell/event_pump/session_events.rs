@@ -222,6 +222,31 @@ impl NyaTermApp {
                         );
                         dirty |= self.handle_session_output_dropped_event(session_id, bytes, cx);
                     }
+                    SessionEvent::CwdChanged { session_id, cwd } => {
+                        self.flush_pending_session_frame_outputs(
+                            &mut pending_frame_outputs,
+                            &mut drain_timings,
+                        );
+                        self.apply_session_cwd(&session_id, cwd);
+                        dirty = true;
+                    }
+                    SessionEvent::CommandAccepted {
+                        session_id,
+                        command,
+                    } => {
+                        self.flush_pending_session_frame_outputs(
+                            &mut pending_frame_outputs,
+                            &mut drain_timings,
+                        );
+                        self.session.record_command_history(&session_id, &command);
+                        if !self.commands.queue_command_history(vec![command]) {
+                            self.settings.update_store_status(
+                                "command history worker is unavailable",
+                                false,
+                            );
+                        }
+                        dirty = true;
+                    }
                     SessionEvent::Exited { session_id, reason } => {
                         self.flush_pending_session_frame_outputs(
                             &mut pending_frame_outputs,

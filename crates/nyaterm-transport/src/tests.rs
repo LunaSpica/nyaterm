@@ -4,6 +4,7 @@ use std::net::TcpListener;
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant};
 
+use base64::Engine;
 use tokio::sync::mpsc as tokio_mpsc;
 
 use super::{
@@ -623,6 +624,59 @@ fn ssh_shell_integration_script_emits_osc7_and_ready_marker() {
 }
 
 #[test]
+fn ssh_activation_and_persistent_scripts_match_rc_file_mode_contract() {
+    let ready = super::build_ssh_ready_marker("session-1");
+    let activation =
+        super::activation_script(super::ShellKind::Bash, &ready).expect("activation script");
+    let persistent = super::persistent_script(super::ShellKind::Bash).expect("persistent script");
+    let block = super::rc_managed_block(super::ShellKind::Bash).expect("managed block");
+
+    assert!(activation.contains("shell-integration.bash"));
+    assert!(activation.contains("NyaTermReady:session-1"));
+    assert!(persistent.contains("__nyaterm_install_prompt"));
+    assert!(persistent.contains("NyaTermCommand:%s"));
+    assert!(block.contains("# >>> nyaterm shell integration >>>"));
+    assert!(block.contains("shell-integration.bash"));
+}
+
+#[test]
+fn ssh_osc_stripper_extracts_cwd_and_command_without_leaking_private_markers() {
+    let ready = super::build_ssh_ready_marker("session-1");
+    let legacy = super::build_legacy_ssh_ready_marker(&ready);
+    let mut stripper = super::OscStripper::new(&ready, legacy.as_deref());
+    let command = base64::engine::general_purpose::STANDARD.encode("git status");
+
+    let first = stripper.push(format!("hello\x1b]7;file://host/home/user").as_bytes());
+    assert_eq!(first.visible, b"hello");
+    assert!(first.cwd_paths.is_empty());
+
+    let second = stripper.push(
+        format!(
+            "\x07x\x1b]7777;DflyCommand:{command}\x07y\x1b]7777;DflyReady:session-1\x07prompt$ "
+        )
+        .as_bytes(),
+    );
+
+    assert_eq!(second.visible, b"xyprompt$ ");
+    assert_eq!(second.visible_after_ready, b"prompt$ ");
+    assert_eq!(second.cwd_paths, vec!["/home/user".to_string()]);
+    assert_eq!(second.accepted_commands, vec!["git status".to_string()]);
+    assert!(second.ready);
+}
+
+#[test]
+fn ssh_osc_stripper_ignores_ready_marker_for_other_sessions() {
+    let ready = super::build_ssh_ready_marker("session-1");
+    let mut stripper = super::OscStripper::new(&ready, None);
+
+    let result = stripper.push(b"a\x1b]7777;NyaTermReady:session-2\x07b");
+
+    assert_eq!(result.visible, b"ab");
+    assert!(!result.ready);
+    assert!(result.visible_after_ready.is_empty());
+}
+
+#[test]
 fn ssh_ready_marker_helpers_strip_current_and_legacy_markers() {
     let ready = super::build_ssh_ready_marker("session-1").into_bytes();
     let legacy = super::build_legacy_ssh_ready_marker("\x1b]7777;NyaTermReady:session-1\x07")
@@ -641,6 +695,31 @@ fn ssh_ready_marker_helpers_strip_current_and_legacy_markers() {
         super::strip_ssh_ready_markers(&payload, &ready, Some(&legacy)),
         b"beforemiddleafter"
     );
+}
+
+#[test]
+fn session_event_queue_drains_metadata_even_with_zero_output_budget() {
+    let queue = SessionEventQueue::new();
+    queue.push(SessionEvent::CwdChanged {
+        session_id: "s1".to_string(),
+        cwd: "/opt/app".to_string(),
+    });
+    queue.push(SessionEvent::CommandAccepted {
+        session_id: "s1".to_string(),
+        command: "pwd".to_string(),
+    });
+
+    let drain = queue.drain_with_output_budget(8, Some(0));
+
+    assert_eq!(drain.events.len(), 2);
+    assert!(matches!(
+        &drain.events[0],
+        SessionEvent::CwdChanged { cwd, .. } if cwd == "/opt/app"
+    ));
+    assert!(matches!(
+        &drain.events[1],
+        SessionEvent::CommandAccepted { command, .. } if command == "pwd"
+    ));
 }
 
 #[test]
