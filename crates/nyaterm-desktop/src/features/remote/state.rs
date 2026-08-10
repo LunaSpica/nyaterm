@@ -169,6 +169,9 @@ struct AcceleratorPaneState<Data, Event> {
     job: RemoteJobState<Event>,
     pub data: Option<Data>,
     pub status: String,
+    pub search_draft: String,
+    pub expanded_devices: HashSet<String>,
+    pub process_list_offset: usize,
     unavailable_sessions: HashSet<String>,
 }
 
@@ -219,6 +222,9 @@ pub(in crate::features) struct StatsPresentationState {
 pub(in crate::features) struct GpuPresentationState {
     pub data: Option<RemoteGpuOverview>,
     pub status: String,
+    pub search_draft: String,
+    pub expanded_devices: HashSet<String>,
+    pub process_list_offset: usize,
     pub pending: bool,
     pub consecutive_refresh_failures: u8,
 }
@@ -227,6 +233,9 @@ pub(in crate::features) struct GpuPresentationState {
 pub(in crate::features) struct NpuPresentationState {
     pub data: Option<RemoteNpuOverview>,
     pub status: String,
+    pub search_draft: String,
+    pub expanded_devices: HashSet<String>,
+    pub process_list_offset: usize,
     pub pending: bool,
     pub consecutive_refresh_failures: u8,
 }
@@ -337,6 +346,9 @@ impl RemoteOpsFeatureState {
         GpuPresentationState {
             data: self.gpu.data.clone(),
             status: self.gpu.status.clone(),
+            search_draft: self.gpu.search_draft.clone(),
+            expanded_devices: self.gpu.expanded_devices.clone(),
+            process_list_offset: self.gpu.process_list_offset,
             pending: self.gpu.is_pending(),
             consecutive_refresh_failures: self.gpu.consecutive_refresh_failures(),
         }
@@ -346,6 +358,9 @@ impl RemoteOpsFeatureState {
         NpuPresentationState {
             data: self.npu.data.clone(),
             status: self.npu.status.clone(),
+            search_draft: self.npu.search_draft.clone(),
+            expanded_devices: self.npu.expanded_devices.clone(),
+            process_list_offset: self.npu.process_list_offset,
             pending: self.npu.is_pending(),
             consecutive_refresh_failures: self.npu.consecutive_refresh_failures(),
         }
@@ -859,12 +874,34 @@ impl RemoteOpsFeatureState {
         self.gpu.reset_refresh_failures();
     }
 
+    pub(in crate::features) fn apply_gpu_search(&mut self, text: String) {
+        self.gpu.apply_search(text, "GPU search updated");
+    }
+
+    pub(in crate::features) fn toggle_gpu_device_expanded(&mut self, key: String) {
+        self.gpu.toggle_device_expanded(key);
+    }
+
+    pub(in crate::features) fn clamp_gpu_process_offset(&mut self, max: usize) -> usize {
+        self.gpu.clamp_process_offset(max)
+    }
+
+    pub(in crate::features) fn set_gpu_process_offset(&mut self, offset: usize) -> bool {
+        self.gpu.set_process_offset(offset)
+    }
+
     pub(in crate::features) fn apply_gpu(&mut self, session_id: &str, overview: RemoteGpuOverview) {
         if overview.available {
             self.gpu.clear_unavailable(session_id);
         } else {
             self.gpu.mark_unavailable(session_id.to_string());
         }
+        let active_devices = overview
+            .gpus
+            .iter()
+            .map(|gpu| gpu_device_key(gpu.index, &gpu.uuid))
+            .collect::<HashSet<_>>();
+        self.gpu.retain_expanded_devices(&active_devices);
         self.gpu.data = Some(overview);
     }
 
@@ -911,12 +948,34 @@ impl RemoteOpsFeatureState {
         self.npu.reset_refresh_failures();
     }
 
+    pub(in crate::features) fn apply_npu_search(&mut self, text: String) {
+        self.npu.apply_search(text, "NPU search updated");
+    }
+
+    pub(in crate::features) fn toggle_npu_device_expanded(&mut self, key: String) {
+        self.npu.toggle_device_expanded(key);
+    }
+
+    pub(in crate::features) fn clamp_npu_process_offset(&mut self, max: usize) -> usize {
+        self.npu.clamp_process_offset(max)
+    }
+
+    pub(in crate::features) fn set_npu_process_offset(&mut self, offset: usize) -> bool {
+        self.npu.set_process_offset(offset)
+    }
+
     pub(in crate::features) fn apply_npu(&mut self, session_id: &str, overview: RemoteNpuOverview) {
         if overview.available {
             self.npu.clear_unavailable(session_id);
         } else {
             self.npu.mark_unavailable(session_id.to_string());
         }
+        let active_devices = overview
+            .npus
+            .iter()
+            .map(|npu| npu.device_key.clone())
+            .collect::<HashSet<_>>();
+        self.npu.retain_expanded_devices(&active_devices);
         self.npu.data = Some(overview);
     }
 
@@ -1230,6 +1289,9 @@ impl<Data, Event> AcceleratorPaneState<Data, Event> {
             job: RemoteJobState::new(),
             data: None,
             status: status.to_string(),
+            search_draft: String::new(),
+            expanded_devices: HashSet::new(),
+            process_list_offset: 0,
             unavailable_sessions: HashSet::new(),
         }
     }
@@ -1262,6 +1324,36 @@ impl<Data, Event> AcceleratorPaneState<Data, Event> {
         self.unavailable_sessions.remove(session_id);
     }
 
+    fn apply_search(&mut self, text: String, status: &str) {
+        self.search_draft = text;
+        self.process_list_offset = 0;
+        self.status = status.to_string();
+    }
+
+    fn toggle_device_expanded(&mut self, key: String) {
+        if !self.expanded_devices.remove(&key) {
+            self.expanded_devices.insert(key);
+        }
+    }
+
+    fn retain_expanded_devices(&mut self, active_devices: &HashSet<String>) {
+        self.expanded_devices
+            .retain(|key| active_devices.contains(key));
+    }
+
+    fn clamp_process_offset(&mut self, max: usize) -> usize {
+        self.process_list_offset = self.process_list_offset.min(max);
+        self.process_list_offset
+    }
+
+    fn set_process_offset(&mut self, offset: usize) -> bool {
+        if self.process_list_offset == offset {
+            return false;
+        }
+        self.process_list_offset = offset;
+        true
+    }
+
     fn begin_job(&mut self, session_id: String) -> RemoteJobTicket<Event> {
         self.job.begin(session_id)
     }
@@ -1289,13 +1381,27 @@ impl<Data, Event> AcceleratorPaneState<Data, Event> {
     fn reset_for_session_switch(&mut self, status: &str) {
         self.job.reset_for_session_switch();
         self.data = None;
+        self.expanded_devices.clear();
+        self.process_list_offset = 0;
         self.status = status.to_string();
+    }
+}
+
+fn gpu_device_key(index: u32, uuid: &str) -> String {
+    let uuid = uuid.trim();
+    if uuid.is_empty() {
+        index.to_string()
+    } else {
+        uuid.to_string()
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use nyaterm_transport::{DockerContainerDetails, RemoteDockerOverview, RemoteProcess};
+    use nyaterm_transport::{
+        DockerContainerDetails, RemoteDockerOverview, RemoteGpu, RemoteGpuOverview, RemoteNpu,
+        RemoteNpuOverview, RemoteProcess,
+    };
 
     use super::{RemoteJobState, RemoteOpsFeatureFocus, RemoteOpsFeatureState};
 
@@ -1312,6 +1418,46 @@ mod tests {
             elapsed: "00:01".to_string(),
             command: "sleep".to_string(),
             command_line: "sleep 10".to_string(),
+        }
+    }
+
+    fn gpu(index: u32, uuid: &str) -> RemoteGpu {
+        RemoteGpu {
+            index,
+            uuid: uuid.to_string(),
+            name: format!("GPU {index}"),
+            temperature_c: None,
+            utilization_gpu_percent: None,
+            utilization_memory_percent: None,
+            memory_total_mb: 0,
+            memory_used_mb: 0,
+            memory_free_mb: 0,
+            power_draw_w: None,
+            power_limit_w: None,
+            fan_speed_percent: None,
+            pstate: String::new(),
+        }
+    }
+
+    fn npu(index: u32, chip_id: u32, device_key: &str) -> RemoteNpu {
+        RemoteNpu {
+            index,
+            chip_id,
+            physical_id: None,
+            device_key: device_key.to_string(),
+            name: format!("NPU {index}:{chip_id}"),
+            health: String::new(),
+            bus_id: String::new(),
+            temperature_c: None,
+            utilization_aicore_percent: None,
+            utilization_memory_percent: None,
+            memory_total_mb: 0,
+            memory_used_mb: 0,
+            memory_free_mb: 0,
+            memory_kind: String::new(),
+            hbm_total_mb: None,
+            hbm_used_mb: None,
+            power_draw_w: None,
         }
     }
 
@@ -1417,6 +1563,80 @@ mod tests {
             presentation.status,
             "start an SSH session to inspect remote stats"
         );
+    }
+
+    #[test]
+    fn accelerator_owner_tracks_search_offsets_and_prunes_missing_gpu_devices() {
+        let mut state = RemoteOpsFeatureState::new(RemoteOpsFeatureFocus {});
+        state.apply_gpu(
+            "session-a",
+            RemoteGpuOverview {
+                available: true,
+                gpus: vec![gpu(0, "gpu-a"), gpu(1, "gpu-b")],
+                ..Default::default()
+            },
+        );
+
+        state.toggle_gpu_device_expanded("gpu-a".to_string());
+        assert!(state.set_gpu_process_offset(12));
+        assert_eq!(state.gpu_presentation().process_list_offset, 12);
+
+        state.apply_gpu_search("python".to_string());
+        let presentation = state.gpu_presentation();
+        assert_eq!(presentation.search_draft, "python");
+        assert_eq!(presentation.process_list_offset, 0);
+        assert!(presentation.expanded_devices.contains("gpu-a"));
+
+        state.toggle_gpu_device_expanded("gpu-b".to_string());
+        state.apply_gpu(
+            "session-a",
+            RemoteGpuOverview {
+                available: true,
+                gpus: vec![gpu(1, "gpu-b")],
+                ..Default::default()
+            },
+        );
+
+        let presentation = state.gpu_presentation();
+        assert!(!presentation.expanded_devices.contains("gpu-a"));
+        assert!(presentation.expanded_devices.contains("gpu-b"));
+    }
+
+    #[test]
+    fn accelerator_owner_tracks_search_offsets_and_prunes_missing_npu_devices() {
+        let mut state = RemoteOpsFeatureState::new(RemoteOpsFeatureFocus {});
+        state.apply_npu(
+            "session-a",
+            RemoteNpuOverview {
+                available: true,
+                npus: vec![npu(0, 0, "npu-a"), npu(1, 0, "npu-b")],
+                ..Default::default()
+            },
+        );
+
+        state.toggle_npu_device_expanded("npu-a".to_string());
+        assert!(state.set_npu_process_offset(9));
+        assert_eq!(state.npu_presentation().process_list_offset, 9);
+
+        state.apply_npu_search("train".to_string());
+        let presentation = state.npu_presentation();
+        assert_eq!(presentation.search_draft, "train");
+        assert_eq!(presentation.process_list_offset, 0);
+        assert!(presentation.expanded_devices.contains("npu-a"));
+
+        state.toggle_npu_device_expanded("npu-b".to_string());
+        state.apply_npu(
+            "session-a",
+            RemoteNpuOverview {
+                available: true,
+                npus: vec![npu(1, 0, "npu-b")],
+                ..Default::default()
+            },
+        );
+
+        let presentation = state.npu_presentation();
+        assert!(!presentation.expanded_devices.contains("npu-a"));
+        assert!(presentation.expanded_devices.contains("npu-b"));
     }
 
     #[test]

@@ -585,6 +585,36 @@ impl NyaTermApp {
                 .and_then(|_| self.remote_ops.loaded_process_count())
                 .map(|count| SharedString::from(count.to_string()))
                 .unwrap_or_else(|| SharedString::from("")),
+            NavItem::GpuMonitor => self
+                .remote_ops
+                .gpu_presentation()
+                .data
+                .filter(|overview| overview.available)
+                .map(|overview| {
+                    SharedString::from(format!(
+                        "{} {} · {} {}",
+                        self.tr("gpuMonitor.driver"),
+                        panel_meta_version_or_dash(&overview.driver_version),
+                        self.tr("gpuMonitor.cuda"),
+                        panel_meta_version_or_dash(&overview.cuda_version)
+                    ))
+                })
+                .unwrap_or_else(|| SharedString::from("")),
+            NavItem::AscendNpuMonitor => self
+                .remote_ops
+                .npu_presentation()
+                .data
+                .filter(|overview| overview.available)
+                .map(|overview| {
+                    SharedString::from(format!(
+                        "{} {} · {} {}",
+                        self.tr("ascendNpuMonitor.driver"),
+                        panel_meta_version_or_dash(&overview.driver_version),
+                        self.tr("ascendNpuMonitor.cann"),
+                        panel_meta_version_or_dash(&overview.cann_version)
+                    ))
+                })
+                .unwrap_or_else(|| SharedString::from("")),
             NavItem::Docker => {
                 if self.session.active_ssh_config().is_none() {
                     return SharedString::from("");
@@ -918,6 +948,14 @@ impl NyaTermApp {
                     );
                 }),
             )
+    }
+}
+
+fn panel_meta_version_or_dash(value: &str) -> String {
+    if value.trim().is_empty() {
+        "-".to_string()
+    } else {
+        truncate_preview(value, 24)
     }
 }
 

@@ -468,6 +468,10 @@ impl NyaTermApp {
             self.apply_docker_search(text, cx);
         } else if id.as_ref() == "remote.process.filter" {
             self.apply_process_search(text, cx);
+        } else if id.as_ref() == "remote.gpu.filter" {
+            self.apply_gpu_search(text, cx);
+        } else if id.as_ref() == "remote.npu.filter" {
+            self.apply_npu_search(text, cx);
         } else if id.starts_with("remote.process.") && id.ends_with(".nice") {
             self.apply_process_nice_input(text, cx);
         } else if id.as_ref() == "settings.interaction.word-separators" {
