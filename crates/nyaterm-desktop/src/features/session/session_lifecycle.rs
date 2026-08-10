@@ -427,6 +427,12 @@ impl NyaTermApp {
         if self.session.active_id() == Some(old_id) {
             self.activate_session_id(new_id);
         }
+        self.transfer.replace_session_id(old_id, new_id);
+        if self.session.active_id() == Some(new_id)
+            && self.transfer.has_browser_session_cache(new_id)
+        {
+            self.restore_transfer_browser_session_cache(new_id);
+        }
         self.sync_workspace_split_from_active_tab();
     }
 }

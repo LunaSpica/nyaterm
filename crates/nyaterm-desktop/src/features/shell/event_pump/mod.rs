@@ -453,7 +453,13 @@ impl NyaTermApp {
             && !((self.session.active_ssh_config().is_some()
                 && matches!(
                     self.current_right_panel(),
-                    Some(NavItem::Stats | NavItem::Processes | NavItem::Docker)
+                    Some(
+                        NavItem::Stats
+                            | NavItem::GpuMonitor
+                            | NavItem::AscendNpuMonitor
+                            | NavItem::Processes
+                            | NavItem::Docker
+                    )
                 ))
                 || self.current_left_panel() == Some(NavItem::Transfers))
     }
@@ -512,7 +518,7 @@ impl NyaTermApp {
             dirty = true;
         }
 
-        if (right_panel == Some(NavItem::Stats) || self.header_status_needs_gpu())
+        if (right_panel == Some(NavItem::GpuMonitor) || self.header_status_needs_gpu())
             && self.settings.summary().ui_show_gpu_monitor
             && !self.remote_ops.gpu_is_pending()
             && remote_refresh_due(
@@ -524,7 +530,7 @@ impl NyaTermApp {
             dirty = true;
         }
 
-        if (right_panel == Some(NavItem::Stats) || self.header_status_needs_npu())
+        if (right_panel == Some(NavItem::AscendNpuMonitor) || self.header_status_needs_npu())
             && self.settings.summary().ui_show_ascend_npu_monitor
             && !self.remote_ops.npu_is_pending()
             && remote_refresh_due(

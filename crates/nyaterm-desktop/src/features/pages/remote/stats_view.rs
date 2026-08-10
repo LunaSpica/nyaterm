@@ -62,25 +62,8 @@ impl NyaTermApp {
         let memory_label = self.tr("resourceMonitor.memory").to_string();
         let available_label = self.tr("resourceMonitor.available").to_string();
         let cached_label = self.tr("resourceMonitor.cached").to_string();
-        let gpu_label = self.tr("resourceMonitor.gpu").to_string();
-        let npu_label = self.tr("resourceMonitor.npu").to_string();
-        let driver_label = self.tr("resourceMonitor.driver").to_string();
-        let cuda_label = self.tr("resourceMonitor.cuda").to_string();
-        let cann_label = self.tr("resourceMonitor.cann").to_string();
-        let temp_label = self.tr("resourceMonitor.temperature").to_string();
-        let power_label = self.tr("resourceMonitor.power").to_string();
-        let processes_label = self.tr("resourceMonitor.processes").to_string();
         let network_label = self.tr("resourceMonitor.network").to_string();
         let disk_label = self.tr("resourceMonitor.disk").to_string();
-        let gpu_state = self.remote_ops.gpu_presentation();
-        let npu_state = self.remote_ops.npu_presentation();
-        let accelerator_common = ResourceAcceleratorCommonLabels {
-            memory: memory_label.clone(),
-            temp: temp_label,
-            power: power_label,
-            processes: processes_label,
-            loading: self.tr("common.loading").to_string(),
-        };
 
         let mut network_rows = div().flex().flex_col();
         if stats.networks.is_empty() {
@@ -349,46 +332,101 @@ impl NyaTermApp {
                                     )),
                             ),
                     ))
-                    .when(self.settings.summary().ui_show_gpu_monitor, |this| {
-                        this.child(resource_section_card(
-                            palette,
-                            gpu_label,
-                            resource_gpu_rows(
-                                palette,
-                                gpu_state.data.as_ref(),
-                                &gpu_state.status,
-                                gpu_state.pending,
-                                ResourceGpuLabels {
-                                    common: accelerator_common.clone(),
-                                    driver: driver_label.clone(),
-                                    cuda: cuda_label,
-                                },
-                            ),
-                        ))
-                    })
-                    .when(
-                        self.settings.summary().ui_show_ascend_npu_monitor,
-                        |this| {
-                            this.child(resource_section_card(
-                                palette,
-                                npu_label,
-                                resource_npu_rows(
-                                    palette,
-                                    npu_state.data.as_ref(),
-                                    &npu_state.status,
-                                    npu_state.pending,
-                                    ResourceNpuLabels {
-                                        common: accelerator_common,
-                                        driver: driver_label,
-                                        cann: cann_label,
-                                    },
-                                ),
-                            ))
-                        },
-                    )
                     .child(resource_section_card(palette, network_label, network_rows))
                     .child(resource_section_card(palette, disk_label, disk_rows)),
             )
+    }
+
+    pub(in crate::features) fn gpu_view(&mut self, _cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.theme_palette();
+        if self.session.active_ssh_config().is_none() {
+            return div()
+                .size_full()
+                .bg(self.shell_transparent_color(palette.surface))
+                .child(empty_panel(
+                    self.tr("panel.resourceMonitorNoSession"),
+                    palette,
+                ));
+        }
+        let gpu_state = self.remote_ops.gpu_presentation();
+        div()
+            .size_full()
+            .overflow_hidden()
+            .bg(self.shell_transparent_color(palette.surface))
+            .child(
+                div()
+                    .id(SharedString::from("gpu-monitor-scroll"))
+                    .size_full()
+                    .overflow_scroll()
+                    .scrollbar_width(px(6.))
+                    .p(px(10.))
+                    .child(resource_section_card(
+                        palette,
+                        self.tr("resourceMonitor.gpu").to_string(),
+                        resource_gpu_rows(
+                            palette,
+                            gpu_state.data.as_ref(),
+                            &gpu_state.status,
+                            gpu_state.pending,
+                            ResourceGpuLabels {
+                                common: self.resource_accelerator_common_labels(),
+                                driver: self.tr("resourceMonitor.driver").to_string(),
+                                cuda: self.tr("resourceMonitor.cuda").to_string(),
+                            },
+                        ),
+                    )),
+            )
+    }
+
+    pub(in crate::features) fn npu_view(&mut self, _cx: &mut Context<Self>) -> impl IntoElement {
+        let palette = self.theme_palette();
+        if self.session.active_ssh_config().is_none() {
+            return div()
+                .size_full()
+                .bg(self.shell_transparent_color(palette.surface))
+                .child(empty_panel(
+                    self.tr("panel.resourceMonitorNoSession"),
+                    palette,
+                ));
+        }
+        let npu_state = self.remote_ops.npu_presentation();
+        div()
+            .size_full()
+            .overflow_hidden()
+            .bg(self.shell_transparent_color(palette.surface))
+            .child(
+                div()
+                    .id(SharedString::from("npu-monitor-scroll"))
+                    .size_full()
+                    .overflow_scroll()
+                    .scrollbar_width(px(6.))
+                    .p(px(10.))
+                    .child(resource_section_card(
+                        palette,
+                        self.tr("resourceMonitor.npu").to_string(),
+                        resource_npu_rows(
+                            palette,
+                            npu_state.data.as_ref(),
+                            &npu_state.status,
+                            npu_state.pending,
+                            ResourceNpuLabels {
+                                common: self.resource_accelerator_common_labels(),
+                                driver: self.tr("resourceMonitor.driver").to_string(),
+                                cann: self.tr("resourceMonitor.cann").to_string(),
+                            },
+                        ),
+                    )),
+            )
+    }
+
+    fn resource_accelerator_common_labels(&self) -> ResourceAcceleratorCommonLabels {
+        ResourceAcceleratorCommonLabels {
+            memory: self.tr("resourceMonitor.memory").to_string(),
+            temp: self.tr("resourceMonitor.temperature").to_string(),
+            power: self.tr("resourceMonitor.power").to_string(),
+            processes: self.tr("resourceMonitor.processes").to_string(),
+            loading: self.tr("common.loading").to_string(),
+        }
     }
 }
 

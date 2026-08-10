@@ -943,6 +943,51 @@ impl TransferFeatureState {
     pub(in crate::features) fn finish_panel_height_resize(&mut self) -> bool {
         self.panel.finish_height_resize()
     }
+
+    pub(in crate::features) fn replace_session_id(&mut self, old_id: &str, new_id: &str) -> bool {
+        if old_id == new_id {
+            return false;
+        }
+
+        let mut changed = false;
+        if let Some(cache) = self.browser.session_cache.remove(old_id) {
+            self.browser.session_cache.insert(new_id.to_string(), cache);
+            changed = true;
+        }
+
+        if let Some(job_id) = self.browser.navigation_jobs.remove(old_id) {
+            if let Some(replaced_job_id) = self
+                .browser
+                .navigation_jobs
+                .insert(new_id.to_string(), job_id)
+            {
+                self.browser.pending_navigations.remove(&replaced_job_id);
+            }
+            changed = true;
+        }
+        self.prune_unreferenced_browser_navigation_snapshots();
+
+        for job in &mut self.queue.jobs {
+            if job.is_user_transfer() && job.session_id.as_deref() == Some(old_id) {
+                job.session_id = Some(new_id.to_string());
+                changed = true;
+            }
+        }
+
+        changed
+    }
+
+    fn prune_unreferenced_browser_navigation_snapshots(&mut self) {
+        let referenced: HashSet<&str> = self
+            .browser
+            .navigation_jobs
+            .values()
+            .map(String::as_str)
+            .collect();
+        self.browser
+            .pending_navigations
+            .retain(|job_id, _| referenced.contains(job_id.as_str()));
+    }
 }
 
 impl TransferFileOpsState {

@@ -84,7 +84,22 @@ impl NyaTermApp {
             .zone(zone)
             .iter()
             .filter_map(|id| ActivityBarEntry::from_persistence_id(id))
+            .filter(|entry| self.activity_entry_visible(*entry))
             .collect()
+    }
+
+    fn activity_entry_visible(&self, entry: ActivityBarEntry) -> bool {
+        let summary = self.settings.summary();
+        match entry {
+            ActivityBarEntry::Panel(NavItem::Stats) => summary.ui_show_remote_stats,
+            ActivityBarEntry::Panel(NavItem::GpuMonitor) => summary.ui_show_gpu_monitor,
+            ActivityBarEntry::Panel(NavItem::AscendNpuMonitor) => {
+                summary.ui_show_ascend_npu_monitor
+            }
+            ActivityBarEntry::Panel(NavItem::Processes) => summary.ui_show_process_manager,
+            ActivityBarEntry::Panel(NavItem::Docker) => summary.ui_show_docker_manager,
+            _ => true,
+        }
     }
 
     pub(in crate::features) fn apply_activity_layout_from_settings(&mut self) {

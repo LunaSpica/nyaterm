@@ -176,8 +176,16 @@ impl NyaTermApp {
         let remote_panels_need_poll = (self.session.active_ssh_config().is_some()
             && (matches!(
                 self.current_right_panel(),
-                Some(NavItem::Stats | NavItem::Processes | NavItem::Docker)
-            ) || self.header_status_needs_remote_stats()))
+                Some(
+                    NavItem::Stats
+                        | NavItem::GpuMonitor
+                        | NavItem::AscendNpuMonitor
+                        | NavItem::Processes
+                        | NavItem::Docker
+                )
+            ) || self.header_status_needs_remote_stats()
+                || self.header_status_needs_gpu()
+                || self.header_status_needs_npu()))
             || self.current_left_panel() == Some(NavItem::Transfers);
         if calm_tick
             && !remote_panels_need_poll

@@ -6,6 +6,10 @@ use crate::features::{GpuJobResult, NpuJobResult, NyaTermApp};
 const ACCELERATOR_EVENT_DRAIN_LIMIT: usize = 8;
 
 impl NyaTermApp {
+    pub(in crate::features) fn refresh_gpu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.refresh_gpu_with_mode(false, window, cx);
+    }
+
     pub(in crate::features) fn refresh_gpu_auto(
         &mut self,
         window: &mut Window,
@@ -96,6 +100,10 @@ impl NyaTermApp {
             }
         }
         dirty
+    }
+
+    pub(in crate::features) fn refresh_npu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.refresh_npu_with_mode(false, window, cx);
     }
 
     pub(in crate::features) fn refresh_npu_auto(

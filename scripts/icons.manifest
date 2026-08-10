@@ -33,6 +33,7 @@ icons/copy.svg	md:filled/content_copy.svg
 icons/docker.svg	si:docker.svg
 icons/eye.svg	md:filled/visibility.svg
 icons/files.svg	md:outlined/folder.svg
+icons/gpu.svg	si:nvidia.svg
 icons/history.svg	md:filled/history.svg
 icons/import.svg	md:filled/file_download.svg
 icons/keyboard.svg	md:filled/keyboard.svg
@@ -41,6 +42,7 @@ icons/unlock.svg	md:filled/lock_open.svg
 icons/minus.svg	md:filled/remove.svg
 icons/mouse.svg	md:filled/mouse.svg
 icons/network.svg	md:filled/lan.svg
+icons/npu.svg	keep
 icons/pin.svg	md:filled/push_pin.svg
 icons/plus.svg	md:filled/add.svg
 icons/processes.svg	md:filled/list_alt.svg

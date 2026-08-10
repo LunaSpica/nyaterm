@@ -7,6 +7,8 @@ pub(crate) enum NavItem {
     Connections,
     Tunnels,
     Stats,
+    GpuMonitor,
+    AscendNpuMonitor,
     Processes,
     Docker,
     Transfers,
@@ -25,6 +27,8 @@ impl NavItem {
             NavItem::Connections => "panel.savedConnections",
             NavItem::Tunnels => "panel.network",
             NavItem::Stats => "panel.resourceMonitor",
+            NavItem::GpuMonitor => "panel.gpuMonitor",
+            NavItem::AscendNpuMonitor => "panel.npuMonitor",
             NavItem::Processes => "panel.processManager",
             NavItem::Docker => "panel.dockerManager",
             NavItem::Transfers => "panel.fileExplorer",
@@ -45,6 +49,8 @@ impl NavItem {
             NavItem::Connections => "Saved Connections",
             NavItem::Tunnels => "Network",
             NavItem::Stats => "Resource Monitor",
+            NavItem::GpuMonitor => "GPU Monitor",
+            NavItem::AscendNpuMonitor => "Ascend NPU Monitor",
             NavItem::Processes => "Process Manager",
             NavItem::Docker => "Docker",
             NavItem::Transfers => "File Explorer",
@@ -68,6 +74,8 @@ impl NavItem {
             NavItem::ActiveSessions => "Sessions",
             NavItem::CommandHistory => "History",
             NavItem::Stats => "Resources",
+            NavItem::GpuMonitor => "GPU",
+            NavItem::AscendNpuMonitor => "NPU",
             NavItem::Processes => "Processes",
             NavItem::Docker => "Docker",
             NavItem::SyncBackupHistory => "Cloud Sync",
@@ -92,6 +100,8 @@ impl NavItem {
             NavItem::ActiveSessions => "icons/sessions.svg",
             NavItem::CommandHistory => "icons/history.svg",
             NavItem::Stats => "icons/resources.svg",
+            NavItem::GpuMonitor => "icons/gpu.svg",
+            NavItem::AscendNpuMonitor => "icons/npu.svg",
             NavItem::Processes => "icons/processes.svg",
             NavItem::Docker => "icons/docker.svg",
             NavItem::Recording => "icons/record.svg",
@@ -117,6 +127,8 @@ impl NavItem {
                 | NavItem::ActiveSessions
                 | NavItem::CommandHistory
                 | NavItem::Stats
+                | NavItem::GpuMonitor
+                | NavItem::AscendNpuMonitor
                 | NavItem::Processes
                 | NavItem::Docker
                 | NavItem::Recording
@@ -135,6 +147,8 @@ impl NavItem {
             NavItem::Connections => "savedConnections",
             NavItem::Tunnels => "network",
             NavItem::Stats => "resourceMonitor",
+            NavItem::GpuMonitor => "gpuMonitor",
+            NavItem::AscendNpuMonitor => "ascendNpuMonitor",
             NavItem::Processes => "processManager",
             NavItem::Docker => "dockerManager",
             NavItem::Transfers => "fileExplorer",
@@ -154,6 +168,8 @@ impl NavItem {
             "connections" | "savedConnections" => Some(NavItem::Connections),
             "network" | "tunnels" => Some(NavItem::Tunnels),
             "stats" | "resourceMonitor" => Some(NavItem::Stats),
+            "gpu" | "gpuMonitor" => Some(NavItem::GpuMonitor),
+            "npu" | "ascendNpuMonitor" => Some(NavItem::AscendNpuMonitor),
             "processes" | "processManager" => Some(NavItem::Processes),
             "docker" | "dockerManager" => Some(NavItem::Docker),
             "fileExplorer" | "fileTransfer" | "transfers" => Some(NavItem::Transfers),
@@ -300,6 +316,8 @@ impl Default for ActivityBarLayoutState {
                 "activeSessions".to_string(),
                 "commandHistory".to_string(),
                 "resourceMonitor".to_string(),
+                "gpuMonitor".to_string(),
+                "ascendNpuMonitor".to_string(),
                 "processManager".to_string(),
                 "dockerManager".to_string(),
             ],
@@ -452,6 +470,51 @@ mod tests {
             Some(NavItem::Connections)
         );
         assert_eq!(layout.side_for_entry("missing"), None);
+    }
+
+    #[test]
+    fn gpu_and_npu_panels_keep_tauri_activity_ids() {
+        let layout = ActivityBarLayoutState::default();
+
+        assert_eq!(
+            NavItem::from_persistence_id("gpuMonitor"),
+            Some(NavItem::GpuMonitor)
+        );
+        assert_eq!(
+            NavItem::from_persistence_id("ascendNpuMonitor"),
+            Some(NavItem::AscendNpuMonitor)
+        );
+        assert_eq!(
+            ActivityBarEntry::from_persistence_id("gpuMonitor"),
+            Some(ActivityBarEntry::Panel(NavItem::GpuMonitor))
+        );
+        assert_eq!(
+            ActivityBarEntry::from_persistence_id("ascendNpuMonitor"),
+            Some(ActivityBarEntry::Panel(NavItem::AscendNpuMonitor))
+        );
+        assert_eq!(layout.side_for_entry("gpuMonitor"), Some(PanelSide::Right));
+        assert_eq!(
+            layout.side_for_entry("ascendNpuMonitor"),
+            Some(PanelSide::Right)
+        );
+        assert_eq!(
+            layout
+                .right_top
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            [
+                "savedConnections",
+                "aiAssistant",
+                "activeSessions",
+                "commandHistory",
+                "resourceMonitor",
+                "gpuMonitor",
+                "ascendNpuMonitor",
+                "processManager",
+                "dockerManager",
+            ]
+        );
     }
 
     #[test]

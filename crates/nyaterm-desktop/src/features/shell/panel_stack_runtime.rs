@@ -28,6 +28,18 @@ impl NyaTermApp {
         !NON_PANEL_IDS.contains(&id) && !Self::is_exclusive_panel_id(id)
     }
 
+    fn panel_id_visible(&self, id: &str) -> bool {
+        let summary = self.settings.summary();
+        match NavItem::from_persistence_id(id) {
+            Some(NavItem::Stats) => summary.ui_show_remote_stats,
+            Some(NavItem::GpuMonitor) => summary.ui_show_gpu_monitor,
+            Some(NavItem::AscendNpuMonitor) => summary.ui_show_ascend_npu_monitor,
+            Some(NavItem::Processes) => summary.ui_show_process_manager,
+            Some(NavItem::Docker) => summary.ui_show_docker_manager,
+            _ => true,
+        }
+    }
+
     pub(in crate::features) fn toggle_panel_multi_open(&mut self, cx: &mut Context<Self>) {
         self.shell.panels.multi_open = !self.shell.panels.multi_open;
         if self.shell.panels.multi_open {
@@ -102,7 +114,10 @@ impl NyaTermApp {
         let mut ordered = Vec::new();
         for zone in zones {
             for id in self.shell.chrome.activity_bar_layout.zone(zone) {
-                if open_set.contains(id) && Self::is_stackable_panel_id(id) {
+                if open_set.contains(id)
+                    && Self::is_stackable_panel_id(id)
+                    && self.panel_id_visible(id)
+                {
                     ordered.push(id.clone());
                 }
             }
@@ -695,6 +710,42 @@ impl NyaTermApp {
                         can_refresh,
                         cx.listener(|this, _, window, cx| {
                             this.refresh_stats(window, cx);
+                        }),
+                    )
+                    .into_any_element(),
+                )
+            }
+            NavItem::GpuMonitor => {
+                let palette = self.theme_palette();
+                let can_refresh =
+                    self.session.active_ssh_config().is_some() && !self.remote_ops.gpu_is_pending();
+                Some(
+                    header_svg_icon_button(
+                        palette,
+                        "gpu-header-refresh",
+                        "icons/fe/refresh.svg",
+                        self.tr("resourceMonitor.refresh"),
+                        can_refresh,
+                        cx.listener(|this, _, window, cx| {
+                            this.refresh_gpu(window, cx);
+                        }),
+                    )
+                    .into_any_element(),
+                )
+            }
+            NavItem::AscendNpuMonitor => {
+                let palette = self.theme_palette();
+                let can_refresh =
+                    self.session.active_ssh_config().is_some() && !self.remote_ops.npu_is_pending();
+                Some(
+                    header_svg_icon_button(
+                        palette,
+                        "npu-header-refresh",
+                        "icons/fe/refresh.svg",
+                        self.tr("resourceMonitor.refresh"),
+                        can_refresh,
+                        cx.listener(|this, _, window, cx| {
+                            this.refresh_npu(window, cx);
                         }),
                     )
                     .into_any_element(),

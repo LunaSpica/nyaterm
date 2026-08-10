@@ -1647,6 +1647,8 @@ fn default_activity_right_top() -> Vec<String> {
         "activeSessions".to_string(),
         "commandHistory".to_string(),
         "resourceMonitor".to_string(),
+        "gpuMonitor".to_string(),
+        "ascendNpuMonitor".to_string(),
         "processManager".to_string(),
         "dockerManager".to_string(),
     ]

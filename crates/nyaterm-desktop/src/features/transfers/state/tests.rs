@@ -303,6 +303,165 @@ fn browser_navigation_and_filters_reset_horizontal_scroll() {
 }
 
 #[test]
+fn transfer_session_id_migration_preserves_reconnected_sftp_state() {
+    let cx = TestAppContext::single();
+    let mut transfer = transfer_state(&cx);
+    let cache = TransferBrowserSessionCacheState {
+        entries: vec![file_entry("/srv/app.txt")],
+        current_path: "/srv".to_string(),
+        home_dir: "/home/nya".to_string(),
+        history: VecDeque::from(["/srv".to_string()]),
+        history_index: 0,
+        visited_history: VecDeque::from(["/srv".to_string()]),
+    };
+    transfer.store_browser_session_cache("old-session".to_string(), cache);
+    transfer.store_browser_session_cache(
+        "new-session".to_string(),
+        TransferBrowserSessionCacheState {
+            entries: vec![file_entry("/stale/file.txt")],
+            current_path: "/stale".to_string(),
+            home_dir: "/stale".to_string(),
+            history: VecDeque::from(["/stale".to_string()]),
+            history_index: 0,
+            visited_history: VecDeque::from(["/stale".to_string()]),
+        },
+    );
+    transfer
+        .browser
+        .navigation_jobs
+        .insert("old-session".to_string(), "sftp-list-1".to_string());
+    transfer.browser.pending_navigations.insert(
+        "sftp-list-1".to_string(),
+        TransferBrowserNavigationSnapshot {
+            remote_path: "/srv".to_string(),
+            browser_path: "/srv".to_string(),
+            entries: vec![file_entry("/srv/old.txt")],
+            loading: true,
+            error: None,
+            status: "listing".to_string(),
+            history: VecDeque::from(["/srv".to_string()]),
+            history_index: 0,
+            visited_history: VecDeque::new(),
+            selected_path: None,
+            selected_paths: HashSet::new(),
+            list_scroll: UniformListScrollHandle::new(),
+            horizontal_scroll: ScrollHandle::new(),
+        },
+    );
+    transfer.browser.pending_navigations.insert(
+        "orphan-list".to_string(),
+        TransferBrowserNavigationSnapshot {
+            remote_path: "/tmp".to_string(),
+            browser_path: "/tmp".to_string(),
+            entries: Vec::new(),
+            loading: false,
+            error: None,
+            status: "orphan".to_string(),
+            history: VecDeque::new(),
+            history_index: 0,
+            visited_history: VecDeque::new(),
+            selected_path: None,
+            selected_paths: HashSet::new(),
+            list_scroll: UniformListScrollHandle::new(),
+            horizontal_scroll: ScrollHandle::new(),
+        },
+    );
+    transfer.enqueue_transfer_job(TransferJobState {
+        id: "download".to_string(),
+        session_id: Some("old-session".to_string()),
+        kind: TransferJobKind::Download {
+            remote_path: "/srv/app.txt".to_string(),
+            local_path: PathBuf::from("/tmp/app.txt"),
+        },
+        status: TransferJobStatus::Running,
+        detail: "Downloading".to_string(),
+        created_at_ms: TransferJobState::now_ms(),
+        display_name: String::new(),
+        entries: Vec::new(),
+        summary: None,
+        progress: None,
+        control: None,
+    });
+    transfer.enqueue_transfer_job(TransferJobState {
+        id: "upload".to_string(),
+        session_id: Some("old-session".to_string()),
+        kind: TransferJobKind::Upload {
+            local_path: PathBuf::from("/tmp/app.txt"),
+            remote_path: "/srv/app.txt".to_string(),
+        },
+        status: TransferJobStatus::Running,
+        detail: "Uploading".to_string(),
+        created_at_ms: TransferJobState::now_ms(),
+        display_name: String::new(),
+        entries: Vec::new(),
+        summary: None,
+        progress: None,
+        control: None,
+    });
+    transfer.enqueue_transfer_job(TransferJobState {
+        id: "list".to_string(),
+        session_id: Some("old-session".to_string()),
+        kind: TransferJobKind::ListDir {
+            remote_path: "/srv".to_string(),
+            select_after: None,
+        },
+        status: TransferJobStatus::Running,
+        detail: "Listing".to_string(),
+        created_at_ms: TransferJobState::now_ms(),
+        display_name: String::new(),
+        entries: Vec::new(),
+        summary: None,
+        progress: None,
+        control: None,
+    });
+
+    assert!(transfer.replace_session_id("old-session", "new-session"));
+    transfer.remove_browser_session_cache("old-session");
+
+    assert!(transfer.has_browser_session_cache("new-session"));
+    assert!(!transfer.has_browser_session_cache("old-session"));
+    assert_eq!(
+        transfer
+            .restore_browser_session_cache("new-session")
+            .as_deref(),
+        Some("/srv")
+    );
+    assert_eq!(
+        transfer
+            .browser
+            .navigation_jobs
+            .get("new-session")
+            .map(String::as_str),
+        Some("sftp-list-1")
+    );
+    assert!(!transfer.browser.navigation_jobs.contains_key("old-session"));
+    assert!(
+        transfer
+            .browser
+            .pending_navigations
+            .contains_key("sftp-list-1")
+    );
+    assert!(
+        !transfer
+            .browser
+            .pending_navigations
+            .contains_key("orphan-list")
+    );
+    assert_eq!(
+        transfer.transfer_jobs()[0].session_id.as_deref(),
+        Some("new-session")
+    );
+    assert_eq!(
+        transfer.transfer_jobs()[1].session_id.as_deref(),
+        Some("new-session")
+    );
+    assert_eq!(
+        transfer.transfer_jobs()[2].session_id.as_deref(),
+        Some("old-session")
+    );
+}
+
+#[test]
 fn browser_selection_replacement_preserves_the_explicit_active_path() {
     let cx = TestAppContext::single();
     let mut transfer = transfer_state(&cx);
