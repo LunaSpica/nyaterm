@@ -244,6 +244,13 @@ pub(super) fn set_connection_editor_kind(
                 editor.port.clone()
             }
         }
+        ConnectionKindTab::Rdp => {
+            if editor.port.trim().is_empty() || editor.port == "22" || editor.port == "23" {
+                "3389".to_string()
+            } else {
+                editor.port.clone()
+            }
+        }
         _ => editor.port.clone(),
     };
     editor.error = None;
@@ -457,6 +464,12 @@ pub(super) fn editor_field_seeds(
             "",
         ),
         (
+            ConnectionEditorField::Domain,
+            draft.domain.clone(),
+            false,
+            "",
+        ),
+        (
             ConnectionEditorField::Password,
             draft.password.clone(),
             true,
@@ -566,6 +579,7 @@ pub(super) fn set_connection_editor_field_text(
         ConnectionEditorField::Host => draft.host = text,
         ConnectionEditorField::Port => draft.port = text,
         ConnectionEditorField::Username => draft.username = text,
+        ConnectionEditorField::Domain => draft.domain = text,
         ConnectionEditorField::Password => draft.password = text,
         ConnectionEditorField::ShellPath => draft.shell_path = text,
         ConnectionEditorField::ShellArgs => draft.shell_args = text,

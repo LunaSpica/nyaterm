@@ -211,6 +211,14 @@ impl NyaTermApp {
                     cx,
                 );
             }
+            ConnectionType::Rdp { .. } => {
+                self.shell.set_status(
+                    "RDP saved connection is available, but native RDP runtime is not wired yet"
+                        .to_string(),
+                );
+                self.shell.show_workspace();
+                cx.notify();
+            }
         }
     }
 
@@ -772,6 +780,7 @@ mod tests {
                 mode: "none".to_string(),
                 ..ConnectionAuth::default()
             }),
+            recording: None,
             ssh_algorithms: None,
             sftp: Default::default(),
             network: None,
@@ -814,6 +823,7 @@ mod tests {
                 mode: "none".to_string(),
                 ..ConnectionAuth::default()
             }),
+            recording: None,
             ssh_algorithms: Some(SshAlgorithmPreferences {
                 mode: SshAlgorithmMode::Secure,
                 ..Default::default()

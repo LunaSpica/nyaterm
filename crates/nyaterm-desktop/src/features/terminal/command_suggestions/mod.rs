@@ -9,8 +9,8 @@ use nyaterm_core::{
     CommandHistoryEntry, ConnectionStore, QuickCommand, TerminalInputState,
     apply_terminal_input_data, apply_terminal_input_data_in_place,
     can_suggest_from_tracked_command, command_starts_suggestion_suppressing_program,
-    get_tracked_command, get_tracked_submission_command, resync_from_terminal_line,
-    search_command_sources, terminal_input_tracker_below_min_chars,
+    get_tracked_command, get_tracked_submission_command, manual_empty_command_suggestions,
+    resync_from_terminal_line, search_command_sources, terminal_input_tracker_below_min_chars,
 };
 
 use crate::features::NyaTermApp;
@@ -484,6 +484,103 @@ impl NyaTermApp {
 
     pub(in crate::features) fn refresh_command_suggestions(&mut self, cx: &mut Context<Self>) {
         self.schedule_command_suggestion_refresh_after(Duration::ZERO, cx);
+    }
+
+    pub(in crate::features) fn show_manual_command_suggestions(&mut self, cx: &mut Context<Self>) {
+        if self.terminal.assist.credential_suggestions.is_some()
+            || self.is_credential_prompt_input_mode()
+            || self.terminal.assist.command_suggestions_suppressed
+            || self.settings.summary().terminal_low_latency_mode
+            || !self
+                .settings
+                .summary()
+                .interaction_command_suggestions_enabled
+        {
+            self.hide_command_suggestions_if_present(cx);
+            return;
+        }
+        let Some(session_id) = self
+            .session
+            .active_id()
+            .filter(|session_id| !session_id.is_empty())
+            .map(ToOwned::to_owned)
+        else {
+            self.hide_command_suggestions_if_present(cx);
+            return;
+        };
+        if !command_suggestion_input_can_defer_refresh(&self.terminal.assist.command_input_tracker)
+        {
+            self.hide_command_suggestions_if_present(cx);
+            return;
+        }
+
+        self.terminal.assist.command_suggestion_search_gen = self
+            .terminal
+            .assist
+            .command_suggestion_search_gen
+            .saturating_add(1);
+        self.terminal.assist.command_suggestion_refresh_task = None;
+        let min_chars = self
+            .settings
+            .summary()
+            .interaction_command_suggestion_min_chars
+            .max(1) as usize;
+        let max_chars = self
+            .settings
+            .summary()
+            .interaction_command_suggestion_max_chars
+            .max(min_chars as u32) as usize;
+        let pattern = get_tracked_command(&self.terminal.assist.command_input_tracker);
+        let pattern_chars = pattern.chars().count();
+        let results = if pattern.trim().is_empty() {
+            manual_empty_command_suggestions(
+                &self.commands.command_history_snapshot(),
+                &self.commands.quick_commands_snapshot(),
+                12,
+                Some(min_chars),
+                Some(max_chars),
+            )
+        } else if can_suggest_from_tracked_command(
+            &self.terminal.assist.command_input_tracker,
+            &pattern,
+        ) {
+            search_command_sources(
+                &self.commands.command_history_snapshot(),
+                &self.commands.quick_commands_snapshot(),
+                &pattern,
+                12,
+                Some(min_chars),
+                Some(max_chars),
+            )
+        } else {
+            Vec::new()
+        };
+        if results.is_empty() {
+            self.hide_command_suggestions_if_present(cx);
+            return;
+        }
+
+        let (cursor_row, cursor_col) = self.active_terminal_cursor_cell();
+        self.terminal.assist.command_suggestions = Some(CommandSuggestionState {
+            session_id,
+            draft: pattern,
+            items: results
+                .into_iter()
+                .map(|item| CommandSuggestionItem {
+                    command: item.command,
+                    display: item.display,
+                    source: item.source,
+                    score: item.score,
+                    indices: item.indices,
+                })
+                .collect(),
+            selected_index: None,
+            cursor_row,
+            cursor_col,
+        });
+        self.shell
+            .set_status(format!("showing {pattern_chars}-char command suggestions"));
+        cx.notify();
     }
 
     fn prepare_command_suggestion_search(

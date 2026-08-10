@@ -6,10 +6,37 @@ remaining entries here describe targeted parity, compatibility, ownership, and
 cleanup work rather than a broad half-migrated application state. Keep dynamic
 counts here instead of in `AGENTS.md`.
 
-Last updated from the working tree on 2026-08-09.
+Last updated from the working tree on 2026-08-10.
 
 ## Tauri Main Parity Refreshes
 
+- 2026-08-10 pulled and audited the active Tauri `main` delta from
+  `b5900d70` to `32df0957` after the broader `b5900d70..32df0957` parity
+  review. GPUI now carries the behavior-value pieces that fit the native
+  architecture: saved-connection recording overrides with legacy-safe serde,
+  effective recording auto-start resolution, transport-level recording status,
+  recording panel status/actions, large-output copy that uses throttled wording,
+  manual `Alt+R` command suggestions with empty-input history/quick-command
+  ranking, numeric-input draft preservation, RDP saved-connection models and
+  known-host certificate records, RDP connection-editor/new-session entry
+  points, a UI-independent RDP transport API scaffold, macOS GPUI native menu
+  action mapping, and GPU/NPU unavailable-session caching for auto refresh.
+- The same audit intentionally did not port the React/WebView
+  `TerminalOutputDrain` class. GPUI already owns terminal ordering,
+  backpressure and visible-session freshness in `TerminalFramePipeline` and the
+  session event bridge, so parity belongs in focused pipeline tests and
+  queue-pressure behavior rather than in a second drain abstraction.
+- RDP remains GPUI-native and UI-framework independent at the model/storage/API
+  boundary. The Tauri `src-tauri/vendor/ironrdp-*` snapshots were not copied:
+  GPUI should wire the runtime against upstream IronRDP crates when the client
+  engine is implemented, and vendoring is reserved for a documented upstream
+  gap under the repository vendor rules. A compile probe against upstream
+  `ironrdp-client 0.1.0`/`ironrdp-connector 0.10.0` found that their current
+  `picky 7.0.0-rc.25` dependency pulls pre-release `aes-gcm` and
+  `curve25519-dalek` versions that conflict with NyaTerm's credential crypto
+  and vendored `russh` dependency set. The current batch therefore exposes the
+  native transport surface, unavailable runtime status events, and persistence
+  compatibility without claiming a working frame/input engine.
 - 2026-08-09 audited the active Tauri `main` delta from `f41e0d6d` to
   `b5900d70`. GPUI now carries the compatible quick-command export JSON shape,
   WindTerm quickbar escaped/real terminal-newline handling, cloud-sync

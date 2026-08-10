@@ -705,6 +705,7 @@ mod tests {
             icon: None,
             icon_auto_detect: None,
             auth: None,
+            recording: None,
             ssh_algorithms: None,
             sftp: Default::default(),
             network: None,
@@ -1113,6 +1114,29 @@ pub(super) fn connection_detail_rows(
                     _ => "DEL".to_string(),
                 },
             ));
+        }
+        nyaterm_core::ConnectionType::Rdp {
+            host,
+            port,
+            username,
+            security,
+            display,
+            ..
+        } => {
+            rows.push(("Host", host.clone()));
+            rows.push(("Port", port.to_string()));
+            if !username.trim().is_empty() {
+                rows.push(("User", username.clone()));
+            }
+            rows.push((
+                "Security",
+                if security.use_nla {
+                    "NLA".to_string()
+                } else {
+                    "standard".to_string()
+                },
+            ));
+            rows.push(("Display", format!("{}x{}", display.width, display.height)));
         }
     }
     rows.push(("Last", format_last_used_ms(connection.last_used_at_ms)));

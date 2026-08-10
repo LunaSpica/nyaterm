@@ -1,7 +1,8 @@
 use gpui::Context;
 use nyaterm_core::{
     AiExecutionProfile, ConnectionAuth, ConnectionNetwork, ConnectionPostLogin, ConnectionStore,
-    ConnectionType, Group, SavedConnection, SftpCwdFollowMode, SftpSettings, SshAlgorithmMode,
+    ConnectionType, Group, RdpClipboardSettings, RdpDisplaySettings, RdpReconnectSettings,
+    RdpSecuritySettings, SavedConnection, SftpCwdFollowMode, SftpSettings, SshAlgorithmMode,
     SshAlgorithmPreferences, StorageError, TelnetAutoLoginConfig, uuid,
 };
 
@@ -56,6 +57,7 @@ pub(super) fn connection_editor_from_saved(
         host: String::new(),
         port: String::new(),
         username: "root".to_string(),
+        domain: String::new(),
         auth_mode: auth.mode,
         password_source,
         password_id: auth.password_id,
@@ -116,6 +118,7 @@ pub(super) fn connection_editor_from_saved(
         post_login_enabled: post_login.enabled,
         post_login_command: post_login.command,
         post_login_delay_ms: post_login.delay_ms.to_string(),
+        recording: connection.recording.clone(),
         advanced_open: false,
         advanced_network_tab: ConnectionEditorAdvancedTab::Proxy,
         advanced_behavior_tab: ConnectionEditorAdvancedTab::PostLogin,
@@ -199,6 +202,19 @@ pub(super) fn connection_editor_from_saved(
             editor.stop_bits = stop_bits;
             editor.backspace_mode = backspace_mode;
             editor.encoding = encoding_to_editor_value(&encoding);
+        }
+        ConnectionType::Rdp {
+            host,
+            port,
+            username,
+            domain,
+            ..
+        } => {
+            editor.host = host;
+            editor.port = port.to_string();
+            editor.username = username;
+            editor.domain = domain;
+            editor.auth_mode = "password".to_string();
         }
     }
     editor
@@ -369,6 +385,23 @@ pub(super) fn build_saved_connection_from_editor(
                 encoding: editor_encoding_to_saved(&editor.encoding),
             }
         }
+        ConnectionKindTab::Rdp => {
+            let host = editor.host.trim().to_string();
+            if host.is_empty() {
+                return Err("RDP host is required".to_string());
+            }
+            let port = parse_port(&editor.port, "RDP port")?;
+            ConnectionType::Rdp {
+                host,
+                port,
+                username: editor.username.trim().to_string(),
+                domain: editor.domain.trim().to_string(),
+                security: RdpSecuritySettings::default(),
+                display: RdpDisplaySettings::default(),
+                clipboard: RdpClipboardSettings::default(),
+                reconnect: RdpReconnectSettings::default(),
+            }
+        }
     };
 
     if editor.kind == ConnectionKindTab::Ssh {
@@ -399,7 +432,9 @@ pub(super) fn build_saved_connection_from_editor(
 
     let name = if editor.name.trim().is_empty() {
         match &config {
-            ConnectionType::Ssh { host, port, .. } | ConnectionType::Telnet { host, port, .. } => {
+            ConnectionType::Ssh { host, port, .. }
+            | ConnectionType::Telnet { host, port, .. }
+            | ConnectionType::Rdp { host, port, .. } => {
                 format!("{host}:{port}")
             }
             ConnectionType::LocalTerminal { .. } => "Local Terminal".to_string(),
@@ -410,7 +445,7 @@ pub(super) fn build_saved_connection_from_editor(
     };
 
     let auth = match editor.kind {
-        ConnectionKindTab::Ssh | ConnectionKindTab::Telnet => {
+        ConnectionKindTab::Ssh | ConnectionKindTab::Telnet | ConnectionKindTab::Rdp => {
             let password = editor.password.trim().to_string();
             let existing = editor.existing_password.clone();
             let mode = match editor.auth_mode.as_str() {
@@ -555,6 +590,7 @@ pub(super) fn build_saved_connection_from_editor(
         auth,
         network,
         post_login,
+        recording: editor.recording.clone(),
         ssh_algorithms,
         sftp,
         created_at_ms: None,
@@ -586,11 +622,12 @@ pub(super) fn non_empty_or(value: String, fallback: &str) -> String {
 #[cfg(test)]
 mod tests {
     use nyaterm_core::{
-        AiExecutionProfile, ConnectionAuth, ConnectionType, SavedConnection, SftpCwdFollowMode,
-        SftpSettings, SshAlgorithmMode, SshAlgorithmPreferences,
+        AiExecutionProfile, ConnectionAuth, ConnectionType, RdpClipboardSettings,
+        RdpDisplaySettings, RdpReconnectSettings, RdpSecuritySettings, SavedConnection,
+        SftpCwdFollowMode, SftpSettings, SshAlgorithmMode, SshAlgorithmPreferences,
     };
 
-    use crate::models::ConnectionEditorPasswordSource;
+    use crate::models::{ConnectionEditorPasswordSource, ConnectionKindTab};
 
     use super::{build_saved_connection_from_editor, connection_editor_from_saved};
 
@@ -612,6 +649,7 @@ mod tests {
             icon: Some("linux".to_string()),
             icon_auto_detect: None,
             auth: None,
+            recording: None,
             ssh_algorithms: None,
             sftp: Default::default(),
             network: None,
@@ -651,6 +689,7 @@ mod tests {
                 password_id: Some("password-1".to_string()),
                 ..ConnectionAuth::default()
             }),
+            recording: None,
             ssh_algorithms: None,
             sftp: Default::default(),
             network: None,
@@ -694,6 +733,7 @@ mod tests {
             icon: None,
             icon_auto_detect: None,
             auth: None,
+            recording: None,
             ssh_algorithms: Some(SshAlgorithmPreferences {
                 mode: SshAlgorithmMode::Custom,
                 kex: vec!["curve25519-sha256".to_string()],
@@ -752,6 +792,7 @@ mod tests {
             icon: None,
             icon_auto_detect: None,
             auth: None,
+            recording: None,
             ssh_algorithms: None,
             sftp: Default::default(),
             network: None,
@@ -779,6 +820,66 @@ mod tests {
         assert!(force_character_at_a_time);
         assert!(!send_naws);
         assert!(!send_sga);
+    }
+
+    #[test]
+    fn connection_editor_round_trip_preserves_rdp_identity_and_defaults() {
+        let connection = SavedConnection {
+            id: "connection-rdp".to_string(),
+            name: "RDP".to_string(),
+            config: ConnectionType::Rdp {
+                host: "desktop.example.com".to_string(),
+                port: 3390,
+                username: "operator".to_string(),
+                domain: "ACME".to_string(),
+                security: RdpSecuritySettings::default(),
+                display: RdpDisplaySettings::default(),
+                clipboard: RdpClipboardSettings::default(),
+                reconnect: RdpReconnectSettings::default(),
+            },
+            group_id: None,
+            description: None,
+            sort_order: 0,
+            icon: None,
+            icon_auto_detect: None,
+            auth: None,
+            recording: None,
+            ssh_algorithms: None,
+            sftp: Default::default(),
+            network: None,
+            post_login: None,
+            created_at_ms: None,
+            updated_at_ms: None,
+            last_used_at_ms: None,
+        };
+
+        let editor = connection_editor_from_saved(connection, false);
+        assert_eq!(editor.kind, ConnectionKindTab::Rdp);
+        assert_eq!(editor.domain, "ACME");
+
+        let saved = build_saved_connection_from_editor(&editor).expect("valid connection");
+        let ConnectionType::Rdp {
+            host,
+            port,
+            username,
+            domain,
+            security,
+            display,
+            clipboard,
+            reconnect,
+        } = saved.config
+        else {
+            panic!("expected RDP connection");
+        };
+
+        assert_eq!(host, "desktop.example.com");
+        assert_eq!(port, 3390);
+        assert_eq!(username, "operator");
+        assert_eq!(domain, "ACME");
+        assert_eq!(security, RdpSecuritySettings::default());
+        assert_eq!(display, RdpDisplaySettings::default());
+        assert_eq!(clipboard, RdpClipboardSettings::default());
+        assert_eq!(reconnect, RdpReconnectSettings::default());
     }
 
     #[test]
@@ -812,6 +913,7 @@ mod tests {
                 password: Some("secret".to_string()),
                 ..ConnectionAuth::default()
             }),
+            recording: None,
             ssh_algorithms: None,
             sftp: Default::default(),
             network: None,

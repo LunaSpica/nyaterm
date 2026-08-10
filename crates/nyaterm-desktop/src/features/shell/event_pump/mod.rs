@@ -520,7 +520,7 @@ impl NyaTermApp {
                 self.settings.summary().ui_gpu_monitor_interval.max(1),
             )
         {
-            self.refresh_gpu(window, cx);
+            self.refresh_gpu_auto(window, cx);
             dirty = true;
         }
 
@@ -535,7 +535,7 @@ impl NyaTermApp {
                     .max(1),
             )
         {
-            self.refresh_npu(window, cx);
+            self.refresh_npu_auto(window, cx);
             dirty = true;
         }
 

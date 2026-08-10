@@ -929,6 +929,7 @@ fn local_connection(id: &str, name: &str, shell: &str) -> SavedConnection {
         sftp: Default::default(),
         network: None,
         post_login: None,
+        recording: None,
         created_at_ms: None,
         updated_at_ms: None,
         last_used_at_ms: None,

@@ -169,6 +169,7 @@ struct AcceleratorPaneState<Data, Event> {
     job: RemoteJobState<Event>,
     pub data: Option<Data>,
     pub status: String,
+    unavailable_sessions: HashSet<String>,
 }
 
 #[derive(Clone)]
@@ -827,6 +828,10 @@ impl RemoteOpsFeatureState {
         self.gpu.is_pending_for(session_id)
     }
 
+    pub(in crate::features) fn gpu_unavailable_for(&self, session_id: &str) -> bool {
+        self.gpu.unavailable_for(session_id)
+    }
+
     pub(in crate::features) fn begin_gpu_job(
         &mut self,
         session_id: String,
@@ -854,7 +859,12 @@ impl RemoteOpsFeatureState {
         self.gpu.reset_refresh_failures();
     }
 
-    pub(in crate::features) fn apply_gpu(&mut self, overview: RemoteGpuOverview) {
+    pub(in crate::features) fn apply_gpu(&mut self, session_id: &str, overview: RemoteGpuOverview) {
+        if overview.available {
+            self.gpu.clear_unavailable(session_id);
+        } else {
+            self.gpu.mark_unavailable(session_id.to_string());
+        }
         self.gpu.data = Some(overview);
     }
 
@@ -868,6 +878,10 @@ impl RemoteOpsFeatureState {
 
     pub(in crate::features) fn npu_is_pending_for(&self, session_id: &str) -> bool {
         self.npu.is_pending_for(session_id)
+    }
+
+    pub(in crate::features) fn npu_unavailable_for(&self, session_id: &str) -> bool {
+        self.npu.unavailable_for(session_id)
     }
 
     pub(in crate::features) fn begin_npu_job(
@@ -897,7 +911,12 @@ impl RemoteOpsFeatureState {
         self.npu.reset_refresh_failures();
     }
 
-    pub(in crate::features) fn apply_npu(&mut self, overview: RemoteNpuOverview) {
+    pub(in crate::features) fn apply_npu(&mut self, session_id: &str, overview: RemoteNpuOverview) {
+        if overview.available {
+            self.npu.clear_unavailable(session_id);
+        } else {
+            self.npu.mark_unavailable(session_id.to_string());
+        }
         self.npu.data = Some(overview);
     }
 
@@ -1211,6 +1230,7 @@ impl<Data, Event> AcceleratorPaneState<Data, Event> {
             job: RemoteJobState::new(),
             data: None,
             status: status.to_string(),
+            unavailable_sessions: HashSet::new(),
         }
     }
 
@@ -1228,6 +1248,18 @@ impl<Data, Event> AcceleratorPaneState<Data, Event> {
 
     fn is_pending_for(&self, session_id: &str) -> bool {
         self.job.is_pending_for(session_id)
+    }
+
+    fn unavailable_for(&self, session_id: &str) -> bool {
+        self.unavailable_sessions.contains(session_id)
+    }
+
+    fn mark_unavailable(&mut self, session_id: String) {
+        self.unavailable_sessions.insert(session_id);
+    }
+
+    fn clear_unavailable(&mut self, session_id: &str) {
+        self.unavailable_sessions.remove(session_id);
     }
 
     fn begin_job(&mut self, session_id: String) -> RemoteJobTicket<Event> {
@@ -1385,5 +1417,34 @@ mod tests {
             presentation.status,
             "start an SSH session to inspect remote stats"
         );
+    }
+
+    #[test]
+    fn accelerator_owner_caches_unavailable_sessions_until_success() {
+        let mut state = RemoteOpsFeatureState::new(RemoteOpsFeatureFocus {});
+        let session_id = "session-a";
+
+        state.apply_gpu(
+            session_id,
+            nyaterm_transport::RemoteGpuOverview {
+                available: false,
+                ..Default::default()
+            },
+        );
+
+        assert!(state.gpu_unavailable_for(session_id));
+
+        state.reset_for_session_switch();
+        assert!(state.gpu_unavailable_for(session_id));
+
+        state.apply_gpu(
+            session_id,
+            nyaterm_transport::RemoteGpuOverview {
+                available: true,
+                ..Default::default()
+            },
+        );
+
+        assert!(!state.gpu_unavailable_for(session_id));
     }
 }

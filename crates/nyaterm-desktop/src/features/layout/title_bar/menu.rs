@@ -1,8 +1,9 @@
 use gpui::Context;
 use nyaterm_ui::{NyaAppMenuBar, NyaDialogWindowExt as _, NyaMenuItem};
 
+use crate::app_shell::NativeMenuCommand;
 use crate::features::NyaTermApp;
-use crate::models::{SmartSplitMode, TitleMenu};
+use crate::models::{NavItem, SmartSplitMode, TitleMenu};
 
 impl NyaTermApp {
     pub(crate) fn set_title_menu_bar(&mut self, menu_bar: gpui::Entity<NyaAppMenuBar>) {
@@ -25,6 +26,63 @@ impl NyaTermApp {
         self.shell.close_open_tabs_menu();
         self.shell.close_new_session_menu();
         cx.notify();
+    }
+
+    pub(crate) fn perform_native_menu_command(
+        &mut self,
+        command: NativeMenuCommand,
+        window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+    ) {
+        match command {
+            NativeMenuCommand::NewSession => {
+                self.open_connection_editor(None, None, false, window, cx);
+            }
+            NativeMenuCommand::NewLocalTerminal => {
+                self.start_local_session(window, cx);
+            }
+            NativeMenuCommand::QuickSwitch => {
+                self.open_quick_switch(window, cx);
+            }
+            NativeMenuCommand::OpenSettings => {
+                self.open_page(NavItem::Settings, cx);
+                self.shell.set_status("settings opened".to_string());
+                cx.notify();
+            }
+            NativeMenuCommand::ToggleLeftSidebar => {
+                self.toggle_left_sidebar(cx);
+            }
+            NativeMenuCommand::ToggleRightSidebar => {
+                self.toggle_right_inspector(cx);
+            }
+            NativeMenuCommand::ZoomIn => {
+                self.zoom_terminal_in(cx);
+            }
+            NativeMenuCommand::ZoomOut => {
+                self.zoom_terminal_out(cx);
+            }
+            NativeMenuCommand::ResetZoom => {
+                self.reset_terminal_font_size(cx);
+            }
+            NativeMenuCommand::TerminalCopy => {
+                self.copy_terminal_selection_or_visible(cx);
+            }
+            NativeMenuCommand::TerminalPaste => {
+                self.paste_from_clipboard(window, cx);
+            }
+            NativeMenuCommand::TerminalFind => {
+                self.open_terminal_search(window, cx);
+            }
+            NativeMenuCommand::TerminalClear => {
+                self.clear_terminal(cx);
+            }
+            NativeMenuCommand::TerminalSelectAll => {
+                self.select_all_terminal(cx);
+            }
+            NativeMenuCommand::ManageSyncGroups => {
+                self.open_sync_groups(window, cx);
+            }
+        }
     }
 
     pub(in crate::features) fn title_menu_items(

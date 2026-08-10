@@ -1,4 +1,5 @@
 mod local;
+mod rdp;
 mod serial;
 mod ssh;
 mod telnet;
@@ -19,6 +20,7 @@ use nyaterm_ui::{
 };
 
 use self::local::connection_editor_local_section;
+use self::rdp::connection_editor_rdp_section;
 use self::serial::connection_editor_serial_section;
 use self::ssh::{
     SshConnectionSectionLabels, SshConnectionSectionOptions, connection_editor_ssh_section,
@@ -896,19 +898,22 @@ impl NyaTermApp {
                                 NyaTabItem::new(local_label),
                                 NyaTabItem::new("Telnet"),
                                 NyaTabItem::new(serial_label),
+                                NyaTabItem::new("RDP"),
                             ])
                             .selected_index(match editor.kind {
                                 ConnectionKindTab::Ssh => 0,
                                 ConnectionKindTab::Local => 1,
                                 ConnectionKindTab::Telnet => 2,
                                 ConnectionKindTab::Serial => 3,
+                                ConnectionKindTab::Rdp => 4,
                             })
                             .on_select(cx.listener(|this, index, _, cx| {
                                 let kind = match *index {
                                     0 => ConnectionKindTab::Ssh,
                                     1 => ConnectionKindTab::Local,
                                     2 => ConnectionKindTab::Telnet,
-                                    _ => ConnectionKindTab::Serial,
+                                    3 => ConnectionKindTab::Serial,
+                                    _ => ConnectionKindTab::Rdp,
                                 };
                                 this.set_connection_editor_kind(kind, cx);
                             })),
@@ -989,6 +994,9 @@ impl NyaTermApp {
                     })
                     .when(editor.kind == ConnectionKindTab::Serial, |this| {
                         this.child(connection_editor_serial_section(section_context, cx))
+                    })
+                    .when(editor.kind == ConnectionKindTab::Rdp, |this| {
+                        this.child(connection_editor_rdp_section(section_context, cx))
                     })
                     .child(connection_description_field(
                         palette,
@@ -1774,6 +1782,7 @@ mod tests {
             description: String::new(),
             icon: None,
             icon_auto_detect: false,
+            recording: None,
             group_id: group_id.map(ToOwned::to_owned),
             new_group_name: String::new(),
             pending_group_name: pending_group_name.map(ToOwned::to_owned),
@@ -1781,6 +1790,7 @@ mod tests {
             host: String::new(),
             port: "22".to_string(),
             username: String::new(),
+            domain: String::new(),
             auth_mode: "password".to_string(),
             password_source: ConnectionEditorPasswordSource::Ask,
             password_id: None,

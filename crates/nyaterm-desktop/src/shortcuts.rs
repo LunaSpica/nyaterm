@@ -47,7 +47,7 @@ pub(crate) const SHORTCUT_CATEGORIES: [ShortcutCategory; 6] = [
     ShortcutCategory::Special,
 ];
 
-pub(crate) const SHORTCUT_REGISTRY: [ShortcutDefinition; 30] = [
+pub(crate) const SHORTCUT_REGISTRY: [ShortcutDefinition; 31] = [
     ShortcutDefinition {
         id: "terminal.copy",
         category: ShortcutCategory::Terminal,
@@ -103,6 +103,14 @@ pub(crate) const SHORTCUT_REGISTRY: [ShortcutDefinition; 30] = [
         default_keys: "Ctrl+Shift+G / Cmd+Shift+G",
         native_status: ShortcutNativeStatus::Supported,
         note: "Opens native synchronized input groups and broadcasts terminal input to peers.",
+    },
+    ShortcutDefinition {
+        id: "terminal.showCommandSuggestions",
+        category: ShortcutCategory::Terminal,
+        label: "Show Command Suggestions",
+        default_keys: "Alt+R",
+        native_status: ShortcutNativeStatus::Supported,
+        note: "Shows recent history and pinned quick commands when the command line is empty.",
     },
     ShortcutDefinition {
         id: "tab.newSession",

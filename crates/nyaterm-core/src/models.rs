@@ -200,6 +200,94 @@ pub enum ConnectionType {
         #[serde(default)]
         encoding: String,
     },
+    Rdp {
+        host: String,
+        #[serde(default = "default_rdp_port")]
+        port: u16,
+        #[serde(default)]
+        username: String,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        domain: String,
+        #[serde(default)]
+        security: RdpSecuritySettings,
+        #[serde(default)]
+        display: RdpDisplaySettings,
+        #[serde(default)]
+        clipboard: RdpClipboardSettings,
+        #[serde(default)]
+        reconnect: RdpReconnectSettings,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RdpSecuritySettings {
+    #[serde(default = "default_true")]
+    pub use_nla: bool,
+    #[serde(default = "default_rdp_certificate_policy")]
+    pub certificate_policy: String,
+}
+
+impl Default for RdpSecuritySettings {
+    fn default() -> Self {
+        Self {
+            use_nla: true,
+            certificate_policy: default_rdp_certificate_policy(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RdpDisplaySettings {
+    #[serde(default = "default_rdp_display_mode")]
+    pub mode: String,
+    #[serde(default = "default_rdp_width")]
+    pub width: u32,
+    #[serde(default = "default_rdp_height")]
+    pub height: u32,
+    #[serde(default = "default_rdp_color_depth")]
+    pub color_depth: u8,
+}
+
+impl Default for RdpDisplaySettings {
+    fn default() -> Self {
+        Self {
+            mode: default_rdp_display_mode(),
+            width: default_rdp_width(),
+            height: default_rdp_height(),
+            color_depth: default_rdp_color_depth(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RdpClipboardSettings {
+    #[serde(default = "default_rdp_clipboard_mode")]
+    pub mode: String,
+}
+
+impl Default for RdpClipboardSettings {
+    fn default() -> Self {
+        Self {
+            mode: default_rdp_clipboard_mode(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RdpReconnectSettings {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default = "default_rdp_reconnect_attempts")]
+    pub max_attempts: u32,
+}
+
+impl Default for RdpReconnectSettings {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            max_attempts: default_rdp_reconnect_attempts(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
@@ -620,6 +708,20 @@ pub struct ConnectionPostLogin {
     pub delay_ms: u64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+pub struct ConnectionRecordingSettings {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auto_start: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mode: Option<RecordingMode>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path_template: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub include_timestamps: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rotation: Option<RecordingRotationPolicy>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SavedConnection {
     #[serde(default = "uuid_v4")]
@@ -650,6 +752,8 @@ pub struct SavedConnection {
     #[serde(default)]
     pub post_login: Option<ConnectionPostLogin>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recording: Option<ConnectionRecordingSettings>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ssh_algorithms: Option<SshAlgorithmPreferences>,
     #[serde(default, skip_serializing_if = "is_default_sftp_settings")]
     pub sftp: SftpSettings,
@@ -678,6 +782,7 @@ impl SavedConnection {
             ConnectionType::LocalTerminal { .. } => "Local",
             ConnectionType::Telnet { .. } => "Telnet",
             ConnectionType::Serial { .. } => "Serial",
+            ConnectionType::Rdp { .. } => "RDP",
         }
     }
 
@@ -710,6 +815,22 @@ impl SavedConnection {
                 baud_rate,
                 ..
             } => format!("{port_name} @ {baud_rate}"),
+            ConnectionType::Rdp {
+                host,
+                port,
+                username,
+                domain,
+                ..
+            } => {
+                let account = if username.is_empty() {
+                    String::new()
+                } else if domain.is_empty() {
+                    format!("{username}@")
+                } else {
+                    format!("{domain}\\{username}@")
+                };
+                format!("{account}{host}:{port}")
+            }
         }
     }
 }
@@ -1656,6 +1777,10 @@ fn default_telnet_port() -> u16 {
     23
 }
 
+fn default_rdp_port() -> u16 {
+    3389
+}
+
 fn default_baud_rate() -> u32 {
     115_200
 }
@@ -1710,6 +1835,34 @@ fn default_telnet_auto_login_timeout_ms() -> u64 {
 
 fn default_true() -> bool {
     true
+}
+
+fn default_rdp_certificate_policy() -> String {
+    "prompt".to_string()
+}
+
+fn default_rdp_display_mode() -> String {
+    "fit-window".to_string()
+}
+
+fn default_rdp_width() -> u32 {
+    1920
+}
+
+fn default_rdp_height() -> u32 {
+    1080
+}
+
+fn default_rdp_color_depth() -> u8 {
+    32
+}
+
+fn default_rdp_clipboard_mode() -> String {
+    "text-only".to_string()
+}
+
+fn default_rdp_reconnect_attempts() -> u32 {
+    5
 }
 
 pub fn default_sftp_shell_detection_timeout_ms() -> u64 {
@@ -1818,6 +1971,7 @@ mod tests {
 
         assert_eq!(config.connections.len(), 4);
         for connection in &config.connections {
+            assert!(connection.recording.is_none());
             assert!(connection.ssh_algorithms.is_none());
             assert_eq!(connection.sftp, SftpSettings::default());
         }
@@ -1842,6 +1996,81 @@ mod tests {
             ConnectionType::Serial { encoding, .. } => assert_eq!(encoding, ""),
             other => panic!("expected serial connection, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn saved_connection_recording_override_round_trips() {
+        let json = r#"{
+            "id":"recording-override",
+            "name":"Recorded SSH",
+            "type":"ssh",
+            "host":"example.com",
+            "recording":{
+                "auto_start":true,
+                "mode":"raw",
+                "path_template":"{session}.raw",
+                "include_timestamps":false,
+                "rotation":{"type":"size","max_bytes":1048576}
+            }
+        }"#;
+
+        let connection: SavedConnection = serde_json::from_str(json).expect("valid connection");
+        let recording = connection.recording.as_ref().expect("recording override");
+        assert_eq!(recording.auto_start, Some(true));
+        assert_eq!(recording.mode, Some(RecordingMode::Raw));
+        assert_eq!(recording.path_template.as_deref(), Some("{session}.raw"));
+        assert_eq!(recording.include_timestamps, Some(false));
+        assert_eq!(
+            recording.rotation,
+            Some(RecordingRotationPolicy::Size {
+                max_bytes: 1_048_576
+            })
+        );
+
+        let round_trip: SavedConnection =
+            serde_json::from_str(&serde_json::to_string(&connection).expect("serialize"))
+                .expect("reload");
+        assert_eq!(round_trip, connection);
+    }
+
+    #[test]
+    fn rdp_connection_defaults_and_endpoint_match_tauri_shape() {
+        let json = r#"{
+            "id":"rdp-1",
+            "name":"Windows",
+            "type":"rdp",
+            "host":"192.168.1.20",
+            "username":"Administrator"
+        }"#;
+
+        let connection: SavedConnection = serde_json::from_str(json).expect("valid connection");
+        assert_eq!(connection.kind_label(), "RDP");
+        assert_eq!(connection.endpoint(), "Administrator@192.168.1.20:3389");
+
+        let ConnectionType::Rdp {
+            port,
+            domain,
+            security,
+            display,
+            clipboard,
+            reconnect,
+            ..
+        } = &connection.config
+        else {
+            panic!("expected RDP connection");
+        };
+
+        assert_eq!(*port, 3389);
+        assert!(domain.is_empty());
+        assert!(security.use_nla);
+        assert_eq!(security.certificate_policy, "prompt");
+        assert_eq!(display.mode, "fit-window");
+        assert_eq!(display.width, 1920);
+        assert_eq!(display.height, 1080);
+        assert_eq!(display.color_depth, 32);
+        assert_eq!(clipboard.mode, "text-only");
+        assert!(reconnect.enabled);
+        assert_eq!(reconnect.max_attempts, 5);
     }
 
     #[test]
@@ -1998,6 +2227,7 @@ mod tests {
             sftp: Default::default(),
             network: None,
             post_login: None,
+            recording: None,
             created_at_ms: None,
             updated_at_ms: None,
             last_used_at_ms: None,

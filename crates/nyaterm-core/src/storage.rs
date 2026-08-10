@@ -35,8 +35,8 @@ use self::config_backup::{
 use self::keyword_highlights::{
     merge_keyword_highlight_rules, normalize_keyword_highlight_rule, parse_keyword_highlight_import,
 };
-pub use self::known_hosts::KnownHostCheck;
 use self::known_hosts::replace_known_hosts_text_in_txn;
+pub use self::known_hosts::{KnownHostCheck, RdpCertificateMetadata};
 
 const DATABASE_FILE: &str = "nyaterm.redb";
 const GROUP_PREFIX: &str = "groups/";
@@ -51,6 +51,7 @@ const OTP_PREFIX: &str = "otp_accounts/";
 const PROXY_PREFIX: &str = "proxies/";
 const KNOWN_HOST_PREFIX: &str = "known_hosts/";
 const KNOWN_HOST_RAW_PREFIX: &str = "known_hosts/raw/";
+const RDP_KNOWN_HOST_PREFIX: &str = "rdp_known_hosts/";
 const COMMAND_HISTORY_PREFIX: &str = "command_history/";
 const META_MASTER_KEY: &str = "security/master_key";
 const LEGACY_TEXT_MASTER_KEY: &str = "master.key";

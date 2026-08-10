@@ -754,6 +754,7 @@ impl NyaTermApp {
             ConnectionType::Telnet { .. } => "icons/conn/telnet.svg",
             ConnectionType::Serial { .. } => "icons/conn/serial.svg",
             ConnectionType::LocalTerminal { .. } => "icons/conn/terminal.svg",
+            ConnectionType::Rdp { .. } => "icons/conn/server.svg",
         };
         div()
             .id(SharedString::from(format!(
@@ -850,6 +851,7 @@ impl NyaTermApp {
             ConnectionType::Telnet { .. } => "icons/conn/telnet.svg",
             ConnectionType::Serial { .. } => "icons/conn/serial.svg",
             ConnectionType::LocalTerminal { .. } => "icons/conn/terminal.svg",
+            ConnectionType::Rdp { .. } => "icons/conn/server.svg",
         };
         let endpoint = connection.endpoint();
         let label = name.clone();
@@ -961,6 +963,7 @@ mod tests {
             icon: None,
             icon_auto_detect: None,
             auth: None,
+            recording: None,
             ssh_algorithms: None,
             sftp: Default::default(),
             network: None,

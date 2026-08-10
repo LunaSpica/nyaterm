@@ -278,7 +278,7 @@ impl NyaTermApp {
         session_name: &str,
         cx: &mut Context<Self>,
     ) {
-        if !self.settings.summary().recording_auto_start {
+        if !self.effective_recording_auto_start(session_id) {
             return;
         }
         let _ = session_name;
@@ -324,20 +324,60 @@ impl NyaTermApp {
             username,
             started_at: OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc()),
         };
+        let connection_recording = metadata
+            .source_connection_id
+            .as_deref()
+            .and_then(|connection_id| {
+                self.connection_state
+                    .connections()
+                    .iter()
+                    .find(|connection| connection.id == connection_id)
+            })
+            .and_then(|connection| connection.recording.as_ref());
         let profile = RecordingProfile {
-            mode: map_recording_mode(summary.recording_default_mode),
+            mode: connection_recording
+                .and_then(|settings| settings.mode)
+                .map(map_recording_mode)
+                .unwrap_or_else(|| map_recording_mode(summary.recording_default_mode)),
             base_path: recording_base_path(summary, self.runtime.config_dir()),
-            path_template: summary.recording_path_template.clone(),
-            include_timestamps: summary.recording_include_timestamps,
+            path_template: connection_recording
+                .and_then(|settings| settings.path_template.as_ref())
+                .filter(|value| !value.trim().is_empty())
+                .cloned()
+                .unwrap_or_else(|| summary.recording_path_template.clone()),
+            include_timestamps: connection_recording
+                .and_then(|settings| settings.include_timestamps)
+                .unwrap_or(summary.recording_include_timestamps),
             include_io_labels: summary.recording_include_io_labels,
             include_session_metadata: summary.recording_include_session_metadata,
-            rotation: map_recording_rotation(&summary.recording_rotation),
+            rotation: connection_recording
+                .and_then(|settings| settings.rotation.as_ref())
+                .map(map_recording_rotation)
+                .unwrap_or_else(|| map_recording_rotation(&summary.recording_rotation)),
             existing_file_behavior: map_existing_file_behavior(
                 summary.recording_existing_file_behavior,
             ),
             include_binary_transfer_payloads: summary.recording_include_binary_transfer_payloads,
         };
         Some((context, profile))
+    }
+
+    fn effective_recording_auto_start(&self, session_id: &str) -> bool {
+        let Some(metadata) = self.session.metadata(session_id) else {
+            return false;
+        };
+        metadata
+            .source_connection_id
+            .as_deref()
+            .and_then(|connection_id| {
+                self.connection_state
+                    .connections()
+                    .iter()
+                    .find(|connection| connection.id == connection_id)
+            })
+            .and_then(|connection| connection.recording.as_ref())
+            .and_then(|settings| settings.auto_start)
+            .unwrap_or(self.settings.summary().recording_auto_start)
     }
 }
 

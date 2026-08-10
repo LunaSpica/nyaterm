@@ -75,7 +75,9 @@ pub use cloud_sync::{
     read_cloud_sync_history, remote_path, s3_payload_sha256, snippet_remote_filename,
     snippet_remote_path,
 };
-pub use command_search::{fuzzy_search_items, search_command_sources};
+pub use command_search::{
+    fuzzy_search_items, manual_empty_command_suggestions, search_command_sources,
+};
 pub use command_suggestion_suppression::{
     command_starts_suggestion_suppressing_program, is_pager_search_or_command_input,
     is_pager_single_key_input,
@@ -105,7 +107,9 @@ pub use portable_snapshot::{
 };
 pub use runtime::{AppRuntime, RuntimeMode};
 pub use session_import::{SessionImportError, import_sessions, import_termius_sessions};
-pub use storage::{ConfigBackupInfo, ConnectionStore, KnownHostCheck, StorageError};
+pub use storage::{
+    ConfigBackupInfo, ConnectionStore, KnownHostCheck, RdpCertificateMetadata, StorageError,
+};
 pub use terminal_file_drop::{
     format_local_terminal_drop_input, quote_local_path, terminal_drop_overlay_copy,
 };

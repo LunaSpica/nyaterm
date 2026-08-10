@@ -70,6 +70,29 @@ pub struct RecordingProfile {
     pub include_binary_transfer_payloads: bool,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum RecordingStatusState {
+    Starting,
+    #[default]
+    Recording,
+    Degraded,
+    Failed,
+    Stopping,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RecordingStatus {
+    pub session_id: String,
+    pub state: RecordingStatusState,
+    pub mode: RecordingMode,
+    pub file_path: Option<PathBuf>,
+    pub started_at: Option<OffsetDateTime>,
+    pub written_bytes: u64,
+    pub queued_bytes: u64,
+    pub dropped_bytes: u64,
+    pub last_error: Option<String>,
+}
+
 #[derive(Debug, Error)]
 pub enum RecordingError {
     #[error("{0}")]
@@ -657,6 +680,19 @@ impl RecordingManager {
         state.stop_recording()
     }
 
+    pub fn status(&self, session_id: &str) -> Option<RecordingStatus> {
+        let sessions = lock_recover(&self.sessions);
+        recording_status_for_state(session_id, sessions.get(session_id)?)
+    }
+
+    pub fn list_recording_statuses(&self) -> Vec<RecordingStatus> {
+        let sessions = lock_recover(&self.sessions);
+        sessions
+            .iter()
+            .filter_map(|(session_id, state)| recording_status_for_state(session_id, state))
+            .collect()
+    }
+
     pub fn save_transcript(
         &self,
         session_id: &str,
@@ -818,6 +854,24 @@ impl RecordingManager {
             state.finish();
         }
     }
+}
+
+fn recording_status_for_state(
+    session_id: &str,
+    state: &SessionCaptureState,
+) -> Option<RecordingStatus> {
+    let recording = state.recording.as_ref()?;
+    Some(RecordingStatus {
+        session_id: session_id.to_string(),
+        state: RecordingStatusState::Recording,
+        mode: recording.profile.mode,
+        file_path: Some(recording.file_path.clone()),
+        started_at: Some(recording.context.started_at),
+        written_bytes: recording.written_bytes,
+        queued_bytes: 0,
+        dropped_bytes: 0,
+        last_error: None,
+    })
 }
 
 impl Default for RecordingManager {

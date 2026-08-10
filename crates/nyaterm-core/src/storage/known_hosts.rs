@@ -10,8 +10,8 @@ use sha1::Sha1;
 
 use super::{
     ConnectionStore, KNOWN_HOST_PREFIX, KNOWN_HOST_RAW_PREFIX, KNOWN_HOSTS_TABLE,
-    LEGACY_TEXT_KNOWN_HOSTS, StorageError, TEXT_DOCS_TABLE, clear_prefix_in_txn, current_time_ms,
-    deserialize_json, stable_id, write_json_in_txn,
+    LEGACY_TEXT_KNOWN_HOSTS, RDP_KNOWN_HOST_PREFIX, StorageError, TEXT_DOCS_TABLE,
+    clear_prefix_in_txn, current_time_ms, deserialize_json, stable_id, write_json_in_txn,
 };
 use base64::{Engine, engine::general_purpose::STANDARD as B64};
 
@@ -44,6 +44,35 @@ struct KnownHostRecord {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 struct KnownHostRawRecord {
     line: String,
+    created_at_ms: u64,
+    updated_at_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct RdpCertificateMetadata {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subject: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub issuer: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub valid_from: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub valid_to: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+struct RdpKnownHostRecord {
+    host: String,
+    port: u16,
+    sha256_fingerprint: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    subject: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    issuer: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    valid_from: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    valid_to: Option<String>,
     created_at_ms: u64,
     updated_at_ms: u64,
 }
@@ -118,6 +147,54 @@ impl ConnectionStore {
     pub fn replace_known_hosts_export(&self, content: &str) -> Result<(), StorageError> {
         let txn = self.db.begin_write()?;
         replace_known_hosts_text_in_txn(&txn, content)?;
+        txn.commit()?;
+        Ok(())
+    }
+
+    pub fn check_rdp_known_host(
+        &self,
+        host: &str,
+        port: u16,
+        sha256_fingerprint: &str,
+    ) -> Result<KnownHostCheck, StorageError> {
+        let key = rdp_known_host_key(host, port);
+        let Some(value) = self.read_json_table::<RdpKnownHostRecord>(KNOWN_HOSTS_TABLE, &key)?
+        else {
+            return Ok(KnownHostCheck::UnknownHost);
+        };
+        if value
+            .sha256_fingerprint
+            .eq_ignore_ascii_case(sha256_fingerprint)
+        {
+            Ok(KnownHostCheck::Match)
+        } else {
+            Ok(KnownHostCheck::HostSeen)
+        }
+    }
+
+    pub fn upsert_rdp_known_host(
+        &self,
+        host: &str,
+        port: u16,
+        sha256_fingerprint: &str,
+        certificate: RdpCertificateMetadata,
+    ) -> Result<(), StorageError> {
+        let key = rdp_known_host_key(host, port);
+        let now = current_time_ms();
+        let existing = self.read_json_table::<RdpKnownHostRecord>(KNOWN_HOSTS_TABLE, &key)?;
+        let record = RdpKnownHostRecord {
+            host: host.trim().to_ascii_lowercase(),
+            port,
+            sha256_fingerprint: sha256_fingerprint.to_string(),
+            subject: certificate.subject,
+            issuer: certificate.issuer,
+            valid_from: certificate.valid_from,
+            valid_to: certificate.valid_to,
+            created_at_ms: existing.map_or(now, |record| record.created_at_ms),
+            updated_at_ms: now,
+        };
+        let txn = self.db.begin_write()?;
+        write_json_in_txn(&txn, KNOWN_HOSTS_TABLE, &key, &record)?;
         txn.commit()?;
         Ok(())
     }
@@ -308,6 +385,11 @@ fn known_host_key(record: &KnownHostRecord) -> String {
         record.key_type
     );
     format!("{KNOWN_HOST_PREFIX}{}", stable_id(&digest_input))
+}
+
+fn rdp_known_host_key(host: &str, port: u16) -> String {
+    let host_identifier = format!("{}:{}", host.trim().to_ascii_lowercase(), port);
+    format!("{RDP_KNOWN_HOST_PREFIX}{}", stable_id(&host_identifier))
 }
 
 fn render_known_host_record(record: &KnownHostRecord) -> String {

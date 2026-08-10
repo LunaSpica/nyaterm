@@ -15,6 +15,7 @@ pub(crate) enum ConnectionKindTab {
     Local,
     Telnet,
     Serial,
+    Rdp,
 }
 
 impl ConnectionKindTab {
@@ -24,6 +25,7 @@ impl ConnectionKindTab {
             Self::Local => "Local",
             Self::Telnet => "Telnet",
             Self::Serial => "Serial",
+            Self::Rdp => "RDP",
         }
     }
 
@@ -33,6 +35,7 @@ impl ConnectionKindTab {
             nyaterm_core::ConnectionType::LocalTerminal { .. } => Self::Local,
             nyaterm_core::ConnectionType::Telnet { .. } => Self::Telnet,
             nyaterm_core::ConnectionType::Serial { .. } => Self::Serial,
+            nyaterm_core::ConnectionType::Rdp { .. } => Self::Rdp,
         }
     }
 }
@@ -94,6 +97,7 @@ pub(crate) enum ConnectionEditorField {
     Host,
     Port,
     Username,
+    Domain,
     Password,
     ShellPath,
     ShellArgs,
@@ -159,6 +163,17 @@ impl ConnectionEditorField {
                 Self::BaudRate => Self::Name,
                 other => other.next_fallback(kind),
             },
+            ConnectionKindTab::Rdp => match self {
+                Self::Name => Self::Description,
+                Self::Description => Self::Host,
+                Self::Host => Self::Port,
+                Self::Port => Self::Username,
+                Self::Username => Self::Domain,
+                Self::Domain if auth_mode == "password" && password_field_visible => Self::Password,
+                Self::Domain => Self::Name,
+                Self::Password => Self::Name,
+                other => other.next_fallback(kind),
+            },
         }
     }
 
@@ -168,6 +183,7 @@ impl ConnectionEditorField {
             ConnectionKindTab::Local => Self::Name,
             ConnectionKindTab::Telnet => Self::Name,
             ConnectionKindTab::Serial => Self::Name,
+            ConnectionKindTab::Rdp => Self::Name,
         }
     }
 }
@@ -212,6 +228,22 @@ mod connection_editor_field_tests {
             ConnectionEditorField::Name
         );
     }
+
+    #[test]
+    fn rdp_tab_order_reaches_domain_before_optional_password() {
+        assert_eq!(
+            ConnectionEditorField::Username.next(ConnectionKindTab::Rdp, "password", true, false,),
+            ConnectionEditorField::Domain
+        );
+        assert_eq!(
+            ConnectionEditorField::Domain.next(ConnectionKindTab::Rdp, "password", true, false,),
+            ConnectionEditorField::Password
+        );
+        assert_eq!(
+            ConnectionEditorField::Domain.next(ConnectionKindTab::Rdp, "none", false, false,),
+            ConnectionEditorField::Name
+        );
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -230,6 +262,7 @@ pub(crate) struct ConnectionEditorState {
     pub(crate) host: String,
     pub(crate) port: String,
     pub(crate) username: String,
+    pub(crate) domain: String,
     pub(crate) auth_mode: String,
     pub(crate) password_source: ConnectionEditorPasswordSource,
     pub(crate) password_id: Option<String>,
@@ -278,6 +311,7 @@ pub(crate) struct ConnectionEditorState {
     pub(crate) post_login_enabled: bool,
     pub(crate) post_login_command: String,
     pub(crate) post_login_delay_ms: String,
+    pub(crate) recording: Option<nyaterm_core::ConnectionRecordingSettings>,
     pub(crate) advanced_open: bool,
     pub(crate) advanced_network_tab: ConnectionEditorAdvancedTab,
     pub(crate) advanced_behavior_tab: ConnectionEditorAdvancedTab,

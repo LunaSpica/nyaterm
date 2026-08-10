@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use nyaterm_transport::RecordingManager;
+use nyaterm_transport::{RecordingManager, RecordingStatus};
 
 use crate::models::{
     RecordingHistorySearchKey, RecordingPathPromptKind, RecordingWriteEvent, RecordingWriteHandle,
@@ -52,6 +52,10 @@ impl RecordingFeatureState {
 
     pub(in crate::features) fn is_recording(&self, session_id: &str) -> bool {
         self.manager.is_recording(session_id)
+    }
+
+    pub(in crate::features) fn status(&self, session_id: &str) -> Option<RecordingStatus> {
+        self.manager.status(session_id)
     }
 
     pub(in crate::features) fn busy_action(&self, session_id: &str) -> Option<&str> {

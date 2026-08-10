@@ -3,7 +3,7 @@ use gpui::{
     prelude::*, px, rgb, rgba, svg,
 };
 use nyaterm_core::truncate_preview;
-use nyaterm_transport::SessionInfo;
+use nyaterm_transport::{RecordingMode, SessionInfo};
 use nyaterm_ui::NyaInput;
 
 use crate::features::formatting::{session_kind_label, short_id};
@@ -94,6 +94,26 @@ impl NyaTermApp {
                 let is_busy = busy_action.is_some();
                 let kind = session_kind_label(session.kind).to_ascii_uppercase();
                 let short = short_id(&session.id).to_string();
+                let recording_status = self.recording.status(&session.id);
+                let recording_path = recording_status
+                    .as_ref()
+                    .and_then(|status| status.file_path.clone());
+                let recording_status_text = recording_status.as_ref().map(|status| {
+                    let mode = match status.mode {
+                        RecordingMode::Transcript => "transcript",
+                        RecordingMode::Raw => "raw",
+                    };
+                    let path = status
+                        .file_path
+                        .as_ref()
+                        .and_then(|path| path.file_name())
+                        .and_then(|name| name.to_str())
+                        .unwrap_or("recording.log");
+                    format!(
+                        "{mode} · {} · {path}",
+                        format_recording_bytes(status.written_bytes)
+                    )
+                });
 
                 session_rows = session_rows.child(
                     div()
@@ -182,6 +202,16 @@ impl NyaTermApp {
                                                     .text_color(rgb(palette.danger))
                                                     .child(format!("● {recording_label}")),
                                             )
+                                        })
+                                        .when_some(recording_status_text.clone(), |this, text| {
+                                            this.child(
+                                                div()
+                                                    .min_w_0()
+                                                    .overflow_hidden()
+                                                    .text_size(px(10.))
+                                                    .text_color(rgb(palette.text_dimmed))
+                                                    .child(truncate_preview(&text, 44)),
+                                            )
                                         }),
                                 ),
                         )
@@ -190,6 +220,23 @@ impl NyaTermApp {
                                 .flex()
                                 .items_center()
                                 .gap_0()
+                                .when_some(recording_path.clone(), |this, path| {
+                                    this.child(recording_action_svg_button(
+                                        palette,
+                                        format!("recording-session-reveal-{session_id}"),
+                                        "icons/conn/folder.svg",
+                                        rgb(palette.text_muted),
+                                        "Show recording in folder".to_string(),
+                                        !is_busy,
+                                        cx.listener(move |this, _, _, cx| {
+                                            cx.stop_propagation();
+                                            cx.reveal_path(&path);
+                                            this.shell.set_status(
+                                                "recording folder revealed".to_string(),
+                                            );
+                                        }),
+                                    ))
+                                })
                                 .child(recording_action_svg_button(
                                     palette,
                                     format!("recording-session-toggle-{session_id}"),
@@ -350,6 +397,16 @@ impl NyaTermApp {
 
     fn recording_session_filter_query(&self) -> String {
         self.recording.search_draft().trim().to_lowercase()
+    }
+}
+
+fn format_recording_bytes(bytes: u64) -> String {
+    if bytes >= 1024 * 1024 {
+        format!("{:.1} MiB", bytes as f64 / 1024. / 1024.)
+    } else if bytes >= 1024 {
+        format!("{:.1} KiB", bytes as f64 / 1024.)
+    } else {
+        format!("{bytes} B")
     }
 }
 

@@ -453,6 +453,7 @@ mod tests {
             icon: None,
             icon_auto_detect: None,
             auth: None,
+            recording: None,
             ssh_algorithms: None,
             sftp: Default::default(),
             network: None,

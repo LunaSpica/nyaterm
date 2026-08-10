@@ -6,8 +6,17 @@ use crate::features::{GpuJobResult, NpuJobResult, NyaTermApp};
 const ACCELERATOR_EVENT_DRAIN_LIMIT: usize = 8;
 
 impl NyaTermApp {
-    pub(in crate::features) fn refresh_gpu(
+    pub(in crate::features) fn refresh_gpu_auto(
         &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.refresh_gpu_with_mode(true, window, cx);
+    }
+
+    fn refresh_gpu_with_mode(
+        &mut self,
+        skip_unavailable: bool,
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -25,6 +34,9 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
+        if skip_unavailable && self.remote_ops.gpu_unavailable_for(&job_session_id) {
+            return;
+        }
         if self.remote_ops.gpu_is_pending_for(&job_session_id) {
             self.remote_ops
                 .set_gpu_status("GPU refresh already running");
@@ -72,7 +84,7 @@ impl NyaTermApp {
                         .set_gpu_status(gpu_overview_status(&overview));
                     self.shell
                         .set_status(self.remote_ops.gpu_status().to_string());
-                    self.remote_ops.apply_gpu(overview);
+                    self.remote_ops.apply_gpu(&event.session_id, overview);
                 }
                 Err(error) => {
                     self.remote_ops.record_gpu_refresh_failure();
@@ -86,8 +98,17 @@ impl NyaTermApp {
         dirty
     }
 
-    pub(in crate::features) fn refresh_npu(
+    pub(in crate::features) fn refresh_npu_auto(
         &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.refresh_npu_with_mode(true, window, cx);
+    }
+
+    fn refresh_npu_with_mode(
+        &mut self,
+        skip_unavailable: bool,
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -105,6 +126,9 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
+        if skip_unavailable && self.remote_ops.npu_unavailable_for(&job_session_id) {
+            return;
+        }
         if self.remote_ops.npu_is_pending_for(&job_session_id) {
             self.remote_ops
                 .set_npu_status("NPU refresh already running");
@@ -152,7 +176,7 @@ impl NyaTermApp {
                         .set_npu_status(npu_overview_status(&overview));
                     self.shell
                         .set_status(self.remote_ops.npu_status().to_string());
-                    self.remote_ops.apply_npu(overview);
+                    self.remote_ops.apply_npu(&event.session_id, overview);
                 }
                 Err(error) => {
                     self.remote_ops.record_npu_refresh_failure();

@@ -30,7 +30,7 @@ use super::decorations::{
     terminal_line_decorations_cache_key, terminal_line_decorations_needed,
     terminal_snapshot_absolute_range,
 };
-use super::helpers::{format_skipped_count, terminal_plain_text_input_event};
+use super::helpers::terminal_plain_text_input_event;
 
 fn terminal_shell_placeholder_snapshot() -> std::sync::Arc<TerminalSnapshot> {
     static SNAPSHOT: std::sync::OnceLock<std::sync::Arc<TerminalSnapshot>> =
@@ -100,6 +100,15 @@ impl NyaTermApp {
             } else {
                 self.send_terminal_key_event(event, true, cx);
             }
+            return;
+        }
+        if event.keystroke.modifiers.alt
+            && !event.keystroke.modifiers.control
+            && !event.keystroke.modifiers.platform
+            && event.keystroke.key.eq_ignore_ascii_case("r")
+        {
+            cx.stop_propagation();
+            self.show_manual_command_suggestions(cx);
             return;
         }
         if self.handle_global_shortcut(event, window, cx) {
@@ -677,28 +686,18 @@ impl NyaTermApp {
             .views
             .get(&session_id)
             .and_then(|view| view.performance_overlay);
-        let skipped_output_chars = self
-            .terminal
-            .view
-            .views
-            .get(&session_id)
-            .map(|view| view.skipped_output_chars)
-            .unwrap_or(0);
-        let performance_overlay_copy = performance_overlay.map(|overlay| {
-            let skipped = format_skipped_count(skipped_output_chars);
-            match overlay {
-                TerminalPerformanceOverlay::Overloaded => (
-                    self.tr("terminal.largeOutputProtectionActive").to_string(),
-                    self.tr("terminal.largeOutputProtectionActiveDetail")
-                        .replace("{{skipped}}", &skipped),
-                ),
-                TerminalPerformanceOverlay::Recovered => (
-                    self.tr("terminal.largeOutputProtectionRecovered")
-                        .to_string(),
-                    self.tr("terminal.largeOutputProtectionRecoveredDetail")
-                        .replace("{{skipped}}", &skipped),
-                ),
-            }
+        let performance_overlay_copy = performance_overlay.map(|overlay| match overlay {
+            TerminalPerformanceOverlay::Overloaded => (
+                self.tr("terminal.largeOutputProtectionActive").to_string(),
+                self.tr("terminal.largeOutputProtectionActiveDetail")
+                    .to_string(),
+            ),
+            TerminalPerformanceOverlay::Recovered => (
+                self.tr("terminal.largeOutputProtectionRecovered")
+                    .to_string(),
+                self.tr("terminal.largeOutputProtectionRecoveredDetail")
+                    .to_string(),
+            ),
         });
         let (render_cache_hits, render_cache_misses) = self
             .terminal

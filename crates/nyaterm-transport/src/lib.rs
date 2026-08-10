@@ -25,6 +25,7 @@ use tokio::sync::mpsc as tokio_mpsc;
 mod ascend_npu;
 mod gpu;
 mod local_fs;
+mod rdp;
 mod recording;
 mod remote_process;
 mod session_config;
@@ -115,12 +116,18 @@ pub use gpu::{
     parse_gpu_overview_output,
 };
 pub use local_fs::{LocalDirectoryChild, LocalFileService};
+pub use rdp::{
+    RdpCertificatePolicy, RdpCertificateRequest, RdpClipboardConfig, RdpClipboardMode,
+    RdpDisplayConfig, RdpDisplayMode, RdpFrameEvent, RdpInputEvent, RdpPointerButton,
+    RdpReconnectConfig, RdpRuntimeEvent, RdpSessionConfig, RdpSessionManager, RdpSessionState,
+    parse_rdp_certificate_policy, parse_rdp_clipboard_mode, parse_rdp_display_mode,
+};
 pub use recording::{
     DEFAULT_HISTORY_SEARCH_LIMIT, DEFAULT_HISTORY_SEARCH_LINES, DEFAULT_MEMORY_LIMIT_BYTES,
     ExistingFileBehavior, MAX_HISTORY_SEARCH_LINES, RecordingContext, RecordingError,
-    RecordingManager, RecordingMode, RecordingProfile, RecordingRotationPolicy,
-    TerminalHistorySearchRequest, TerminalHistorySearchResponse, TerminalHistorySearchResult,
-    safe_recording_name,
+    RecordingManager, RecordingMode, RecordingProfile, RecordingRotationPolicy, RecordingStatus,
+    RecordingStatusState, TerminalHistorySearchRequest, TerminalHistorySearchResponse,
+    TerminalHistorySearchResult, safe_recording_name,
 };
 pub use remote_process::{
     PROCESS_LIST_SCRIPT, PROCESS_LIST_UNSUPPORTED_ERROR, PROCESS_LIST_UNSUPPORTED_MARKER,

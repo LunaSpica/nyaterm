@@ -420,6 +420,15 @@ mod tests {
     }
 
     #[test]
+    fn committed_number_allows_empty_and_invalid_draft_text() {
+        let options = NyaNumberInputOptions::default().range(1.0, 10.0).step(2.0);
+
+        assert_eq!(committed_number_text("", &options), "");
+        assert_eq!(committed_number_text("nope", &options), "nope");
+        assert_eq!(committed_number_text("99", &options), "10");
+    }
+
+    #[test]
     fn stepped_number_preserves_decimal_places() {
         let options = NyaNumberInputOptions::default()
             .range(0.0, 60.0)

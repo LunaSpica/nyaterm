@@ -61,6 +61,7 @@ fn round_trips_sessions_in_redb_compatible_tables() {
             sftp: Default::default(),
             network: None,
             post_login: None,
+            recording: None,
             created_at_ms: None,
             updated_at_ms: None,
             last_used_at_ms: None,
@@ -125,6 +126,7 @@ fn exports_and_imports_native_redb_backup() {
             sftp: Default::default(),
             network: None,
             post_login: None,
+            recording: None,
             created_at_ms: None,
             updated_at_ms: None,
             last_used_at_ms: None,
@@ -208,6 +210,7 @@ fn exports_and_imports_portable_snapshot() {
                 sftp: Default::default(),
                 network: None,
                 post_login: None,
+                recording: None,
                 created_at_ms: None,
                 updated_at_ms: None,
                 last_used_at_ms: None,
@@ -368,6 +371,7 @@ fn encrypted_portable_snapshot_requires_master_password() {
                 sftp: Default::default(),
                 network: None,
                 post_login: None,
+                recording: None,
                 created_at_ms: None,
                 updated_at_ms: None,
                 last_used_at_ms: None,
@@ -428,6 +432,7 @@ fn encrypted_portable_snapshot_requires_master_password() {
                 sftp: Default::default(),
                 network: None,
                 post_login: None,
+                recording: None,
                 created_at_ms: None,
                 updated_at_ms: None,
                 last_used_at_ms: None,
@@ -502,6 +507,7 @@ fn rejects_invalid_backup_without_replacing_current_database() {
                 sftp: Default::default(),
                 network: None,
                 post_login: None,
+                recording: None,
                 created_at_ms: None,
                 updated_at_ms: None,
                 last_used_at_ms: None,
@@ -573,6 +579,7 @@ fn save_and_delete_connection_updates_store() {
         sftp: Default::default(),
         network: None,
         post_login: None,
+        recording: None,
         created_at_ms: None,
         updated_at_ms: None,
         last_used_at_ms: None,
@@ -618,6 +625,7 @@ fn save_group_and_connection_persists_both_records() {
         sftp: Default::default(),
         network: None,
         post_login: None,
+        recording: None,
         created_at_ms: None,
         updated_at_ms: None,
         last_used_at_ms: None,
@@ -689,6 +697,7 @@ fn deleting_group_removes_descendants_and_grouped_connections() {
                 sftp: Default::default(),
                 network: None,
                 post_login: None,
+                recording: None,
                 created_at_ms: None,
                 updated_at_ms: None,
                 last_used_at_ms: None,
@@ -732,6 +741,7 @@ fn load_sessions_decrypts_legacy_connection_password_record() {
         sftp: Default::default(),
         network: None,
         post_login: None,
+        recording: None,
         created_at_ms: None,
         updated_at_ms: None,
         last_used_at_ms: None,
@@ -1012,6 +1022,48 @@ fn known_hosts_check_distinguishes_match_changed_and_unknown() {
             .check_known_host("example.com", "ssh-ed25519", "CCCC")
             .expect("replaced"),
         KnownHostCheck::Match
+    );
+
+    std::fs::remove_dir_all(dir).ok();
+}
+
+#[test]
+fn rdp_known_hosts_check_distinguishes_match_changed_and_unknown() {
+    let dir = unique_temp_dir("rdp-known-hosts");
+    let store = ConnectionStore::open(&dir).expect("store");
+
+    assert_eq!(
+        store
+            .check_rdp_known_host("Windows.EXAMPLE.com", 3389, "sha256:a")
+            .expect("unknown rdp host"),
+        KnownHostCheck::UnknownHost
+    );
+
+    store
+        .upsert_rdp_known_host(
+            "windows.example.com",
+            3389,
+            "sha256:a",
+            crate::RdpCertificateMetadata {
+                subject: Some("CN=windows.example.com".to_string()),
+                issuer: Some("CN=lab-ca".to_string()),
+                valid_from: None,
+                valid_to: None,
+            },
+        )
+        .expect("save rdp host");
+
+    assert_eq!(
+        store
+            .check_rdp_known_host("WINDOWS.example.com", 3389, "SHA256:A")
+            .expect("matching rdp host"),
+        KnownHostCheck::Match
+    );
+    assert_eq!(
+        store
+            .check_rdp_known_host("windows.example.com", 3389, "sha256:b")
+            .expect("changed rdp host"),
+        KnownHostCheck::HostSeen
     );
 
     std::fs::remove_dir_all(dir).ok();

@@ -1,8 +1,8 @@
 //! Root GPUI shell boundary.
 
 use gpui::{
-    AppContext, Context, Entity, IntoElement, ParentElement, Render, Styled, Subscription,
-    WeakEntity, Window, div, px,
+    AppContext, Context, Entity, InteractiveElement, IntoElement, Menu, MenuItem, ParentElement,
+    Render, Styled, Subscription, SystemMenuType, WeakEntity, Window, actions, div, px,
 };
 use nyaterm_core::AppRuntime;
 use nyaterm_ui::{NyaAppMenu, NyaAppMenuBar};
@@ -11,6 +11,47 @@ use crate::{
     entities::{OverlayStore, StartupRestoreStore, UiStoreHandles, WindowRuntimeStore},
     features::NyaTermApp,
 };
+
+actions!(
+    nyaterm_native_menu,
+    [
+        NativeNewSession,
+        NativeNewLocalTerminal,
+        NativeQuickSwitch,
+        NativeOpenSettings,
+        NativeToggleLeftSidebar,
+        NativeToggleRightSidebar,
+        NativeZoomIn,
+        NativeZoomOut,
+        NativeResetZoom,
+        NativeTerminalCopy,
+        NativeTerminalPaste,
+        NativeTerminalFind,
+        NativeTerminalClear,
+        NativeTerminalSelectAll,
+        NativeManageSyncGroups,
+        NativeQuit
+    ]
+);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum NativeMenuCommand {
+    NewSession,
+    NewLocalTerminal,
+    QuickSwitch,
+    OpenSettings,
+    ToggleLeftSidebar,
+    ToggleRightSidebar,
+    ZoomIn,
+    ZoomOut,
+    ResetZoom,
+    TerminalCopy,
+    TerminalPaste,
+    TerminalFind,
+    TerminalClear,
+    TerminalSelectAll,
+    ManageSyncGroups,
+}
 
 #[allow(dead_code)]
 pub struct AppShell {
@@ -32,6 +73,7 @@ impl AppShell {
         let app = cx.new(|cx| NyaTermApp::new(runtime, stores, cx));
         let title_menu_bar = build_title_menu_bar(app.downgrade(), cx);
         app.update(cx, |app, _| app.set_title_menu_bar(title_menu_bar));
+        install_native_app_menus(cx);
         // Do not observe UI stores for parent notify: AppShell only hosts the
         // NyaTermApp entity, and NyaTermApp already cx.notify()s on visual dirty.
         // Store observe → AppShell notify was amplifying every snapshot publish
@@ -68,6 +110,55 @@ impl AppShell {
             }
         });
     }
+
+    fn perform_native_menu_command(
+        &mut self,
+        command: NativeMenuCommand,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.app.update(cx, |app, cx| {
+            app.perform_native_menu_command(command, window, cx);
+        });
+    }
+}
+
+fn install_native_app_menus(cx: &mut Context<AppShell>) {
+    if !cfg!(target_os = "macos") {
+        return;
+    }
+    cx.set_menus([
+        Menu::new("NyaTerm").items([
+            MenuItem::os_submenu("Services", SystemMenuType::Services),
+            MenuItem::separator(),
+            MenuItem::action("Quit NyaTerm", NativeQuit),
+        ]),
+        Menu::new("File").items([
+            MenuItem::action("New Session", NativeNewSession),
+            MenuItem::action("New Local Terminal", NativeNewLocalTerminal),
+        ]),
+        Menu::new("View").items([
+            MenuItem::action("Settings", NativeOpenSettings),
+            MenuItem::separator(),
+            MenuItem::action("Toggle Left Sidebar", NativeToggleLeftSidebar),
+            MenuItem::action("Toggle Right Sidebar", NativeToggleRightSidebar),
+            MenuItem::separator(),
+            MenuItem::action("Zoom In", NativeZoomIn),
+            MenuItem::action("Zoom Out", NativeZoomOut),
+            MenuItem::action("Reset Zoom", NativeResetZoom),
+        ]),
+        Menu::new("Terminal").items([
+            MenuItem::action("Command Palette", NativeQuickSwitch),
+            MenuItem::separator(),
+            MenuItem::action("Copy", NativeTerminalCopy),
+            MenuItem::action("Paste", NativeTerminalPaste),
+            MenuItem::action("Find", NativeTerminalFind),
+            MenuItem::action("Clear", NativeTerminalClear),
+            MenuItem::action("Select All", NativeTerminalSelectAll),
+            MenuItem::separator(),
+            MenuItem::action("Manage Sync Groups", NativeManageSyncGroups),
+        ]),
+    ]);
 }
 
 fn build_title_menu_bar(
@@ -110,7 +201,75 @@ fn build_title_menu_bar(
 }
 
 impl Render for AppShell {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        div().size_full().child(self.app.clone())
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .size_full()
+            .on_action(cx.listener(|this, _: &NativeNewSession, window, cx| {
+                this.perform_native_menu_command(NativeMenuCommand::NewSession, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &NativeNewLocalTerminal, window, cx| {
+                this.perform_native_menu_command(NativeMenuCommand::NewLocalTerminal, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &NativeQuickSwitch, window, cx| {
+                this.perform_native_menu_command(NativeMenuCommand::QuickSwitch, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &NativeOpenSettings, window, cx| {
+                this.perform_native_menu_command(NativeMenuCommand::OpenSettings, window, cx);
+            }))
+            .on_action(
+                cx.listener(|this, _: &NativeToggleLeftSidebar, window, cx| {
+                    this.perform_native_menu_command(
+                        NativeMenuCommand::ToggleLeftSidebar,
+                        window,
+                        cx,
+                    );
+                }),
+            )
+            .on_action(
+                cx.listener(|this, _: &NativeToggleRightSidebar, window, cx| {
+                    this.perform_native_menu_command(
+                        NativeMenuCommand::ToggleRightSidebar,
+                        window,
+                        cx,
+                    );
+                }),
+            )
+            .on_action(cx.listener(|this, _: &NativeZoomIn, window, cx| {
+                this.perform_native_menu_command(NativeMenuCommand::ZoomIn, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &NativeZoomOut, window, cx| {
+                this.perform_native_menu_command(NativeMenuCommand::ZoomOut, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &NativeResetZoom, window, cx| {
+                this.perform_native_menu_command(NativeMenuCommand::ResetZoom, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &NativeTerminalCopy, window, cx| {
+                this.perform_native_menu_command(NativeMenuCommand::TerminalCopy, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &NativeTerminalPaste, window, cx| {
+                this.perform_native_menu_command(NativeMenuCommand::TerminalPaste, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &NativeTerminalFind, window, cx| {
+                this.perform_native_menu_command(NativeMenuCommand::TerminalFind, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &NativeTerminalClear, window, cx| {
+                this.perform_native_menu_command(NativeMenuCommand::TerminalClear, window, cx);
+            }))
+            .on_action(
+                cx.listener(|this, _: &NativeTerminalSelectAll, window, cx| {
+                    this.perform_native_menu_command(
+                        NativeMenuCommand::TerminalSelectAll,
+                        window,
+                        cx,
+                    );
+                }),
+            )
+            .on_action(cx.listener(|this, _: &NativeManageSyncGroups, window, cx| {
+                this.perform_native_menu_command(NativeMenuCommand::ManageSyncGroups, window, cx);
+            }))
+            .on_action(|_: &NativeQuit, _window, cx| {
+                cx.quit();
+            })
+            .child(self.app.clone())
     }
 }
