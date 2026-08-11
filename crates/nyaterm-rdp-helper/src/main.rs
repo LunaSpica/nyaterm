@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::io;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::{
     Arc, Condvar, Mutex,
     atomic::{AtomicBool, Ordering},
@@ -124,15 +125,26 @@ async fn run() -> anyhow::Result<()> {
                 bridge.set_input_sender(input_sender.clone());
                 iron_input = Some(input_sender.clone());
                 clipboard_bridge = Some(bridge);
+                let client_session_id = session_id.clone();
+                let client_output_tx = output_tx.clone();
                 client_task = Some(
                     thread::Builder::new()
                         .name("nyaterm-ironrdp".to_string())
                         .spawn(move || {
-                            let runtime = tokio::runtime::Builder::new_current_thread()
-                                .enable_all()
-                                .build()
-                                .expect("failed to create IronRDP runtime");
-                            runtime.block_on(client.run());
+                            let result = catch_unwind(AssertUnwindSafe(|| {
+                                let runtime = tokio::runtime::Builder::new_current_thread()
+                                    .enable_all()
+                                    .build()
+                                    .expect("failed to create IronRDP runtime");
+                                runtime.block_on(client.run());
+                            }));
+                            if let Err(payload) = result {
+                                report_ironrdp_panic(
+                                    &client_output_tx,
+                                    &client_session_id,
+                                    payload,
+                                );
+                            }
                         })?,
                 );
                 output_task = Some(tokio::spawn(forward_output(
@@ -488,16 +500,6 @@ async fn forward_output(
             }
         };
         let Some(event) = event else {
-            if !connected {
-                let _ = output_tx.send(Outbound::Control(RdpControlMessage::Error {
-                    session_id: session_id.clone(),
-                    error: RdpError::new(
-                        RdpErrorKind::HelperCrashed,
-                        "IronRDP stopped before completing security negotiation",
-                    ),
-                    fatal: true,
-                }));
-            }
             return;
         };
         let terminal = matches!(
@@ -778,6 +780,30 @@ fn send_error(
     )
 }
 
+fn report_ironrdp_panic(
+    output_tx: &mpsc::Sender<Outbound>,
+    session_id: &str,
+    payload: Box<dyn std::any::Any + Send>,
+) {
+    let detail = if let Some(message) = payload.downcast_ref::<&str>() {
+        *message
+    } else if let Some(message) = payload.downcast_ref::<String>() {
+        message.as_str()
+    } else {
+        "non-string panic payload"
+    };
+    let detail = detail.replace(['\r', '\n'], " ");
+    let detail = detail.chars().take(512).collect::<String>();
+    let _ = output_tx.send(Outbound::Control(RdpControlMessage::Error {
+        session_id: session_id.to_string(),
+        error: RdpError::new(
+            RdpErrorKind::HelperCrashed,
+            format!("IronRDP runtime panicked: {detail}"),
+        ),
+        fatal: true,
+    }));
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::{Arc, mpsc};
@@ -787,7 +813,7 @@ mod tests {
     use nyaterm_remote_desktop::{RdpControlMessage, RdpErrorKind};
     use tokio::sync::mpsc as tokio_mpsc;
 
-    use super::{CertificateGate, Outbound, forward_output};
+    use super::{CertificateGate, Outbound, forward_output, report_ironrdp_panic};
 
     #[tokio::test]
     async fn stalled_security_negotiation_reports_a_fatal_timeout() {
@@ -814,5 +840,27 @@ mod tests {
         assert!(fatal);
         assert!(matches!(input_rx.recv().await, Some(IronInput::Close)));
         drop(rdp_output_tx);
+    }
+
+    #[test]
+    fn ironrdp_panic_is_forwarded_without_multiline_output() {
+        let (output_tx, output_rx) = mpsc::channel();
+        report_ironrdp_panic(
+            &output_tx,
+            "session",
+            Box::new("connector assertion\nfailed".to_string()),
+        );
+
+        let Outbound::Control(RdpControlMessage::Error { error, fatal, .. }) =
+            output_rx.recv().unwrap()
+        else {
+            panic!("expected a helper crash error");
+        };
+        assert_eq!(error.kind, RdpErrorKind::HelperCrashed);
+        assert_eq!(
+            error.message,
+            "IronRDP runtime panicked: connector assertion failed"
+        );
+        assert!(fatal);
     }
 }
