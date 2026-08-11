@@ -944,6 +944,10 @@ impl TransferFeatureState {
         self.panel.finish_height_resize()
     }
 
+    pub(in crate::features) fn panel_height_is_resizing(&self) -> bool {
+        self.panel.height_resize.is_some()
+    }
+
     pub(in crate::features) fn replace_session_id(&mut self, old_id: &str, new_id: &str) -> bool {
         if old_id == new_id {
             return false;

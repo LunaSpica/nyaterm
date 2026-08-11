@@ -55,7 +55,7 @@ pub use session_config::{
     SshCredentialPromptReason, SshCredentialProvider, SshHostKey, SshHostKeyDecision,
     SshHostKeyVerifier, SshKeyAuthConfig, SshKeyboardInteractivePrompt,
     SshKeyboardInteractiveRequest, SshOtpProvider, SshProxyConfig, SshSessionConfig,
-    TelnetAutoLoginConfig, TelnetEnterMode, TelnetSessionConfig,
+    SshSessionProfile, TelnetAutoLoginConfig, TelnetEnterMode, TelnetSessionConfig,
 };
 use session_event_queue::SessionEventQueue;
 #[cfg(test)]
@@ -1832,6 +1832,14 @@ async fn open_pending_ssh_shell(
     config: &SshSessionConfig,
     multiplex: Option<&SshMultiplexHandle>,
 ) -> anyhow::Result<PendingOpenSshShellSession> {
+    tracing::debug!(
+        stage = "connection",
+        host = %config.host,
+        port = config.port,
+        profile = ?config.profile,
+        multiplexed = multiplex.is_some(),
+        "opening SSH transport"
+    );
     let x11_config = if config.x11_forwarding {
         Some(prepare_x11_forwarding(&config.x11_display).await)
     } else {
@@ -1884,6 +1892,13 @@ async fn open_ssh_shell_from_pending(
         SshShellHandle::Dedicated(handle) => handle.channel_open_session().await?,
         SshShellHandle::Multiplexed(handle) => handle.lock().await.channel_open_session().await?,
     };
+    tracing::debug!(
+        stage = "interactive-channel",
+        host = %config.host,
+        port = config.port,
+        profile = ?config.profile,
+        "opened SSH session channel"
+    );
     let (x11_forwarder, local_notice) = if let (Some(config), Some(rx)) = (x11_config, x11_rx) {
         match channel
             .request_x11(true, false, MIT_MAGIC_COOKIE, &config.fake_cookie_hex, 0)
@@ -1906,8 +1921,26 @@ async fn open_ssh_shell_from_pending(
             &[],
         )
         .await?;
+    tracing::debug!(
+        stage = "pty",
+        host = %config.host,
+        port = config.port,
+        profile = ?config.profile,
+        term = %config.term,
+        cols = dimensions.cols,
+        rows = dimensions.rows,
+        "SSH PTY accepted"
+    );
     channel.request_shell(true).await?;
-    let shell_kind = match config.sftp.cwd_follow_mode {
+    tracing::debug!(
+        stage = "shell",
+        host = %config.host,
+        port = config.port,
+        profile = ?config.profile,
+        "SSH shell accepted"
+    );
+    let cwd_follow_mode = config.effective_cwd_follow_mode();
+    let shell_kind = match cwd_follow_mode {
         SftpCwdFollowMode::ShellIntegration | SftpCwdFollowMode::RcFile => {
             detect_ssh_shell_type(&handle, config.sftp.shell_detection_timeout_ms).await
         }
@@ -1919,13 +1952,23 @@ async fn open_ssh_shell_from_pending(
                 &handle,
                 kind,
                 &ready_marker,
-                config.sftp.cwd_follow_mode,
+                cwd_follow_mode,
                 config.sftp.shell_detection_timeout_ms,
             )
             .await
         }
         None => None,
     };
+    tracing::debug!(
+        stage = "integration",
+        host = %config.host,
+        port = config.port,
+        profile = ?config.profile,
+        cwd_follow_mode = ?cwd_follow_mode,
+        shell_detected = shell_kind.is_some(),
+        integration_enabled = injection_script.is_some(),
+        "resolved SSH shell integration"
+    );
     let handle = match handle {
         SshShellHandle::Dedicated(handle) => Some(handle),
         SshShellHandle::Multiplexed(_) => None,
@@ -2213,6 +2256,14 @@ fn open_authenticated_ssh_handle_with_sender_registry(
             .await
             .map_err(|_| anyhow::anyhow!("SSH ProxyJump target connection timed out"))??;
             authenticate_ssh(&mut handle, config).await?;
+            tracing::debug!(
+                stage = "authentication",
+                host = %config.host,
+                port = config.port,
+                profile = ?config.profile,
+                via_jump = true,
+                "SSH authentication completed"
+            );
             jump_handles.push(jump_handle);
             return Ok((handle, jump_handles));
         }
@@ -2225,6 +2276,14 @@ fn open_authenticated_ssh_handle_with_sender_registry(
         .map_err(|_| anyhow::anyhow!("SSH connection timed out"))??;
 
         authenticate_ssh(&mut handle, config).await?;
+        tracing::debug!(
+            stage = "authentication",
+            host = %config.host,
+            port = config.port,
+            profile = ?config.profile,
+            via_jump = false,
+            "SSH authentication completed"
+        );
         Ok((handle, Vec::new()))
     })
 }

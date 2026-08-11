@@ -35,7 +35,10 @@ use crate::models::{
     NetworkProxyEditorState, NetworkTab, NetworkTunnelEditorField, NetworkTunnelEditorState,
 };
 use gpui::TestAppContext;
-use nyaterm_core::{AiExecutionProfile, ConnectionType, Group, SavedConnection};
+use nyaterm_core::{
+    AiExecutionProfile, ConnectionRecordingSettings, ConnectionType, Group, RecordingMode,
+    RecordingRotationPolicy, SavedConnection, SshProfile, SshTerminalType,
+};
 
 #[test]
 fn search_expansion_opens_matches_and_restores_the_prior_tree() {
@@ -697,6 +700,81 @@ fn set_connection_editor_group_select_value_clears_group_draft() {
 }
 
 #[test]
+fn ssh_profile_selection_preserves_explicit_terminal_type() {
+    let mut draft = Some(ConnectionEditorState {
+        terminal_type: Some(SshTerminalType::Ansi),
+        ..connection_editor_state_with_secret_draft()
+    });
+
+    assert!(set_connection_editor_select_value(
+        &mut draft,
+        ConnectionEditorSelect::SshProfile,
+        Some("network_device".to_string()),
+    ));
+
+    let editor = draft.as_ref().expect("editor remains open");
+    assert_eq!(editor.ssh_profile, SshProfile::NetworkDevice);
+    assert_eq!(editor.terminal_type, Some(SshTerminalType::Ansi));
+
+    assert!(set_connection_editor_select_value(
+        &mut draft,
+        ConnectionEditorSelect::SshTerminalType,
+        None,
+    ));
+    let editor = draft.expect("editor remains open");
+    assert_eq!(editor.terminal_type, None);
+    assert_eq!(
+        nyaterm_core::resolve_ssh_terminal_type(editor.ssh_profile, editor.terminal_type),
+        SshTerminalType::Vt100
+    );
+}
+
+#[test]
+fn recording_edits_preserve_advanced_compatibility_fields() {
+    let expected_path = "logs/{session}.log".to_string();
+    let expected_rotation = RecordingRotationPolicy::Size { max_bytes: 8192 };
+    let mut draft = Some(ConnectionEditorState {
+        recording: Some(ConnectionRecordingSettings {
+            auto_start: Some(true),
+            mode: Some(RecordingMode::Raw),
+            path_template: Some(expected_path.clone()),
+            include_timestamps: Some(false),
+            rotation: Some(expected_rotation.clone()),
+        }),
+        ..connection_editor_state_with_secret_draft()
+    });
+
+    assert!(toggle_connection_editor_flag(
+        &mut draft,
+        ConnectionEditorToggle::RecordingAutoStart,
+    ));
+    assert!(set_connection_editor_select_value(
+        &mut draft,
+        ConnectionEditorSelect::RecordingMode,
+        Some("transcript".to_string()),
+    ));
+
+    let recording = draft
+        .as_ref()
+        .and_then(|editor| editor.recording.as_ref())
+        .expect("connection override remains enabled");
+    assert_eq!(recording.auto_start, Some(false));
+    assert_eq!(recording.mode, Some(RecordingMode::Transcript));
+    assert_eq!(
+        recording.path_template.as_deref(),
+        Some(expected_path.as_str())
+    );
+    assert_eq!(recording.include_timestamps, Some(false));
+    assert_eq!(recording.rotation, Some(expected_rotation));
+
+    assert!(toggle_connection_editor_flag(
+        &mut draft,
+        ConnectionEditorToggle::RecordingUseGlobal,
+    ));
+    assert_eq!(draft.expect("editor remains open").recording, None);
+}
+
+#[test]
 fn set_connection_editor_password_source_clears_secret_drafts() {
     let mut draft = Some(ConnectionEditorState {
         password_id: Some("saved-password".to_string()),
@@ -1293,6 +1371,8 @@ fn saved_connection(
         auth: None,
         recording: None,
         ssh_algorithms: None,
+        ssh_profile: Default::default(),
+        terminal_type: None,
         sftp: Default::default(),
         network: None,
         post_login: None,
@@ -1334,6 +1414,7 @@ fn connection_editor_state_with_secret_draft() -> ConnectionEditorState {
         rdp_display: Default::default(),
         rdp_clipboard: Default::default(),
         rdp_reconnect: Default::default(),
+        rdp_advanced_tab: crate::models::ConnectionEditorRdpTab::Security,
         password_source: ConnectionEditorPasswordSource::Direct,
         password_id: None,
         password: "draft-secret".to_string(),
@@ -1346,6 +1427,8 @@ fn connection_editor_state_with_secret_draft() -> ConnectionEditorState {
         x11_forwarding: false,
         backspace_mode: "del".to_string(),
         encoding: "global".to_string(),
+        ssh_profile: Default::default(),
+        terminal_type: None,
         sftp_enabled: true,
         sftp_cwd_follow_mode: "shell_integration".to_string(),
         sftp_shell_detection_timeout_ms: "3000".to_string(),

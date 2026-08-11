@@ -37,6 +37,7 @@ impl NyaTermApp {
 
         // Only SSH sessions report a remote system worth reading.
         if !matches!(connection.config, ConnectionType::Ssh { .. })
+            || connection.ssh_profile == nyaterm_core::SshProfile::NetworkDevice
             || !connection.icon_auto_detect_enabled()
         {
             return;

@@ -64,7 +64,7 @@ impl NyaTermApp {
     pub(in crate::features) fn reset_transfer_browser_for_active_session(&mut self) {
         self.transfer.set_remote_path(".");
         self.transfer
-            .reset_browser_for_session(self.session.active_ssh_config().is_some());
+            .reset_browser_for_session(self.session.active_ssh_file_browser_config().is_some());
     }
 
     pub(in crate::features) fn load_transfer_browser_for_active_session_if_needed(
@@ -74,7 +74,7 @@ impl NyaTermApp {
         let Some(session_id) = self.session.active_id_owned() else {
             return;
         };
-        if self.session.active_ssh_config().is_none()
+        if self.session.active_ssh_file_browser_config().is_none()
             || self.session.is_disconnected(&session_id)
             || self.transfer.has_browser_session_cache(&session_id)
             || self.transfer.browser_view().loading

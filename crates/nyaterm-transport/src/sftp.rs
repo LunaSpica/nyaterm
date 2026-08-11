@@ -518,8 +518,8 @@ impl SftpService {
         T: Send + 'static,
         F: Future<Output = anyhow::Result<T>> + Send + 'static,
     {
-        if !self.config.sftp.enabled {
-            return Err(anyhow::anyhow!("SFTP is disabled for this connection"));
+        if !self.config.remote_file_browser_enabled() {
+            return Err(anyhow::anyhow!("SFTP is disabled for this SSH profile"));
         }
         if let Some(multiplex) = self.multiplex.as_ref() {
             multiplex.block_on(operation)

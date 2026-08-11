@@ -2,11 +2,13 @@ use std::collections::HashSet;
 
 use gpui::{
     Context, InteractiveElement as _, IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent,
-    SharedString, Styled as _, Window, div, px, rgb,
+    SharedString, Styled as _, Window,
 };
 use nyaterm_core::{ConnectionStore, uuid};
 
-use crate::features::{NyaTermApp, short_id};
+use crate::features::{
+    NyaTermApp, horizontal_resize_handle_visual, short_id, vertical_resize_handle_visual,
+};
 use crate::models::{
     MainMode, NavItem, WorkspacePaneNode, WorkspaceSplitDirection, WorkspaceSplitResizeState,
 };
@@ -387,34 +389,29 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let accent = rgb(palette.link);
+        let dragging = self
+            .shell
+            .workspace
+            .split_resize
+            .as_ref()
+            .is_some_and(|resize| resize.split_id == split_id);
         let id = SharedString::from(format!("workspace-split-resize-{split_id}"));
         match direction {
-            WorkspaceSplitDirection::Horizontal => div()
+            WorkspaceSplitDirection::Horizontal => {
+                horizontal_resize_handle_visual(palette, dragging)
+                    .id(id)
+                    .cursor_row_resize()
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(move |this, event: &MouseDownEvent, _, cx| {
+                            this.start_workspace_split_resize(split_id.clone(), event, cx);
+                        }),
+                    )
+                    .into_any_element()
+            }
+            WorkspaceSplitDirection::Vertical => vertical_resize_handle_visual(palette, dragging)
                 .id(id)
-                .h(px(5.))
-                .flex_none()
-                .w_full()
-                .rounded_sm()
-                .bg(rgb(palette.border))
-                .cursor_row_resize()
-                .hover(move |this| this.bg(accent))
-                .on_mouse_down(
-                    MouseButton::Left,
-                    cx.listener(move |this, event: &MouseDownEvent, _, cx| {
-                        this.start_workspace_split_resize(split_id.clone(), event, cx);
-                    }),
-                )
-                .into_any_element(),
-            WorkspaceSplitDirection::Vertical => div()
-                .id(id)
-                .w(px(5.))
-                .flex_none()
-                .h_full()
-                .rounded_sm()
-                .bg(rgb(palette.border))
                 .cursor_col_resize()
-                .hover(move |this| this.bg(accent))
                 .on_mouse_down(
                     MouseButton::Left,
                     cx.listener(move |this, event: &MouseDownEvent, _, cx| {

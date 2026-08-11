@@ -5,12 +5,13 @@ use std::time::Instant;
 use gpui::{Context, Window};
 use nyaterm_core::{
     AiExecutionProfile, ConnectionAuth, ConnectionStore, ConnectionType, SavedConnection,
-    SftpCwdFollowMode, SftpSettings, SshAlgorithmMode, SshAlgorithmPreferences,
+    SftpCwdFollowMode, SftpSettings, SshAlgorithmMode, SshAlgorithmPreferences, SshProfile,
+    resolve_ssh_terminal_type,
 };
 use nyaterm_transport::{
     LocalSessionConfig, RdpClipboardConfig, RdpDisplayConfig, RdpReconnectConfig, RdpSessionConfig,
     SerialSessionConfig, SessionKind, SshKeyAuthConfig, SshProxyConfig, SshSessionConfig,
-    TelnetAutoLoginConfig, TelnetSessionConfig, parse_rdp_certificate_policy,
+    SshSessionProfile, TelnetAutoLoginConfig, TelnetSessionConfig, parse_rdp_certificate_policy,
     parse_rdp_clipboard_mode, parse_rdp_display_mode,
 };
 
@@ -499,7 +500,13 @@ pub(in crate::features) fn build_ssh_session_config_with_context(
         proxy,
         allow_none_auth,
         backspace_mode,
-        term: "xterm-256color".to_string(),
+        profile: match connection.ssh_profile {
+            SshProfile::Standard => SshSessionProfile::Standard,
+            SshProfile::NetworkDevice => SshSessionProfile::NetworkDevice,
+        },
+        term: resolve_ssh_terminal_type(connection.ssh_profile, connection.terminal_type)
+            .as_str()
+            .to_string(),
         x11_forwarding,
         x11_display: context.x11_display.clone(),
         encoding,
@@ -764,8 +771,10 @@ mod tests {
 
     use nyaterm_core::{
         AiExecutionProfile, ConnectionAuth, ConnectionStore, ConnectionType, SavedConnection,
-        SftpCwdFollowMode, SftpSettings, SshAlgorithmMode, SshAlgorithmPreferences, uuid,
+        SftpCwdFollowMode, SftpSettings, SshAlgorithmMode, SshAlgorithmPreferences, SshProfile,
+        SshTerminalType, uuid,
     };
+    use nyaterm_transport::SshSessionProfile;
 
     use super::{
         SshSessionConfigBuildContext, build_ssh_session_config_with_context,
@@ -886,6 +895,8 @@ mod tests {
             }),
             recording: None,
             ssh_algorithms: None,
+            ssh_profile: Default::default(),
+            terminal_type: None,
             sftp: Default::default(),
             network: None,
             post_login: None,
@@ -906,7 +917,7 @@ mod tests {
         let dir = unique_temp_dir("ssh-mapping");
         let mut context = test_ssh_build_context(dir.clone());
         context.default_encoding = "GB18030".to_string();
-        let connection = SavedConnection {
+        let mut connection = SavedConnection {
             id: "conn-1".to_string(),
             name: "SSH".to_string(),
             config: ConnectionType::Ssh {
@@ -932,8 +943,10 @@ mod tests {
                 mode: SshAlgorithmMode::Secure,
                 ..Default::default()
             }),
+            ssh_profile: SshProfile::NetworkDevice,
+            terminal_type: None,
             sftp: SftpSettings {
-                enabled: false,
+                enabled: true,
                 cwd_follow_mode: SftpCwdFollowMode::RcFile,
                 shell_detection_timeout_ms: 5000,
                 filename_encoding: "GBK".to_string(),
@@ -956,13 +969,22 @@ mod tests {
                 .map(|preferences| preferences.mode),
             Some(nyaterm_transport::SshAlgorithmMode::Secure)
         );
-        assert!(!config.sftp.enabled);
+        assert!(config.sftp.enabled);
         assert_eq!(
             config.sftp.cwd_follow_mode,
             nyaterm_transport::SftpCwdFollowMode::RcFile
         );
         assert_eq!(config.sftp.shell_detection_timeout_ms, 5000);
         assert_eq!(config.sftp.filename_encoding, "GBK");
+        assert_eq!(config.profile, SshSessionProfile::NetworkDevice);
+        assert_eq!(config.term, "vt100");
+        assert!(!config.remote_file_browser_enabled());
+        assert!(!config.remote_stats_enabled());
+
+        connection.terminal_type = Some(SshTerminalType::Ansi);
+        let explicit =
+            build_ssh_session_config_with_context(&connection, &mut Vec::new(), &context).unwrap();
+        assert_eq!(explicit.term, "ansi");
         let _ = std::fs::remove_dir_all(dir);
     }
 }

@@ -916,38 +916,44 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let above = above_id.clone();
         let below = below_id.clone();
-        div()
-            .id(SharedString::from(format!(
-                "panel-stack-resize-{}-{}-{}",
-                match side {
-                    PanelSide::Left => "left",
-                    PanelSide::Right => "right",
-                },
-                above_id,
-                below_id
-            )))
-            .h(px(3.))
-            .flex_none()
-            .w_full()
-            .bg(rgb(palette.border))
-            .cursor_row_resize()
-            .hover(|this| this.bg(rgb(0x58a6ff)))
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(move |this, event: &MouseDownEvent, _, cx| {
-                    let open = this.side_open_panel_ids(side);
-                    let total_weight: f32 = open.iter().map(|id| this.panel_stack_weight(id)).sum();
-                    let container_height = 480.0_f32.max(total_weight * 120.);
-                    this.start_panel_stack_resize(
-                        side,
-                        above.clone(),
-                        below.clone(),
-                        event,
-                        container_height,
-                        cx,
-                    );
+        crate::features::horizontal_resize_handle_visual(
+            palette,
+            self.shell
+                .panels
+                .stack_resize
+                .as_ref()
+                .is_some_and(|resize| {
+                    resize.side == side
+                        && resize.above_id == above_id
+                        && resize.below_id == below_id
                 }),
-            )
+        )
+        .id(SharedString::from(format!(
+            "panel-stack-resize-{}-{}-{}",
+            match side {
+                PanelSide::Left => "left",
+                PanelSide::Right => "right",
+            },
+            above_id,
+            below_id
+        )))
+        .cursor_row_resize()
+        .on_mouse_down(
+            MouseButton::Left,
+            cx.listener(move |this, event: &MouseDownEvent, _, cx| {
+                let open = this.side_open_panel_ids(side);
+                let total_weight: f32 = open.iter().map(|id| this.panel_stack_weight(id)).sum();
+                let container_height = 480.0_f32.max(total_weight * 120.);
+                this.start_panel_stack_resize(
+                    side,
+                    above.clone(),
+                    below.clone(),
+                    event,
+                    container_height,
+                    cx,
+                );
+            }),
+        )
     }
 }
 

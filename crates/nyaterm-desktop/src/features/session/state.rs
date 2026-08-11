@@ -690,6 +690,11 @@ impl SessionFeatureState {
         self.active_ssh_config().cloned()
     }
 
+    pub(in crate::features) fn active_ssh_file_browser_config(&self) -> Option<&SshSessionConfig> {
+        self.active_ssh_config()
+            .filter(|config| config.remote_file_browser_enabled())
+    }
+
     pub(in crate::features) fn active_ssh_multiplex_handle(
         &mut self,
     ) -> Option<SshMultiplexHandle> {

@@ -111,6 +111,13 @@ pub enum SftpCwdFollowMode {
     RcFile,
 }
 
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum SshSessionProfile {
+    #[default]
+    Standard,
+    NetworkDevice,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SftpSettings {
     pub enabled: bool,
@@ -144,6 +151,7 @@ pub struct SshSessionConfig {
     pub proxy: Option<SshProxyConfig>,
     pub allow_none_auth: bool,
     pub backspace_mode: String,
+    pub profile: SshSessionProfile,
     pub term: String,
     pub x11_forwarding: bool,
     pub x11_display: String,
@@ -162,6 +170,28 @@ pub struct SshSessionConfig {
     pub host_key_verifier: Option<Arc<dyn SshHostKeyVerifier>>,
     pub credential_provider: Option<Arc<dyn SshCredentialProvider>>,
     pub otp_provider: Option<Arc<dyn SshOtpProvider>>,
+}
+
+impl SshSessionConfig {
+    pub fn is_network_device(&self) -> bool {
+        self.profile == SshSessionProfile::NetworkDevice
+    }
+
+    pub fn remote_file_browser_enabled(&self) -> bool {
+        self.sftp.enabled && !self.is_network_device()
+    }
+
+    pub fn remote_stats_enabled(&self) -> bool {
+        !self.is_network_device()
+    }
+
+    pub fn effective_cwd_follow_mode(&self) -> SftpCwdFollowMode {
+        if self.remote_file_browser_enabled() {
+            self.sftp.cwd_follow_mode
+        } else {
+            SftpCwdFollowMode::Off
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -222,6 +252,7 @@ impl std::fmt::Debug for SshSessionConfig {
             .field("proxy", &self.proxy)
             .field("allow_none_auth", &self.allow_none_auth)
             .field("backspace_mode", &self.backspace_mode)
+            .field("profile", &self.profile)
             .field("term", &self.term)
             .field("x11_forwarding", &self.x11_forwarding)
             .field("x11_display", &self.x11_display)
@@ -378,6 +409,7 @@ impl Default for SshSessionConfig {
             proxy: None,
             allow_none_auth: false,
             backspace_mode: "del".to_string(),
+            profile: SshSessionProfile::Standard,
             term: "xterm-256color".to_string(),
             x11_forwarding: false,
             x11_display: String::new(),
@@ -434,5 +466,40 @@ impl Default for LocalSessionConfig {
             pixel_width: 0,
             pixel_height: 0,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{SftpCwdFollowMode, SftpSettings, SshSessionConfig, SshSessionProfile};
+
+    #[test]
+    fn network_device_runtime_capabilities_do_not_mutate_saved_settings() {
+        let config = SshSessionConfig {
+            profile: SshSessionProfile::NetworkDevice,
+            sftp: SftpSettings {
+                enabled: true,
+                cwd_follow_mode: SftpCwdFollowMode::RcFile,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        assert!(!config.remote_file_browser_enabled());
+        assert!(!config.remote_stats_enabled());
+        assert_eq!(config.effective_cwd_follow_mode(), SftpCwdFollowMode::Off);
+        assert!(config.sftp.enabled);
+        assert_eq!(config.sftp.cwd_follow_mode, SftpCwdFollowMode::RcFile);
+    }
+
+    #[test]
+    fn standard_runtime_capabilities_remain_enabled() {
+        let config = SshSessionConfig::default();
+        assert!(config.remote_file_browser_enabled());
+        assert!(config.remote_stats_enabled());
+        assert_eq!(
+            config.effective_cwd_follow_mode(),
+            SftpCwdFollowMode::ShellIntegration
+        );
     }
 }

@@ -3,7 +3,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 
-pub const PROTOCOL_VERSION: u32 = 1;
+pub const PROTOCOL_VERSION: u32 = 2;
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RdpSessionConfig {
@@ -54,6 +54,7 @@ pub enum RdpCertificatePolicy {
     Prompt,
     TrustOnFirstUse,
     Strict,
+    #[serde(alias = "accept-temporarily")]
     Insecure,
     #[serde(alias = "reject_changed")]
     RejectChanged,
@@ -200,6 +201,7 @@ pub enum RdpSessionState {
     Idle,
     Connecting,
     Connected,
+    Reconnecting,
     Disconnecting,
     Disconnected,
     Failed(RdpError),
@@ -239,6 +241,10 @@ pub enum RdpErrorKind {
     CertificateRejected,
     Timeout,
     ConnectionRefused,
+    Tls,
+    Transport,
+    Session,
+    Clipboard,
     Negotiation,
     HelperMissing,
     HelperCrashed,
@@ -360,16 +366,18 @@ pub enum RdpControlMessage {
 
 pub fn parse_rdp_certificate_policy(value: &str) -> RdpCertificatePolicy {
     match value.trim() {
-        "trust_on_first_use" | "tofu" => RdpCertificatePolicy::TrustOnFirstUse,
-        "strict" | "reject_changed" => RdpCertificatePolicy::Strict,
-        "insecure" => RdpCertificatePolicy::Insecure,
+        "trust_on_first_use" | "trust-on-first-use" | "tofu" => {
+            RdpCertificatePolicy::TrustOnFirstUse
+        }
+        "strict" | "reject_changed" | "reject-changed" => RdpCertificatePolicy::Strict,
+        "insecure" | "accept-temporarily" => RdpCertificatePolicy::Insecure,
         _ => RdpCertificatePolicy::Prompt,
     }
 }
 
 pub fn parse_rdp_display_mode(value: &str) -> RdpDisplayMode {
     match value.trim() {
-        "fixed" => RdpDisplayMode::Fixed,
+        "fixed" | "native" => RdpDisplayMode::Fixed,
         _ => RdpDisplayMode::FitWindow,
     }
 }
@@ -378,5 +386,37 @@ pub fn parse_rdp_clipboard_mode(value: &str) -> RdpClipboardMode {
     match value.trim() {
         "disabled" | "off" => RdpClipboardMode::Disabled,
         _ => RdpClipboardMode::TextOnly,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        RdpCertificatePolicy, RdpDisplayMode, parse_rdp_certificate_policy, parse_rdp_display_mode,
+    };
+
+    #[test]
+    fn certificate_policy_accepts_public_and_legacy_names() {
+        assert_eq!(
+            parse_rdp_certificate_policy("accept-temporarily"),
+            RdpCertificatePolicy::Insecure
+        );
+        assert_eq!(
+            parse_rdp_certificate_policy("insecure"),
+            RdpCertificatePolicy::Insecure
+        );
+        assert_eq!(
+            parse_rdp_certificate_policy("tofu"),
+            RdpCertificatePolicy::TrustOnFirstUse
+        );
+        assert_eq!(
+            parse_rdp_certificate_policy("reject-changed"),
+            RdpCertificatePolicy::Strict
+        );
+    }
+
+    #[test]
+    fn legacy_native_display_mode_is_fixed() {
+        assert_eq!(parse_rdp_display_mode("native"), RdpDisplayMode::Fixed);
     }
 }

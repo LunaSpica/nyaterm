@@ -68,6 +68,7 @@ quick-xml = "0.40"
 rand = { version = "0.10", features = ["thread_rng"] }
 redb = "4.1.0"
 regex = "1.11.1"
+rustls = { version = "0.23.43", default-features = false, features = ["aws_lc_rs", "std"] }
 russh = { path = "vendor/russh/russh", features = ["des", "dsa"] }
 russh-sftp = { path = "vendor/russh-sftp" }
 rusty-leveldb = "4.0"

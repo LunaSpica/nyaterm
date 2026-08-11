@@ -35,6 +35,7 @@ fn test_config() -> SshSessionConfig {
         proxy_jump: None,
         proxy: None,
         allow_none_auth: false,
+        profile: Default::default(),
         backspace_mode: "del".to_string(),
         term: "xterm-256color".to_string(),
         x11_forwarding: false,

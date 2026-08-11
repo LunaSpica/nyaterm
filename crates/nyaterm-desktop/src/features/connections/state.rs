@@ -12,11 +12,11 @@ use super::interaction::{ConnectionDragKind, ConnectionDropPosition, ConnectionD
 use crate::features::NyaTermApp;
 use crate::models::{
     ConnectionEditorAdvancedTab, ConnectionEditorField, ConnectionEditorPasswordSource,
-    ConnectionEditorSelect, ConnectionEditorState, ConnectionEditorTelnetTab,
-    ConnectionGroupEditorMode, ConnectionGroupEditorState, ConnectionImportSource,
-    ConnectionKindTab, ConnectionSortMode, NetworkGroupEditorState, NetworkMovePickerState,
-    NetworkProxyEditorField, NetworkProxyEditorState, NetworkTab, NetworkTunnelEditorField,
-    NetworkTunnelEditorState,
+    ConnectionEditorRdpTab, ConnectionEditorSelect, ConnectionEditorState,
+    ConnectionEditorTelnetTab, ConnectionGroupEditorMode, ConnectionGroupEditorState,
+    ConnectionImportSource, ConnectionKindTab, ConnectionSortMode, NetworkGroupEditorState,
+    NetworkMovePickerState, NetworkProxyEditorField, NetworkProxyEditorState, NetworkTab,
+    NetworkTunnelEditorField, NetworkTunnelEditorState,
 };
 use nyaterm_ui::{
     NyaInputEvent, NyaInputState, NyaNumberInputEvent, NyaNumberInputOptions, NyaNumberInputState,
@@ -35,9 +35,9 @@ use self::editor_logic::{
     set_connection_editor_advanced_tab, set_connection_editor_error,
     set_connection_editor_field_text, set_connection_editor_icon,
     set_connection_editor_icon_auto_detect, set_connection_editor_kind,
-    set_connection_editor_password_source, set_connection_editor_select_value,
-    set_connection_editor_telnet_tab, set_connection_group_editor_error,
-    toggle_connection_editor_flag,
+    set_connection_editor_password_source, set_connection_editor_rdp_tab,
+    set_connection_editor_select_value, set_connection_editor_telnet_tab,
+    set_connection_group_editor_error, toggle_connection_editor_flag,
 };
 use self::list_logic::{
     clear_connection_list_runtime_state, clear_selected_connection_ids,
@@ -659,6 +659,10 @@ impl ConnectionFeatureState {
 
     pub fn set_editor_telnet_tab(&mut self, tab: ConnectionEditorTelnetTab) -> bool {
         self.editor.set_telnet_tab(tab)
+    }
+
+    pub fn set_editor_rdp_tab(&mut self, tab: ConnectionEditorRdpTab) -> bool {
+        self.editor.set_rdp_tab(tab)
     }
 
     pub fn set_editor_kind(&mut self, kind: ConnectionKindTab) -> bool {
@@ -1377,6 +1381,14 @@ impl ConnectionEditorFeatureState {
         changed
     }
 
+    pub fn set_rdp_tab(&mut self, tab: ConnectionEditorRdpTab) -> bool {
+        let changed = set_connection_editor_rdp_tab(&mut self.draft, tab);
+        if changed {
+            self.close_icon_picker();
+        }
+        changed
+    }
+
     pub fn set_kind(&mut self, kind: ConnectionKindTab) -> bool {
         self.close_icon_picker();
         self.close_group_select();
@@ -1495,6 +1507,19 @@ fn connection_editor_number_options(field: ConnectionEditorField) -> Option<NyaN
         ),
         ConnectionEditorField::TelnetAutoLoginMaxRetries => {
             Some(NyaNumberInputOptions::default().range(0.0, 10.0).step(1.0))
+        }
+        ConnectionEditorField::RdpDisplayWidth => Some(
+            NyaNumberInputOptions::default()
+                .range(640.0, 7680.0)
+                .step(1.0),
+        ),
+        ConnectionEditorField::RdpDisplayHeight => Some(
+            NyaNumberInputOptions::default()
+                .range(480.0, 4320.0)
+                .step(1.0),
+        ),
+        ConnectionEditorField::RdpReconnectAttempts => {
+            Some(NyaNumberInputOptions::default().range(0.0, 20.0).step(1.0))
         }
         ConnectionEditorField::BaudRate => Some(
             NyaNumberInputOptions::default()

@@ -331,6 +331,9 @@ impl RemoteStatsService {
     }
 
     pub fn snapshot(&self) -> anyhow::Result<RemoteStats> {
+        if !self.config.remote_stats_enabled() {
+            anyhow::bail!("remote stats are disabled for this SSH profile");
+        }
         let output = self.exec_success(SYSINFO_SCRIPT, "Failed to fetch stats")?;
         Ok(parse_stats_output(&output.stdout))
     }

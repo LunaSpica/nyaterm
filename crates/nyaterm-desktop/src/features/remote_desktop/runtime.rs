@@ -29,6 +29,10 @@ impl NyaTermApp {
             &self.remote_desktop.focus,
             window,
             |this, _event, _window, _cx| {
+                super::keyboard_capture::set_keyboard_capture(
+                    this.remote_desktop.manager.clone(),
+                    None,
+                );
                 if let Some(session_id) = this.session.active_id_owned() {
                     this.release_rdp_keys(&session_id);
                 }
@@ -56,6 +60,10 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn retry_rdp_runtime(&mut self, session_id: &str) {
+        self.restart_rdp_runtime(session_id, true);
+    }
+
+    fn restart_rdp_runtime(&mut self, session_id: &str, reset_attempts: bool) {
         let Some(metadata) = self.session.metadata(session_id).cloned() else {
             return;
         };
@@ -73,6 +81,14 @@ impl NyaTermApp {
         {
             config.password = load_rdp_password(self, connection.auth.as_ref());
         }
+        let reconnect_attempts = if reset_attempts {
+            0
+        } else {
+            self.remote_desktop
+                .sessions
+                .get(session_id)
+                .map_or(0, |session| session.reconnect_attempts)
+        };
         let _ = self.close_rdp_runtime(session_id);
         match self
             .remote_desktop
@@ -82,6 +98,9 @@ impl NyaTermApp {
             Ok(_) => {
                 self.remote_desktop
                     .insert_connecting(session_id.to_string());
+                if let Some(session) = self.remote_desktop.sessions.get_mut(session_id) {
+                    session.reconnect_attempts = reconnect_attempts;
+                }
                 if let Some(metadata) = self.session.metadata_mut(session_id) {
                     metadata.disconnected = false;
                 }
@@ -101,6 +120,13 @@ impl NyaTermApp {
         &mut self,
         session_id: &str,
     ) -> Result<(), RdpError> {
+        if self.session.active_id() == Some(session_id) {
+            super::keyboard_capture::set_keyboard_capture(
+                self.remote_desktop.manager.clone(),
+                None,
+            );
+            self.release_rdp_keys(session_id);
+        }
         if let Some(mut session) = self.remote_desktop.sessions.remove(session_id) {
             if let Some(texture) = session.texture.take() {
                 self.remote_desktop.pending_texture_removals.push(texture);
@@ -157,9 +183,24 @@ impl NyaTermApp {
         }
         dirty |= self.drive_rdp_pointer_flush();
         dirty |= self.drive_rdp_resize_debounce();
+        dirty |= self.drive_rdp_reconnects();
+        self.sync_rdp_keyboard_capture(window);
         dirty |= self.poll_active_rdp_clipboard(cx);
         self.report_rdp_metrics();
         dirty
+    }
+
+    fn sync_rdp_keyboard_capture(&self, window: &Window) {
+        let target = self.session.active_id().and_then(|session_id| {
+            (self.remote_desktop.focus.is_focused(window)
+                && self
+                    .remote_desktop
+                    .sessions
+                    .get(session_id)
+                    .is_some_and(|session| matches!(session.state, RdpSessionState::Connected)))
+            .then(|| session_id.to_string())
+        });
+        super::keyboard_capture::set_keyboard_capture(self.remote_desktop.manager.clone(), target);
     }
 
     pub(in crate::features) fn update_rdp_viewport(
@@ -393,15 +434,72 @@ impl NyaTermApp {
                 }
             }
             RdpRuntimeEvent::Error { error, fatal, .. } => {
+                let should_reconnect = fatal && self.schedule_rdp_reconnect(session_id, &error);
                 if let Some(session) = self.remote_desktop.sessions.get_mut(session_id) {
                     session.error = Some(error.clone());
-                    if fatal {
+                    if fatal && !should_reconnect {
                         session.state = RdpSessionState::Failed(error.clone());
                     }
                 }
-                self.shell.set_status(format_rdp_error(&error));
+                if !should_reconnect {
+                    self.shell.set_status(format_rdp_error(&error));
+                }
             }
         }
+    }
+
+    fn schedule_rdp_reconnect(&mut self, session_id: &str, error: &RdpError) -> bool {
+        if !rdp_error_is_retryable(error.kind) {
+            return false;
+        }
+        let Some(config) =
+            self.session
+                .metadata(session_id)
+                .and_then(|metadata| match &metadata.launch_config {
+                    crate::models::SessionLaunchConfig::Rdp(config) => Some(&config.reconnect),
+                    _ => None,
+                })
+        else {
+            return false;
+        };
+        if !config.enabled {
+            return false;
+        }
+        let Some(session) = self.remote_desktop.sessions.get_mut(session_id) else {
+            return false;
+        };
+        if session.reconnect_attempts >= config.max_attempts {
+            return false;
+        }
+        session.reconnect_attempts += 1;
+        let delay = rdp_reconnect_delay(session.reconnect_attempts, rand::random_range(0..250));
+        session.reconnect_at = Some(Instant::now() + delay);
+        session.state = RdpSessionState::Reconnecting;
+        self.shell.set_status(format!(
+            "RDP reconnecting in {:.1}s (attempt {}/{})",
+            delay.as_secs_f32(),
+            session.reconnect_attempts,
+            config.max_attempts
+        ));
+        true
+    }
+
+    fn drive_rdp_reconnects(&mut self) -> bool {
+        let now = Instant::now();
+        let due = self
+            .remote_desktop
+            .sessions
+            .iter()
+            .filter(|(_, session)| session.reconnect_at.is_some_and(|deadline| now >= deadline))
+            .map(|(session_id, _)| session_id.clone())
+            .collect::<Vec<_>>();
+        for session_id in &due {
+            if let Some(session) = self.remote_desktop.sessions.get_mut(session_id) {
+                session.reconnect_at = None;
+            }
+            self.restart_rdp_runtime(session_id, false);
+        }
+        !due.is_empty()
     }
 
     fn reset_rdp_framebuffer(
@@ -499,6 +597,9 @@ impl NyaTermApp {
                     return;
                 }
             }
+        }
+        if !dirty_rects.is_empty() {
+            clear_rdp_reconnect_after_frame(session);
         }
         let (Some(framebuffer), Some(texture)) = (session.framebuffer.as_ref(), session.texture)
         else {
@@ -714,6 +815,9 @@ impl NyaTermApp {
             return false;
         }
         self.remote_desktop.last_clipboard_poll = Some(now);
+        if !clipboard_has_unicode_text() {
+            return false;
+        }
         let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) else {
             return false;
         };
@@ -732,6 +836,22 @@ impl NyaTermApp {
         }
         true
     }
+}
+
+#[cfg(target_os = "windows")]
+fn clipboard_has_unicode_text() -> bool {
+    // GPUI logs every unsupported OLE clipboard format it probes. Only enter
+    // that path when Windows reports the text format this bridge accepts.
+    unsafe {
+        windows_sys::Win32::System::DataExchange::IsClipboardFormatAvailable(
+            windows_sys::Win32::System::Ole::CF_UNICODETEXT as u32,
+        ) != 0
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn clipboard_has_unicode_text() -> bool {
+    true
 }
 
 fn upload_rdp_rect(
@@ -769,12 +889,40 @@ fn set_rdp_view_error(
     session.state = RdpSessionState::Failed(error);
 }
 
+fn rdp_error_is_retryable(kind: RdpErrorKind) -> bool {
+    matches!(
+        kind,
+        RdpErrorKind::Timeout
+            | RdpErrorKind::ConnectionRefused
+            | RdpErrorKind::Tls
+            | RdpErrorKind::Transport
+            | RdpErrorKind::Session
+    )
+}
+
+fn rdp_reconnect_delay(attempt: u32, jitter_ms: u64) -> Duration {
+    const BACKOFF_SECONDS: [u64; 6] = [1, 2, 4, 8, 15, 30];
+    let index = attempt.saturating_sub(1) as usize;
+    Duration::from_secs(BACKOFF_SECONDS[index.min(BACKOFF_SECONDS.len() - 1)])
+        + Duration::from_millis(jitter_ms.min(249))
+}
+
+fn clear_rdp_reconnect_after_frame(session: &mut super::state::RemoteDesktopSessionState) {
+    session.reconnect_attempts = 0;
+    session.reconnect_at = None;
+    session.error = None;
+}
+
 pub(super) fn format_rdp_error(error: &RdpError) -> String {
     let category = match error.kind {
         RdpErrorKind::Authentication => "Authentication failed",
         RdpErrorKind::CertificateRejected => "Certificate rejected",
         RdpErrorKind::Timeout => "Connection timed out",
         RdpErrorKind::ConnectionRefused => "Connection refused",
+        RdpErrorKind::Tls => "RDP TLS connection failed",
+        RdpErrorKind::Transport => "RDP transport interrupted",
+        RdpErrorKind::Session => "RDP session failed",
+        RdpErrorKind::Clipboard => "RDP clipboard failed",
         RdpErrorKind::Negotiation => "RDP negotiation failed",
         RdpErrorKind::HelperMissing => "RDP helper is missing",
         RdpErrorKind::HelperCrashed => "RDP helper crashed",
@@ -814,4 +962,68 @@ fn load_rdp_password(
     .ok()??
     .password
     .filter(|password| !password.trim().is_empty())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::{Duration, Instant};
+
+    use nyaterm_remote_desktop::{RdpError, RdpErrorKind};
+
+    use super::{clear_rdp_reconnect_after_frame, rdp_error_is_retryable, rdp_reconnect_delay};
+    use crate::features::remote_desktop::state::RemoteDesktopSessionState;
+
+    #[test]
+    fn reconnect_classification_only_accepts_transient_failures() {
+        for kind in [
+            RdpErrorKind::Timeout,
+            RdpErrorKind::ConnectionRefused,
+            RdpErrorKind::Tls,
+            RdpErrorKind::Transport,
+            RdpErrorKind::Session,
+        ] {
+            assert!(rdp_error_is_retryable(kind), "{kind:?}");
+        }
+        for kind in [
+            RdpErrorKind::Authentication,
+            RdpErrorKind::CertificateRejected,
+            RdpErrorKind::Negotiation,
+            RdpErrorKind::Clipboard,
+            RdpErrorKind::HelperMissing,
+            RdpErrorKind::HelperCrashed,
+            RdpErrorKind::Ipc,
+            RdpErrorKind::Protocol,
+            RdpErrorKind::Unsupported,
+        ] {
+            assert!(!rdp_error_is_retryable(kind), "{kind:?}");
+        }
+    }
+
+    #[test]
+    fn reconnect_backoff_caps_and_bounds_jitter() {
+        let expected = [1, 2, 4, 8, 15, 30, 30];
+        for (index, seconds) in expected.into_iter().enumerate() {
+            assert_eq!(
+                rdp_reconnect_delay(index as u32 + 1, 0),
+                Duration::from_secs(seconds)
+            );
+        }
+        assert_eq!(rdp_reconnect_delay(1, 999), Duration::from_millis(1_249));
+    }
+
+    #[test]
+    fn first_frame_clears_reconnect_attempt_and_error_state() {
+        let mut session = RemoteDesktopSessionState {
+            reconnect_attempts: 4,
+            reconnect_at: Some(Instant::now()),
+            error: Some(RdpError::new(RdpErrorKind::Transport, "interrupted")),
+            ..Default::default()
+        };
+
+        clear_rdp_reconnect_after_frame(&mut session);
+
+        assert_eq!(session.reconnect_attempts, 0);
+        assert_eq!(session.reconnect_at, None);
+        assert_eq!(session.error, None);
+    }
 }

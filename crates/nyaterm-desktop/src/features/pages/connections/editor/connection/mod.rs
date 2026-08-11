@@ -1,5 +1,6 @@
 mod local;
 mod rdp;
+mod recording;
 mod serial;
 mod ssh;
 mod telnet;
@@ -21,6 +22,7 @@ use nyaterm_ui::{
 
 use self::local::connection_editor_local_section;
 use self::rdp::connection_editor_rdp_section;
+use self::recording::connection_editor_recording_section;
 use self::serial::connection_editor_serial_section;
 use self::ssh::{
     SshConnectionSectionLabels, SshConnectionSectionOptions, connection_editor_ssh_section,
@@ -479,6 +481,109 @@ impl NyaTermApp {
                 )
             })
             .collect::<Vec<_>>();
+        let ssh_profile_options = [
+            ("standard", self.tr("dialog.sshProfileStandard")),
+            ("network_device", self.tr("dialog.sshProfileNetworkDevice")),
+        ]
+        .into_iter()
+        .map(|(value, label)| {
+            ConnectionEditorChoice::new(
+                Some(value.to_string()),
+                label,
+                matches!(
+                    (editor.ssh_profile, value),
+                    (nyaterm_core::SshProfile::Standard, "standard")
+                        | (nyaterm_core::SshProfile::NetworkDevice, "network_device")
+                ),
+            )
+        })
+        .collect::<Vec<_>>();
+        let effective_terminal =
+            nyaterm_core::resolve_ssh_terminal_type(editor.ssh_profile, editor.terminal_type);
+        let mut ssh_terminal_options = vec![ConnectionEditorChoice::new(
+            None,
+            self.tr("dialog.sshTerminalTypeDefault")
+                .replace("{{value}}", effective_terminal.as_str()),
+            editor.terminal_type.is_none(),
+        )];
+        ssh_terminal_options.extend(
+            ["xterm-256color", "xterm", "vt100", "vt220", "ansi", "linux"]
+                .into_iter()
+                .map(|value| {
+                    ConnectionEditorChoice::new(
+                        Some(value.to_string()),
+                        value,
+                        editor.terminal_type.is_some() && effective_terminal.as_str() == value,
+                    )
+                })
+                .collect::<Vec<_>>(),
+        );
+        let rdp_certificate_options = [
+            ("prompt", self.tr("dialog.rdpCertificatePrompt")),
+            ("strict", self.tr("dialog.rdpCertificateStrict")),
+            (
+                "accept-temporarily",
+                self.tr("dialog.rdpCertificateTemporary"),
+            ),
+        ]
+        .into_iter()
+        .map(|(value, label)| {
+            let selected = match editor.rdp_security.certificate_policy.as_str() {
+                "strict" | "reject_changed" | "reject-changed" => value == "strict",
+                "insecure" | "accept-temporarily" => value == "accept-temporarily",
+                _ => value == "prompt",
+            };
+            ConnectionEditorChoice::new(Some(value.to_string()), label, selected)
+        })
+        .collect::<Vec<_>>();
+        let rdp_display_options = [
+            ("fit-window", self.tr("dialog.rdpDisplayFitWindow")),
+            ("fixed", self.tr("dialog.rdpDisplayFixed")),
+        ]
+        .into_iter()
+        .map(|(value, label)| {
+            let current = match editor.rdp_display.mode.as_str() {
+                "fixed" | "native" => "fixed",
+                _ => "fit-window",
+            };
+            ConnectionEditorChoice::new(Some(value.to_string()), label, current == value)
+        })
+        .collect::<Vec<_>>();
+        let rdp_clipboard_options = [
+            ("text-only", self.tr("dialog.rdpClipboardTextOnly")),
+            ("disabled", self.tr("dialog.disabled")),
+        ]
+        .into_iter()
+        .map(|(value, label)| {
+            ConnectionEditorChoice::new(
+                Some(value.to_string()),
+                label,
+                editor.rdp_clipboard.mode == value,
+            )
+        })
+        .collect::<Vec<_>>();
+        let recording_mode = editor
+            .recording
+            .as_ref()
+            .and_then(|settings| settings.mode)
+            .unwrap_or(nyaterm_core::RecordingMode::Transcript);
+        let recording_mode_options = [
+            ("transcript", self.tr("dialog.recordingModeTranscript")),
+            ("raw", self.tr("dialog.recordingModeRaw")),
+        ]
+        .into_iter()
+        .map(|(value, label)| {
+            ConnectionEditorChoice::new(
+                Some(value.to_string()),
+                label,
+                matches!(
+                    (recording_mode, value),
+                    (nyaterm_core::RecordingMode::Transcript, "transcript")
+                        | (nyaterm_core::RecordingMode::Raw, "raw")
+                ),
+            )
+        })
+        .collect::<Vec<_>>();
         let sftp_cwd_options = [
             ("off", self.tr("dialog.sftpCwdFollowOff")),
             (
@@ -664,6 +769,36 @@ impl NyaTermApp {
                 String::new(),
             ),
             (
+                ConnectionEditorSelect::SshProfile,
+                ssh_profile_options.as_slice(),
+                String::new(),
+            ),
+            (
+                ConnectionEditorSelect::SshTerminalType,
+                ssh_terminal_options.as_slice(),
+                String::new(),
+            ),
+            (
+                ConnectionEditorSelect::RdpCertificatePolicy,
+                rdp_certificate_options.as_slice(),
+                String::new(),
+            ),
+            (
+                ConnectionEditorSelect::RdpDisplayMode,
+                rdp_display_options.as_slice(),
+                String::new(),
+            ),
+            (
+                ConnectionEditorSelect::RdpClipboardMode,
+                rdp_clipboard_options.as_slice(),
+                String::new(),
+            ),
+            (
+                ConnectionEditorSelect::RecordingMode,
+                recording_mode_options.as_slice(),
+                String::new(),
+            ),
+            (
                 ConnectionEditorSelect::TelnetEnterMode,
                 telnet_enter_options.as_slice(),
                 "CR (\\r)".to_string(),
@@ -787,50 +922,57 @@ impl NyaTermApp {
             .child(icon_grid)
             // Only SSH reports a remote system, so the toggle would be
             // inert on the other kinds.
-            .when(editor.kind == ConnectionKindTab::Ssh, |this| {
-                this.child(
-                    div()
-                        .id("connection-editor-icon-auto-detect")
-                        .mt_2()
-                        .pt_2()
-                        .border_t_1()
-                        .border_color(rgb(palette.border))
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .gap_2()
-                        .cursor_pointer()
-                        .child(
-                            div()
-                                .min_w_0()
-                                .flex()
-                                .flex_col()
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(rgb(palette.text))
-                                        .child(icon_auto_detect_label),
-                                )
-                                .child(
-                                    div()
-                                        .text_size(px(10.))
-                                        .text_color(rgb(palette.text_dimmed))
-                                        .child(icon_auto_detect_hint),
-                                ),
-                        )
-                        .child(crate::features::pages::settings::settings_switch(
-                            palette,
-                            "connection-editor-icon-auto-detect-switch",
-                            icon_auto_detect,
-                            cx.listener(move |this, _, _, cx| {
+            .when(
+                editor.kind == ConnectionKindTab::Ssh
+                    && editor.ssh_profile == nyaterm_core::SshProfile::Standard,
+                |this| {
+                    this.child(
+                        div()
+                            .id("connection-editor-icon-auto-detect")
+                            .mt_2()
+                            .pt_2()
+                            .border_t_1()
+                            .border_color(rgb(palette.border))
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap_2()
+                            .cursor_pointer()
+                            .child(
+                                div()
+                                    .min_w_0()
+                                    .flex()
+                                    .flex_col()
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(rgb(palette.text))
+                                            .child(icon_auto_detect_label),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_size(px(10.))
+                                            .text_color(rgb(palette.text_dimmed))
+                                            .child(icon_auto_detect_hint),
+                                    ),
+                            )
+                            .child(crate::features::pages::settings::settings_switch(
+                                palette,
+                                "connection-editor-icon-auto-detect-switch",
+                                icon_auto_detect,
+                                cx.listener(move |this, _, _, cx| {
+                                    this.set_connection_editor_icon_auto_detect(
+                                        !icon_auto_detect,
+                                        cx,
+                                    );
+                                }),
+                            ))
+                            .on_click(cx.listener(move |this, _, _, cx| {
                                 this.set_connection_editor_icon_auto_detect(!icon_auto_detect, cx);
-                            }),
-                        ))
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.set_connection_editor_icon_auto_detect(!icon_auto_detect, cx);
-                        })),
-                )
-            });
+                            })),
+                    )
+                },
+            );
         let icon_picker = div()
             .flex_none()
             .flex()
@@ -998,6 +1140,9 @@ impl NyaTermApp {
                     .when(editor.kind == ConnectionKindTab::Rdp, |this| {
                         this.child(connection_editor_rdp_section(section_context, cx))
                     })
+                    .when(editor.kind != ConnectionKindTab::Rdp, |this| {
+                        this.child(connection_editor_recording_section(section_context, cx))
+                    })
                     .child(connection_description_field(
                         palette,
                         description_label,
@@ -1100,7 +1245,7 @@ impl NyaTermApp {
     }
 }
 
-fn connection_editor_select_keys() -> [ConnectionEditorSelect; 18] {
+fn connection_editor_select_keys() -> [ConnectionEditorSelect; 24] {
     [
         ConnectionEditorSelect::Group,
         ConnectionEditorSelect::SavedPassword,
@@ -1113,6 +1258,12 @@ fn connection_editor_select_keys() -> [ConnectionEditorSelect; 18] {
         ConnectionEditorSelect::SftpCwdFollowMode,
         ConnectionEditorSelect::SftpFilenameEncoding,
         ConnectionEditorSelect::SshAlgorithmMode,
+        ConnectionEditorSelect::SshProfile,
+        ConnectionEditorSelect::SshTerminalType,
+        ConnectionEditorSelect::RdpCertificatePolicy,
+        ConnectionEditorSelect::RdpDisplayMode,
+        ConnectionEditorSelect::RdpClipboardMode,
+        ConnectionEditorSelect::RecordingMode,
         ConnectionEditorSelect::TelnetEnterMode,
         ConnectionEditorSelect::Shell,
         ConnectionEditorSelect::SerialPort,
@@ -1139,6 +1290,12 @@ fn connection_editor_select_id(select: ConnectionEditorSelect) -> &'static str {
         ConnectionEditorSelect::SftpCwdFollowMode => "connection-editor-sftp-cwd-follow",
         ConnectionEditorSelect::SftpFilenameEncoding => "connection-editor-sftp-filename-encoding",
         ConnectionEditorSelect::SshAlgorithmMode => "connection-editor-ssh-algorithm-mode",
+        ConnectionEditorSelect::SshProfile => "connection-editor-ssh-profile",
+        ConnectionEditorSelect::SshTerminalType => "connection-editor-ssh-terminal-type",
+        ConnectionEditorSelect::RdpCertificatePolicy => "connection-editor-rdp-certificate-policy",
+        ConnectionEditorSelect::RdpDisplayMode => "connection-editor-rdp-display-mode",
+        ConnectionEditorSelect::RdpClipboardMode => "connection-editor-rdp-clipboard-mode",
+        ConnectionEditorSelect::RecordingMode => "connection-editor-recording-mode",
         ConnectionEditorSelect::TelnetEnterMode => "connection-editor-telnet-enter-mode",
         ConnectionEditorSelect::Shell => "connection-editor-shell",
         ConnectionEditorSelect::SerialPort => "connection-editor-serial-port",
@@ -1796,6 +1953,7 @@ mod tests {
             rdp_display: Default::default(),
             rdp_clipboard: Default::default(),
             rdp_reconnect: Default::default(),
+            rdp_advanced_tab: crate::models::ConnectionEditorRdpTab::Security,
             password_source: ConnectionEditorPasswordSource::Ask,
             password_id: None,
             password: String::new(),
@@ -1808,6 +1966,8 @@ mod tests {
             x11_forwarding: false,
             backspace_mode: "del".to_string(),
             encoding: "global".to_string(),
+            ssh_profile: Default::default(),
+            terminal_type: None,
             sftp_enabled: true,
             sftp_cwd_follow_mode: "shell_integration".to_string(),
             sftp_shell_detection_timeout_ms: "3000".to_string(),

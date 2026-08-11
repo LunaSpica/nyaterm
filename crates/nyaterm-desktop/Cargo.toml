@@ -24,6 +24,7 @@ nyaterm-terminal-gpui.workspace = true
 nyaterm-transport.workspace = true
 nyaterm-ui.workspace = true
 regex.workspace = true
+rand.workspace = true
 rqrr = "0.9"
 serde.workspace = true
 serde_json.workspace = true
@@ -36,3 +37,12 @@ zeroize.workspace = true
 
 [dev-dependencies]
 gpui = { workspace = true, features = ["test-support"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_System_DataExchange",
+    "Win32_System_Ole",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+] }

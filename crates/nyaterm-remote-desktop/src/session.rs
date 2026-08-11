@@ -560,7 +560,9 @@ fn spawn_reader(
                 .clone();
             if !matches!(
                 current,
-                RdpSessionState::Disconnecting | RdpSessionState::Disconnected
+                RdpSessionState::Disconnecting
+                    | RdpSessionState::Disconnected
+                    | RdpSessionState::Failed(_)
             ) {
                 push_reader_error(
                     &session_id,

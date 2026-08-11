@@ -926,6 +926,8 @@ fn local_connection(id: &str, name: &str, shell: &str) -> SavedConnection {
         icon_auto_detect: None,
         auth: None,
         ssh_algorithms: None,
+        ssh_profile: Default::default(),
+        terminal_type: None,
         sftp: Default::default(),
         network: None,
         post_login: None,

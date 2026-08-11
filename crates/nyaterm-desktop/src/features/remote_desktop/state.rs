@@ -39,6 +39,33 @@ pub(super) struct RemoteDesktopSessionState {
     pub(super) last_resize: Option<(u32, u32)>,
     pub(super) pending_resize: Option<(u32, u32, Instant)>,
     pub(super) viewport: Option<Bounds<Pixels>>,
+    pub(super) reconnect_attempts: u32,
+    pub(super) reconnect_at: Option<Instant>,
+}
+
+impl Default for RemoteDesktopSessionState {
+    fn default() -> Self {
+        Self {
+            state: RdpSessionState::Connecting,
+            framebuffer: None,
+            texture: None,
+            cursor: None,
+            cursor_texture: None,
+            certificate_request: None,
+            error: None,
+            capability: None,
+            clipboard: ClipboardTracker::default(),
+            keys: KeyMapper::default(),
+            last_pointer: None,
+            last_pointer_sent_at: None,
+            pending_pointer: None,
+            last_resize: None,
+            pending_resize: None,
+            viewport: None,
+            reconnect_attempts: 0,
+            reconnect_at: None,
+        }
+    }
 }
 
 impl RemoteDesktopFeatureState {
@@ -67,27 +94,8 @@ impl RemoteDesktopFeatureState {
     }
 
     pub(super) fn insert_connecting(&mut self, session_id: String) {
-        self.sessions.insert(
-            session_id,
-            RemoteDesktopSessionState {
-                state: RdpSessionState::Connecting,
-                framebuffer: None,
-                texture: None,
-                cursor: None,
-                cursor_texture: None,
-                certificate_request: None,
-                error: None,
-                capability: None,
-                clipboard: ClipboardTracker::default(),
-                keys: KeyMapper::default(),
-                last_pointer: None,
-                last_pointer_sent_at: None,
-                pending_pointer: None,
-                last_resize: None,
-                pending_resize: None,
-                viewport: None,
-            },
-        );
+        self.sessions
+            .insert(session_id, RemoteDesktopSessionState::default());
     }
 
     pub(in crate::features) fn insert_disconnected(&mut self, session_id: String) {

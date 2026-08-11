@@ -374,6 +374,18 @@ impl NyaTermApp {
                     "connection-editor-ssh-algorithm-mode" => {
                         ConnectionEditorSelect::SshAlgorithmMode
                     }
+                    "connection-editor-ssh-profile" => ConnectionEditorSelect::SshProfile,
+                    "connection-editor-ssh-terminal-type" => {
+                        ConnectionEditorSelect::SshTerminalType
+                    }
+                    "connection-editor-rdp-certificate-policy" => {
+                        ConnectionEditorSelect::RdpCertificatePolicy
+                    }
+                    "connection-editor-rdp-display-mode" => ConnectionEditorSelect::RdpDisplayMode,
+                    "connection-editor-rdp-clipboard-mode" => {
+                        ConnectionEditorSelect::RdpClipboardMode
+                    }
+                    "connection-editor-recording-mode" => ConnectionEditorSelect::RecordingMode,
                     "connection-editor-telnet-enter-mode" => {
                         ConnectionEditorSelect::TelnetEnterMode
                     }

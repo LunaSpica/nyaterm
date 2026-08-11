@@ -20,6 +20,14 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
+        if !config.remote_stats_enabled() {
+            self.remote_ops
+                .set_stats_status("remote stats are unavailable for network device sessions");
+            self.shell
+                .set_status(self.remote_ops.stats_status().to_string());
+            cx.notify();
+            return;
+        }
         let Some(job_session_id) = self.session.active_id_owned() else {
             self.remote_ops
                 .set_stats_status("start an SSH session before inspecting stats");

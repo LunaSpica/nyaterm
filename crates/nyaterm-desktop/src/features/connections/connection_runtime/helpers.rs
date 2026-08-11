@@ -9,7 +9,7 @@ use nyaterm_core::{
 use crate::features::NyaTermApp;
 use crate::models::{
     ConnectionEditorAdvancedTab, ConnectionEditorField, ConnectionEditorPasswordSource,
-    ConnectionEditorState, ConnectionEditorTelnetTab, ConnectionKindTab,
+    ConnectionEditorRdpTab, ConnectionEditorState, ConnectionEditorTelnetTab, ConnectionKindTab,
 };
 
 pub(super) fn connection_editor_from_saved(
@@ -63,6 +63,7 @@ pub(super) fn connection_editor_from_saved(
         rdp_display: RdpDisplaySettings::default(),
         rdp_clipboard: RdpClipboardSettings::default(),
         rdp_reconnect: RdpReconnectSettings::default(),
+        rdp_advanced_tab: ConnectionEditorRdpTab::Security,
         password_source,
         password_id: auth.password_id,
         password: String::new(),
@@ -75,6 +76,8 @@ pub(super) fn connection_editor_from_saved(
         x11_forwarding: false,
         backspace_mode: "del".to_string(),
         encoding: "global".to_string(),
+        ssh_profile: connection.ssh_profile,
+        terminal_type: connection.terminal_type,
         sftp_enabled: sftp.enabled,
         sftp_cwd_follow_mode: sftp_cwd_follow_mode_value(sftp.cwd_follow_mode),
         sftp_shell_detection_timeout_ms: sftp.shell_detection_timeout_ms.to_string(),
@@ -401,6 +404,18 @@ pub(super) fn build_saved_connection_from_editor(
                 return Err("RDP host is required".to_string());
             }
             let port = parse_port(&editor.port, "RDP port")?;
+            if editor.username.trim().is_empty() {
+                return Err("RDP username is required".to_string());
+            }
+            if !(640..=7680).contains(&editor.rdp_display.width) {
+                return Err("RDP width must be between 640 and 7680".to_string());
+            }
+            if !(480..=4320).contains(&editor.rdp_display.height) {
+                return Err("RDP height must be between 480 and 4320".to_string());
+            }
+            if editor.rdp_reconnect.max_attempts > 20 {
+                return Err("RDP reconnect attempts must be between 0 and 20".to_string());
+            }
             ConnectionType::Rdp {
                 host,
                 port,
@@ -600,8 +615,18 @@ pub(super) fn build_saved_connection_from_editor(
         auth,
         network,
         post_login,
+        // RDP does not expose recording controls, but an existing hidden value
+        // remains part of the compatibility-sensitive saved connection.
         recording: editor.recording.clone(),
         ssh_algorithms,
+        ssh_profile: if editor.kind == ConnectionKindTab::Ssh {
+            editor.ssh_profile
+        } else {
+            Default::default()
+        },
+        terminal_type: (editor.kind == ConnectionKindTab::Ssh)
+            .then_some(editor.terminal_type)
+            .flatten(),
         sftp,
         created_at_ms: None,
         updated_at_ms: None,
@@ -632,9 +657,10 @@ pub(super) fn non_empty_or(value: String, fallback: &str) -> String {
 #[cfg(test)]
 mod tests {
     use nyaterm_core::{
-        AiExecutionProfile, ConnectionAuth, ConnectionType, RdpClipboardSettings,
-        RdpDisplaySettings, RdpReconnectSettings, RdpSecuritySettings, SavedConnection,
-        SftpCwdFollowMode, SftpSettings, SshAlgorithmMode, SshAlgorithmPreferences,
+        AiExecutionProfile, ConnectionAuth, ConnectionRecordingSettings, ConnectionType,
+        RdpClipboardSettings, RdpDisplaySettings, RdpReconnectSettings, RdpSecuritySettings,
+        RecordingMode, RecordingRotationPolicy, SavedConnection, SftpCwdFollowMode, SftpSettings,
+        SshAlgorithmMode, SshAlgorithmPreferences, SshProfile, SshTerminalType,
     };
 
     use crate::models::{ConnectionEditorPasswordSource, ConnectionKindTab};
@@ -661,6 +687,8 @@ mod tests {
             auth: None,
             recording: None,
             ssh_algorithms: None,
+            ssh_profile: Default::default(),
+            terminal_type: None,
             sftp: Default::default(),
             network: None,
             post_login: None,
@@ -701,6 +729,8 @@ mod tests {
             }),
             recording: None,
             ssh_algorithms: None,
+            ssh_profile: Default::default(),
+            terminal_type: None,
             sftp: Default::default(),
             network: None,
             post_login: None,
@@ -751,6 +781,8 @@ mod tests {
                 macs: vec!["hmac-sha2-256".to_string()],
                 host_keys: vec!["ssh-ed25519".to_string()],
             }),
+            ssh_profile: SshProfile::NetworkDevice,
+            terminal_type: Some(SshTerminalType::Vt220),
             sftp: SftpSettings {
                 enabled: false,
                 cwd_follow_mode: SftpCwdFollowMode::RcFile,
@@ -769,6 +801,8 @@ mod tests {
 
         assert_eq!(saved.ssh_algorithms, connection.ssh_algorithms);
         assert_eq!(saved.sftp, connection.sftp);
+        assert_eq!(saved.ssh_profile, SshProfile::NetworkDevice);
+        assert_eq!(saved.terminal_type, Some(SshTerminalType::Vt220));
         match saved.config {
             ConnectionType::Ssh { encoding, .. } => assert_eq!(encoding, "GBK"),
             other => panic!("expected SSH connection, got {other:?}"),
@@ -804,6 +838,8 @@ mod tests {
             auth: None,
             recording: None,
             ssh_algorithms: None,
+            ssh_profile: Default::default(),
+            terminal_type: None,
             sftp: Default::default(),
             network: None,
             post_login: None,
@@ -851,6 +887,13 @@ mod tests {
             enabled: false,
             max_attempts: 17,
         };
+        let expected_recording = ConnectionRecordingSettings {
+            auto_start: Some(true),
+            mode: Some(RecordingMode::Raw),
+            path_template: Some("rdp/{session}.bin".to_string()),
+            include_timestamps: Some(false),
+            rotation: Some(RecordingRotationPolicy::Size { max_bytes: 4096 }),
+        };
         let connection = SavedConnection {
             id: "connection-rdp".to_string(),
             name: "RDP".to_string(),
@@ -873,8 +916,10 @@ mod tests {
                 mode: "none".to_string(),
                 ..ConnectionAuth::default()
             }),
-            recording: None,
+            recording: Some(expected_recording.clone()),
             ssh_algorithms: None,
+            ssh_profile: Default::default(),
+            terminal_type: None,
             sftp: Default::default(),
             network: None,
             post_login: None,
@@ -887,6 +932,31 @@ mod tests {
         assert_eq!(editor.kind, ConnectionKindTab::Rdp);
         assert_eq!(editor.domain, "ACME");
         assert_eq!(editor.auth_mode, "none");
+
+        let mut invalid = editor.clone();
+        invalid.username.clear();
+        assert_eq!(
+            build_saved_connection_from_editor(&invalid).unwrap_err(),
+            "RDP username is required"
+        );
+        invalid.username = "operator".to_string();
+        invalid.rdp_display.width = 639;
+        assert_eq!(
+            build_saved_connection_from_editor(&invalid).unwrap_err(),
+            "RDP width must be between 640 and 7680"
+        );
+        invalid.rdp_display.width = 2560;
+        invalid.rdp_display.height = 4321;
+        assert_eq!(
+            build_saved_connection_from_editor(&invalid).unwrap_err(),
+            "RDP height must be between 480 and 4320"
+        );
+        invalid.rdp_display.height = 1440;
+        invalid.rdp_reconnect.max_attempts = 21;
+        assert_eq!(
+            build_saved_connection_from_editor(&invalid).unwrap_err(),
+            "RDP reconnect attempts must be between 0 and 20"
+        );
 
         let saved = build_saved_connection_from_editor(&editor).expect("valid connection");
         let ConnectionType::Rdp {
@@ -912,6 +982,7 @@ mod tests {
         assert_eq!(clipboard, expected_clipboard);
         assert_eq!(reconnect, expected_reconnect);
         assert_eq!(saved.auth.expect("auth settings").mode, "none");
+        assert_eq!(saved.recording, Some(expected_recording));
     }
 
     #[test]
@@ -947,6 +1018,8 @@ mod tests {
             }),
             recording: None,
             ssh_algorithms: None,
+            ssh_profile: Default::default(),
+            terminal_type: None,
             sftp: Default::default(),
             network: None,
             post_login: None,
@@ -1076,5 +1149,9 @@ pub(in crate::features) enum ConnectionEditorToggle {
     TelnetAutoLoginEnabled,
     TelnetAutoLoginSendWakeEnter,
     PostLogin,
+    RdpUseNla,
+    RdpReconnect,
+    RecordingUseGlobal,
+    RecordingAutoStart,
     Advanced,
 }

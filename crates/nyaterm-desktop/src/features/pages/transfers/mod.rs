@@ -85,7 +85,7 @@ impl NyaTermApp {
         let active_session_id = self.session.active_id();
         let browser_availability = transfer_browser_availability(
             active_session_id.is_some(),
-            self.session.active_ssh_config().is_some(),
+            self.session.active_ssh_file_browser_config().is_some(),
             active_session_id.is_some_and(|session_id| self.session.is_disconnected(session_id)),
         );
         let transfer_height = self.transfer.panel_height().clamp(60., 600.);

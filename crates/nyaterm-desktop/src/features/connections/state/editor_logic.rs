@@ -5,8 +5,8 @@ use nyaterm_ui::NyaWindowHandle;
 use super::super::connection_runtime::ConnectionEditorToggle;
 use crate::models::{
     ConnectionEditorAdvancedTab, ConnectionEditorField, ConnectionEditorPasswordSource,
-    ConnectionEditorSelect, ConnectionEditorState, ConnectionEditorTelnetTab,
-    ConnectionGroupEditorState, ConnectionKindTab,
+    ConnectionEditorRdpTab, ConnectionEditorSelect, ConnectionEditorState,
+    ConnectionEditorTelnetTab, ConnectionGroupEditorState, ConnectionKindTab,
 };
 
 pub(super) fn clear_connection_editor_runtime_state(
@@ -136,6 +136,40 @@ pub(super) fn set_connection_editor_select_value(
         ConnectionEditorSelect::SshAlgorithmMode => {
             editor.ssh_algorithm_mode = value.unwrap_or_else(|| "compatible".to_string());
         }
+        ConnectionEditorSelect::SshProfile => {
+            editor.ssh_profile = match value.as_deref() {
+                Some("network_device") => nyaterm_core::SshProfile::NetworkDevice,
+                _ => nyaterm_core::SshProfile::Standard,
+            };
+        }
+        ConnectionEditorSelect::SshTerminalType => {
+            editor.terminal_type = match value.as_deref() {
+                Some("xterm-256color") => Some(nyaterm_core::SshTerminalType::Xterm256Color),
+                Some("xterm") => Some(nyaterm_core::SshTerminalType::Xterm),
+                Some("vt100") => Some(nyaterm_core::SshTerminalType::Vt100),
+                Some("vt220") => Some(nyaterm_core::SshTerminalType::Vt220),
+                Some("ansi") => Some(nyaterm_core::SshTerminalType::Ansi),
+                Some("linux") => Some(nyaterm_core::SshTerminalType::Linux),
+                _ => None,
+            };
+        }
+        ConnectionEditorSelect::RdpCertificatePolicy => {
+            editor.rdp_security.certificate_policy = value.unwrap_or_else(|| "prompt".to_string());
+        }
+        ConnectionEditorSelect::RdpDisplayMode => {
+            editor.rdp_display.mode = value.unwrap_or_else(|| "fit-window".to_string());
+        }
+        ConnectionEditorSelect::RdpClipboardMode => {
+            editor.rdp_clipboard.mode = value.unwrap_or_else(|| "text-only".to_string());
+        }
+        ConnectionEditorSelect::RecordingMode => {
+            let recording = editor.recording.get_or_insert_with(Default::default);
+            recording.mode = Some(if value.as_deref() == Some("raw") {
+                nyaterm_core::RecordingMode::Raw
+            } else {
+                nyaterm_core::RecordingMode::Transcript
+            });
+        }
         ConnectionEditorSelect::TelnetEnterMode => {
             editor.telnet_enter_mode = value.unwrap_or_else(|| "cr".to_string());
         }
@@ -216,6 +250,18 @@ pub(super) fn set_connection_editor_telnet_tab(
         return false;
     };
     editor.telnet_advanced_tab = tab;
+    editor.error = None;
+    true
+}
+
+pub(super) fn set_connection_editor_rdp_tab(
+    draft: &mut Option<ConnectionEditorState>,
+    tab: ConnectionEditorRdpTab,
+) -> bool {
+    let Some(editor) = draft.as_mut() else {
+        return false;
+    };
+    editor.rdp_advanced_tab = tab;
     editor.error = None;
     true
 }
@@ -326,6 +372,23 @@ pub(super) fn toggle_connection_editor_flag(
         }
         ConnectionEditorToggle::PostLogin => {
             editor.post_login_enabled = !editor.post_login_enabled;
+        }
+        ConnectionEditorToggle::RdpUseNla => {
+            editor.rdp_security.use_nla = !editor.rdp_security.use_nla;
+        }
+        ConnectionEditorToggle::RdpReconnect => {
+            editor.rdp_reconnect.enabled = !editor.rdp_reconnect.enabled;
+        }
+        ConnectionEditorToggle::RecordingUseGlobal => {
+            if editor.recording.is_some() {
+                editor.recording = None;
+            } else {
+                editor.recording = Some(Default::default());
+            }
+        }
+        ConnectionEditorToggle::RecordingAutoStart => {
+            let recording = editor.recording.get_or_insert_with(Default::default);
+            recording.auto_start = Some(!recording.auto_start.unwrap_or(false));
         }
         ConnectionEditorToggle::Advanced => {
             editor.advanced_open = !editor.advanced_open;
@@ -559,6 +622,24 @@ pub(super) fn editor_field_seeds(
             false,
             "",
         ),
+        (
+            ConnectionEditorField::RdpDisplayWidth,
+            draft.rdp_display.width.to_string(),
+            false,
+            "",
+        ),
+        (
+            ConnectionEditorField::RdpDisplayHeight,
+            draft.rdp_display.height.to_string(),
+            false,
+            "",
+        ),
+        (
+            ConnectionEditorField::RdpReconnectAttempts,
+            draft.rdp_reconnect.max_attempts.to_string(),
+            false,
+            "",
+        ),
     ]
 }
 
@@ -608,6 +689,21 @@ pub(super) fn set_connection_editor_field_text(
         }
         ConnectionEditorField::TelnetAutoLoginMaxRetries => {
             draft.telnet_auto_login_max_retries = text;
+        }
+        ConnectionEditorField::RdpDisplayWidth => {
+            if let Ok(value) = text.parse() {
+                draft.rdp_display.width = value;
+            }
+        }
+        ConnectionEditorField::RdpDisplayHeight => {
+            if let Ok(value) = text.parse() {
+                draft.rdp_display.height = value;
+            }
+        }
+        ConnectionEditorField::RdpReconnectAttempts => {
+            if let Ok(value) = text.parse() {
+                draft.rdp_reconnect.max_attempts = value;
+            }
         }
     }
 }

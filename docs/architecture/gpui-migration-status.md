@@ -10,6 +10,25 @@ Last updated from the working tree on 2026-08-11.
 
 ## Tauri Main Parity Refreshes
 
+- 2026-08-11 fast-forwarded the clean reference Tauri repository from the
+  previously audited `32df0957` baseline to `21d0f04e` and audited exactly the
+  four intervening commits. GPUI now carries their behavior in native owners:
+  SSH Standard/Network Device profiles and six explicit PTY TERM choices,
+  runtime capability gates for SFTP, shell integration, remote stats and auto
+  icon detection, per-connection recording overrides on Local/SSH/Telnet/Serial
+  editors, and shared 1px-resting/3px-interaction resize chrome for side panels,
+  panel stacks, bottom/transfer panels and workspace splits. The matching
+  English and Simplified Chinese strings are local GPUI catalogs; no React form
+  or WebView resize implementation was imported.
+- The same refresh completed the requested RDP runtime gap that was not supplied
+  by those four Tauri commits: the helper explicitly installs the rustls
+  AWS-LC provider before constructing IronRDP/TLS state, protocol v2 classifies
+  TLS/transport/session/clipboard failures and exposes reconnecting state, and
+  desktop owns bounded jittered automatic reconnect. The RDP editor exposes
+  security/display/clipboard/reconnect controls, Windows clipboard polling
+  skips non-text OLE formats, and Windows-key capture is limited to the focused
+  active RDP surface. Dynamic-resize rejection remains informational; GPUI does
+  not reconnect at a new size.
 - 2026-08-11 completed the first native Remote Desktop runtime boundary. The
   UI-independent `nyaterm-remote-desktop` crate owns typed IPC, frame/epoch
   validation, contain geometry, Set-1 key mapping, clipboard echo suppression,
@@ -20,7 +39,7 @@ Last updated from the working tree on 2026-08-11.
   normal tab/pane metadata without creating terminal frames, recording,
   transfer, AI or sync-input runtimes. GPUI's vendored platform atlases expose
   stride-aware dynamic BGRA texture creation, partial upload, paint and removal.
-  Automatic reconnect and advanced RDP channels remain intentionally disabled.
+  Advanced non-text RDP channels remain intentionally disabled.
 
 - 2026-08-10 pulled and audited the active Tauri `main` delta from
   `b5900d70` to `32df0957` after the broader `b5900d70..32df0957` parity

@@ -10,7 +10,8 @@ use super::helpers::{
 use crate::features::NyaTermApp;
 use crate::models::{
     ConnectionEditorAdvancedTab, ConnectionEditorField, ConnectionEditorPasswordSource,
-    ConnectionEditorSelect, ConnectionEditorState, ConnectionEditorTelnetTab, ConnectionKindTab,
+    ConnectionEditorRdpTab, ConnectionEditorSelect, ConnectionEditorState,
+    ConnectionEditorTelnetTab, ConnectionKindTab,
 };
 
 impl NyaTermApp {
@@ -67,6 +68,7 @@ impl NyaTermApp {
                 rdp_display: RdpDisplaySettings::default(),
                 rdp_clipboard: RdpClipboardSettings::default(),
                 rdp_reconnect: RdpReconnectSettings::default(),
+                rdp_advanced_tab: ConnectionEditorRdpTab::Security,
                 password_source: ConnectionEditorPasswordSource::Ask,
                 password_id: None,
                 password: String::new(),
@@ -79,6 +81,8 @@ impl NyaTermApp {
                 x11_forwarding: false,
                 backspace_mode: "del".to_string(),
                 encoding: "global".to_string(),
+                ssh_profile: Default::default(),
+                terminal_type: None,
                 sftp_enabled: true,
                 sftp_cwd_follow_mode: "shell_integration".to_string(),
                 sftp_shell_detection_timeout_ms: "3000".to_string(),
@@ -251,6 +255,15 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.connection_state.set_editor_telnet_tab(tab);
+        cx.notify();
+    }
+
+    pub(in crate::features) fn set_connection_editor_rdp_tab(
+        &mut self,
+        tab: ConnectionEditorRdpTab,
+        cx: &mut Context<Self>,
+    ) {
+        self.connection_state.set_editor_rdp_tab(tab);
         cx.notify();
     }
 

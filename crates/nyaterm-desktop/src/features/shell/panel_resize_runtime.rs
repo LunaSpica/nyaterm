@@ -1,10 +1,13 @@
 use gpui::{
     Context, InteractiveElement as _, IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent,
-    SharedString, Styled as _, div, prelude::FluentBuilder as _, px, rgb,
+    SharedString, Styled as _, prelude::FluentBuilder as _,
 };
 use nyaterm_core::ConnectionStore;
 
-use crate::features::{NyaTermApp, settings::UiLayoutSettingsUpdate};
+use crate::features::{
+    NyaTermApp, horizontal_resize_handle_visual, settings::UiLayoutSettingsUpdate,
+    vertical_resize_handle_visual,
+};
 use crate::models::{
     BottomPanelMode, NavItem, PanelResizeSide, PanelSide, panel_collapsed_from_persistence,
 };
@@ -203,26 +206,27 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        div()
-            .id(SharedString::from(format!(
-                "panel-resize-{}",
-                match side {
-                    PanelResizeSide::Left => "left",
-                    PanelResizeSide::Right => "right",
-                }
-            )))
-            .w(px(3.))
-            .flex_none()
-            .h_full()
-            .bg(rgb(palette.border))
-            .cursor_col_resize()
-            .hover(|this| this.bg(rgb(0x58a6ff)))
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(move |this, event: &MouseDownEvent, _, cx| {
-                    this.start_panel_resize(side, event, cx);
-                }),
-            )
+        vertical_resize_handle_visual(
+            palette,
+            self.shell
+                .panels
+                .resize
+                .is_some_and(|resize| resize.side == side),
+        )
+        .id(SharedString::from(format!(
+            "panel-resize-{}",
+            match side {
+                PanelResizeSide::Left => "left",
+                PanelResizeSide::Right => "right",
+            }
+        )))
+        .cursor_col_resize()
+        .on_mouse_down(
+            MouseButton::Left,
+            cx.listener(move |this, event: &MouseDownEvent, _, cx| {
+                this.start_panel_resize(side, event, cx);
+            }),
+        )
     }
 }
 
@@ -266,14 +270,9 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        div()
+        horizontal_resize_handle_visual(palette, self.transfer.panel_height_is_resizing())
             .id(SharedString::from("transfer-height-resize"))
-            .h(px(3.))
-            .w_full()
-            .flex_none()
-            .bg(rgb(palette.border))
             .cursor_row_resize()
-            .hover(|this| this.bg(rgb(0x58a6ff)))
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, event: &MouseDownEvent, _, cx| {
@@ -322,14 +321,9 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        div()
+        horizontal_resize_handle_visual(palette, self.shell.bottom_panel.resize.is_some())
             .id("bottom-panel-resize")
-            .h(px(3.))
-            .w_full()
-            .flex_none()
-            .bg(rgb(palette.border))
             .cursor_row_resize()
-            .hover(|this| this.bg(rgb(0x58a6ff)))
             .when(
                 self.shell.bottom_panel.mode == BottomPanelMode::Hidden,
                 |this| this.h_0(),

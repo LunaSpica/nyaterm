@@ -16,6 +16,58 @@ pub(in crate::features) fn logo_mark(palette: ThemePalette) -> impl IntoElement 
         .child(super::icons::nyaterm_app_icon(palette, 22.))
 }
 
+pub(in crate::features) fn vertical_resize_handle_visual(
+    palette: ThemePalette,
+    dragging: bool,
+) -> gpui::Div {
+    div()
+        .relative()
+        .w(px(1.))
+        .h_full()
+        .flex_none()
+        .bg(rgb(palette.border))
+        .child(
+            div()
+                .absolute()
+                .left(px(-1.))
+                .top_0()
+                .bottom_0()
+                .w(px(3.))
+                .bg(if dragging {
+                    rgb(palette.primary)
+                } else {
+                    rgba(0x00000000)
+                })
+                .hover(move |this| this.bg(rgb(palette.primary))),
+        )
+}
+
+pub(in crate::features) fn horizontal_resize_handle_visual(
+    palette: ThemePalette,
+    dragging: bool,
+) -> gpui::Div {
+    div()
+        .relative()
+        .h(px(1.))
+        .w_full()
+        .flex_none()
+        .bg(rgb(palette.border))
+        .child(
+            div()
+                .absolute()
+                .left_0()
+                .right_0()
+                .top(px(-1.))
+                .h(px(3.))
+                .bg(if dragging {
+                    rgb(palette.primary)
+                } else {
+                    rgba(0x00000000)
+                })
+                .hover(move |this| this.bg(rgb(palette.primary))),
+        )
+}
+
 pub(in crate::features) fn window_control_button(
     palette: ThemePalette,
     id: &'static str,

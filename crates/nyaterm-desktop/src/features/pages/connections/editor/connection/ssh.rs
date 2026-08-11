@@ -473,16 +473,59 @@ pub(super) fn connection_editor_ssh_section(
                                 palette,
                                 tr("dialog.encodingSettings"),
                                 tr("connection.encodingFollowGlobal"),
-                                connection_editor_select(
-                                    ConnectionEditorRenderContext {
-                                        palette,
-                                        fields,
-                                        cx,
-                                    },
-                                    "connection-editor-ssh-encoding",
-                                    tr("connection.encoding"),
-                                    ConnectionEditorSelect::Encoding,
-                                ),
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_3()
+                                    .child(connection_editor_select(
+                                        ConnectionEditorRenderContext {
+                                            palette,
+                                            fields,
+                                            cx,
+                                        },
+                                        "connection-editor-ssh-profile",
+                                        tr("dialog.sshProfile"),
+                                        ConnectionEditorSelect::SshProfile,
+                                    ))
+                                    .child(connection_editor_select(
+                                        ConnectionEditorRenderContext {
+                                            palette,
+                                            fields,
+                                            cx,
+                                        },
+                                        "connection-editor-ssh-terminal-type",
+                                        tr("dialog.sshTerminalType"),
+                                        ConnectionEditorSelect::SshTerminalType,
+                                    ))
+                                    .child(connection_editor_select(
+                                        ConnectionEditorRenderContext {
+                                            palette,
+                                            fields,
+                                            cx,
+                                        },
+                                        "connection-editor-ssh-encoding",
+                                        tr("connection.encoding"),
+                                        ConnectionEditorSelect::Encoding,
+                                    ))
+                                    .when(
+                                        editor.ssh_profile
+                                            == nyaterm_core::SshProfile::NetworkDevice,
+                                        |this| {
+                                            this.child(
+                                                div()
+                                                    .rounded_md()
+                                                    .border_1()
+                                                    .border_color(rgb(palette.warning))
+                                                    .bg(rgba((palette.warning << 8) | 0x18))
+                                                    .p_2()
+                                                    .text_size(px(10.))
+                                                    .text_color(rgb(palette.text_muted))
+                                                    .child(tr(
+                                                        "dialog.sshNetworkDeviceLimitations",
+                                                    )),
+                                            )
+                                        },
+                                    ),
                             ))
                         },
                     )

@@ -39,6 +39,58 @@ pub struct SshAlgorithmPreferences {
     pub host_keys: Vec<String>,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SshProfile {
+    #[default]
+    Standard,
+    NetworkDevice,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub enum SshTerminalType {
+    #[default]
+    #[serde(rename = "xterm-256color")]
+    Xterm256Color,
+    #[serde(rename = "xterm")]
+    Xterm,
+    #[serde(rename = "vt100")]
+    Vt100,
+    #[serde(rename = "vt220")]
+    Vt220,
+    #[serde(rename = "ansi")]
+    Ansi,
+    #[serde(rename = "linux")]
+    Linux,
+}
+
+impl SshTerminalType {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Xterm256Color => "xterm-256color",
+            Self::Xterm => "xterm",
+            Self::Vt100 => "vt100",
+            Self::Vt220 => "vt220",
+            Self::Ansi => "ansi",
+            Self::Linux => "linux",
+        }
+    }
+}
+
+pub fn default_terminal_type_for_profile(profile: SshProfile) -> SshTerminalType {
+    match profile {
+        SshProfile::Standard => SshTerminalType::Xterm256Color,
+        SshProfile::NetworkDevice => SshTerminalType::Vt100,
+    }
+}
+
+pub fn resolve_ssh_terminal_type(
+    profile: SshProfile,
+    terminal_type: Option<SshTerminalType>,
+) -> SshTerminalType {
+    terminal_type.unwrap_or_else(|| default_terminal_type_for_profile(profile))
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum SftpCwdFollowMode {
@@ -755,6 +807,10 @@ pub struct SavedConnection {
     pub recording: Option<ConnectionRecordingSettings>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ssh_algorithms: Option<SshAlgorithmPreferences>,
+    #[serde(default, skip_serializing_if = "is_standard_ssh_profile")]
+    pub ssh_profile: SshProfile,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terminal_type: Option<SshTerminalType>,
     #[serde(default, skip_serializing_if = "is_default_sftp_settings")]
     pub sftp: SftpSettings,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1879,6 +1935,10 @@ fn is_default_sftp_settings(value: &SftpSettings) -> bool {
     value == &SftpSettings::default()
 }
 
+fn is_standard_ssh_profile(value: &SshProfile) -> bool {
+    *value == SshProfile::Standard
+}
+
 fn is_default_telnet_auto_login_config(value: &TelnetAutoLoginConfig) -> bool {
     value == &TelnetAutoLoginConfig::default()
 }
@@ -2226,6 +2286,8 @@ mod tests {
             icon_auto_detect: None,
             auth: None,
             ssh_algorithms: None,
+            ssh_profile: Default::default(),
+            terminal_type: None,
             sftp: Default::default(),
             network: None,
             post_login: None,
@@ -2306,5 +2368,51 @@ mod tests {
         assert!(json.contains(r#""locked":true"#), "{json}");
         let reloaded: RestorableOpenTab = serde_json::from_str(&json).expect("locked tab reloads");
         assert!(reloaded.locked);
+    }
+
+    #[test]
+    fn legacy_ssh_profile_defaults_without_rewriting_sparse_json() {
+        let json = r#"{
+            "id":"legacy-ssh",
+            "name":"Legacy SSH",
+            "type":"ssh",
+            "host":"example.com"
+        }"#;
+        let connection: SavedConnection = serde_json::from_str(json).expect("legacy SSH loads");
+        assert_eq!(connection.ssh_profile, SshProfile::Standard);
+        assert_eq!(connection.terminal_type, None);
+        assert_eq!(
+            resolve_ssh_terminal_type(connection.ssh_profile, connection.terminal_type),
+            SshTerminalType::Xterm256Color
+        );
+        let serialized = serde_json::to_string(&connection).expect("serialize");
+        assert!(!serialized.contains("ssh_profile"), "{serialized}");
+        assert!(!serialized.contains("terminal_type"), "{serialized}");
+    }
+
+    #[test]
+    fn network_device_profile_and_explicit_terminal_round_trip() {
+        let json = r#"{
+            "id":"switch",
+            "name":"Core switch",
+            "type":"ssh",
+            "host":"10.0.0.2",
+            "ssh_profile":"network_device"
+        }"#;
+        let mut connection: SavedConnection = serde_json::from_str(json).expect("profile loads");
+        assert_eq!(connection.ssh_profile, SshProfile::NetworkDevice);
+        assert_eq!(
+            resolve_ssh_terminal_type(connection.ssh_profile, connection.terminal_type),
+            SshTerminalType::Vt100
+        );
+        connection.terminal_type = Some(SshTerminalType::Ansi);
+        assert_eq!(
+            resolve_ssh_terminal_type(connection.ssh_profile, connection.terminal_type),
+            SshTerminalType::Ansi
+        );
+        let reloaded: SavedConnection =
+            serde_json::from_str(&serde_json::to_string(&connection).expect("serialize profile"))
+                .expect("reload profile");
+        assert_eq!(reloaded, connection);
     }
 }

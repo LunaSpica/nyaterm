@@ -55,6 +55,9 @@ struct InputState {
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 2)]
 async fn main() {
+    let provider_error = install_crypto_provider()
+        .err()
+        .map(|error| error.to_string());
     match std::env::var("NYATERM_RDP_HELPER_TEST_MODE").as_deref() {
         Ok("crash") => std::process::exit(91),
         Ok("hang") => loop {
@@ -62,13 +65,22 @@ async fn main() {
         },
         _ => {}
     }
-    if let Err(error) = run().await {
+    if let Err(error) = run(provider_error).await {
         eprintln!("RDP helper stopped: {error}");
         std::process::exit(1);
     }
 }
 
-async fn run() -> anyhow::Result<()> {
+fn install_crypto_provider() -> anyhow::Result<()> {
+    if rustls::crypto::CryptoProvider::get_default().is_some() {
+        return Ok(());
+    }
+    rustls::crypto::aws_lc_rs::default_provider()
+        .install_default()
+        .map_err(|_| anyhow::anyhow!("failed to install the rustls aws-lc-rs CryptoProvider"))
+}
+
+async fn run(provider_error: Option<String>) -> anyhow::Result<()> {
     let (output_tx, output_rx) = mpsc::channel();
     let writer = spawn_stdout_writer(output_rx)?;
     let (control_tx, mut control_rx) = tokio_mpsc::unbounded_channel();
@@ -94,6 +106,10 @@ async fn run() -> anyhow::Result<()> {
                 )?;
             }
             RdpControlMessage::Connect { session_id, config } => {
+                if let Some(error) = provider_error.as_deref() {
+                    send_error(&output_tx, &session_id, RdpErrorKind::Protocol, error, true)?;
+                    return Ok(());
+                }
                 if client_task.is_some() {
                     send_error(
                         &output_tx,
@@ -236,7 +252,7 @@ async fn run() -> anyhow::Result<()> {
                     send_error(
                         &output_tx,
                         &session_id,
-                        RdpErrorKind::Protocol,
+                        RdpErrorKind::Clipboard,
                         "RDP clipboard channel is not connected",
                         false,
                     )?;
@@ -246,7 +262,7 @@ async fn run() -> anyhow::Result<()> {
                     send_error(
                         &output_tx,
                         &session_id,
-                        RdpErrorKind::Unsupported,
+                        RdpErrorKind::Clipboard,
                         &error.to_string(),
                         false,
                     )?;
@@ -590,7 +606,17 @@ async fn forward_output(
             RdpOutputEvent::ConnectionFailure(error) => output_tx
                 .send(Outbound::Control(RdpControlMessage::Error {
                     session_id: session_id.clone(),
-                    error: classify_error(error.to_string()),
+                    error: classify_error(error.to_string(), RdpErrorKind::Transport),
+                    fatal: true,
+                }))
+                .map_err(|_| ()),
+            RdpOutputEvent::Terminated(Ok(reason)) if connected => output_tx
+                .send(Outbound::Control(RdpControlMessage::Error {
+                    session_id: session_id.clone(),
+                    error: RdpError::new(
+                        RdpErrorKind::Session,
+                        format!("active RDP session terminated: {reason:?}"),
+                    ),
                     fatal: true,
                 }))
                 .map_err(|_| ()),
@@ -604,7 +630,7 @@ async fn forward_output(
             RdpOutputEvent::Terminated(Err(error)) => output_tx
                 .send(Outbound::Control(RdpControlMessage::Error {
                     session_id: session_id.clone(),
-                    error: classify_error(error.to_string()),
+                    error: classify_error(error.to_string(), RdpErrorKind::Session),
                     fatal: true,
                 }))
                 .map_err(|_| ()),
@@ -733,7 +759,7 @@ fn convert_input(
     (!result.is_empty()).then_some(result)
 }
 
-fn classify_error(message: String) -> RdpError {
+fn classify_error(message: String, fallback: RdpErrorKind) -> RdpError {
     let lower = message.to_ascii_lowercase();
     let kind = if lower.contains("certificate rejected") {
         RdpErrorKind::CertificateRejected
@@ -746,10 +772,20 @@ fn classify_error(message: String) -> RdpError {
         RdpErrorKind::Timeout
     } else if lower.contains("refused") {
         RdpErrorKind::ConnectionRefused
-    } else if lower.contains("negotiat") {
+    } else if lower.contains("negotiat") || lower.contains("nla") || lower.contains("x224") {
         RdpErrorKind::Negotiation
+    } else if lower.contains("tls") || lower.contains("rustls") || lower.contains("handshake") {
+        RdpErrorKind::Tls
+    } else if lower.contains("clipboard") || lower.contains("cliprdr") {
+        RdpErrorKind::Clipboard
+    } else if lower.contains("transport")
+        || lower.contains("connection reset")
+        || lower.contains("broken pipe")
+        || lower.contains("unexpected eof")
+    {
+        RdpErrorKind::Transport
     } else {
-        RdpErrorKind::Protocol
+        fallback
     };
     RdpError::new(kind, message)
 }
@@ -813,7 +849,45 @@ mod tests {
     use nyaterm_remote_desktop::{RdpControlMessage, RdpErrorKind};
     use tokio::sync::mpsc as tokio_mpsc;
 
-    use super::{CertificateGate, Outbound, forward_output, report_ironrdp_panic};
+    use super::{
+        CertificateGate, Outbound, classify_error, forward_output, install_crypto_provider,
+        report_ironrdp_panic,
+    };
+
+    #[test]
+    fn rustls_crypto_provider_installation_is_idempotent() {
+        install_crypto_provider().expect("first install");
+        install_crypto_provider().expect("second install");
+        assert!(rustls::crypto::CryptoProvider::get_default().is_some());
+    }
+
+    #[test]
+    fn helper_error_classification_preserves_retry_boundaries() {
+        assert_eq!(
+            classify_error("TLS handshake failed".to_string(), RdpErrorKind::Transport).kind,
+            RdpErrorKind::Tls
+        );
+        assert_eq!(
+            classify_error("connection reset".to_string(), RdpErrorKind::Session).kind,
+            RdpErrorKind::Transport
+        );
+        assert_eq!(
+            classify_error("CredSSP logon failed".to_string(), RdpErrorKind::Transport).kind,
+            RdpErrorKind::Authentication
+        );
+        assert_eq!(
+            classify_error(
+                "NLA negotiation handshake failed".to_string(),
+                RdpErrorKind::Transport,
+            )
+            .kind,
+            RdpErrorKind::Negotiation
+        );
+        assert_eq!(
+            classify_error("channel closed".to_string(), RdpErrorKind::Session).kind,
+            RdpErrorKind::Session
+        );
+    }
 
     #[tokio::test]
     async fn stalled_security_negotiation_reports_a_fatal_timeout() {

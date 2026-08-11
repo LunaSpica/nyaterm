@@ -13,11 +13,11 @@ use super::{
     SESSION_EVENT_QUEUE_OUTPUT_LIMIT, SerialSessionConfig, SessionError, SessionEvent,
     SessionEventQueue, SessionManager, SftpService, SftpSettings, SshAlgorithmMode,
     SshAlgorithmPreferences, SshCommand, SshKeyAuthConfig, SshProxyConfig, SshPtyDimensions,
-    SshSessionConfig, TelnetSessionConfig, WILL, cipher, drain_deferred_ssh_open_commands,
-    expand_proxy_command, forwarded_tcpip_sender_for, has_password_prompt, has_username_prompt,
-    is_process_list_unsupported, kex, local_pty_size, mac, normalize_process_signal,
-    parse_process_output, remap_del_to_bs, run_local_command, ssh_client_config,
-    ssh_host_identifier, validate_ssh_algorithm_preferences,
+    SshSessionConfig, SshSessionProfile, TelnetSessionConfig, WILL, cipher,
+    drain_deferred_ssh_open_commands, expand_proxy_command, forwarded_tcpip_sender_for,
+    has_password_prompt, has_username_prompt, is_process_list_unsupported, kex, local_pty_size,
+    mac, normalize_process_signal, parse_process_output, remap_del_to_bs, run_local_command,
+    ssh_client_config, ssh_host_identifier, validate_ssh_algorithm_preferences,
 };
 
 /// A push must hand the event straight to a parked consumer. Before the
@@ -575,6 +575,24 @@ fn sftp_service_rejects_operations_when_disabled() {
     });
 
     let error = service.list_dir("/").expect_err("SFTP disabled");
+
+    assert!(error.to_string().contains("SFTP is disabled"));
+}
+
+#[test]
+fn sftp_service_rejects_network_device_profile_even_when_saved_enabled() {
+    let service = SftpService::new(SshSessionConfig {
+        profile: SshSessionProfile::NetworkDevice,
+        sftp: SftpSettings {
+            enabled: true,
+            ..Default::default()
+        },
+        ..Default::default()
+    });
+
+    let error = service
+        .list_dir("/")
+        .expect_err("network device SFTP must be disabled before connecting");
 
     assert!(error.to_string().contains("SFTP is disabled"));
 }

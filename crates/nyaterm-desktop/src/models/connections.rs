@@ -54,6 +54,12 @@ pub(crate) enum ConnectionEditorSelect {
     SftpCwdFollowMode,
     SftpFilenameEncoding,
     SshAlgorithmMode,
+    SshProfile,
+    SshTerminalType,
+    RdpCertificatePolicy,
+    RdpDisplayMode,
+    RdpClipboardMode,
+    RecordingMode,
     TelnetEnterMode,
     Shell,
     SerialPort,
@@ -89,6 +95,14 @@ pub(crate) enum ConnectionEditorTelnetTab {
     Compatibility,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ConnectionEditorRdpTab {
+    Security,
+    Display,
+    Clipboard,
+    Reconnect,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum ConnectionEditorField {
     Name,
@@ -113,6 +127,9 @@ pub(crate) enum ConnectionEditorField {
     TelnetAutoLoginSuccessPrompt,
     TelnetAutoLoginFailurePrompt,
     TelnetAutoLoginMaxRetries,
+    RdpDisplayWidth,
+    RdpDisplayHeight,
+    RdpReconnectAttempts,
 }
 
 impl ConnectionEditorField {
@@ -268,6 +285,7 @@ pub(crate) struct ConnectionEditorState {
     pub(crate) rdp_display: nyaterm_core::RdpDisplaySettings,
     pub(crate) rdp_clipboard: nyaterm_core::RdpClipboardSettings,
     pub(crate) rdp_reconnect: nyaterm_core::RdpReconnectSettings,
+    pub(crate) rdp_advanced_tab: ConnectionEditorRdpTab,
     pub(crate) password_source: ConnectionEditorPasswordSource,
     pub(crate) password_id: Option<String>,
     pub(crate) password: String,
@@ -280,6 +298,8 @@ pub(crate) struct ConnectionEditorState {
     pub(crate) x11_forwarding: bool,
     pub(crate) backspace_mode: String,
     pub(crate) encoding: String,
+    pub(crate) ssh_profile: nyaterm_core::SshProfile,
+    pub(crate) terminal_type: Option<nyaterm_core::SshTerminalType>,
     pub(crate) sftp_enabled: bool,
     pub(crate) sftp_cwd_follow_mode: String,
     pub(crate) sftp_shell_detection_timeout_ms: String,

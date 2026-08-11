@@ -2,7 +2,9 @@ use std::sync::Arc;
 
 use gpui::{Context, Window};
 use nyaterm_core::AiExecutionProfile;
-use nyaterm_transport::{SerialSessionConfig, SshSessionConfig, TelnetSessionConfig};
+use nyaterm_transport::{
+    SerialSessionConfig, SshSessionConfig, SshSessionProfile, TelnetSessionConfig,
+};
 
 use super::NativeHostKeyVerifier;
 use crate::features::{NyaTermApp, SavedConnectionStartOptions};
@@ -224,6 +226,7 @@ impl NyaTermApp {
             proxy: None,
             allow_none_auth: false,
             backspace_mode: "del".to_string(),
+            profile: SshSessionProfile::Standard,
             term: "xterm-256color".to_string(),
             x11_forwarding: false,
             x11_display: String::new(),

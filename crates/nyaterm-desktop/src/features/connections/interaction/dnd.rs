@@ -421,6 +421,8 @@ mod tests {
             auth: None,
             recording: None,
             ssh_algorithms: None,
+            ssh_profile: Default::default(),
+            terminal_type: None,
             sftp: Default::default(),
             network: None,
             post_login: None,
