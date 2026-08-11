@@ -687,6 +687,14 @@ impl NyaTermApp {
         if !self.remote_desktop.is_session(&session_id) {
             return false;
         }
+        if !self
+            .remote_desktop
+            .sessions
+            .get(&session_id)
+            .is_some_and(|session| matches!(session.state, RdpSessionState::Connected))
+        {
+            return false;
+        }
         let clipboard_enabled = self.session.metadata(&session_id).is_some_and(|metadata| {
             matches!(
                 &metadata.launch_config,

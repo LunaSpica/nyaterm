@@ -1,6 +1,10 @@
 use std::collections::HashSet;
 use std::io;
-use std::sync::{Arc, Condvar, Mutex, mpsc};
+use std::sync::{
+    Arc, Condvar, Mutex,
+    atomic::{AtomicBool, Ordering},
+    mpsc,
+};
 use std::thread;
 use std::time::Duration;
 
@@ -27,6 +31,8 @@ mod clipboard;
 
 use clipboard::ClipboardBridge;
 
+const CONNECTION_TIMEOUT: Duration = Duration::from_secs(30);
+
 enum Outbound {
     Control(RdpControlMessage),
     Packet(Packet),
@@ -36,6 +42,7 @@ enum Outbound {
 struct CertificateGate {
     response: Mutex<Option<(String, RdpCertificateResponse)>>,
     changed: Condvar,
+    waiting: AtomicBool,
 }
 
 #[derive(Default)]
@@ -104,17 +111,18 @@ async fn run() -> anyhow::Result<()> {
                         message: None,
                     },
                 )?;
+                let connection_gate = certificate_gate.clone();
                 let (iron_config, bridge) = build_config(
                     &session_id,
                     &config,
                     output_tx.clone(),
-                    certificate_gate.clone(),
+                    connection_gate.clone(),
                 )?;
                 let (rdp_output_tx, rdp_output_rx) = tokio_mpsc::channel(64);
                 let client = RdpClient::new(iron_config, rdp_output_tx);
                 let input_sender = client.input_sender();
                 bridge.set_input_sender(input_sender.clone());
-                iron_input = Some(input_sender);
+                iron_input = Some(input_sender.clone());
                 clipboard_bridge = Some(bridge);
                 client_task = Some(
                     thread::Builder::new()
@@ -131,6 +139,9 @@ async fn run() -> anyhow::Result<()> {
                     session_id,
                     rdp_output_rx,
                     output_tx.clone(),
+                    input_sender,
+                    connection_gate,
+                    CONNECTION_TIMEOUT,
                 )));
             }
             RdpControlMessage::Input { session_id, events } => {
@@ -350,27 +361,30 @@ fn build_config(
         {
             return false;
         }
+        certificate_gate.waiting.store(true, Ordering::Release);
         let deadline = std::time::Instant::now() + Duration::from_secs(120);
         let mut slot = certificate_gate
             .response
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        loop {
+        let accepted = loop {
             if let Some((response_id, response)) = slot.take()
                 && response_id == request_id
             {
-                return !matches!(response, RdpCertificateResponse::Reject);
+                break !matches!(response, RdpCertificateResponse::Reject);
             }
             let now = std::time::Instant::now();
             if now >= deadline {
-                return false;
+                break false;
             }
             let waited = certificate_gate.changed.wait_timeout(slot, deadline - now);
             slot = match waited {
                 Ok((slot, _)) => slot,
                 Err(poisoned) => poisoned.into_inner().0,
             };
-        }
+        };
+        certificate_gate.waiting.store(false, Ordering::Release);
+        accepted
     });
     let destination = Destination::new(format!("{}:{}", config.host, config.port))?;
     let platform = if cfg!(target_os = "windows") {
@@ -425,6 +439,9 @@ async fn forward_output(
     session_id: String,
     mut receiver: tokio_mpsc::Receiver<RdpOutputEvent>,
     output_tx: mpsc::Sender<Outbound>,
+    input_tx: tokio_mpsc::UnboundedSender<IronInput>,
+    certificate_gate: Arc<CertificateGate>,
+    connection_timeout: Duration,
 ) {
     let mut epoch = 0u64;
     let mut connected = false;
@@ -439,7 +456,54 @@ async fn forward_output(
         hotspot_y: 0,
         pixels: Vec::new(),
     };
-    while let Some(event) = receiver.recv().await {
+    let connection_deadline = tokio::time::sleep(connection_timeout);
+    tokio::pin!(connection_deadline);
+    loop {
+        let event = if connected {
+            receiver.recv().await
+        } else {
+            tokio::select! {
+                event = receiver.recv() => event,
+                () = &mut connection_deadline => {
+                    if certificate_gate.waiting.load(Ordering::Acquire) {
+                        connection_deadline
+                            .as_mut()
+                            .reset(tokio::time::Instant::now() + connection_timeout);
+                        continue;
+                    }
+                    let _ = output_tx.send(Outbound::Control(RdpControlMessage::Error {
+                        session_id: session_id.clone(),
+                        error: RdpError::new(
+                            RdpErrorKind::Timeout,
+                            format!(
+                                "RDP security negotiation did not complete within {} seconds",
+                                connection_timeout.as_secs()
+                            ),
+                        ),
+                        fatal: true,
+                    }));
+                    let _ = input_tx.send(IronInput::Close);
+                    return;
+                }
+            }
+        };
+        let Some(event) = event else {
+            if !connected {
+                let _ = output_tx.send(Outbound::Control(RdpControlMessage::Error {
+                    session_id: session_id.clone(),
+                    error: RdpError::new(
+                        RdpErrorKind::HelperCrashed,
+                        "IronRDP stopped before completing security negotiation",
+                    ),
+                    fatal: true,
+                }));
+            }
+            return;
+        };
+        let terminal = matches!(
+            &event,
+            RdpOutputEvent::ConnectionFailure(_) | RdpOutputEvent::Terminated(_)
+        );
         let result: Result<(), ()> = match event {
             RdpOutputEvent::DesktopReset { width, height } => {
                 epoch = epoch.wrapping_add(1);
@@ -544,6 +608,9 @@ async fn forward_output(
                 .map_err(|_| ()),
         };
         if result.is_err() {
+            break;
+        }
+        if terminal {
             break;
         }
     }
@@ -709,4 +776,43 @@ fn send_error(
             fatal,
         },
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{Arc, mpsc};
+    use std::time::Duration;
+
+    use ironrdp_client::rdp::{RdpInputEvent as IronInput, RdpOutputEvent};
+    use nyaterm_remote_desktop::{RdpControlMessage, RdpErrorKind};
+    use tokio::sync::mpsc as tokio_mpsc;
+
+    use super::{CertificateGate, Outbound, forward_output};
+
+    #[tokio::test]
+    async fn stalled_security_negotiation_reports_a_fatal_timeout() {
+        let (rdp_output_tx, rdp_output_rx) = tokio_mpsc::channel::<RdpOutputEvent>(1);
+        let (input_tx, mut input_rx) = tokio_mpsc::unbounded_channel();
+        let (output_tx, output_rx) = mpsc::channel();
+
+        forward_output(
+            "session".to_string(),
+            rdp_output_rx,
+            output_tx,
+            input_tx,
+            Arc::new(CertificateGate::default()),
+            Duration::from_millis(10),
+        )
+        .await;
+
+        let Outbound::Control(RdpControlMessage::Error { error, fatal, .. }) =
+            output_rx.recv().unwrap()
+        else {
+            panic!("expected a timeout error");
+        };
+        assert_eq!(error.kind, RdpErrorKind::Timeout);
+        assert!(fatal);
+        assert!(matches!(input_rx.recv().await, Some(IronInput::Close)));
+        drop(rdp_output_tx);
+    }
 }
