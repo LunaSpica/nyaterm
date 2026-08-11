@@ -99,19 +99,29 @@ zed_reqwest = { package = "zed-reqwest", version = "0.12.15-zed", default-featur
 ] }
 zip = { version = "8.2.0", default-features = false, features = ["deflate"] }
 
+[profile.dev]
+debug = "line-tables-only"
+
 [profile.dev.package]
-alacritty_terminal = { opt-level = 1 }
-gpui = { opt-level = 1 }
-gpui_platform = { opt-level = 1 }
-regex = { opt-level = 1 }
-regex-automata = { opt-level = 1 }
-regex-syntax = { opt-level = 1 }
-rustybuzz = { opt-level = 1 }
-smol = { opt-level = 1 }
-sum_tree = { opt-level = 1 }
-swash = { opt-level = 1 }
-taffy = { opt-level = 1 }
-ttf-parser = { opt-level = 1 }
+alacritty_terminal = { opt-level = 1, debug = false }
+gpui = { opt-level = 1, debug = false }
+gpui_platform = { opt-level = 1, debug = false }
+regex = { opt-level = 1, debug = false }
+regex-automata = { opt-level = 1, debug = false }
+regex-syntax = { opt-level = 1, debug = false }
+rustybuzz = { opt-level = 1, debug = false }
+smol = { opt-level = 1, debug = false }
+sum_tree = { opt-level = 1, debug = false }
+swash = { opt-level = 1, debug = false }
+taffy = { opt-level = 1, debug = false }
+ttf-parser = { opt-level = 1, debug = false }
+
+[profile.dev.package."*"]
+debug = false
+
+[profile.debugging]
+inherits = "dev"
+debug = "full"
 
 [patch.crates-io]
 ironrdp-client = { path = "vendor/ironrdp-client" }
