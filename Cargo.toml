@@ -1,4 +1,5 @@
 [workspace]
+default-members = ["crates/nyaterm-app"]
 members = [
     "crates/nyaterm-app",
     "crates/nyaterm-core",
