@@ -180,7 +180,8 @@ fn open_connection_editor_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut 
             window.on_window_should_close(cx, move |_, cx| {
                 close_app.update(cx, |app, cx| {
                     app.connection_state.close_editor();
-                    app.shell.set_status("connection editor closed".to_string());
+                    app.shell
+                        .set_status(app.tr("dialog.connectionEditorClosed").to_string());
                     cx.notify();
                 });
                 true
@@ -199,8 +200,10 @@ fn open_connection_editor_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut 
         }
         Err(error) => {
             app.connection_state.clear_editor_window();
-            app.shell
-                .set_status(format!("failed to open connection editor window: {error}"));
+            app.shell.set_status(
+                app.tr("dialog.connectionEditorOpenFailed")
+                    .replace("{{error}}", &error.to_string()),
+            );
             cx.notify();
         }
     });

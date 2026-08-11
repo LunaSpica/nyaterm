@@ -9,8 +9,26 @@ use nyaterm_core::{
 use crate::features::NyaTermApp;
 use crate::models::{
     ConnectionEditorAdvancedTab, ConnectionEditorField, ConnectionEditorPasswordSource,
-    ConnectionEditorRdpTab, ConnectionEditorState, ConnectionEditorTelnetTab, ConnectionKindTab,
+    ConnectionEditorRdpTab, ConnectionEditorSshAlgorithmTab, ConnectionEditorState,
+    ConnectionEditorTelnetTab, ConnectionKindTab,
 };
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum ConnectionEditorValidationError {
+    HostRequired,
+    PortInvalid,
+    UsernameRequired,
+    ShellPathRequired,
+    SerialPortRequired,
+    BaudRateInvalid,
+    RdpDisplayWidthInvalid,
+    RdpDisplayHeightInvalid,
+    RdpReconnectAttemptsInvalid,
+    PostLoginCommandRequired,
+    PostLoginDelayInvalid,
+    SftpShellDetectionTimeoutInvalid,
+    SshAlgorithms(nyaterm_transport::SshAlgorithmValidationError),
+}
 
 pub(super) fn connection_editor_from_saved(
     connection: SavedConnection,
@@ -91,6 +109,7 @@ pub(super) fn connection_editor_from_saved(
         ssh_algorithm_ciphers: ssh_algorithms.ciphers,
         ssh_algorithm_macs: ssh_algorithms.macs,
         ssh_algorithm_host_keys: ssh_algorithms.host_keys,
+        ssh_algorithm_tab: ConnectionEditorSshAlgorithmTab::KeyExchange,
         shell_path: String::new(),
         shell_args: String::new(),
         working_dir: String::new(),
@@ -284,17 +303,17 @@ fn parse_ssh_algorithm_mode(value: &str) -> SshAlgorithmMode {
 
 pub(super) fn build_saved_connection_from_editor(
     editor: &ConnectionEditorState,
-) -> Result<SavedConnection, String> {
+) -> Result<SavedConnection, ConnectionEditorValidationError> {
     let config = match editor.kind {
         ConnectionKindTab::Ssh => {
             let host = editor.host.trim().to_string();
             if host.is_empty() {
-                return Err("SSH host is required".to_string());
+                return Err(ConnectionEditorValidationError::HostRequired);
             }
-            let port = parse_port(&editor.port, "SSH port")?;
+            let port = parse_port(&editor.port)?;
             let username = editor.username.trim().to_string();
             if username.is_empty() {
-                return Err("SSH username is required".to_string());
+                return Err(ConnectionEditorValidationError::UsernameRequired);
             }
             ConnectionType::Ssh {
                 host,
@@ -309,7 +328,7 @@ pub(super) fn build_saved_connection_from_editor(
         ConnectionKindTab::Local => {
             let shell_path = editor.shell_path.trim().to_string();
             if shell_path.is_empty() {
-                return Err("Shell path is required".to_string());
+                return Err(ConnectionEditorValidationError::ShellPathRequired);
             }
             ConnectionType::LocalTerminal {
                 shell_path,
@@ -322,9 +341,9 @@ pub(super) fn build_saved_connection_from_editor(
         ConnectionKindTab::Telnet => {
             let host = editor.host.trim().to_string();
             if host.is_empty() {
-                return Err("Telnet host is required".to_string());
+                return Err(ConnectionEditorValidationError::HostRequired);
             }
-            let port = parse_port(&editor.port, "Telnet port")?;
+            let port = parse_port(&editor.port)?;
             ConnectionType::Telnet {
                 host,
                 port,
@@ -371,15 +390,15 @@ pub(super) fn build_saved_connection_from_editor(
         ConnectionKindTab::Serial => {
             let port_name = editor.serial_port.trim().to_string();
             if port_name.is_empty() {
-                return Err("Serial port is required".to_string());
+                return Err(ConnectionEditorValidationError::SerialPortRequired);
             }
             let baud_rate = editor
                 .baud_rate
                 .trim()
                 .parse::<u32>()
-                .map_err(|_| "Baud rate must be a number".to_string())?;
+                .map_err(|_| ConnectionEditorValidationError::BaudRateInvalid)?;
             if !(1..=4_000_000).contains(&baud_rate) {
-                return Err("Baud rate must be between 1 and 4000000".to_string());
+                return Err(ConnectionEditorValidationError::BaudRateInvalid);
             }
             let data_bits = editor
                 .data_bits
@@ -401,20 +420,20 @@ pub(super) fn build_saved_connection_from_editor(
         ConnectionKindTab::Rdp => {
             let host = editor.host.trim().to_string();
             if host.is_empty() {
-                return Err("RDP host is required".to_string());
+                return Err(ConnectionEditorValidationError::HostRequired);
             }
-            let port = parse_port(&editor.port, "RDP port")?;
+            let port = parse_port(&editor.port)?;
             if editor.username.trim().is_empty() {
-                return Err("RDP username is required".to_string());
+                return Err(ConnectionEditorValidationError::UsernameRequired);
             }
             if !(640..=7680).contains(&editor.rdp_display.width) {
-                return Err("RDP width must be between 640 and 7680".to_string());
+                return Err(ConnectionEditorValidationError::RdpDisplayWidthInvalid);
             }
             if !(480..=4320).contains(&editor.rdp_display.height) {
-                return Err("RDP height must be between 480 and 4320".to_string());
+                return Err(ConnectionEditorValidationError::RdpDisplayHeightInvalid);
             }
             if editor.rdp_reconnect.max_attempts > 20 {
-                return Err("RDP reconnect attempts must be between 0 and 20".to_string());
+                return Err(ConnectionEditorValidationError::RdpReconnectAttemptsInvalid);
             }
             ConnectionType::Rdp {
                 host,
@@ -431,27 +450,23 @@ pub(super) fn build_saved_connection_from_editor(
 
     if editor.kind == ConnectionKindTab::Ssh {
         if editor.post_login_enabled && editor.post_login_command.trim().is_empty() {
-            return Err("Post-login command is required".to_string());
+            return Err(ConnectionEditorValidationError::PostLoginCommandRequired);
         }
         let delay = editor
             .post_login_delay_ms
             .trim()
             .parse::<u64>()
-            .map_err(|_| "Post-login delay must be between 0 and 60000 ms".to_string())?;
+            .map_err(|_| ConnectionEditorValidationError::PostLoginDelayInvalid)?;
         if delay > 60_000 {
-            return Err("Post-login delay must be between 0 and 60000 ms".to_string());
+            return Err(ConnectionEditorValidationError::PostLoginDelayInvalid);
         }
         let sftp_timeout = editor
             .sftp_shell_detection_timeout_ms
             .trim()
             .parse::<u64>()
-            .map_err(|_| {
-                "SFTP shell detection timeout must be between 100 and 60000 ms".to_string()
-            })?;
+            .map_err(|_| ConnectionEditorValidationError::SftpShellDetectionTimeoutInvalid)?;
         if !(100..=60_000).contains(&sftp_timeout) {
-            return Err(
-                "SFTP shell detection timeout must be between 100 and 60000 ms".to_string(),
-            );
+            return Err(ConnectionEditorValidationError::SftpShellDetectionTimeoutInvalid);
         }
     }
 
@@ -573,7 +588,27 @@ pub(super) fn build_saved_connection_from_editor(
             macs: editor.ssh_algorithm_macs.clone(),
             host_keys: editor.ssh_algorithm_host_keys.clone(),
         };
-        (preferences != SshAlgorithmPreferences::default()).then_some(preferences)
+        let preferences =
+            (preferences != SshAlgorithmPreferences::default()).then_some(preferences);
+        let transport_preferences =
+            preferences
+                .as_ref()
+                .map(|preferences| nyaterm_transport::SshAlgorithmPreferences {
+                    mode: match preferences.mode {
+                        SshAlgorithmMode::Compatible => {
+                            nyaterm_transport::SshAlgorithmMode::Compatible
+                        }
+                        SshAlgorithmMode::Secure => nyaterm_transport::SshAlgorithmMode::Secure,
+                        SshAlgorithmMode::Custom => nyaterm_transport::SshAlgorithmMode::Custom,
+                    },
+                    kex: preferences.kex.clone(),
+                    ciphers: preferences.ciphers.clone(),
+                    macs: preferences.macs.clone(),
+                    host_keys: preferences.host_keys.clone(),
+                });
+        nyaterm_transport::validate_ssh_algorithm_preferences(transport_preferences.as_ref())
+            .map_err(ConnectionEditorValidationError::SshAlgorithms)?;
+        preferences
     } else {
         None
     };
@@ -634,13 +669,13 @@ pub(super) fn build_saved_connection_from_editor(
     })
 }
 
-pub(super) fn parse_port(value: &str, label: &str) -> Result<u16, String> {
+pub(super) fn parse_port(value: &str) -> Result<u16, ConnectionEditorValidationError> {
     let port = value
         .trim()
         .parse::<u16>()
-        .map_err(|_| format!("{label} must be 1-65535"))?;
+        .map_err(|_| ConnectionEditorValidationError::PortInvalid)?;
     if port == 0 {
-        return Err(format!("{label} must be 1-65535"));
+        return Err(ConnectionEditorValidationError::PortInvalid);
     }
     Ok(port)
 }
@@ -665,7 +700,10 @@ mod tests {
 
     use crate::models::{ConnectionEditorPasswordSource, ConnectionKindTab};
 
-    use super::{build_saved_connection_from_editor, connection_editor_from_saved};
+    use super::{
+        ConnectionEditorValidationError, build_saved_connection_from_editor,
+        connection_editor_from_saved,
+    };
 
     #[test]
     fn connection_editor_round_trip_preserves_icon() {
@@ -803,10 +841,34 @@ mod tests {
         assert_eq!(saved.sftp, connection.sftp);
         assert_eq!(saved.ssh_profile, SshProfile::NetworkDevice);
         assert_eq!(saved.terminal_type, Some(SshTerminalType::Vt220));
+        let mut invalid = editor.clone();
+        invalid.ssh_algorithm_kex = vec!["not-a-kex".to_string()];
+        assert_eq!(
+            build_saved_connection_from_editor(&invalid).unwrap_err(),
+            ConnectionEditorValidationError::SshAlgorithms(
+                nyaterm_transport::SshAlgorithmValidationError::Unsupported {
+                    kind: nyaterm_transport::SshAlgorithmListKind::KeyExchange,
+                    algorithm: "not-a-kex".to_string(),
+                }
+            )
+        );
         match saved.config {
             ConnectionType::Ssh { encoding, .. } => assert_eq!(encoding, "GBK"),
             other => panic!("expected SSH connection, got {other:?}"),
         }
+
+        let mut compatible = editor.clone();
+        compatible.ssh_algorithm_mode = "compatible".to_string();
+        compatible.ssh_algorithm_kex.clear();
+        compatible.ssh_algorithm_ciphers.clear();
+        compatible.ssh_algorithm_macs.clear();
+        compatible.ssh_algorithm_host_keys.clear();
+        assert_eq!(
+            build_saved_connection_from_editor(&compatible)
+                .expect("compatible connection")
+                .ssh_algorithms,
+            None
+        );
     }
 
     #[test]
@@ -937,25 +999,25 @@ mod tests {
         invalid.username.clear();
         assert_eq!(
             build_saved_connection_from_editor(&invalid).unwrap_err(),
-            "RDP username is required"
+            ConnectionEditorValidationError::UsernameRequired
         );
         invalid.username = "operator".to_string();
         invalid.rdp_display.width = 639;
         assert_eq!(
             build_saved_connection_from_editor(&invalid).unwrap_err(),
-            "RDP width must be between 640 and 7680"
+            ConnectionEditorValidationError::RdpDisplayWidthInvalid
         );
         invalid.rdp_display.width = 2560;
         invalid.rdp_display.height = 4321;
         assert_eq!(
             build_saved_connection_from_editor(&invalid).unwrap_err(),
-            "RDP height must be between 480 and 4320"
+            ConnectionEditorValidationError::RdpDisplayHeightInvalid
         );
         invalid.rdp_display.height = 1440;
         invalid.rdp_reconnect.max_attempts = 21;
         assert_eq!(
             build_saved_connection_from_editor(&invalid).unwrap_err(),
-            "RDP reconnect attempts must be between 0 and 20"
+            ConnectionEditorValidationError::RdpReconnectAttemptsInvalid
         );
 
         let saved = build_saved_connection_from_editor(&editor).expect("valid connection");

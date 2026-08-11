@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use gpui::{
     Context, FontWeight, IntoElement, SharedString, div,
     prelude::{
@@ -7,12 +9,13 @@ use gpui::{
 };
 
 use nyaterm_core::truncate_preview;
-use nyaterm_ui::{NyaTabItem, NyaTabs};
+use nyaterm_transport::{SshAlgorithmOption, SshAlgorithmRisk};
+use nyaterm_ui::{NyaCheckbox, NyaTabItem, NyaTabs, NyaTooltip};
 
 use crate::features::{ConnectionEditorToggle, NyaTermApp};
 use crate::models::{
     ConnectionEditorAdvancedTab, ConnectionEditorField, ConnectionEditorPasswordSource,
-    ConnectionEditorSelect,
+    ConnectionEditorSelect, ConnectionEditorSshAlgorithmTab,
 };
 
 use super::super::super::list::{
@@ -68,6 +71,191 @@ fn ssh_advanced_content(
                 ),
         )
         .child(content)
+}
+
+fn ssh_algorithm_move_button(
+    palette: crate::theme::ThemePalette,
+    id: String,
+    icon: &'static str,
+    tooltip: String,
+    enabled: bool,
+    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+) -> impl IntoElement {
+    let mut button = div()
+        .id(SharedString::from(id))
+        .size(px(24.))
+        .flex_none()
+        .rounded_sm()
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(
+            svg()
+                .size(px(13.))
+                .path(icon)
+                .text_color(rgb(palette.text_muted)),
+        )
+        .tooltip(move |window, cx| NyaTooltip::new(tooltip.clone()).build(window, cx));
+    if enabled {
+        button = button
+            .cursor_pointer()
+            .hover(move |this| this.bg(rgb(palette.hover)))
+            .on_click(on_click);
+    } else {
+        button = button.opacity(0.35);
+    }
+    button
+}
+
+fn ssh_algorithm_list(
+    palette: crate::theme::ThemePalette,
+    language: &str,
+    tab: ConnectionEditorSshAlgorithmTab,
+    options: &[SshAlgorithmOption],
+    selected_values: &[String],
+    cx: &mut Context<NyaTermApp>,
+) -> impl IntoElement {
+    let tr = |key: &'static str| crate::i18n::text(language, key);
+    let selected = selected_values.iter().cloned().collect::<HashSet<_>>();
+    let option_by_id = options
+        .iter()
+        .map(|option| (option.id.as_str(), option.risk))
+        .collect::<std::collections::HashMap<_, _>>();
+    let mut rows = selected_values
+        .iter()
+        .map(|id| (id.clone(), option_by_id.get(id.as_str()).copied(), true))
+        .collect::<Vec<_>>();
+    rows.extend(
+        options
+            .iter()
+            .filter(|option| !selected.contains(&option.id))
+            .map(|option| (option.id.clone(), Some(option.risk), false)),
+    );
+
+    let mut list = div()
+        .id(SharedString::from(format!(
+            "connection-ssh-algorithm-list-{tab:?}"
+        )))
+        .max_h(px(224.))
+        .overflow_y_scroll()
+        .flex()
+        .flex_col()
+        .gap_1();
+    for (row_index, (id, risk, enabled)) in rows.into_iter().enumerate() {
+        let risk_label = match risk {
+            Some(SshAlgorithmRisk::Modern) => tr("dialog.algorithmRiskModern"),
+            Some(SshAlgorithmRisk::Legacy) => tr("dialog.algorithmRiskLegacy"),
+            Some(SshAlgorithmRisk::Insecure) => tr("dialog.algorithmRiskInsecure"),
+            None => tr("dialog.algorithmUnsupported"),
+        };
+        let risk_color = match risk {
+            Some(SshAlgorithmRisk::Modern) => palette.success,
+            Some(SshAlgorithmRisk::Legacy) => palette.warning,
+            Some(SshAlgorithmRisk::Insecure) | None => palette.danger,
+        };
+        let selected_index = selected_values.iter().position(|value| value == &id);
+        let move_up_enabled = selected_index.is_some_and(|index| index > 0);
+        let move_down_enabled =
+            selected_index.is_some_and(|index| index + 1 < selected_values.len());
+        let checkbox_id = format!("connection-ssh-algorithm-checkbox-{tab:?}-{row_index}");
+        let app = cx.weak_entity();
+        let checkbox_algorithm = id.clone();
+        let checkbox = NyaCheckbox::new(checkbox_id)
+            .checked(enabled)
+            .disabled(enabled && selected_values.len() <= 1)
+            .on_click(move |_, _, cx| {
+                let _ = app.update(cx, |app, cx| {
+                    app.set_connection_editor_ssh_algorithm_enabled(
+                        tab,
+                        &checkbox_algorithm,
+                        !enabled,
+                        cx,
+                    );
+                });
+            });
+        let move_up_id = id.clone();
+        let move_down_id = id.clone();
+        list = list.child(
+            div()
+                .min_h(px(38.))
+                .rounded_sm()
+                .border_1()
+                .border_color(rgb(palette.border))
+                .bg(if enabled {
+                    rgba((palette.accent << 8) | 0x18)
+                } else {
+                    rgba((palette.surface << 8) | 0x18)
+                })
+                .px_2()
+                .py_1()
+                .flex()
+                .items_center()
+                .gap_2()
+                .opacity(if enabled { 1.0 } else { 0.65 })
+                .child(div().flex_none().child(checkbox))
+                .child(
+                    div()
+                        .min_w_0()
+                        .flex_1()
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .child(
+                            div()
+                                .truncate()
+                                .text_size(px(10.))
+                                .font_family(crate::features::gpui_code_font_family())
+                                .text_color(rgb(palette.text))
+                                .child(id),
+                        )
+                        .child(
+                            div()
+                                .flex_none()
+                                .rounded_sm()
+                                .border_1()
+                                .border_color(rgba((risk_color << 8) | 0x66))
+                                .bg(rgba((risk_color << 8) | 0x18))
+                                .px_1()
+                                .text_size(px(9.))
+                                .text_color(rgb(risk_color))
+                                .child(risk_label),
+                        ),
+                )
+                .child(
+                    div()
+                        .flex_none()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .child(ssh_algorithm_move_button(
+                            palette,
+                            format!("connection-ssh-algorithm-up-{tab:?}-{row_index}"),
+                            "icons/chevron-up.svg",
+                            tr("dialog.moveUp").to_string(),
+                            move_up_enabled,
+                            cx.listener(move |this, _, _, cx| {
+                                this.move_connection_editor_ssh_algorithm(tab, &move_up_id, -1, cx);
+                            }),
+                        ))
+                        .child(ssh_algorithm_move_button(
+                            palette,
+                            format!("connection-ssh-algorithm-down-{tab:?}-{row_index}"),
+                            "icons/chevron-down.svg",
+                            tr("dialog.moveDown").to_string(),
+                            move_down_enabled,
+                            cx.listener(move |this, _, _, cx| {
+                                this.move_connection_editor_ssh_algorithm(
+                                    tab,
+                                    &move_down_id,
+                                    1,
+                                    cx,
+                                );
+                            }),
+                        )),
+                ),
+        );
+    }
+    list
 }
 
 pub(super) fn connection_editor_ssh_section(
@@ -148,7 +336,6 @@ pub(super) fn connection_editor_ssh_section(
             NyaTabItem::new("SFTP"),
             NyaTabItem::new(tr("dialog.x11Forwarding")),
             NyaTabItem::new(tr("dialog.backspaceMode")),
-            NyaTabItem::new(tr("dialog.sshAlgorithms")),
         ])
         .selected_index(match editor.advanced_behavior_tab {
             ConnectionEditorAdvancedTab::PostLogin => 0,
@@ -156,7 +343,6 @@ pub(super) fn connection_editor_ssh_section(
             ConnectionEditorAdvancedTab::Sftp => 2,
             ConnectionEditorAdvancedTab::X11 => 3,
             ConnectionEditorAdvancedTab::Backspace => 4,
-            ConnectionEditorAdvancedTab::Algorithms => 5,
             _ => 0,
         })
         .on_select(cx.listener(|this, index, _, cx| {
@@ -165,8 +351,7 @@ pub(super) fn connection_editor_ssh_section(
                 1 => ConnectionEditorAdvancedTab::Terminal,
                 2 => ConnectionEditorAdvancedTab::Sftp,
                 3 => ConnectionEditorAdvancedTab::X11,
-                4 => ConnectionEditorAdvancedTab::Backspace,
-                _ => ConnectionEditorAdvancedTab::Algorithms,
+                _ => ConnectionEditorAdvancedTab::Backspace,
             };
             this.set_connection_editor_advanced_tab(tab, cx);
         }));
@@ -622,14 +807,62 @@ pub(super) fn connection_editor_ssh_section(
                             ))
                         },
                     )
-                    .when(
-                        editor.advanced_behavior_tab == ConnectionEditorAdvancedTab::Algorithms,
-                        |this| {
-                            this.child(ssh_advanced_content(
-                                palette,
-                                tr("dialog.sshAlgorithms"),
-                                tr("dialog.sshAlgorithmsDesc"),
-                                connection_editor_select(
+                    .child({
+                        let supported = nyaterm_transport::supported_ssh_algorithms();
+                        let algorithm_tabs = NyaTabs::new("connection-ssh-algorithm-tabs")
+                            .items([
+                                NyaTabItem::new(tr("dialog.algorithmKexTab")),
+                                NyaTabItem::new(tr("dialog.algorithmCiphersTab")),
+                                NyaTabItem::new(tr("dialog.algorithmMacsTab")),
+                                NyaTabItem::new(tr("dialog.algorithmHostKeysTab")),
+                            ])
+                            .selected_index(match editor.ssh_algorithm_tab {
+                                ConnectionEditorSshAlgorithmTab::KeyExchange => 0,
+                                ConnectionEditorSshAlgorithmTab::Ciphers => 1,
+                                ConnectionEditorSshAlgorithmTab::Macs => 2,
+                                ConnectionEditorSshAlgorithmTab::HostKeys => 3,
+                            })
+                            .on_select(cx.listener(|this, index, _, cx| {
+                                let tab = match *index {
+                                    0 => ConnectionEditorSshAlgorithmTab::KeyExchange,
+                                    1 => ConnectionEditorSshAlgorithmTab::Ciphers,
+                                    2 => ConnectionEditorSshAlgorithmTab::Macs,
+                                    _ => ConnectionEditorSshAlgorithmTab::HostKeys,
+                                };
+                                this.set_connection_editor_ssh_algorithm_tab(tab, cx);
+                            }));
+                        let (options, selected_values) = match editor.ssh_algorithm_tab {
+                            ConnectionEditorSshAlgorithmTab::KeyExchange => (
+                                supported.kex.as_slice(),
+                                editor.ssh_algorithm_kex.as_slice(),
+                            ),
+                            ConnectionEditorSshAlgorithmTab::Ciphers => (
+                                supported.ciphers.as_slice(),
+                                editor.ssh_algorithm_ciphers.as_slice(),
+                            ),
+                            ConnectionEditorSshAlgorithmTab::Macs => (
+                                supported.macs.as_slice(),
+                                editor.ssh_algorithm_macs.as_slice(),
+                            ),
+                            ConnectionEditorSshAlgorithmTab::HostKeys => (
+                                supported.host_keys.as_slice(),
+                                editor.ssh_algorithm_host_keys.as_slice(),
+                            ),
+                        };
+                        let mode_description = match editor.ssh_algorithm_mode.as_str() {
+                            "secure" => tr("dialog.algorithmModeSecureDesc"),
+                            "custom" => tr("dialog.algorithmModeCustomDesc"),
+                            _ => tr("dialog.algorithmModeCompatibleDesc"),
+                        };
+                        ssh_advanced_content(
+                            palette,
+                            tr("dialog.sshAlgorithms"),
+                            tr("dialog.sshAlgorithmsDesc"),
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap_2()
+                                .child(connection_editor_select(
                                     ConnectionEditorRenderContext {
                                         palette,
                                         fields,
@@ -638,10 +871,25 @@ pub(super) fn connection_editor_ssh_section(
                                     "connection-editor-ssh-algorithm-mode",
                                     tr("dialog.algorithmMode"),
                                     ConnectionEditorSelect::SshAlgorithmMode,
-                                ),
-                            ))
-                        },
-                    ),
+                                ))
+                                .child(
+                                    div()
+                                        .text_size(px(10.))
+                                        .text_color(rgb(palette.text_muted))
+                                        .child(mode_description),
+                                )
+                                .when(editor.ssh_algorithm_mode == "custom", |this| {
+                                    this.child(algorithm_tabs).child(ssh_algorithm_list(
+                                        palette,
+                                        language,
+                                        editor.ssh_algorithm_tab,
+                                        options,
+                                        selected_values,
+                                        cx,
+                                    ))
+                                }),
+                        )
+                    }),
             )
         })
 }

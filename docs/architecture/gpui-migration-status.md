@@ -10,6 +10,23 @@ Last updated from the working tree on 2026-08-11.
 
 ## Tauri Main Parity Refreshes
 
+- 2026-08-11 completed the native connection-editor parity audit against the
+  clean Tauri reference at `266db741`. The SSH algorithm editor is again a
+  standalone advanced section rather than a behavior tab, with compatible,
+  secure and custom modes, four ordered algorithm categories, risk metadata,
+  unknown-value preservation and explicit removal. `ConnectionsFeatureState`
+  remains the only editor owner, while `nyaterm-transport` exposes the cached
+  russh capability model and the typed validation shared by save and session
+  startup. Internal russh KEX extension markers remain active in preset runtime
+  configuration but are deliberately excluded from user-selectable custom
+  algorithms because russh does not accept them through its public parser.
+- The same refresh localized the remaining connection form placeholders,
+  predictable validation and file-picker/status messages, including the full
+  Telnet auto-login surface. English and Simplified Chinese catalogs now have
+  identical key sets, and tests scan the native connection-editor sources so a
+  referenced static key missing from either catalog fails immediately. Existing
+  serialized fields are unchanged: missing `ssh_algorithms` still reads as
+  compatible, and the default compatible configuration still writes `None`.
 - 2026-08-11 fast-forwarded the clean reference Tauri repository from
   `21d0f04e` to `266db741` and audited the five intervening commits. Native
   GPUI now carries the behavior-value changes without importing React/Tauri
@@ -119,32 +136,33 @@ Last updated from the working tree on 2026-08-11.
 | `replace_snapshot` methods | 0 | Cleared. |
 | Store snapshot publish calls | 0 | `publish.rs` and the publish throttle are gone. |
 
-No Rust source file currently exceeds 3,000 lines. The largest production file
-is the terminal desktop model at 2,647 lines, followed by terminal runtime
-`buffer.rs` at 2,593. The former 4,000-line files now have these boundaries:
+Three production Rust files currently exceed 3,000 lines:
+`nyaterm-transport/src/lib.rs` at 3,328, `nyaterm-transport/src/sftp.rs` at
+3,146, and the terminal desktop model at 3,097. The former 4,000-line files now
+have these boundaries:
 
 | Production file | Production lines | Test module lines | Notes |
 | --- | ---: | ---: | --- |
-| `crates/nyaterm-desktop/src/models/terminal.rs` | 2647 | 2270 | Frame-pipeline tests live in `models/terminal/tests.rs`; terminal cell and selection models remain in the production module. |
-| `crates/nyaterm-desktop/src/features/terminal/terminal_surface_entity.rs` | 2475 | 2283 | The 54 focused tests live in `terminal_surface_entity/tests.rs`; the paint hot path and private entity boundary are unchanged. |
-| `crates/nyaterm-transport/src/lib.rs` | 2547 | 990 | Crate-root session lifecycle tests live in `src/tests.rs` with explicit imports. Session configuration contracts, the bounded event queue, and SSH command/process execution live in focused modules; the crate root preserves their public facade. |
-| `crates/nyaterm-core/src/storage.rs` | 1470 | 2618 | Compatibility tests live in `storage/tests.rs` with explicit imports. The facade, redb schema, encryption and fallback readers remain unchanged. |
+| `crates/nyaterm-desktop/src/models/terminal.rs` | 3097 | 2610 | Frame-pipeline tests live in `models/terminal/tests.rs`; terminal cell and selection models remain in the production module. |
+| `crates/nyaterm-desktop/src/features/terminal/terminal_surface_entity.rs` | 2611 | 2600 | The 64 focused tests live in `terminal_surface_entity/tests.rs`; the paint hot path and private entity boundary are unchanged. |
+| `crates/nyaterm-transport/src/lib.rs` | 3328 | 1428 | Crate-root session lifecycle tests live in `src/tests.rs` with explicit imports. Session configuration contracts, the bounded event queue, and SSH command/process execution live in focused modules; the crate root preserves their public facade. |
+| `crates/nyaterm-core/src/storage.rs` | 1471 | 2893 | Compatibility tests live in `storage/tests.rs` with explicit imports. The facade, redb schema, encryption and fallback readers remain unchanged. |
 
 Other large modules now keep their focused tests behind the same normal
 child-module boundary:
 
 | Production file | Production lines | Test module lines | Notes |
 | --- | ---: | ---: | --- |
-| `crates/nyaterm-desktop/src/features/terminal/terminal_runtime/view_io.rs` | 1606 | 869 | The 41 snapshot, scrolling, input-latency and key-encoding tests live in `view_io/tests.rs`; the 1240-line `view_io/input.rs` module owns keyboard, mouse, focus, wire-write, recording and encoding input adapters. |
-| `crates/nyaterm-desktop/src/features/terminal/terminal_runtime/buffer.rs` | 2593 | 233 | The 10 frame-budget, search-apply, OSC52 and window-tab tests live in `buffer/tests.rs`; buffer application and surface notification logic remain together. |
-| `crates/nyaterm-desktop/src/features/connections/state.rs` | 2106 | 1596 | The 60 list, editor and network owner-transition tests live in `state/tests.rs`; the focused `editor_logic`, `list_logic` and `network_logic` modules are unchanged. |
-| `crates/nyaterm-desktop/src/features/transfers/state.rs` | 1354 | 788 | The 17 browser, queue, editor and external-sync owner tests live in `state/tests.rs`; the 621-line `state/browser.rs` and focused `state/editor.rs` module own their transitions while `TransferFeatureState` remains authoritative. |
-| `crates/nyaterm-desktop/src/features/ai/state.rs` | 1788 | 669 | The 20 chat, settings, discovery, history and agent owner-transition tests live in `state/tests.rs`; the 967-line `state/settings.rs` module owns provider settings, model catalog, credential and custom-action transitions while `AiFeatureState` remains authoritative. |
-| `crates/nyaterm-desktop/src/features/session/state.rs` | 2333 | 897 | The 16 restore, prompt, dialog and start-lifecycle owner tests live in `state/tests.rs`. |
-| `crates/nyaterm-terminal/src/lib.rs` | 1966 | 1147 | The 75 terminal state-machine and snapshot tests live in `src/tests.rs` with explicit imports. |
-| `crates/nyaterm-terminal/src/graphics.rs` | 1597 | 1289 | The 35 ingress, Kitty, iTerm2 and Sixel tests live in `graphics/tests.rs`; parser and graphics-state behavior remain in the production module. |
+| `crates/nyaterm-desktop/src/features/terminal/terminal_runtime/view_io.rs` | 1687 | 973 | The 47 snapshot, scrolling, input-latency and key-encoding tests live in `view_io/tests.rs`; the focused `view_io/input.rs` module owns keyboard, mouse, focus, wire-write, recording and encoding input adapters. |
+| `crates/nyaterm-desktop/src/features/terminal/terminal_runtime/buffer.rs` | 2807 | 396 | The 13 frame-budget, search-apply, OSC52 and window-tab tests live in `buffer/tests.rs`; buffer application and surface notification logic remain together. |
+| `crates/nyaterm-desktop/src/features/connections/state.rs` | 1751 | 1610 | The 57 list, editor and network owner-transition tests live in `state/tests.rs`; the focused `editor_logic`, `list_logic` and `network_logic` modules are unchanged. |
+| `crates/nyaterm-desktop/src/features/transfers/state.rs` | 1413 | 1091 | The 24 browser, queue, editor and external-sync owner tests live in `state/tests.rs`; the focused `state/browser.rs` and `state/editor.rs` modules own their transitions while `TransferFeatureState` remains authoritative. |
+| `crates/nyaterm-desktop/src/features/ai/state.rs` | 1731 | 663 | The 20 chat, settings, discovery, history and agent owner-transition tests live in `state/tests.rs`; the focused `state/settings.rs` module owns provider settings, model catalog, credential and custom-action transitions while `AiFeatureState` remains authoritative. |
+| `crates/nyaterm-desktop/src/features/session/state.rs` | 2465 | 954 | The 19 restore, prompt, dialog and start-lifecycle owner tests live in `state/tests.rs`. |
+| `crates/nyaterm-terminal/src/lib.rs` | 2274 | 1268 | The 80 terminal state-machine and snapshot tests live in `src/tests.rs` with explicit imports. |
+| `crates/nyaterm-terminal/src/graphics.rs` | 1647 | 1307 | The 36 ingress, Kitty, iTerm2 and Sixel tests live in `graphics/tests.rs`; parser and graphics-state behavior remain in the production module. |
 | `crates/nyaterm-core/src/cloud_sync.rs` | 2168 | 1469 | Transactional protocol and conservative retention logic live in the normal `cloud_sync/protocol.rs` and `cloud_sync/gc.rs` child modules; remote, history, provider, conflict, compatibility, recovery and failure-path tests remain in `cloud_sync/tests.rs`. |
-| `crates/nyaterm-terminal-gpui/src/element.rs` | 1648 | 1168 | The 41 layout, shaping, row-cache and decoration tests live in `element/layout_cache_tests.rs`; GPUI layout and paint implementation remain together. |
+| `crates/nyaterm-terminal-gpui/src/element.rs` | 1875 | 1377 | The 48 layout, shaping, row-cache and decoration tests live in `element/layout_cache_tests.rs`; GPUI layout and paint implementation remain together. |
 | `crates/nyaterm-transport/src/trzsz.rs` | 1925 | 1214 | The 42 detector, protocol, download and upload engine tests live in `trzsz/tests.rs` with explicit imports. |
 
 `core/ai.rs` was on this list at 4,032 lines; it is now 1,547 after being split

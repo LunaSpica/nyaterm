@@ -5,8 +5,9 @@ use nyaterm_ui::NyaWindowHandle;
 use super::super::connection_runtime::ConnectionEditorToggle;
 use crate::models::{
     ConnectionEditorAdvancedTab, ConnectionEditorField, ConnectionEditorPasswordSource,
-    ConnectionEditorRdpTab, ConnectionEditorSelect, ConnectionEditorState,
-    ConnectionEditorTelnetTab, ConnectionGroupEditorState, ConnectionKindTab,
+    ConnectionEditorRdpTab, ConnectionEditorSelect, ConnectionEditorSshAlgorithmTab,
+    ConnectionEditorState, ConnectionEditorTelnetTab, ConnectionGroupEditorState,
+    ConnectionKindTab,
 };
 
 pub(super) fn clear_connection_editor_runtime_state(
@@ -134,7 +135,30 @@ pub(super) fn set_connection_editor_select_value(
             editor.sftp_filename_encoding = value.unwrap_or_else(|| "terminal".to_string());
         }
         ConnectionEditorSelect::SshAlgorithmMode => {
-            editor.ssh_algorithm_mode = value.unwrap_or_else(|| "compatible".to_string());
+            let mode = value.unwrap_or_else(|| "compatible".to_string());
+            if mode == "custom" {
+                let defaults = &nyaterm_transport::supported_ssh_algorithms().compatible;
+                if editor.ssh_algorithm_kex.is_empty() {
+                    editor.ssh_algorithm_kex.clone_from(&defaults.kex);
+                }
+                if editor.ssh_algorithm_ciphers.is_empty() {
+                    editor.ssh_algorithm_ciphers.clone_from(&defaults.ciphers);
+                }
+                if editor.ssh_algorithm_macs.is_empty() {
+                    editor.ssh_algorithm_macs.clone_from(&defaults.macs);
+                }
+                if editor.ssh_algorithm_host_keys.is_empty() {
+                    editor
+                        .ssh_algorithm_host_keys
+                        .clone_from(&defaults.host_keys);
+                }
+            } else {
+                editor.ssh_algorithm_kex.clear();
+                editor.ssh_algorithm_ciphers.clear();
+                editor.ssh_algorithm_macs.clear();
+                editor.ssh_algorithm_host_keys.clear();
+            }
+            editor.ssh_algorithm_mode = mode;
         }
         ConnectionEditorSelect::SshProfile => {
             editor.ssh_profile = match value.as_deref() {
@@ -228,7 +252,6 @@ pub(super) fn set_connection_editor_advanced_tab(
         ConnectionEditorAdvancedTab::PostLogin
         | ConnectionEditorAdvancedTab::Terminal
         | ConnectionEditorAdvancedTab::Sftp
-        | ConnectionEditorAdvancedTab::Algorithms
         | ConnectionEditorAdvancedTab::X11
         | ConnectionEditorAdvancedTab::Backspace => editor.advanced_behavior_tab = tab,
     }
@@ -239,6 +262,107 @@ pub(super) fn set_connection_editor_advanced_tab(
     {
         editor.focused_field = ConnectionEditorField::Name;
     }
+    true
+}
+
+fn ssh_algorithm_values_mut(
+    editor: &mut ConnectionEditorState,
+    tab: ConnectionEditorSshAlgorithmTab,
+) -> &mut Vec<String> {
+    match tab {
+        ConnectionEditorSshAlgorithmTab::KeyExchange => &mut editor.ssh_algorithm_kex,
+        ConnectionEditorSshAlgorithmTab::Ciphers => &mut editor.ssh_algorithm_ciphers,
+        ConnectionEditorSshAlgorithmTab::Macs => &mut editor.ssh_algorithm_macs,
+        ConnectionEditorSshAlgorithmTab::HostKeys => &mut editor.ssh_algorithm_host_keys,
+    }
+}
+
+fn ssh_algorithm_is_supported(tab: ConnectionEditorSshAlgorithmTab, id: &str) -> bool {
+    let supported = nyaterm_transport::supported_ssh_algorithms();
+    let options = match tab {
+        ConnectionEditorSshAlgorithmTab::KeyExchange => &supported.kex,
+        ConnectionEditorSshAlgorithmTab::Ciphers => &supported.ciphers,
+        ConnectionEditorSshAlgorithmTab::Macs => &supported.macs,
+        ConnectionEditorSshAlgorithmTab::HostKeys => &supported.host_keys,
+    };
+    options.iter().any(|option| option.id == id)
+}
+
+pub(super) fn set_connection_editor_ssh_algorithm_tab(
+    draft: &mut Option<ConnectionEditorState>,
+    tab: ConnectionEditorSshAlgorithmTab,
+) -> bool {
+    let Some(editor) = draft.as_mut() else {
+        return false;
+    };
+    if editor.ssh_algorithm_tab == tab {
+        return false;
+    }
+    editor.ssh_algorithm_tab = tab;
+    editor.error = None;
+    true
+}
+
+pub(super) fn set_connection_editor_ssh_algorithm_enabled(
+    draft: &mut Option<ConnectionEditorState>,
+    tab: ConnectionEditorSshAlgorithmTab,
+    id: &str,
+    enabled: bool,
+) -> bool {
+    let Some(editor) = draft.as_mut() else {
+        return false;
+    };
+    if editor.ssh_algorithm_mode != "custom" {
+        return false;
+    }
+    let values = ssh_algorithm_values_mut(editor, tab);
+    let position = values.iter().position(|value| value == id);
+    if enabled {
+        if position.is_some() || !ssh_algorithm_is_supported(tab, id) {
+            return false;
+        }
+        values.push(id.to_string());
+    } else {
+        let Some(position) = position else {
+            return false;
+        };
+        if values.len() <= 1 {
+            return false;
+        }
+        values.remove(position);
+    }
+    editor.error = None;
+    true
+}
+
+pub(super) fn move_connection_editor_ssh_algorithm(
+    draft: &mut Option<ConnectionEditorState>,
+    tab: ConnectionEditorSshAlgorithmTab,
+    id: &str,
+    direction: i8,
+) -> bool {
+    let Some(editor) = draft.as_mut() else {
+        return false;
+    };
+    if editor.ssh_algorithm_mode != "custom" {
+        return false;
+    }
+    let values = ssh_algorithm_values_mut(editor, tab);
+    let Some(index) = values.iter().position(|value| value == id) else {
+        return false;
+    };
+    let target = if direction < 0 {
+        index.checked_sub(1)
+    } else if direction > 0 && index + 1 < values.len() {
+        Some(index + 1)
+    } else {
+        None
+    };
+    let Some(target) = target else {
+        return false;
+    };
+    values.swap(index, target);
+    editor.error = None;
     true
 }
 
@@ -496,149 +620,173 @@ pub(super) fn set_connection_group_editor_error(
 ///
 /// Driven off the draft rather than a fixed list so a field that does not apply
 /// to the current kind is simply never built.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ConnectionEditorPlaceholder {
+    Empty,
+    I18n(&'static str),
+    Literal(&'static str),
+}
+
 pub(super) fn editor_field_seeds(
     draft: &ConnectionEditorState,
-) -> Vec<(ConnectionEditorField, String, bool, &'static str)> {
+) -> Vec<(
+    ConnectionEditorField,
+    String,
+    bool,
+    ConnectionEditorPlaceholder,
+)> {
+    use ConnectionEditorPlaceholder::{Empty, I18n, Literal};
+
     vec![
-        (ConnectionEditorField::Name, draft.name.clone(), false, ""),
+        (
+            ConnectionEditorField::Name,
+            draft.name.clone(),
+            false,
+            Empty,
+        ),
         (
             ConnectionEditorField::Description,
             draft.description.clone(),
             false,
-            "e.g. Web server for project X",
+            I18n("dialog.descriptionPlaceholder"),
         ),
         (
             ConnectionEditorField::NewGroupName,
             draft.new_group_name.clone(),
             false,
-            "New group...",
+            I18n("dialog.newGroupPlaceholder"),
         ),
         (
             ConnectionEditorField::Host,
             draft.host.clone(),
             false,
-            "192.168.1.100",
+            Literal("192.168.1.100"),
         ),
-        (ConnectionEditorField::Port, draft.port.clone(), false, ""),
+        (
+            ConnectionEditorField::Port,
+            draft.port.clone(),
+            false,
+            Empty,
+        ),
         (
             ConnectionEditorField::Username,
             draft.username.clone(),
             false,
-            "",
+            Empty,
         ),
         (
             ConnectionEditorField::Domain,
             draft.domain.clone(),
             false,
-            "",
+            Empty,
         ),
         (
             ConnectionEditorField::Password,
             draft.password.clone(),
             true,
-            "",
+            I18n("dialog.passwordPlaceholder"),
         ),
         (
             ConnectionEditorField::ShellPath,
             draft.shell_path.clone(),
             false,
-            "",
+            I18n("dialog.shellPathPlaceholder"),
         ),
         (
             ConnectionEditorField::ShellArgs,
             draft.shell_args.clone(),
             false,
-            "e.g. --login -i or -NoLogo",
+            I18n("dialog.shellArgsPlaceholder"),
         ),
         (
             ConnectionEditorField::WorkingDir,
             draft.working_dir.clone(),
             false,
-            r"e.g. C:\Projects or ~/workspace",
+            I18n("dialog.workingDirPlaceholder"),
         ),
         (
             ConnectionEditorField::SerialPort,
             draft.serial_port.clone(),
             false,
-            "",
+            I18n("dialog.serialPortPlaceholder"),
         ),
         (
             ConnectionEditorField::BaudRate,
             draft.baud_rate.clone(),
             false,
-            "e.g. 74880",
+            I18n("dialog.customBaudRatePlaceholder"),
         ),
         (
             ConnectionEditorField::PostLoginCommand,
             draft.post_login_command.clone(),
             false,
-            "cd /opt/app",
+            Literal("cd /opt/app"),
         ),
         (
             ConnectionEditorField::PostLoginDelay,
             draft.post_login_delay_ms.clone(),
             false,
-            "",
+            Empty,
         ),
         (
             ConnectionEditorField::SftpShellDetectionTimeout,
             draft.sftp_shell_detection_timeout_ms.clone(),
             false,
-            "",
+            Empty,
         ),
         (
             ConnectionEditorField::TelnetAutoLoginTimeout,
             draft.telnet_auto_login_timeout_ms.clone(),
             false,
-            "",
+            Empty,
         ),
         (
             ConnectionEditorField::TelnetAutoLoginUsernamePrompt,
             draft.telnet_auto_login_username_prompt_regex.clone(),
             false,
-            "",
+            I18n("dialog.telnetAutoLoginUsernamePromptPlaceholder"),
         ),
         (
             ConnectionEditorField::TelnetAutoLoginPasswordPrompt,
             draft.telnet_auto_login_password_prompt_regex.clone(),
             false,
-            "",
+            I18n("dialog.telnetAutoLoginPasswordPromptPlaceholder"),
         ),
         (
             ConnectionEditorField::TelnetAutoLoginSuccessPrompt,
             draft.telnet_auto_login_success_prompt_regex.clone(),
             false,
-            "",
+            I18n("dialog.telnetAutoLoginSuccessPromptPlaceholder"),
         ),
         (
             ConnectionEditorField::TelnetAutoLoginFailurePrompt,
             draft.telnet_auto_login_failure_prompt_regex.clone(),
             false,
-            "",
+            I18n("dialog.telnetAutoLoginFailurePromptPlaceholder"),
         ),
         (
             ConnectionEditorField::TelnetAutoLoginMaxRetries,
             draft.telnet_auto_login_max_retries.clone(),
             false,
-            "",
+            Empty,
         ),
         (
             ConnectionEditorField::RdpDisplayWidth,
             draft.rdp_display.width.to_string(),
             false,
-            "",
+            Empty,
         ),
         (
             ConnectionEditorField::RdpDisplayHeight,
             draft.rdp_display.height.to_string(),
             false,
-            "",
+            Empty,
         ),
         (
             ConnectionEditorField::RdpReconnectAttempts,
             draft.rdp_reconnect.max_attempts.to_string(),
             false,
-            "",
+            Empty,
         ),
     ]
 }

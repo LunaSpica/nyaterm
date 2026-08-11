@@ -59,7 +59,11 @@ fn flatten_json(prefix: Option<&str>, value: &Value, output: &mut HashMap<String
 
 #[cfg(test)]
 mod tests {
-    use super::text;
+    use std::collections::HashSet;
+
+    use regex::Regex;
+
+    use super::{EN_CATALOG, EN_JSON, ZH_CN_CATALOG, ZH_CN_JSON, catalog, text};
 
     #[test]
     fn resolves_tauri_locale_keys_and_normalizes_chinese_ids() {
@@ -79,6 +83,65 @@ mod tests {
         assert_eq!(
             text("zh-CN", "missing.translation.key"),
             "missing.translation.key"
+        );
+    }
+
+    #[test]
+    fn english_and_chinese_catalogs_have_identical_keys() {
+        let english = catalog(&EN_CATALOG, EN_JSON).keys().collect::<HashSet<_>>();
+        let chinese = catalog(&ZH_CN_CATALOG, ZH_CN_JSON)
+            .keys()
+            .collect::<HashSet<_>>();
+        assert_eq!(english, chinese);
+    }
+
+    #[test]
+    fn connection_editor_static_translation_keys_exist_in_both_catalogs() {
+        let sources = [
+            include_str!("../features/pages/connections/editor/mod.rs"),
+            include_str!("../features/pages/connections/editor/connection/mod.rs"),
+            include_str!("../features/pages/connections/editor/connection/local.rs"),
+            include_str!("../features/pages/connections/editor/connection/rdp.rs"),
+            include_str!("../features/pages/connections/editor/connection/recording.rs"),
+            include_str!("../features/pages/connections/editor/connection/serial.rs"),
+            include_str!("../features/pages/connections/editor/connection/ssh.rs"),
+            include_str!("../features/pages/connections/editor/connection/telnet.rs"),
+            include_str!("../features/connections/connection_runtime/editor.rs"),
+            include_str!("../features/connections/connection_runtime/window.rs"),
+            include_str!("../features/connections/state/editor_logic.rs"),
+        ];
+        let key_pattern = Regex::new(r#"(?:\btr|self\.tr|I18n)\(\s*\"([^\"]+)\""#)
+            .expect("translation-key regex");
+        let english = catalog(&EN_CATALOG, EN_JSON);
+        let chinese = catalog(&ZH_CN_CATALOG, ZH_CN_JSON);
+        let mut missing = Vec::new();
+        for source in sources {
+            for captures in key_pattern.captures_iter(source) {
+                let key = captures.get(1).expect("key capture").as_str();
+                if !english.contains_key(key) || !chinese.contains_key(key) {
+                    missing.push(key.to_string());
+                }
+            }
+        }
+        missing.sort();
+        missing.dedup();
+        assert!(
+            missing.is_empty(),
+            "missing connection editor keys: {missing:?}"
+        );
+    }
+
+    #[test]
+    fn connection_editor_algorithm_and_telnet_labels_are_localized() {
+        assert_eq!(text("en", "dialog.sshAlgorithms"), "SSH algorithms");
+        assert_eq!(text("zh-CN", "dialog.sshAlgorithms"), "SSH 算法");
+        assert_eq!(text("en", "dialog.telnetAutoLogin"), "Auto Login");
+        assert_eq!(text("zh-CN", "dialog.telnetAutoLogin"), "自动登录");
+        assert_eq!(
+            text("en", "dialog.algorithmUnsupportedError")
+                .replace("{{algorithm}}", "future-kex")
+                .replace("{{category}}", "key exchanges"),
+            "future-kex is not supported in key exchanges."
         );
     }
 }

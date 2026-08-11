@@ -422,7 +422,7 @@ pub(super) fn connection_editor_telnet_section(
                                                 .text_xs()
                                                 .font_weight(FontWeight(600.))
                                                 .text_color(rgb(palette.text))
-                                                .child("Auto Login"),
+                                                .child(tr("dialog.telnetAutoLogin")),
                                         )
                                         .child(
                                             div()
@@ -432,8 +432,8 @@ pub(super) fn connection_editor_telnet_section(
                                                 .child(telnet_switch_row(
                                                     palette,
                                                     "connection-telnet-auto-login-enabled",
-                                                    "Enabled",
-                                                    "Detect login prompts and send saved credentials",
+                                                    tr("dialog.enabled"),
+                                                    tr("dialog.telnetAutoLoginDesc"),
                                                     editor.telnet_auto_login_enabled,
                                                     true,
                                                     cx.listener(|this, _, _, cx| {
@@ -446,8 +446,8 @@ pub(super) fn connection_editor_telnet_section(
                                                 .child(telnet_switch_row(
                                                     palette,
                                                     "connection-telnet-auto-login-wake",
-                                                    "Wake Enter",
-                                                    "Send Enter once when a wake prompt is detected",
+                                                    tr("dialog.telnetAutoLoginWakeEnter"),
+                                                    tr("dialog.telnetAutoLoginWakeEnterDesc"),
                                                     editor.telnet_auto_login_send_wake_enter,
                                                     editor.telnet_auto_login_enabled,
                                                     cx.listener(|this, _, _, cx| {
@@ -465,14 +465,14 @@ pub(super) fn connection_editor_telnet_section(
                                                 .gap_2()
                                                 .child(editor_stepper_field(
                                                     palette,
-                                                    "Timeout (ms)",
+                                                    tr("dialog.telnetAutoLoginTimeout"),
                                                     ConnectionEditorField::TelnetAutoLoginTimeout,
                                                     fields,
                                                     cx,
                                                 ))
                                                 .child(editor_stepper_field(
                                                     palette,
-                                                    "Max Retries",
+                                                    tr("dialog.telnetAutoLoginMaxRetries"),
                                                     ConnectionEditorField::TelnetAutoLoginMaxRetries,
                                                     fields,
                                                     cx,
@@ -480,28 +480,28 @@ pub(super) fn connection_editor_telnet_section(
                                         )
                                         .child(editor_field(
                                             palette,
-                                            "Username Prompt Regex",
+                                            tr("dialog.telnetAutoLoginUsernamePrompt"),
                                             ConnectionEditorField::TelnetAutoLoginUsernamePrompt,
                                             fields,
                                             cx,
                                         ))
                                         .child(editor_field(
                                             palette,
-                                            "Password Prompt Regex",
+                                            tr("dialog.telnetAutoLoginPasswordPrompt"),
                                             ConnectionEditorField::TelnetAutoLoginPasswordPrompt,
                                             fields,
                                             cx,
                                         ))
                                         .child(editor_field(
                                             palette,
-                                            "Success Prompt Regex",
+                                            tr("dialog.telnetAutoLoginSuccessPrompt"),
                                             ConnectionEditorField::TelnetAutoLoginSuccessPrompt,
                                             fields,
                                             cx,
                                         ))
                                         .child(editor_field(
                                             palette,
-                                            "Failure Prompt Regex",
+                                            tr("dialog.telnetAutoLoginFailurePrompt"),
                                             ConnectionEditorField::TelnetAutoLoginFailurePrompt,
                                             fields,
                                             cx,

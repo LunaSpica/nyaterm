@@ -11,13 +11,15 @@ use super::{
     DO, ForwardedTcpIpDispatch, IAC, LocalSessionConfig, OPT_SUPPRESS_GO_AHEAD,
     QueuedTransportWriter, SESSION_EVENT_QUEUE_OUTPUT_EVENT_LIMIT,
     SESSION_EVENT_QUEUE_OUTPUT_LIMIT, SerialSessionConfig, SessionError, SessionEvent,
-    SessionEventQueue, SessionManager, SftpService, SftpSettings, SshAlgorithmMode,
-    SshAlgorithmPreferences, SshCommand, SshKeyAuthConfig, SshProxyConfig, SshPtyDimensions,
-    SshSessionConfig, SshSessionProfile, TelnetSessionConfig, WILL, cipher,
+    SessionEventQueue, SessionManager, SftpService, SftpSettings, SshAlgorithmListKind,
+    SshAlgorithmMode, SshAlgorithmPreferences, SshAlgorithmRisk, SshAlgorithmValidationError,
+    SshCommand, SshKeyAuthConfig, SshProxyConfig, SshPtyDimensions, SshSessionConfig,
+    SshSessionProfile, TelnetSessionConfig, WILL, cipher, defaults_from_preferred,
     drain_deferred_ssh_open_commands, expand_proxy_command, forwarded_tcpip_sender_for,
     has_password_prompt, has_username_prompt, is_process_list_unsupported, kex, local_pty_size,
-    mac, normalize_process_signal, parse_process_output, remap_del_to_bs, run_local_command,
-    ssh_client_config, ssh_host_identifier, validate_ssh_algorithm_preferences,
+    mac, normalize_process_signal, parse_process_output, remap_del_to_bs,
+    resolve_preferred_algorithms, run_local_command, ssh_client_config, ssh_host_identifier,
+    supported_ssh_algorithms, validate_ssh_algorithm_preferences,
 };
 
 /// A push must hand the event straight to a parked consumer. Before the
@@ -939,7 +941,12 @@ fn ssh_algorithm_validation_rejects_empty_or_unknown_custom_lists() {
         mode: SshAlgorithmMode::Custom,
         ..Default::default()
     };
-    assert!(validate_ssh_algorithm_preferences(Some(&empty)).is_err());
+    assert_eq!(
+        validate_ssh_algorithm_preferences(Some(&empty)),
+        Err(SshAlgorithmValidationError::EmptyList {
+            kind: SshAlgorithmListKind::KeyExchange,
+        })
+    );
 
     let unknown = SshAlgorithmPreferences {
         mode: SshAlgorithmMode::Custom,
@@ -948,7 +955,69 @@ fn ssh_algorithm_validation_rejects_empty_or_unknown_custom_lists() {
         macs: vec!["hmac-sha2-256".to_string()],
         host_keys: vec!["ssh-ed25519".to_string()],
     };
-    assert!(validate_ssh_algorithm_preferences(Some(&unknown)).is_err());
+    assert_eq!(
+        validate_ssh_algorithm_preferences(Some(&unknown)),
+        Err(SshAlgorithmValidationError::Unsupported {
+            kind: SshAlgorithmListKind::KeyExchange,
+            algorithm: "not-a-kex".to_string(),
+        })
+    );
+}
+
+#[test]
+fn supported_ssh_algorithms_expose_defaults_and_risk_metadata() {
+    let supported = supported_ssh_algorithms();
+
+    assert_eq!(
+        supported.compatible.kex.first().map(String::as_str),
+        Some("mlkem768x25519-sha256")
+    );
+    assert!(
+        supported
+            .secure
+            .ciphers
+            .iter()
+            .all(|id| supported.ciphers.iter().any(|option| option.id == *id))
+    );
+    assert_eq!(
+        supported
+            .ciphers
+            .iter()
+            .find(|option| option.id == "3des-cbc")
+            .map(|option| option.risk),
+        Some(SshAlgorithmRisk::Insecure)
+    );
+    assert_eq!(
+        supported
+            .host_keys
+            .iter()
+            .find(|option| option.id == "ssh-rsa")
+            .map(|option| option.risk),
+        Some(SshAlgorithmRisk::Legacy)
+    );
+}
+
+#[test]
+fn ssh_algorithm_custom_order_reaches_runtime_unchanged() {
+    let defaults = &supported_ssh_algorithms().compatible;
+    let mut preferences = SshAlgorithmPreferences {
+        mode: SshAlgorithmMode::Custom,
+        kex: defaults.kex.clone(),
+        ciphers: defaults.ciphers.clone(),
+        macs: defaults.macs.clone(),
+        host_keys: defaults.host_keys.clone(),
+    };
+    preferences.kex.swap(0, 1);
+    preferences.ciphers.swap(0, 1);
+    preferences.macs.swap(0, 1);
+    preferences.host_keys.swap(0, 1);
+
+    let resolved = resolve_preferred_algorithms(Some(&preferences)).expect("valid preferences");
+    let resolved = defaults_from_preferred(resolved);
+    assert_eq!(resolved.kex, preferences.kex);
+    assert_eq!(resolved.ciphers, preferences.ciphers);
+    assert_eq!(resolved.macs, preferences.macs);
+    assert_eq!(resolved.host_keys, preferences.host_keys);
 }
 
 #[test]

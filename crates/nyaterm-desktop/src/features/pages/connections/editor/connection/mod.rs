@@ -1977,6 +1977,7 @@ mod tests {
             ssh_algorithm_ciphers: Vec::new(),
             ssh_algorithm_macs: Vec::new(),
             ssh_algorithm_host_keys: Vec::new(),
+            ssh_algorithm_tab: crate::models::ConnectionEditorSshAlgorithmTab::KeyExchange,
             shell_path: String::new(),
             shell_args: String::new(),
             working_dir: String::new(),

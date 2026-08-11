@@ -7,15 +7,17 @@ use super::{
     clear_selected_connection_ids, commit_connection_editor_new_group,
     connection_drop_position_for_target, connection_editor_inline_panel_draft,
     connection_editor_window_open_or_pending, cycle_connection_sort_mode,
-    insert_connection_editor_description_newline, remove_connection_list_references,
-    remove_group_list_references, remove_network_group_references, remove_network_item_references,
+    insert_connection_editor_description_newline, move_connection_editor_ssh_algorithm,
+    remove_connection_list_references, remove_group_list_references,
+    remove_network_group_references, remove_network_item_references,
     retain_loaded_connection_references, retain_loaded_group_list_references,
     saved_connections_in_group_tree_for_list_state, select_connection_ids,
     select_saved_connection_after_editor_save, selected_connections_for_list_state,
     set_connection_drop_target_if_changed, set_connection_editor_advanced_tab,
     set_connection_editor_error, set_connection_editor_field_text, set_connection_editor_icon,
     set_connection_editor_kind, set_connection_editor_password_source,
-    set_connection_editor_select_value, set_connection_editor_telnet_tab,
+    set_connection_editor_select_value, set_connection_editor_ssh_algorithm_enabled,
+    set_connection_editor_ssh_algorithm_tab, set_connection_editor_telnet_tab,
     set_connection_group_editor_error, set_connection_group_hover, set_network_group_editor_error,
     set_network_group_editor_name, set_network_proxy_editor_error, set_network_proxy_editor_field,
     set_network_proxy_protocol, set_network_tunnel_bind_localhost, set_network_tunnel_connection,
@@ -29,10 +31,11 @@ use crate::features::{
 };
 use crate::models::{
     ConnectionEditorAdvancedTab, ConnectionEditorField, ConnectionEditorPasswordSource,
-    ConnectionEditorSelect, ConnectionEditorState, ConnectionEditorTelnetTab,
-    ConnectionGroupEditorMode, ConnectionGroupEditorState, ConnectionKindTab, ConnectionSortMode,
-    NetworkGroupEditorState, NetworkMovePickerState, NetworkProxyEditorField,
-    NetworkProxyEditorState, NetworkTab, NetworkTunnelEditorField, NetworkTunnelEditorState,
+    ConnectionEditorSelect, ConnectionEditorSshAlgorithmTab, ConnectionEditorState,
+    ConnectionEditorTelnetTab, ConnectionGroupEditorMode, ConnectionGroupEditorState,
+    ConnectionKindTab, ConnectionSortMode, NetworkGroupEditorState, NetworkMovePickerState,
+    NetworkProxyEditorField, NetworkProxyEditorState, NetworkTab, NetworkTunnelEditorField,
+    NetworkTunnelEditorState,
 };
 use gpui::TestAppContext;
 use nyaterm_core::{
@@ -727,6 +730,100 @@ fn ssh_profile_selection_preserves_explicit_terminal_type() {
         nyaterm_core::resolve_ssh_terminal_type(editor.ssh_profile, editor.terminal_type),
         SshTerminalType::Vt100
     );
+}
+
+#[test]
+fn ssh_algorithm_mode_fills_only_empty_custom_lists_and_clears_presets() {
+    let mut draft = Some(ConnectionEditorState {
+        ssh_algorithm_kex: vec!["future-kex".to_string()],
+        ..connection_editor_state_with_secret_draft()
+    });
+
+    assert!(set_connection_editor_select_value(
+        &mut draft,
+        ConnectionEditorSelect::SshAlgorithmMode,
+        Some("custom".to_string()),
+    ));
+    let editor = draft.as_ref().expect("editor remains open");
+    let defaults = &nyaterm_transport::supported_ssh_algorithms().compatible;
+    assert_eq!(editor.ssh_algorithm_kex, ["future-kex"]);
+    assert_eq!(editor.ssh_algorithm_ciphers, defaults.ciphers);
+    assert_eq!(editor.ssh_algorithm_macs, defaults.macs);
+    assert_eq!(editor.ssh_algorithm_host_keys, defaults.host_keys);
+
+    assert!(set_connection_editor_select_value(
+        &mut draft,
+        ConnectionEditorSelect::SshAlgorithmMode,
+        Some("secure".to_string()),
+    ));
+    let editor = draft.expect("editor remains open");
+    assert_eq!(editor.ssh_algorithm_mode, "secure");
+    assert!(editor.ssh_algorithm_kex.is_empty());
+    assert!(editor.ssh_algorithm_ciphers.is_empty());
+    assert!(editor.ssh_algorithm_macs.is_empty());
+    assert!(editor.ssh_algorithm_host_keys.is_empty());
+}
+
+#[test]
+fn ssh_algorithm_custom_edits_preserve_unknown_values_and_order() {
+    let defaults = &nyaterm_transport::supported_ssh_algorithms().compatible;
+    let first = defaults.kex[0].clone();
+    let second = defaults.kex[1].clone();
+    let mut draft = Some(ConnectionEditorState {
+        ssh_algorithm_mode: "custom".to_string(),
+        ssh_algorithm_kex: vec!["future-kex".to_string(), first.clone(), second.clone()],
+        ..connection_editor_state_with_secret_draft()
+    });
+
+    assert!(set_connection_editor_ssh_algorithm_tab(
+        &mut draft,
+        ConnectionEditorSshAlgorithmTab::Ciphers,
+    ));
+    assert!(move_connection_editor_ssh_algorithm(
+        &mut draft,
+        ConnectionEditorSshAlgorithmTab::KeyExchange,
+        &first,
+        1,
+    ));
+    assert_eq!(
+        draft.as_ref().expect("editor").ssh_algorithm_kex,
+        ["future-kex", second.as_str(), first.as_str()]
+    );
+    assert!(set_connection_editor_ssh_algorithm_enabled(
+        &mut draft,
+        ConnectionEditorSshAlgorithmTab::KeyExchange,
+        "future-kex",
+        false,
+    ));
+    assert_eq!(
+        draft.as_ref().expect("editor").ssh_algorithm_kex,
+        [second.as_str(), first.as_str()]
+    );
+    assert!(!move_connection_editor_ssh_algorithm(
+        &mut draft,
+        ConnectionEditorSshAlgorithmTab::KeyExchange,
+        &second,
+        -1,
+    ));
+
+    assert!(set_connection_editor_ssh_algorithm_enabled(
+        &mut draft,
+        ConnectionEditorSshAlgorithmTab::KeyExchange,
+        &first,
+        false,
+    ));
+    assert!(!set_connection_editor_ssh_algorithm_enabled(
+        &mut draft,
+        ConnectionEditorSshAlgorithmTab::KeyExchange,
+        &second,
+        false,
+    ));
+    assert!(!set_connection_editor_ssh_algorithm_enabled(
+        &mut draft,
+        ConnectionEditorSshAlgorithmTab::KeyExchange,
+        "future-kex",
+        true,
+    ));
 }
 
 #[test]
@@ -1438,6 +1535,7 @@ fn connection_editor_state_with_secret_draft() -> ConnectionEditorState {
         ssh_algorithm_ciphers: Vec::new(),
         ssh_algorithm_macs: Vec::new(),
         ssh_algorithm_host_keys: Vec::new(),
+        ssh_algorithm_tab: ConnectionEditorSshAlgorithmTab::KeyExchange,
         shell_path: String::new(),
         shell_args: String::new(),
         working_dir: String::new(),

@@ -12,11 +12,11 @@ use super::interaction::{ConnectionDragKind, ConnectionDropPosition, ConnectionD
 use crate::features::NyaTermApp;
 use crate::models::{
     ConnectionEditorAdvancedTab, ConnectionEditorField, ConnectionEditorPasswordSource,
-    ConnectionEditorRdpTab, ConnectionEditorSelect, ConnectionEditorState,
-    ConnectionEditorTelnetTab, ConnectionGroupEditorMode, ConnectionGroupEditorState,
-    ConnectionImportSource, ConnectionKindTab, ConnectionSortMode, NetworkGroupEditorState,
-    NetworkMovePickerState, NetworkProxyEditorField, NetworkProxyEditorState, NetworkTab,
-    NetworkTunnelEditorField, NetworkTunnelEditorState,
+    ConnectionEditorRdpTab, ConnectionEditorSelect, ConnectionEditorSshAlgorithmTab,
+    ConnectionEditorState, ConnectionEditorTelnetTab, ConnectionGroupEditorMode,
+    ConnectionGroupEditorState, ConnectionImportSource, ConnectionKindTab, ConnectionSortMode,
+    NetworkGroupEditorState, NetworkMovePickerState, NetworkProxyEditorField,
+    NetworkProxyEditorState, NetworkTab, NetworkTunnelEditorField, NetworkTunnelEditorState,
 };
 use nyaterm_ui::{
     NyaInputEvent, NyaInputState, NyaNumberInputEvent, NyaNumberInputOptions, NyaNumberInputState,
@@ -27,16 +27,18 @@ mod list_logic;
 mod network_logic;
 
 use self::editor_logic::{
-    advance_connection_editor_focus, apply_connection_editor_shell_path,
-    apply_connection_editor_working_dir, clear_connection_editor_runtime_state,
-    commit_connection_editor_new_group, connection_editor_inline_panel_draft,
-    connection_editor_window_open_or_pending, editor_field_seeds,
-    insert_connection_editor_description_newline, select_saved_connection_after_editor_save,
+    ConnectionEditorPlaceholder, advance_connection_editor_focus,
+    apply_connection_editor_shell_path, apply_connection_editor_working_dir,
+    clear_connection_editor_runtime_state, commit_connection_editor_new_group,
+    connection_editor_inline_panel_draft, connection_editor_window_open_or_pending,
+    editor_field_seeds, insert_connection_editor_description_newline,
+    move_connection_editor_ssh_algorithm, select_saved_connection_after_editor_save,
     set_connection_editor_advanced_tab, set_connection_editor_error,
     set_connection_editor_field_text, set_connection_editor_icon,
     set_connection_editor_icon_auto_detect, set_connection_editor_kind,
     set_connection_editor_password_source, set_connection_editor_rdp_tab,
-    set_connection_editor_select_value, set_connection_editor_telnet_tab,
+    set_connection_editor_select_value, set_connection_editor_ssh_algorithm_enabled,
+    set_connection_editor_ssh_algorithm_tab, set_connection_editor_telnet_tab,
     set_connection_group_editor_error, toggle_connection_editor_flag,
 };
 use self::list_logic::{
@@ -461,7 +463,7 @@ impl ConnectionFeatureState {
     ///
     /// Called when the editor opens, so the entities live exactly as long as the
     /// draft they mirror and never leak between edits.
-    pub fn build_editor_fields(&mut self, cx: &mut Context<NyaTermApp>) {
+    pub fn build_editor_fields(&mut self, language: &str, cx: &mut Context<NyaTermApp>) {
         self.editor.fields.clear();
         self.editor.number_fields.clear();
         self.editor.field_subscriptions.clear();
@@ -470,6 +472,11 @@ impl ConnectionFeatureState {
             return;
         };
         for (field, value, masked, placeholder) in editor_field_seeds(draft) {
+            let placeholder = match placeholder {
+                ConnectionEditorPlaceholder::Empty => "",
+                ConnectionEditorPlaceholder::I18n(key) => crate::i18n::text(language, key),
+                ConnectionEditorPlaceholder::Literal(value) => value,
+            };
             if let Some(options) = connection_editor_number_options(field) {
                 let entity = cx.new(|cx| {
                     NyaNumberInputState::new(cx, value, options).placeholder(placeholder)
@@ -655,6 +662,28 @@ impl ConnectionFeatureState {
 
     pub fn set_editor_advanced_tab(&mut self, tab: ConnectionEditorAdvancedTab) -> bool {
         self.editor.set_advanced_tab(tab)
+    }
+
+    pub fn set_editor_ssh_algorithm_tab(&mut self, tab: ConnectionEditorSshAlgorithmTab) -> bool {
+        self.editor.set_ssh_algorithm_tab(tab)
+    }
+
+    pub fn set_editor_ssh_algorithm_enabled(
+        &mut self,
+        tab: ConnectionEditorSshAlgorithmTab,
+        id: &str,
+        enabled: bool,
+    ) -> bool {
+        self.editor.set_ssh_algorithm_enabled(tab, id, enabled)
+    }
+
+    pub fn move_editor_ssh_algorithm(
+        &mut self,
+        tab: ConnectionEditorSshAlgorithmTab,
+        id: &str,
+        direction: i8,
+    ) -> bool {
+        self.editor.move_ssh_algorithm(tab, id, direction)
     }
 
     pub fn set_editor_telnet_tab(&mut self, tab: ConnectionEditorTelnetTab) -> bool {
@@ -1371,6 +1400,28 @@ impl ConnectionEditorFeatureState {
             self.close_icon_picker();
         }
         changed
+    }
+
+    pub fn set_ssh_algorithm_tab(&mut self, tab: ConnectionEditorSshAlgorithmTab) -> bool {
+        set_connection_editor_ssh_algorithm_tab(&mut self.draft, tab)
+    }
+
+    pub fn set_ssh_algorithm_enabled(
+        &mut self,
+        tab: ConnectionEditorSshAlgorithmTab,
+        id: &str,
+        enabled: bool,
+    ) -> bool {
+        set_connection_editor_ssh_algorithm_enabled(&mut self.draft, tab, id, enabled)
+    }
+
+    pub fn move_ssh_algorithm(
+        &mut self,
+        tab: ConnectionEditorSshAlgorithmTab,
+        id: &str,
+        direction: i8,
+    ) -> bool {
+        move_connection_editor_ssh_algorithm(&mut self.draft, tab, id, direction)
     }
 
     pub fn set_telnet_tab(&mut self, tab: ConnectionEditorTelnetTab) -> bool {

@@ -5,13 +5,14 @@ use nyaterm_core::{
 };
 
 use super::helpers::{
-    ConnectionEditorToggle, build_saved_connection_from_editor, connection_editor_from_saved,
+    ConnectionEditorToggle, ConnectionEditorValidationError, build_saved_connection_from_editor,
+    connection_editor_from_saved,
 };
 use crate::features::NyaTermApp;
 use crate::models::{
     ConnectionEditorAdvancedTab, ConnectionEditorField, ConnectionEditorPasswordSource,
-    ConnectionEditorRdpTab, ConnectionEditorSelect, ConnectionEditorState,
-    ConnectionEditorTelnetTab, ConnectionKindTab,
+    ConnectionEditorRdpTab, ConnectionEditorSelect, ConnectionEditorSshAlgorithmTab,
+    ConnectionEditorState, ConnectionEditorTelnetTab, ConnectionKindTab,
 };
 
 impl NyaTermApp {
@@ -19,7 +20,71 @@ impl NyaTermApp {
         &self,
         editor: &ConnectionEditorState,
     ) -> Option<String> {
-        build_saved_connection_from_editor(editor).err()
+        build_saved_connection_from_editor(editor)
+            .err()
+            .map(|error| self.connection_editor_validation_message(&error))
+    }
+
+    fn connection_editor_validation_message(
+        &self,
+        error: &ConnectionEditorValidationError,
+    ) -> String {
+        use nyaterm_transport::{SshAlgorithmListKind, SshAlgorithmValidationError};
+
+        let algorithm_kind = |kind: SshAlgorithmListKind| match kind {
+            SshAlgorithmListKind::KeyExchange => self.tr("dialog.algorithmKex"),
+            SshAlgorithmListKind::Cipher => self.tr("dialog.algorithmCiphers"),
+            SshAlgorithmListKind::Mac => self.tr("dialog.algorithmMacs"),
+            SshAlgorithmListKind::HostKey => self.tr("dialog.algorithmHostKeys"),
+        };
+        match error {
+            ConnectionEditorValidationError::HostRequired => self.tr("dialog.hostRequired").into(),
+            ConnectionEditorValidationError::PortInvalid => self.tr("dialog.portInvalid").into(),
+            ConnectionEditorValidationError::UsernameRequired => {
+                self.tr("dialog.usernameRequired").into()
+            }
+            ConnectionEditorValidationError::ShellPathRequired => {
+                self.tr("dialog.shellPathRequired").into()
+            }
+            ConnectionEditorValidationError::SerialPortRequired => {
+                self.tr("dialog.serialPortRequired").into()
+            }
+            ConnectionEditorValidationError::BaudRateInvalid => self
+                .tr("dialog.baudRateInvalid")
+                .replace("{{min}}", "1")
+                .replace("{{max}}", "4000000"),
+            ConnectionEditorValidationError::RdpDisplayWidthInvalid => {
+                self.tr("dialog.rdpDisplayWidthInvalid").into()
+            }
+            ConnectionEditorValidationError::RdpDisplayHeightInvalid => {
+                self.tr("dialog.rdpDisplayHeightInvalid").into()
+            }
+            ConnectionEditorValidationError::RdpReconnectAttemptsInvalid => {
+                self.tr("dialog.rdpReconnectAttemptsInvalid").into()
+            }
+            ConnectionEditorValidationError::PostLoginCommandRequired => {
+                self.tr("dialog.postLoginCommandRequired").into()
+            }
+            ConnectionEditorValidationError::PostLoginDelayInvalid => self
+                .tr("dialog.postLoginDelayInvalid")
+                .replace("{{min}}", "0")
+                .replace("{{max}}", "60000"),
+            ConnectionEditorValidationError::SftpShellDetectionTimeoutInvalid => self
+                .tr("dialog.sftpShellDetectionTimeoutInvalid")
+                .replace("{{min}}", "100")
+                .replace("{{max}}", "60000"),
+            ConnectionEditorValidationError::SshAlgorithms(
+                SshAlgorithmValidationError::EmptyList { kind },
+            ) => self
+                .tr("dialog.algorithmListRequired")
+                .replace("{{category}}", algorithm_kind(*kind)),
+            ConnectionEditorValidationError::SshAlgorithms(
+                SshAlgorithmValidationError::Unsupported { kind, algorithm },
+            ) => self
+                .tr("dialog.algorithmUnsupportedError")
+                .replace("{{algorithm}}", algorithm)
+                .replace("{{category}}", algorithm_kind(*kind)),
+        }
     }
 
     pub(in crate::features) fn open_connection_editor(
@@ -40,7 +105,7 @@ impl NyaTermApp {
                 .cloned()
             else {
                 self.shell
-                    .set_status("connection is no longer available".to_string());
+                    .set_status(self.tr("dialog.connectionNotFound").to_string());
                 cx.notify();
                 return;
             };
@@ -92,6 +157,7 @@ impl NyaTermApp {
                 ssh_algorithm_ciphers: Vec::new(),
                 ssh_algorithm_macs: Vec::new(),
                 ssh_algorithm_host_keys: Vec::new(),
+                ssh_algorithm_tab: ConnectionEditorSshAlgorithmTab::KeyExchange,
                 shell_path: String::new(),
                 shell_args: String::new(),
                 working_dir: String::new(),
@@ -136,9 +202,10 @@ impl NyaTermApp {
 
         self.connection_state.begin_editor(editor);
         // Fields mirror the draft, so they are rebuilt with it.
-        self.connection_state.build_editor_fields(cx);
+        let language = self.settings.summary().language.clone();
+        self.connection_state.build_editor_fields(&language, cx);
         self.shell
-            .set_status("connection editor opened".to_string());
+            .set_status(self.tr("dialog.connectionEditorOpened").to_string());
         if !self.open_connection_editor_window(cx) {
             // Land on the name and select it, so an edit can start by typing.
             match self
@@ -164,7 +231,7 @@ impl NyaTermApp {
         self.connection_state.close_editor();
         self.connection_state.clear_editor_fields();
         self.shell
-            .set_status("connection editor closed".to_string());
+            .set_status(self.tr("dialog.connectionEditorClosed").to_string());
         cx.notify();
     }
 
@@ -249,6 +316,46 @@ impl NyaTermApp {
         cx.notify();
     }
 
+    pub(in crate::features) fn set_connection_editor_ssh_algorithm_tab(
+        &mut self,
+        tab: ConnectionEditorSshAlgorithmTab,
+        cx: &mut Context<Self>,
+    ) {
+        if self.connection_state.set_editor_ssh_algorithm_tab(tab) {
+            cx.notify();
+        }
+    }
+
+    pub(in crate::features) fn set_connection_editor_ssh_algorithm_enabled(
+        &mut self,
+        tab: ConnectionEditorSshAlgorithmTab,
+        id: &str,
+        enabled: bool,
+        cx: &mut Context<Self>,
+    ) {
+        if self
+            .connection_state
+            .set_editor_ssh_algorithm_enabled(tab, id, enabled)
+        {
+            cx.notify();
+        }
+    }
+
+    pub(in crate::features) fn move_connection_editor_ssh_algorithm(
+        &mut self,
+        tab: ConnectionEditorSshAlgorithmTab,
+        id: &str,
+        direction: i8,
+        cx: &mut Context<Self>,
+    ) {
+        if self
+            .connection_state
+            .move_editor_ssh_algorithm(tab, id, direction)
+        {
+            cx.notify();
+        }
+    }
+
     pub(in crate::features) fn set_connection_editor_telnet_tab(
         &mut self,
         tab: ConnectionEditorTelnetTab,
@@ -304,8 +411,17 @@ impl NyaTermApp {
             // Switching kind rewrites the default port on the draft; the box has
             // to be told, or it keeps showing the other protocol's.
             self.connection_state.sync_editor_fields_from_draft(cx);
-            self.shell
-                .set_status(format!("connection type set to {}", kind.label()));
+            let kind_label = match kind {
+                ConnectionKindTab::Ssh => "SSH",
+                ConnectionKindTab::Local => self.tr("dialog.localTerminal"),
+                ConnectionKindTab::Telnet => "Telnet",
+                ConnectionKindTab::Serial => self.tr("dialog.serial"),
+                ConnectionKindTab::Rdp => "RDP",
+            };
+            self.shell.set_status(
+                self.tr("dialog.connectionTypeChanged")
+                    .replace("{{type}}", kind_label),
+            );
         }
         cx.notify();
     }
@@ -318,11 +434,15 @@ impl NyaTermApp {
             files: true,
             directories: false,
             multiple: false,
-            prompt: Some(SharedString::from("Select shell executable")),
+            prompt: Some(SharedString::from(
+                self.tr("dialog.selectShellExecutable").to_string(),
+            )),
         };
+        let selected_status = self.tr("dialog.shellPathSelected").to_string();
+        let cancelled_status = self.tr("dialog.shellPathSelectionCancelled").to_string();
         let receiver = cx.prompt_for_paths(options);
         self.shell
-            .set_status("selecting shell executable".to_string());
+            .set_status(self.tr("dialog.selectingShellExecutable").to_string());
         cx.spawn(async move |this, cx| {
             let selected = match receiver.await {
                 Ok(Ok(Some(paths))) => paths.into_iter().next(),
@@ -332,10 +452,10 @@ impl NyaTermApp {
                 if let Some(path) = selected {
                     let path = path.display().to_string();
                     this.connection_state.apply_editor_shell_path(path.clone());
-                    this.shell.set_status(format!("shell path: {path}"));
-                } else {
                     this.shell
-                        .set_status("shell path selection cancelled".to_string());
+                        .set_status(selected_status.replace("{{path}}", &path));
+                } else {
+                    this.shell.set_status(cancelled_status);
                 }
                 cx.notify();
             });
@@ -352,11 +472,17 @@ impl NyaTermApp {
             files: false,
             directories: true,
             multiple: false,
-            prompt: Some(SharedString::from("Select working directory")),
+            prompt: Some(SharedString::from(
+                self.tr("dialog.selectWorkingDirectory").to_string(),
+            )),
         };
+        let selected_status = self.tr("dialog.workingDirectorySelected").to_string();
+        let cancelled_status = self
+            .tr("dialog.workingDirectorySelectionCancelled")
+            .to_string();
         let receiver = cx.prompt_for_paths(options);
         self.shell
-            .set_status("selecting working directory".to_string());
+            .set_status(self.tr("dialog.selectingWorkingDirectory").to_string());
         cx.spawn(async move |this, cx| {
             let selected = match receiver.await {
                 Ok(Ok(Some(paths))) => paths.into_iter().next(),
@@ -366,10 +492,10 @@ impl NyaTermApp {
                 if let Some(path) = selected {
                     let path = path.display().to_string();
                     this.connection_state.apply_editor_working_dir(path.clone());
-                    this.shell.set_status(format!("working dir: {path}"));
-                } else {
                     this.shell
-                        .set_status("working directory selection cancelled".to_string());
+                        .set_status(selected_status.replace("{{path}}", &path));
+                } else {
+                    this.shell.set_status(cancelled_status);
                 }
                 cx.notify();
             });
@@ -465,7 +591,8 @@ impl NyaTermApp {
         let built = match build_saved_connection_from_editor(&editor) {
             Ok(connection) => connection,
             Err(error) => {
-                self.set_connection_editor_error(error, cx);
+                let message = self.connection_editor_validation_message(&error);
+                self.set_connection_editor_error(message, cx);
                 return;
             }
         };
@@ -476,14 +603,19 @@ impl NyaTermApp {
                 self.connection_state
                     .finish_editor_save(saved.id.clone(), saved.group_id.clone());
                 self.shell
-                    .set_status(format!("saved connection {}", saved.name));
+                    .set_status(self.tr("dialog.connectionSaved").to_string());
                 if connect_after_save {
                     self.start_saved_connection(saved, window, cx);
                 } else {
                     cx.notify();
                 }
             }
-            Err(error) => self.set_connection_editor_error(error, cx),
+            Err(error) => {
+                let message = self
+                    .tr("dialog.connectionSaveFailed")
+                    .replace("{{error}}", &error);
+                self.set_connection_editor_error(message, cx);
+            }
         }
     }
 }

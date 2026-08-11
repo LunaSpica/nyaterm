@@ -84,9 +84,16 @@ pub(crate) enum ConnectionEditorAdvancedTab {
     PostLogin,
     Terminal,
     Sftp,
-    Algorithms,
     X11,
     Backspace,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ConnectionEditorSshAlgorithmTab {
+    KeyExchange,
+    Ciphers,
+    Macs,
+    HostKeys,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -309,6 +316,7 @@ pub(crate) struct ConnectionEditorState {
     pub(crate) ssh_algorithm_ciphers: Vec<String>,
     pub(crate) ssh_algorithm_macs: Vec<String>,
     pub(crate) ssh_algorithm_host_keys: Vec<String>,
+    pub(crate) ssh_algorithm_tab: ConnectionEditorSshAlgorithmTab,
     pub(crate) shell_path: String,
     pub(crate) shell_args: String,
     pub(crate) working_dir: String,
