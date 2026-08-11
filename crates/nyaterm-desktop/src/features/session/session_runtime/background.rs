@@ -544,7 +544,8 @@ impl NyaTermApp {
                         let encoding = self
                             .session
                             .metadata(&session_id)
-                            .map(|metadata| metadata.launch_config.encoding().to_string())
+                            .and_then(|metadata| metadata.launch_config.encoding())
+                            .map(ToOwned::to_owned)
                             .unwrap_or_else(|| {
                                 self.settings.summary().interaction_default_encoding.clone()
                             });
@@ -702,6 +703,7 @@ fn session_kind_for_launch_config(config: &SessionLaunchConfig) -> SessionKind {
         SessionLaunchConfig::Telnet(config) if config.raw_tcp => SessionKind::RawTcp,
         SessionLaunchConfig::Telnet(_) => SessionKind::Telnet,
         SessionLaunchConfig::Serial(_) => SessionKind::Serial,
+        SessionLaunchConfig::Rdp(_) => SessionKind::Rdp,
     }
 }
 
@@ -716,6 +718,9 @@ fn create_session_from_launch_config(
         SessionLaunchConfig::Ssh(config) => session_manager.create_ssh_session(*config),
         SessionLaunchConfig::Telnet(config) => session_manager.create_telnet_session(config),
         SessionLaunchConfig::Serial(config) => session_manager.create_serial_session(config),
+        SessionLaunchConfig::Rdp(_) => {
+            unreachable!("RDP sessions are created by RemoteDesktopFeatureState")
+        }
     }
 }
 
@@ -764,5 +769,8 @@ fn launch_config_for_session_info(info: &SessionInfo) -> SessionLaunchConfig {
             backspace_mode: "delete".to_string(),
             encoding: "UTF-8".to_string(),
         }),
+        SessionKind::Rdp => {
+            unreachable!("RDP session metadata does not originate from SessionManager")
+        }
     }
 }

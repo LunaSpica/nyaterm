@@ -1,6 +1,7 @@
 use nyaterm_core::{AiExecutionProfile, SavedConnection};
 use nyaterm_transport::{
-    LocalSessionConfig, SerialSessionConfig, SshSessionConfig, TelnetSessionConfig,
+    LocalSessionConfig, RdpSessionConfig, SerialSessionConfig, SshSessionConfig,
+    TelnetSessionConfig,
 };
 
 #[derive(Clone)]
@@ -58,15 +59,17 @@ pub(crate) enum SessionLaunchConfig {
     Ssh(Box<SshSessionConfig>),
     Telnet(TelnetSessionConfig),
     Serial(SerialSessionConfig),
+    Rdp(RdpSessionConfig),
 }
 
 impl SessionLaunchConfig {
-    pub(crate) fn encoding(&self) -> &str {
+    pub(crate) fn encoding(&self) -> Option<&str> {
         match self {
-            Self::Local(config) => &config.encoding,
-            Self::Ssh(config) => &config.encoding,
-            Self::Telnet(config) => &config.encoding,
-            Self::Serial(config) => &config.encoding,
+            Self::Local(config) => Some(&config.encoding),
+            Self::Ssh(config) => Some(&config.encoding),
+            Self::Telnet(config) => Some(&config.encoding),
+            Self::Serial(config) => Some(&config.encoding),
+            Self::Rdp(_) => None,
         }
     }
 }

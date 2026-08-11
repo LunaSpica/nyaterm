@@ -887,6 +887,13 @@ impl SessionFeatureState {
         self.metadata.get(session_id)
     }
 
+    pub(in crate::features) fn metadata_mut(
+        &mut self,
+        session_id: &str,
+    ) -> Option<&mut SessionRuntimeMetadata> {
+        self.metadata.get_mut(session_id)
+    }
+
     pub(in crate::features) fn has_session(&self, session_id: &str) -> bool {
         self.metadata.contains_key(session_id)
     }
@@ -1106,6 +1113,7 @@ impl SessionFeatureState {
                 config.parity,
                 config.stop_bits
             )),
+            SessionLaunchConfig::Rdp(config) => Some(format!("{}:{}", config.host, config.port)),
         }
     }
 
@@ -1411,6 +1419,14 @@ fn session_info_from_metadata(session_id: &str, metadata: &SessionRuntimeMetadat
             working_dir: None,
             cols: 80,
             rows: 24,
+        },
+        SessionLaunchConfig::Rdp(config) => SessionInfo {
+            id: session_id.to_string(),
+            name: config.name.clone(),
+            kind: SessionKind::Rdp,
+            working_dir: None,
+            cols: u16::try_from(config.display.width).unwrap_or(u16::MAX),
+            rows: u16::try_from(config.display.height).unwrap_or(u16::MAX),
         },
     }
 }

@@ -15,8 +15,11 @@ Local modifications:
 
 - Removed the upstream `.git` metadata after vendoring.
 - Preserved `livekit.yaml` and `crates/collab/.env.toml` from the prior NyaTerm
-  snapshot as local non-code configuration files. No Zed Rust source patch is
-  carried.
+  snapshot as local non-code configuration files.
+- Added NyaTerm's `DynamicTexture` API and stride-aware BGRA8 sub-region upload
+  support to the DirectX, WGPU, Metal, headless, and test atlas backends. This
+  is used by Remote Desktop so normal frame updates do not rebuild a
+  `RenderImage` or clone the full framebuffer.
 
 Validation performed on 2026-08-05:
 
@@ -28,3 +31,10 @@ Validation performed on 2026-08-05:
 - `bash scripts/check-architecture-boundaries.sh` passed.
 - The Linux binary started and rendered the root view without crashing. Visual
   control checks were not possible because no display service was available.
+
+Remote Desktop texture validation added on 2026-08-11:
+
+- The GPUI test atlas applies a strided 2x2 dirty upload to a 4x4 BGRA texture
+  and verifies that pixels outside the rectangle remain unchanged.
+- Windows DirectX and macOS Metal compilation/runtime validation remain part of
+  the platform-specific release matrix.

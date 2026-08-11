@@ -27,7 +27,7 @@ pub(super) fn connection_editor_rdp_section(
         fields,
     } = section;
     let tr = |key: &'static str| crate::i18n::text(language, key);
-    let auth_values = vec!["none".to_string(), "password".to_string()];
+    let auth_values = ["none".to_string(), "password".to_string()];
     let auth_tabs = NyaTabs::new("connection-rdp-auth-tabs")
         .items([
             NyaTabItem::new(tr("dialog.noAuthentication")),

@@ -468,6 +468,7 @@ impl NyaTermApp {
                         nyaterm_transport::SessionKind::Telnet => "Telnet",
                         nyaterm_transport::SessionKind::Serial => "Serial",
                         nyaterm_transport::SessionKind::RawTcp => "SSH",
+                        nyaterm_transport::SessionKind::Rdp => "RDP",
                     };
                     resolve_connection_icon(Some(icon), kind)
                 });

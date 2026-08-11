@@ -49,6 +49,7 @@ impl NyaTermApp {
         }
 
         self.ensure_terminal_focus_reporting(window, cx);
+        self.ensure_rdp_focus_reporting(window, cx);
     }
 
     fn root_chrome(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Stateful<Div> {

@@ -149,7 +149,7 @@ check_exact_struct_fields \
   "NyaTermApp must remain a composition root with the approved owner set" \
   NyaTermApp \
   crates/nyaterm-desktop/src/features/app_state/mod.rs \
-  stores runtime connection_state text_inputs selects commands remote_ops security settings ai terminal \
+  stores runtime connection_state text_inputs selects commands remote_ops remote_desktop security settings ai terminal \
   send_command transfer translation update cloud_sync session shell sync_input recording tunnel_state
 check_no_matches \
   "features/mod.rs must not become a shared domain-constant bucket" \

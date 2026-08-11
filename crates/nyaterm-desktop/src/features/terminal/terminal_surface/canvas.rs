@@ -1406,6 +1406,7 @@ fn terminal_canvas_session_kind_label(config: &SessionLaunchConfig) -> &'static 
         SessionLaunchConfig::Telnet(config) if config.raw_tcp => "Raw TCP",
         SessionLaunchConfig::Telnet(_) => "Telnet",
         SessionLaunchConfig::Serial(_) => "Serial",
+        SessionLaunchConfig::Rdp(_) => "RDP",
     }
 }
 

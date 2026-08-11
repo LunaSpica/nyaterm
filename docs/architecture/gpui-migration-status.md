@@ -6,9 +6,21 @@ remaining entries here describe targeted parity, compatibility, ownership, and
 cleanup work rather than a broad half-migrated application state. Keep dynamic
 counts here instead of in `AGENTS.md`.
 
-Last updated from the working tree on 2026-08-10.
+Last updated from the working tree on 2026-08-11.
 
 ## Tauri Main Parity Refreshes
+
+- 2026-08-11 completed the first native Remote Desktop runtime boundary. The
+  UI-independent `nyaterm-remote-desktop` crate owns typed IPC, frame/epoch
+  validation, contain geometry, Set-1 key mapping, clipboard echo suppression,
+  certificate policy and helper lifecycle. `nyaterm-rdp-helper` is a sibling
+  process using vendored `ironrdp-client 0.1.0`, direct rustls/NLA, a headless
+  text-only CLIPRDR backend and binary BGRA frame/cursor packets. Desktop state
+  is authoritative under `RemoteDesktopFeatureState`; RDP tabs participate in
+  normal tab/pane metadata without creating terminal frames, recording,
+  transfer, AI or sync-input runtimes. GPUI's vendored platform atlases expose
+  stride-aware dynamic BGRA texture creation, partial upload, paint and removal.
+  Automatic reconnect and advanced RDP channels remain intentionally disabled.
 
 - 2026-08-10 pulled and audited the active Tauri `main` delta from
   `b5900d70` to `32df0957` after the broader `b5900d70..32df0957` parity
@@ -26,17 +38,12 @@ Last updated from the working tree on 2026-08-10.
   backpressure and visible-session freshness in `TerminalFramePipeline` and the
   session event bridge, so parity belongs in focused pipeline tests and
   queue-pressure behavior rather than in a second drain abstraction.
-- RDP remains GPUI-native and UI-framework independent at the model/storage/API
-  boundary. The Tauri `src-tauri/vendor/ironrdp-*` snapshots were not copied:
-  GPUI should wire the runtime against upstream IronRDP crates when the client
-  engine is implemented, and vendoring is reserved for a documented upstream
-  gap under the repository vendor rules. A compile probe against upstream
-  `ironrdp-client 0.1.0`/`ironrdp-connector 0.10.0` found that their current
-  `picky 7.0.0-rc.25` dependency pulls pre-release `aes-gcm` and
-  `curve25519-dalek` versions that conflict with NyaTerm's credential crypto
-  and vendored `russh` dependency set. The current batch therefore exposes the
-  native transport surface, unavailable runtime status events, and persistence
-  compatibility without claiming a working frame/input engine.
+- The first-phase RDP runtime now vendors the minimum upstream components needed
+  for the documented dirty-region, desktop-reset, certificate-decision and
+  resize-capability hooks. Compatibility-only connector/SSPI manifest patches
+  isolate the upstream prerelease crypto conflict without changing NyaTerm's
+  credential or persistence formats. Cross-platform backend compilation and the
+  Windows 10/11/Server manual connection matrix remain release validation work.
 - 2026-08-09 audited the active Tauri `main` delta from `f41e0d6d` to
   `b5900d70`. GPUI now carries the compatible quick-command export JSON shape,
   WindTerm quickbar escaped/real terminal-newline handling, cloud-sync
@@ -56,8 +63,8 @@ Last updated from the working tree on 2026-08-10.
 
 | Metric | Current value | Notes |
 | --- | ---: | --- |
-| `NyaTermApp` fields | 20 | Counted from `features/app_state/mod.rs`; down from 585. The remaining fields are composition services and focused feature owners. |
-| `impl NyaTermApp` blocks | 238 | Spread across 233 files. The additional block is the focused `view_io/input.rs` module boundary and adds no adapter method; method bodies and call sites, rather than the block count alone, remain the ownership check. |
+| `NyaTermApp` fields | 22 | Counted from `features/app_state/mod.rs`; down from 585. The remaining fields are composition services and focused feature owners, including the authoritative Remote Desktop owner. |
+| `impl NyaTermApp` blocks | 238 | Spread across 232 files. Method bodies and call sites, rather than the block count alone, remain the ownership check. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
 | `use super::*` imports in desktop | 0 | Cleared in production and test modules; guarded crate-wide. |
 | `use super::*` imports in terminal-GPUI | 0 | Cleared in production and test modules. The crate root is no longer a shared import bucket. |
@@ -1997,8 +2004,8 @@ use the existing behavior.
 
 - `features/prelude.rs`, desktop `#[path = "..."]`, and desktop `use super::*`
   debt are cleared and guarded against reintroduction.
-- `NyaTermApp` is the composition root for two application services and eighteen
-  focused feature owners. The architecture script checks that exact twenty-field
+- `NyaTermApp` is the composition root for two application services and twenty
+  focused feature owners. The architecture script checks that exact twenty-two-field
   set. New state should move into a focused FeatureState or a deliberately
   authoritative Entity, not into a new unrelated top-level field.
 - The connections state, runtime, list interaction and child-window adapters

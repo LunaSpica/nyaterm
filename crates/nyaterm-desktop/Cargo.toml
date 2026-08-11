@@ -18,6 +18,7 @@ keyring.workspace = true
 md5.workspace = true
 nyaterm-core.workspace = true
 nyaterm-otp.workspace = true
+nyaterm-remote-desktop.workspace = true
 nyaterm-terminal.workspace = true
 nyaterm-terminal-gpui.workspace = true
 nyaterm-transport.workspace = true

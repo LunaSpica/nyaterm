@@ -18,14 +18,15 @@ use super::super::settings::{SettingsFeatureFocus, SettingsFeatureInit, Settings
 use super::super::{
     AiFeatureFocus, AiFeatureInit, AiFeatureState, CloudSyncFeatureState, CommandFeatureInit,
     CommandFeatureState, ConnectionFeatureFocus, ConnectionFeatureState, NativeOtpProvider,
-    QuickCommandFeatureFocus, RecordingFeatureState, RemoteOpsFeatureFocus, RemoteOpsFeatureState,
-    SecurityCatalogState, SecurityFeatureFocus, SecurityFeatureState, SelectRegistry,
-    SendCommandFeatureFocus, SendCommandFeatureState, SessionFeatureFocus, SessionFeatureState,
-    ShellFeatureInit, ShellFeatureState, SyncInputFeatureState, TerminalFeatureFocus,
-    TerminalFeatureState, TextInputRegistry, TransferFeatureFocus, TransferFeatureState,
-    TranslationFeatureState, TunnelCatalogState, TunnelFeatureState, UpdateFeatureState,
-    ai_active_profile_drafts, ai_usage_counts, appearance_font_options,
-    quick_command_sort_mode_from_setting, quick_command_view_mode_from_setting,
+    QuickCommandFeatureFocus, RecordingFeatureState, RemoteDesktopFeatureState,
+    RemoteOpsFeatureFocus, RemoteOpsFeatureState, SecurityCatalogState, SecurityFeatureFocus,
+    SecurityFeatureState, SelectRegistry, SendCommandFeatureFocus, SendCommandFeatureState,
+    SessionFeatureFocus, SessionFeatureState, ShellFeatureInit, ShellFeatureState,
+    SyncInputFeatureState, TerminalFeatureFocus, TerminalFeatureState, TextInputRegistry,
+    TransferFeatureFocus, TransferFeatureState, TranslationFeatureState, TunnelCatalogState,
+    TunnelFeatureState, UpdateFeatureState, ai_active_profile_drafts, ai_usage_counts,
+    appearance_font_options, quick_command_sort_mode_from_setting,
+    quick_command_view_mode_from_setting,
 };
 use super::NyaTermApp;
 use crate::models::panel_collapsed_from_persistence;
@@ -357,6 +358,7 @@ impl NyaTermApp {
                 },
             ),
             remote_ops: RemoteOpsFeatureState::new(RemoteOpsFeatureFocus {}),
+            remote_desktop: RemoteDesktopFeatureState::new(cx.focus_handle()),
             translation: TranslationFeatureState::new(translation_settings),
             update: UpdateFeatureState::new(),
             cloud_sync: CloudSyncFeatureState::new(

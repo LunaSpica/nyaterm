@@ -928,11 +928,11 @@ impl NyaTermApp {
         let session_encodings = self
             .session
             .metadata_entries()
-            .map(|(session_id, metadata)| {
-                (
-                    session_id.to_string(),
-                    metadata.launch_config.encoding().to_string(),
-                )
+            .filter_map(|(session_id, metadata)| {
+                metadata
+                    .launch_config
+                    .encoding()
+                    .map(|encoding| (session_id.to_string(), encoding.to_string()))
             })
             .collect::<std::collections::HashMap<_, _>>();
         for (session_id, view) in &mut self.terminal.view.views {

@@ -262,7 +262,9 @@ impl NyaTermApp {
             .session
             .ordered_sessions()
             .into_iter()
-            .filter(|session| !self.session.is_disconnected(&session.id))
+            .filter(|session| {
+                !self.session.is_disconnected(&session.id) && session.kind != SessionKind::Rdp
+            })
             .collect::<Vec<_>>();
         let live_session_ids = sessions
             .iter()
@@ -272,6 +274,7 @@ impl NyaTermApp {
         let is_compatible = |kind: SessionKind| -> bool {
             match active_kind {
                 Some(SessionKind::Serial) => matches!(kind, SessionKind::Serial),
+                Some(SessionKind::Rdp) => false,
                 Some(_) => !matches!(kind, SessionKind::Serial),
                 None => true,
             }
@@ -338,12 +341,15 @@ impl NyaTermApp {
             .session
             .ordered_sessions()
             .into_iter()
-            .filter(|session| !self.session.is_disconnected(&session.id))
+            .filter(|session| {
+                !self.session.is_disconnected(&session.id) && session.kind != SessionKind::Rdp
+            })
             .collect::<Vec<_>>();
         let active_kind = self.active_session_kind();
         let is_compatible = |kind: SessionKind| -> bool {
             match active_kind {
                 Some(SessionKind::Serial) => matches!(kind, SessionKind::Serial),
+                Some(SessionKind::Rdp) => false,
                 Some(_) => !matches!(kind, SessionKind::Serial),
                 None => true,
             }

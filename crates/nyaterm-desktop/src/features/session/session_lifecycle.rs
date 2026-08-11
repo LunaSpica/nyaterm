@@ -111,6 +111,10 @@ impl NyaTermApp {
                     cx,
                 );
             }
+            SessionLaunchConfig::Rdp(_) => {
+                self.shell
+                    .set_status("RDP duplication is not available in this phase".to_string());
+            }
         }
         self.shell.show_workspace();
         cx.notify();
@@ -223,7 +227,11 @@ impl NyaTermApp {
 
         self.session.begin_disconnect_action(session_id.clone());
         // Backend may already be gone (race with Exited); still mark disconnected.
-        let _ = self.session.manager().close(&session_id);
+        if self.remote_desktop.is_session(&session_id) {
+            let _ = self.close_rdp_runtime(&session_id);
+        } else {
+            let _ = self.session.manager().close(&session_id);
+        }
         self.cleanup_recording_for_session(&session_id);
         self.mark_session_disconnected(&session_id, cx);
         self.session.finish_busy_action(&session_id);
@@ -257,7 +265,8 @@ impl NyaTermApp {
         let encoding = self
             .session
             .metadata(session_id)
-            .map(|metadata| metadata.launch_config.encoding().to_string())
+            .and_then(|metadata| metadata.launch_config.encoding())
+            .map(ToOwned::to_owned)
             .unwrap_or_else(|| self.settings.summary().interaction_default_encoding.clone());
         self.terminal
             .append_session_text_or_create(session_id, &encoding, banner);
@@ -320,7 +329,11 @@ impl NyaTermApp {
             .unwrap_or(seed_output);
 
         // Close live backend if still present.
-        let _ = self.session.manager().close(&old_id);
+        if self.remote_desktop.is_session(&old_id) {
+            let _ = self.close_rdp_runtime(&old_id);
+        } else {
+            let _ = self.session.manager().close(&old_id);
+        }
         self.cleanup_recording_for_session(&old_id);
         self.clear_terminal_mouse_report_for_session(&old_id);
         let Some(metadata) = self.session.metadata(&old_id).cloned() else {
@@ -402,6 +415,11 @@ impl NyaTermApp {
                     },
                     cx,
                 );
+            }
+            SessionLaunchConfig::Rdp(_) => {
+                self.session.finish_busy_action(&old_id);
+                self.shell
+                    .set_status("Use Retry in the RDP view to reconnect".to_string());
             }
         }
         // Tauri clears busy when reconnect action returns (even if SSH still connecting).

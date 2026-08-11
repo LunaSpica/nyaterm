@@ -9,14 +9,20 @@ impl NyaTermApp {
         session_id: &str,
         metadata: SessionRuntimeMetadata,
     ) {
-        let encoding = metadata.launch_config.encoding().to_string();
+        let encoding = metadata.launch_config.encoding().map(ToOwned::to_owned);
+        let is_terminal = encoding.is_some();
         self.session.register_session_metadata(session_id, metadata);
-        self.terminal.ensure_frame_session(
-            session_id.to_string(),
-            encoding,
-            self.terminal_scrollback_line_limit(),
-        );
+        if let Some(encoding) = encoding {
+            self.terminal.ensure_frame_session(
+                session_id.to_string(),
+                encoding,
+                self.terminal_scrollback_line_limit(),
+            );
+        }
         self.reconcile_terminal_windows();
+        if !is_terminal {
+            self.terminal.remove_frame_session(session_id);
+        }
         if self.session.restore_is_complete() {
             self.persist_open_tabs();
         }

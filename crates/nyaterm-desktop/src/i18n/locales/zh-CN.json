@@ -2331,6 +2331,18 @@
     "translatedText": "译文",
     "youdao": "有道翻译"
   },
+  "remoteDesktop": {
+    "certificateTitle": "确认远程桌面证书",
+    "close": "关闭",
+    "connecting": "正在协商安全远程桌面会话…",
+    "connectionFailed": "远程桌面连接失败",
+    "disconnected": "远程桌面会话已断开",
+    "reject": "拒绝",
+    "retry": "重试",
+    "trustAndRemember": "信任并记住",
+    "trustOnce": "仅本次信任",
+    "waitingFrame": "正在等待首个桌面画面…"
+  },
   "updater": {
     "checking": "正在检查更新...",
     "currentVersion": "当前版本",

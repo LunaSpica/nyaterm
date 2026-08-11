@@ -6,6 +6,7 @@ use super::connections::ConnectionFeatureState;
 use super::panels::SendCommandFeatureState;
 use super::recording::RecordingFeatureState;
 use super::remote::RemoteOpsFeatureState;
+use super::remote_desktop::RemoteDesktopFeatureState;
 use super::selects::SelectRegistry;
 use super::session::SessionFeatureState;
 use super::settings::{SecurityFeatureState, SettingsFeatureState};
@@ -35,6 +36,7 @@ pub struct NyaTermApp {
     pub(in crate::features) selects: SelectRegistry,
     pub(in crate::features) commands: CommandFeatureState,
     pub(in crate::features) remote_ops: RemoteOpsFeatureState,
+    pub(in crate::features) remote_desktop: RemoteDesktopFeatureState,
     pub(in crate::features) security: SecurityFeatureState,
     pub(in crate::features) settings: SettingsFeatureState,
     pub(in crate::features) ai: AiFeatureState,

@@ -4,6 +4,8 @@ members = [
     "crates/nyaterm-core",
     "crates/nyaterm-desktop",
     "crates/nyaterm-otp",
+    "crates/nyaterm-rdp-helper",
+    "crates/nyaterm-remote-desktop",
     "crates/nyaterm-store",
     "crates/nyaterm-terminal",
     "crates/nyaterm-terminal-gpui",
@@ -55,6 +57,7 @@ md5 = "0.8"
 nyaterm-core = { path = "crates/nyaterm-core" }
 nyaterm-desktop = { path = "crates/nyaterm-desktop" }
 nyaterm-otp = { path = "crates/nyaterm-otp" }
+nyaterm-remote-desktop = { path = "crates/nyaterm-remote-desktop" }
 nyaterm-terminal = { path = "crates/nyaterm-terminal" }
 nyaterm-terminal-gpui = { path = "crates/nyaterm-terminal-gpui" }
 nyaterm-transport = { path = "crates/nyaterm-transport" }
@@ -108,3 +111,8 @@ sum_tree = { opt-level = 1 }
 swash = { opt-level = 1 }
 taffy = { opt-level = 1 }
 ttf-parser = { opt-level = 1 }
+
+[patch.crates-io]
+ironrdp-client = { path = "vendor/ironrdp-client" }
+ironrdp-connector = { path = "vendor/ironrdp-connector" }
+sspi = { path = "vendor/sspi" }

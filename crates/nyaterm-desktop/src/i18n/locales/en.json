@@ -2331,6 +2331,18 @@
     "translatedText": "Result",
     "youdao": "Youdao"
   },
+  "remoteDesktop": {
+    "certificateTitle": "Confirm Remote Desktop certificate",
+    "close": "Close",
+    "connecting": "Negotiating secure Remote Desktop session...",
+    "connectionFailed": "Remote Desktop connection failed",
+    "disconnected": "Remote Desktop session is disconnected",
+    "reject": "Reject",
+    "retry": "Retry",
+    "trustAndRemember": "Trust And Remember",
+    "trustOnce": "Trust Once",
+    "waitingFrame": "Waiting for the first desktop frame..."
+  },
   "updater": {
     "checking": "Checking for updates...",
     "currentVersion": "Current",

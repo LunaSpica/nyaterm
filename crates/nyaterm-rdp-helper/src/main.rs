@@ -1,0 +1,712 @@
+use std::collections::HashSet;
+use std::io;
+use std::sync::{Arc, Condvar, Mutex, mpsc};
+use std::thread;
+use std::time::Duration;
+
+use ironrdp_client::config::{CertificateVerifier, ClipboardType, ConfigBuilder, Destination};
+use ironrdp_client::rdp::{RdpClient, RdpInputEvent as IronInput, RdpOutputEvent};
+use ironrdp_pdu::input::MousePdu;
+use ironrdp_pdu::input::fast_path::{FastPathInputEvent, KeyboardFlags};
+use ironrdp_pdu::input::mouse::PointerFlags;
+use ironrdp_pdu::rdp::capability_sets::MajorPlatformType;
+use nyaterm_remote_desktop::{
+    PROTOCOL_VERSION, Packet, PixelFormat, RdpCapability, RdpCertificateRequest,
+    RdpCertificateResponse, RdpControlMessage, RdpCursorEvent, RdpError, RdpErrorKind,
+    RdpFrameEvent, RdpInputEvent, RdpPointerButton, RdpSessionConfig, RdpSessionState,
+    decode_control, encode_control, encode_cursor_packet, encode_frame_packet, read_packet,
+    write_packet,
+};
+use sha2::{Digest, Sha256};
+use smallvec::SmallVec;
+use tokio::sync::mpsc as tokio_mpsc;
+use uuid::Uuid;
+use x509_cert::der::Encode as _;
+
+mod clipboard;
+
+use clipboard::ClipboardBridge;
+
+enum Outbound {
+    Control(RdpControlMessage),
+    Packet(Packet),
+}
+
+#[derive(Default)]
+struct CertificateGate {
+    response: Mutex<Option<(String, RdpCertificateResponse)>>,
+    changed: Condvar,
+}
+
+#[derive(Default)]
+struct InputState {
+    pressed_keys: HashSet<(u8, bool)>,
+    pointer_x: u16,
+    pointer_y: u16,
+}
+
+#[tokio::main(flavor = "multi_thread", worker_threads = 2)]
+async fn main() {
+    match std::env::var("NYATERM_RDP_HELPER_TEST_MODE").as_deref() {
+        Ok("crash") => std::process::exit(91),
+        Ok("hang") => loop {
+            std::thread::sleep(Duration::from_secs(1));
+        },
+        _ => {}
+    }
+    if let Err(error) = run().await {
+        eprintln!("RDP helper stopped: {error}");
+        std::process::exit(1);
+    }
+}
+
+async fn run() -> anyhow::Result<()> {
+    let (output_tx, output_rx) = mpsc::channel();
+    let writer = spawn_stdout_writer(output_rx)?;
+    let (control_tx, mut control_rx) = tokio_mpsc::unbounded_channel();
+    let reader = spawn_stdin_reader(control_tx)?;
+    let certificate_gate = Arc::new(CertificateGate::default());
+    let mut iron_input = None;
+    let mut client_task = None;
+    let mut output_task = None;
+    let mut input_state = InputState::default();
+    let mut clipboard_bridge = None;
+
+    while let Some(message) = control_rx.recv().await {
+        match message {
+            RdpControlMessage::ClientHello { version } => {
+                if version != PROTOCOL_VERSION {
+                    anyhow::bail!("RDP IPC protocol version mismatch");
+                }
+                send_control(
+                    &output_tx,
+                    RdpControlMessage::ServerHello {
+                        version: PROTOCOL_VERSION,
+                    },
+                )?;
+            }
+            RdpControlMessage::Connect { session_id, config } => {
+                if client_task.is_some() {
+                    send_error(
+                        &output_tx,
+                        &session_id,
+                        RdpErrorKind::Protocol,
+                        "helper already owns an RDP session",
+                        true,
+                    )?;
+                    continue;
+                }
+                send_control(
+                    &output_tx,
+                    RdpControlMessage::State {
+                        session_id: session_id.clone(),
+                        state: RdpSessionState::Connecting,
+                        message: None,
+                    },
+                )?;
+                let (iron_config, bridge) = build_config(
+                    &session_id,
+                    &config,
+                    output_tx.clone(),
+                    certificate_gate.clone(),
+                )?;
+                let (rdp_output_tx, rdp_output_rx) = tokio_mpsc::channel(64);
+                let client = RdpClient::new(iron_config, rdp_output_tx);
+                let input_sender = client.input_sender();
+                bridge.set_input_sender(input_sender.clone());
+                iron_input = Some(input_sender);
+                clipboard_bridge = Some(bridge);
+                client_task = Some(
+                    thread::Builder::new()
+                        .name("nyaterm-ironrdp".to_string())
+                        .spawn(move || {
+                            let runtime = tokio::runtime::Builder::new_current_thread()
+                                .enable_all()
+                                .build()
+                                .expect("failed to create IronRDP runtime");
+                            runtime.block_on(client.run());
+                        })?,
+                );
+                output_task = Some(tokio::spawn(forward_output(
+                    session_id,
+                    rdp_output_rx,
+                    output_tx.clone(),
+                )));
+            }
+            RdpControlMessage::Input { session_id, events } => {
+                let Some(sender) = iron_input.as_ref() else {
+                    send_error(
+                        &output_tx,
+                        &session_id,
+                        RdpErrorKind::Protocol,
+                        "RDP session is not connected",
+                        false,
+                    )?;
+                    continue;
+                };
+                for event in events {
+                    if let Some(event) = convert_input(event, &mut input_state) {
+                        sender
+                            .send(IronInput::FastPath(event))
+                            .map_err(|_| anyhow::anyhow!("IronRDP input channel closed"))?;
+                    }
+                }
+            }
+            RdpControlMessage::Resize {
+                session_id,
+                width,
+                height,
+            } => {
+                let Some(sender) = iron_input.as_ref() else {
+                    send_error(
+                        &output_tx,
+                        &session_id,
+                        RdpErrorKind::Protocol,
+                        "RDP session is not connected",
+                        false,
+                    )?;
+                    continue;
+                };
+                let width = u16::try_from(width).unwrap_or(u16::MAX);
+                let height = u16::try_from(height).unwrap_or(u16::MAX);
+                sender
+                    .send(IronInput::Resize {
+                        width,
+                        height,
+                        scale_factor: 100,
+                        physical_size: None,
+                    })
+                    .map_err(|_| anyhow::anyhow!("IronRDP input channel closed"))?;
+            }
+            RdpControlMessage::RequestFullFrame { session_id } => {
+                if let Some(sender) = iron_input.as_ref() {
+                    sender
+                        .send(IronInput::RequestFullFrame)
+                        .map_err(|_| anyhow::anyhow!("IronRDP input channel closed"))?;
+                } else {
+                    send_error(
+                        &output_tx,
+                        &session_id,
+                        RdpErrorKind::Protocol,
+                        "RDP session is not connected",
+                        false,
+                    )?;
+                }
+            }
+            RdpControlMessage::CertificateResponse {
+                request_id,
+                response,
+            } => {
+                let mut slot = certificate_gate
+                    .response
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                *slot = Some((request_id, response));
+                certificate_gate.changed.notify_all();
+            }
+            RdpControlMessage::Clipboard {
+                session_id,
+                text,
+                generation: _,
+            } => {
+                let Some(bridge) = clipboard_bridge.as_ref() else {
+                    send_error(
+                        &output_tx,
+                        &session_id,
+                        RdpErrorKind::Protocol,
+                        "RDP clipboard channel is not connected",
+                        false,
+                    )?;
+                    continue;
+                };
+                if let Err(error) = bridge.set_local_text(text) {
+                    send_error(
+                        &output_tx,
+                        &session_id,
+                        RdpErrorKind::Unsupported,
+                        &error.to_string(),
+                        false,
+                    )?;
+                }
+            }
+            RdpControlMessage::Disconnect { session_id } => {
+                send_control(
+                    &output_tx,
+                    RdpControlMessage::State {
+                        session_id: session_id.clone(),
+                        state: RdpSessionState::Disconnecting,
+                        message: None,
+                    },
+                )?;
+                if let Some(sender) = iron_input.take() {
+                    let _ = sender.send(IronInput::Close);
+                }
+                if let Some(task) = client_task.take() {
+                    let deadline = std::time::Instant::now() + Duration::from_millis(700);
+                    while !task.is_finished() && std::time::Instant::now() < deadline {
+                        tokio::time::sleep(Duration::from_millis(10)).await;
+                    }
+                    if task.is_finished() {
+                        let _ = task.join();
+                    }
+                }
+                if let Some(task) = output_task.take() {
+                    let _ = tokio::time::timeout(Duration::from_millis(50), task).await;
+                }
+                send_control(
+                    &output_tx,
+                    RdpControlMessage::State {
+                        session_id,
+                        state: RdpSessionState::Disconnected,
+                        message: None,
+                    },
+                )?;
+                break;
+            }
+            _ => {}
+        }
+    }
+
+    if let Some(sender) = iron_input {
+        let _ = sender.send(IronInput::Close);
+    }
+    drop(output_tx);
+    let _ = reader.join();
+    writer
+        .join()
+        .map_err(|_| anyhow::anyhow!("RDP stdout writer panicked"))??;
+    Ok(())
+}
+
+fn spawn_stdout_writer(
+    output_rx: mpsc::Receiver<Outbound>,
+) -> io::Result<thread::JoinHandle<io::Result<()>>> {
+    thread::Builder::new()
+        .name("nyaterm-rdp-stdout".to_string())
+        .spawn(move || {
+            let mut stdout = io::stdout().lock();
+            while let Ok(outbound) = output_rx.recv() {
+                let packet = match outbound {
+                    Outbound::Control(message) => encode_control(&message)?,
+                    Outbound::Packet(packet) => packet,
+                };
+                write_packet(&mut stdout, &packet)?;
+            }
+            Ok(())
+        })
+}
+
+fn spawn_stdin_reader(
+    control_tx: tokio_mpsc::UnboundedSender<RdpControlMessage>,
+) -> io::Result<thread::JoinHandle<()>> {
+    thread::Builder::new()
+        .name("nyaterm-rdp-stdin".to_string())
+        .spawn(move || {
+            let mut stdin = io::stdin().lock();
+            while let Ok(Some(message)) = read_packet(&mut stdin)
+                .and_then(|packet| packet.map(|packet| decode_control(&packet)).transpose())
+            {
+                if control_tx.send(message).is_err() {
+                    break;
+                }
+            }
+        })
+}
+
+fn build_config(
+    session_id: &str,
+    config: &RdpSessionConfig,
+    output_tx: mpsc::Sender<Outbound>,
+    certificate_gate: Arc<CertificateGate>,
+) -> anyhow::Result<(ironrdp_client::config::Config, Arc<ClipboardBridge>)> {
+    let port = config.port;
+    let certificate_output_tx = output_tx.clone();
+    let verifier: CertificateVerifier = Arc::new(move |host, certificate| {
+        let der = match certificate.to_der() {
+            Ok(der) => der,
+            Err(_) => return false,
+        };
+        let request_id = Uuid::new_v4().to_string();
+        let fingerprint = Sha256::digest(&der)
+            .iter()
+            .map(|byte| format!("{byte:02X}"))
+            .collect::<Vec<_>>()
+            .join(":");
+        let request = RdpCertificateRequest {
+            request_id: request_id.clone(),
+            host: host.to_string(),
+            port,
+            sha256_fingerprint: fingerprint,
+            subject: Some(certificate.tbs_certificate.subject.to_string()),
+            issuer: Some(certificate.tbs_certificate.issuer.to_string()),
+            valid_from: Some(certificate.tbs_certificate.validity.not_before.to_string()),
+            valid_to: Some(certificate.tbs_certificate.validity.not_after.to_string()),
+        };
+        if certificate_output_tx
+            .send(Outbound::Control(RdpControlMessage::CertificateRequest(
+                request,
+            )))
+            .is_err()
+        {
+            return false;
+        }
+        let deadline = std::time::Instant::now() + Duration::from_secs(120);
+        let mut slot = certificate_gate
+            .response
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        loop {
+            if let Some((response_id, response)) = slot.take()
+                && response_id == request_id
+            {
+                return !matches!(response, RdpCertificateResponse::Reject);
+            }
+            let now = std::time::Instant::now();
+            if now >= deadline {
+                return false;
+            }
+            let waited = certificate_gate.changed.wait_timeout(slot, deadline - now);
+            slot = match waited {
+                Ok((slot, _)) => slot,
+                Err(poisoned) => poisoned.into_inner().0,
+            };
+        }
+    });
+    let destination = Destination::new(format!("{}:{}", config.host, config.port))?;
+    let platform = if cfg!(target_os = "windows") {
+        MajorPlatformType::WINDOWS
+    } else if cfg!(target_os = "macos") {
+        MajorPlatformType::OSX
+    } else {
+        MajorPlatformType::UNIX
+    };
+    let color_depth = if config.display.color_depth == 16 {
+        16
+    } else {
+        32
+    };
+    let clipboard_enabled = !matches!(
+        config.clipboard.mode,
+        nyaterm_remote_desktop::RdpClipboardMode::Disabled
+    );
+    let clipboard = ClipboardBridge::new(session_id.to_string(), output_tx);
+    let clipboard_factory = clipboard.clone();
+    let use_credssp = config.use_nla && config.password.is_some();
+    let mut builder = ConfigBuilder::new()
+        .with_destination(destination)
+        .with_username(config.username.clone())
+        .with_domain(config.domain.clone())
+        .with_password(config.password.clone().unwrap_or_default())
+        .with_client_build(10_001)
+        .with_client_dir("C:\\Windows\\System32\\mstscax.dll")
+        .with_client_name("NYATERM")
+        .with_platform(platform)
+        .with_desktop_width(u16::try_from(config.display.width).unwrap_or(1920))
+        .with_desktop_height(u16::try_from(config.display.height).unwrap_or(1080))
+        .with_color_depth(color_depth)
+        // `none` authentication must not submit a password or enter CredSSP.
+        .with_credssp(use_credssp)
+        .with_tls(!use_credssp)
+        .with_audio_playback(false)
+        .with_codecs(Vec::new())
+        .with_pointer_software_rendering(false)
+        .with_certificate_verifier(verifier)
+        // Keep IronRDP's native clipboard backend disabled on every platform. When text
+        // redirection is enabled, the custom static channel below is the sole CLIPRDR backend.
+        .with_clipboard(ClipboardType::Disable);
+    if clipboard_enabled {
+        builder = builder.with_static_channel(move |_| Some(clipboard_factory.cliprdr_client()));
+    }
+    let config = builder.build()?;
+    Ok((config, clipboard))
+}
+
+async fn forward_output(
+    session_id: String,
+    mut receiver: tokio_mpsc::Receiver<RdpOutputEvent>,
+    output_tx: mpsc::Sender<Outbound>,
+) {
+    let mut epoch = 0u64;
+    let mut connected = false;
+    let mut cursor = RdpCursorEvent {
+        epoch: 0,
+        visible: true,
+        x: 0,
+        y: 0,
+        width: 0,
+        height: 0,
+        hotspot_x: 0,
+        hotspot_y: 0,
+        pixels: Vec::new(),
+    };
+    while let Some(event) = receiver.recv().await {
+        let result: Result<(), ()> = match event {
+            RdpOutputEvent::DesktopReset { width, height } => {
+                epoch = epoch.wrapping_add(1);
+                cursor.epoch = epoch;
+                let reset = output_tx.send(Outbound::Control(RdpControlMessage::DesktopReset {
+                    session_id: session_id.clone(),
+                    epoch,
+                    width: u32::from(width),
+                    height: u32::from(height),
+                }));
+                if !connected {
+                    connected = true;
+                    let _ = output_tx.send(Outbound::Control(RdpControlMessage::State {
+                        session_id: session_id.clone(),
+                        state: RdpSessionState::Connected,
+                        message: None,
+                    }));
+                }
+                reset.map_err(|_| ())
+            }
+            RdpOutputEvent::ImageRegion {
+                buffer,
+                x,
+                y,
+                width,
+                height,
+                stride,
+                full,
+            } => {
+                let pixels = rgba_to_bgra(buffer);
+                let frame = RdpFrameEvent::Bitmap {
+                    epoch,
+                    full,
+                    x: u32::from(x),
+                    y: u32::from(y),
+                    width: u32::from(width),
+                    height: u32::from(height),
+                    stride: u32::try_from(stride).unwrap_or(u32::MAX),
+                    format: PixelFormat::Bgra8,
+                    pixels,
+                };
+                encode_frame_packet(&session_id, &frame)
+                    .map(Outbound::Packet)
+                    .and_then(|packet| {
+                        output_tx.send(packet).map_err(|_| {
+                            io::Error::new(io::ErrorKind::BrokenPipe, "RDP stdout writer stopped")
+                        })
+                    })
+                    .map_err(|_| ())
+            }
+            RdpOutputEvent::ResizeNotSupported => output_tx
+                .send(Outbound::Control(RdpControlMessage::Capability {
+                    session_id: session_id.clone(),
+                    capability: RdpCapability::DynamicResizeUnavailable,
+                }))
+                .map_err(|_| ()),
+            RdpOutputEvent::PointerDefault => {
+                cursor.visible = true;
+                cursor.width = 0;
+                cursor.height = 0;
+                cursor.pixels.clear();
+                send_cursor(&output_tx, &session_id, &cursor).map_err(|_| ())
+            }
+            RdpOutputEvent::PointerHidden => {
+                cursor.visible = false;
+                send_cursor(&output_tx, &session_id, &cursor).map_err(|_| ())
+            }
+            RdpOutputEvent::PointerPosition { x, y } => {
+                cursor.x = u32::from(x);
+                cursor.y = u32::from(y);
+                send_cursor(&output_tx, &session_id, &cursor).map_err(|_| ())
+            }
+            RdpOutputEvent::PointerBitmap(pointer) => {
+                cursor.visible = true;
+                cursor.width = u32::from(pointer.width);
+                cursor.height = u32::from(pointer.height);
+                cursor.hotspot_x = u32::from(pointer.hotspot_x);
+                cursor.hotspot_y = u32::from(pointer.hotspot_y);
+                cursor.pixels = rgba_to_bgra(pointer.bitmap_data.clone());
+                send_cursor(&output_tx, &session_id, &cursor).map_err(|_| ())
+            }
+            RdpOutputEvent::ConnectionFailure(error) => output_tx
+                .send(Outbound::Control(RdpControlMessage::Error {
+                    session_id: session_id.clone(),
+                    error: classify_error(error.to_string()),
+                    fatal: true,
+                }))
+                .map_err(|_| ()),
+            RdpOutputEvent::Terminated(Ok(reason)) => output_tx
+                .send(Outbound::Control(RdpControlMessage::State {
+                    session_id: session_id.clone(),
+                    state: RdpSessionState::Disconnected,
+                    message: Some(format!("{reason:?}")),
+                }))
+                .map_err(|_| ()),
+            RdpOutputEvent::Terminated(Err(error)) => output_tx
+                .send(Outbound::Control(RdpControlMessage::Error {
+                    session_id: session_id.clone(),
+                    error: classify_error(error.to_string()),
+                    fatal: true,
+                }))
+                .map_err(|_| ()),
+        };
+        if result.is_err() {
+            break;
+        }
+    }
+}
+
+fn send_cursor(
+    output_tx: &mpsc::Sender<Outbound>,
+    session_id: &str,
+    cursor: &RdpCursorEvent,
+) -> Result<(), ()> {
+    match encode_cursor_packet(session_id, cursor) {
+        Ok(packet) => output_tx.send(Outbound::Packet(packet)).map_err(|_| ()),
+        Err(_) => Ok(()),
+    }
+}
+
+fn rgba_to_bgra(mut pixels: Vec<u8>) -> Vec<u8> {
+    for pixel in pixels.chunks_exact_mut(4) {
+        pixel.swap(0, 2);
+    }
+    pixels
+}
+
+fn convert_input(
+    event: RdpInputEvent,
+    state: &mut InputState,
+) -> Option<SmallVec<[FastPathInputEvent; 2]>> {
+    let mut result = SmallVec::new();
+    match event {
+        RdpInputEvent::KeyDown {
+            scan_code,
+            extended,
+            ..
+        } => {
+            let code = u8::try_from(scan_code).ok()?;
+            state.pressed_keys.insert((code, extended));
+            let flags = if extended {
+                KeyboardFlags::EXTENDED
+            } else {
+                KeyboardFlags::empty()
+            };
+            result.push(FastPathInputEvent::KeyboardEvent(flags, code));
+        }
+        RdpInputEvent::KeyUp {
+            scan_code,
+            extended,
+            ..
+        } => {
+            let code = u8::try_from(scan_code).ok()?;
+            state.pressed_keys.remove(&(code, extended));
+            let mut flags = KeyboardFlags::RELEASE;
+            if extended {
+                flags |= KeyboardFlags::EXTENDED;
+            }
+            result.push(FastPathInputEvent::KeyboardEvent(flags, code));
+        }
+        RdpInputEvent::Unicode { text } => {
+            for unit in text.encode_utf16() {
+                result.push(FastPathInputEvent::UnicodeKeyboardEvent(
+                    KeyboardFlags::empty(),
+                    unit,
+                ));
+                result.push(FastPathInputEvent::UnicodeKeyboardEvent(
+                    KeyboardFlags::RELEASE,
+                    unit,
+                ));
+            }
+        }
+        RdpInputEvent::Pointer {
+            x,
+            y,
+            button,
+            pressed,
+        } => {
+            state.pointer_x = u16::try_from(x).unwrap_or(u16::MAX);
+            state.pointer_y = u16::try_from(y).unwrap_or(u16::MAX);
+            let mut flags = PointerFlags::MOVE;
+            let mut wheel = 0;
+            match button {
+                Some(RdpPointerButton::Left) => flags |= PointerFlags::LEFT_BUTTON,
+                Some(RdpPointerButton::Middle) => flags |= PointerFlags::MIDDLE_BUTTON_OR_WHEEL,
+                Some(RdpPointerButton::Right) => flags |= PointerFlags::RIGHT_BUTTON,
+                Some(RdpPointerButton::WheelUp) => {
+                    flags |= PointerFlags::VERTICAL_WHEEL;
+                    wheel = 120;
+                }
+                Some(RdpPointerButton::WheelDown) => {
+                    flags |= PointerFlags::VERTICAL_WHEEL;
+                    wheel = -120;
+                }
+                None => {}
+            }
+            if pressed
+                && !matches!(
+                    button,
+                    Some(RdpPointerButton::WheelUp | RdpPointerButton::WheelDown)
+                )
+            {
+                flags |= PointerFlags::DOWN;
+            }
+            result.push(FastPathInputEvent::MouseEvent(MousePdu {
+                flags,
+                number_of_wheel_rotation_units: wheel,
+                x_position: state.pointer_x,
+                y_position: state.pointer_y,
+            }));
+        }
+        RdpInputEvent::ReleaseAllKeys => {
+            for (code, extended) in state.pressed_keys.drain() {
+                let mut flags = KeyboardFlags::RELEASE;
+                if extended {
+                    flags |= KeyboardFlags::EXTENDED;
+                }
+                result.push(FastPathInputEvent::KeyboardEvent(flags, code));
+            }
+        }
+    }
+    (!result.is_empty()).then_some(result)
+}
+
+fn classify_error(message: String) -> RdpError {
+    let lower = message.to_ascii_lowercase();
+    let kind = if lower.contains("certificate rejected") {
+        RdpErrorKind::CertificateRejected
+    } else if lower.contains("authentication")
+        || lower.contains("credssp")
+        || lower.contains("logon")
+    {
+        RdpErrorKind::Authentication
+    } else if lower.contains("timed out") || lower.contains("timeout") {
+        RdpErrorKind::Timeout
+    } else if lower.contains("refused") {
+        RdpErrorKind::ConnectionRefused
+    } else if lower.contains("negotiat") {
+        RdpErrorKind::Negotiation
+    } else {
+        RdpErrorKind::Protocol
+    };
+    RdpError::new(kind, message)
+}
+
+fn send_control(
+    output_tx: &mpsc::Sender<Outbound>,
+    message: RdpControlMessage,
+) -> anyhow::Result<()> {
+    output_tx
+        .send(Outbound::Control(message))
+        .map_err(|_| anyhow::anyhow!("RDP stdout writer stopped"))
+}
+
+fn send_error(
+    output_tx: &mpsc::Sender<Outbound>,
+    session_id: &str,
+    kind: RdpErrorKind,
+    message: &str,
+    fatal: bool,
+) -> anyhow::Result<()> {
+    send_control(
+        output_tx,
+        RdpControlMessage::Error {
+            session_id: session_id.to_string(),
+            error: RdpError::new(kind, message),
+            fatal,
+        },
+    )
+}

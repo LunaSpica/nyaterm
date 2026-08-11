@@ -90,6 +90,7 @@ impl NyaTermApp {
         }
 
         // Data plane only. Session start / prompts already ran on the control plane.
+        drain_stage!(remote, self.drain_rdp_runtime_events(window, cx));
         if defer_terminal_frames {
             // Leave room for paint after a fresh output drain.
             timings.terminal_frames_deferred = true;

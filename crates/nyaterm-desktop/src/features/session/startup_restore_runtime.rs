@@ -3,7 +3,10 @@ use nyaterm_core::{
     AiExecutionProfile, ConnectionStore, RestorableOpenTab, RestorablePaneNode,
     RestorableWorkspacePaneNode,
 };
-use nyaterm_transport::{LocalSessionConfig, SessionInfo};
+use nyaterm_transport::{
+    LocalSessionConfig, RdpClipboardConfig, RdpDisplayConfig, RdpReconnectConfig, RdpSessionConfig,
+    SessionInfo, parse_rdp_certificate_policy, parse_rdp_clipboard_mode, parse_rdp_display_mode,
+};
 
 use crate::features::{NyaTermApp, SavedConnectionStartOptions};
 use crate::models::{SessionLaunchConfig, WorkspacePaneNode, WorkspaceSplitDirection};
@@ -190,6 +193,7 @@ impl NyaTermApp {
             Some(SessionLaunchConfig::Ssh(_)) => "SSH",
             Some(SessionLaunchConfig::Telnet(_)) => "Telnet",
             Some(SessionLaunchConfig::Serial(_)) => "Serial",
+            Some(SessionLaunchConfig::Rdp(_)) => "RDP",
             Some(SessionLaunchConfig::Local(_)) | None => "Local",
         }
         .to_string();
@@ -510,6 +514,67 @@ impl NyaTermApp {
                 ));
                 return false;
             };
+            if let nyaterm_core::ConnectionType::Rdp {
+                host,
+                port,
+                username,
+                domain,
+                security,
+                display,
+                clipboard,
+                reconnect,
+            } = &connection.config
+            {
+                let session_id = nyaterm_core::uuid();
+                let config = RdpSessionConfig {
+                    name: connection.name.clone(),
+                    host: host.clone(),
+                    port: *port,
+                    username: username.clone(),
+                    domain: domain.clone(),
+                    password: None,
+                    use_nla: security.use_nla,
+                    certificate_policy: parse_rdp_certificate_policy(&security.certificate_policy),
+                    display: RdpDisplayConfig {
+                        mode: parse_rdp_display_mode(&display.mode),
+                        width: display.width,
+                        height: display.height,
+                        color_depth: display.color_depth,
+                    },
+                    clipboard: RdpClipboardConfig {
+                        mode: parse_rdp_clipboard_mode(&clipboard.mode),
+                    },
+                    reconnect: RdpReconnectConfig {
+                        enabled: reconnect.enabled,
+                        max_attempts: reconnect.max_attempts,
+                    },
+                };
+                self.remote_desktop.insert_disconnected(session_id.clone());
+                self.register_session(
+                    &session_id,
+                    crate::models::SessionRuntimeMetadata {
+                        ssh_config: None,
+                        ssh_multiplex_key: None,
+                        source_connection_id: Some(connection.id.clone()),
+                        ai_execution_profile: AiExecutionProfile::Disabled,
+                        launch_config: SessionLaunchConfig::Rdp(config),
+                        disconnected: true,
+                    },
+                );
+                if let Some(name) = custom_name {
+                    self.session.set_custom_name(session_id.clone(), name);
+                }
+                if let Some(color) = tab_color {
+                    self.session.set_tab_color(&session_id, Some(color));
+                }
+                if tab.locked {
+                    self.session.set_tab_locked(&session_id, true);
+                }
+                if self.session.active_id().is_none() {
+                    self.activate_session_id(&session_id);
+                }
+                return false;
+            }
             self.start_saved_connection_with_options(
                 connection,
                 SavedConnectionStartOptions {

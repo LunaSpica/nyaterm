@@ -76,7 +76,16 @@ impl NyaTermApp {
             .is_some_and(|active_id| close_ids.iter().any(|id| id == active_id));
         for close_id in &close_ids {
             let disconnected = self.session.is_disconnected(close_id);
-            match self.session.manager().close(close_id) {
+            let close_result = if self.remote_desktop.is_session(close_id) {
+                self.close_rdp_runtime(close_id)
+                    .map_err(anyhow::Error::from)
+            } else {
+                self.session
+                    .manager()
+                    .close(close_id)
+                    .map_err(anyhow::Error::from)
+            };
+            match close_result {
                 Ok(()) => {}
                 Err(_) if disconnected => {}
                 Err(error) if !disconnected && !self.session.has_session(close_id) => {
@@ -146,7 +155,16 @@ impl NyaTermApp {
 
         let was_active = self.session.active_id() == Some(pane_id.as_str());
         let disconnected = self.session.is_disconnected(&pane_id);
-        match self.session.manager().close(&pane_id) {
+        let close_result = if self.remote_desktop.is_session(&pane_id) {
+            self.close_rdp_runtime(&pane_id)
+                .map_err(anyhow::Error::from)
+        } else {
+            self.session
+                .manager()
+                .close(&pane_id)
+                .map_err(anyhow::Error::from)
+        };
+        match close_result {
             Ok(()) => {}
             Err(_) if disconnected => {}
             Err(error) if !disconnected && !self.session.has_session(&pane_id) => {
@@ -193,7 +211,16 @@ impl NyaTermApp {
         let mut closed = 0usize;
         let mut failed = 0usize;
         for session_id in session_ids {
-            match self.session.manager().close(&session_id) {
+            let close_result = if self.remote_desktop.is_session(&session_id) {
+                self.close_rdp_runtime(&session_id)
+                    .map_err(anyhow::Error::from)
+            } else {
+                self.session
+                    .manager()
+                    .close(&session_id)
+                    .map_err(anyhow::Error::from)
+            };
+            match close_result {
                 Ok(()) => {
                     self.cleanup_recording_for_session(&session_id);
                     self.remove_session_state(&session_id);

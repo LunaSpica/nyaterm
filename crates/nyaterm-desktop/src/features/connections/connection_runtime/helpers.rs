@@ -59,6 +59,10 @@ pub(super) fn connection_editor_from_saved(
         username: "root".to_string(),
         domain: String::new(),
         auth_mode: auth.mode,
+        rdp_security: RdpSecuritySettings::default(),
+        rdp_display: RdpDisplaySettings::default(),
+        rdp_clipboard: RdpClipboardSettings::default(),
+        rdp_reconnect: RdpReconnectSettings::default(),
         password_source,
         password_id: auth.password_id,
         password: String::new(),
@@ -208,13 +212,19 @@ pub(super) fn connection_editor_from_saved(
             port,
             username,
             domain,
-            ..
+            security,
+            display,
+            clipboard,
+            reconnect,
         } => {
             editor.host = host;
             editor.port = port.to_string();
             editor.username = username;
             editor.domain = domain;
-            editor.auth_mode = "password".to_string();
+            editor.rdp_security = security;
+            editor.rdp_display = display;
+            editor.rdp_clipboard = clipboard;
+            editor.rdp_reconnect = reconnect;
         }
     }
     editor
@@ -396,10 +406,10 @@ pub(super) fn build_saved_connection_from_editor(
                 port,
                 username: editor.username.trim().to_string(),
                 domain: editor.domain.trim().to_string(),
-                security: RdpSecuritySettings::default(),
-                display: RdpDisplaySettings::default(),
-                clipboard: RdpClipboardSettings::default(),
-                reconnect: RdpReconnectSettings::default(),
+                security: editor.rdp_security.clone(),
+                display: editor.rdp_display.clone(),
+                clipboard: editor.rdp_clipboard.clone(),
+                reconnect: editor.rdp_reconnect.clone(),
             }
         }
     };
@@ -823,7 +833,24 @@ mod tests {
     }
 
     #[test]
-    fn connection_editor_round_trip_preserves_rdp_identity_and_defaults() {
+    fn connection_editor_round_trip_preserves_rdp_settings_and_auth_mode() {
+        let expected_security = RdpSecuritySettings {
+            use_nla: false,
+            certificate_policy: "strict".to_string(),
+        };
+        let expected_display = RdpDisplaySettings {
+            mode: "fixed".to_string(),
+            width: 2560,
+            height: 1440,
+            color_depth: 24,
+        };
+        let expected_clipboard = RdpClipboardSettings {
+            mode: "disabled".to_string(),
+        };
+        let expected_reconnect = RdpReconnectSettings {
+            enabled: false,
+            max_attempts: 17,
+        };
         let connection = SavedConnection {
             id: "connection-rdp".to_string(),
             name: "RDP".to_string(),
@@ -832,17 +859,20 @@ mod tests {
                 port: 3390,
                 username: "operator".to_string(),
                 domain: "ACME".to_string(),
-                security: RdpSecuritySettings::default(),
-                display: RdpDisplaySettings::default(),
-                clipboard: RdpClipboardSettings::default(),
-                reconnect: RdpReconnectSettings::default(),
+                security: expected_security.clone(),
+                display: expected_display.clone(),
+                clipboard: expected_clipboard.clone(),
+                reconnect: expected_reconnect.clone(),
             },
             group_id: None,
             description: None,
             sort_order: 0,
             icon: None,
             icon_auto_detect: None,
-            auth: None,
+            auth: Some(ConnectionAuth {
+                mode: "none".to_string(),
+                ..ConnectionAuth::default()
+            }),
             recording: None,
             ssh_algorithms: None,
             sftp: Default::default(),
@@ -856,6 +886,7 @@ mod tests {
         let editor = connection_editor_from_saved(connection, false);
         assert_eq!(editor.kind, ConnectionKindTab::Rdp);
         assert_eq!(editor.domain, "ACME");
+        assert_eq!(editor.auth_mode, "none");
 
         let saved = build_saved_connection_from_editor(&editor).expect("valid connection");
         let ConnectionType::Rdp {
@@ -876,10 +907,11 @@ mod tests {
         assert_eq!(port, 3390);
         assert_eq!(username, "operator");
         assert_eq!(domain, "ACME");
-        assert_eq!(security, RdpSecuritySettings::default());
-        assert_eq!(display, RdpDisplaySettings::default());
-        assert_eq!(clipboard, RdpClipboardSettings::default());
-        assert_eq!(reconnect, RdpReconnectSettings::default());
+        assert_eq!(security, expected_security);
+        assert_eq!(display, expected_display);
+        assert_eq!(clipboard, expected_clipboard);
+        assert_eq!(reconnect, expected_reconnect);
+        assert_eq!(saved.auth.expect("auth settings").mode, "none");
     }
 
     #[test]

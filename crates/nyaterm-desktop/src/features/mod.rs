@@ -10,6 +10,7 @@ mod pages;
 mod panels;
 mod recording;
 mod remote;
+mod remote_desktop;
 mod root;
 mod runtime_jobs;
 mod selects;
@@ -67,6 +68,7 @@ pub(in crate::features) use panels::{
 };
 pub(in crate::features) use recording::RecordingFeatureState;
 pub(in crate::features) use remote::{RemoteOpsFeatureFocus, RemoteOpsFeatureState};
+pub(in crate::features) use remote_desktop::RemoteDesktopFeatureState;
 pub(in crate::features) use runtime_jobs::{
     ActivitySide, AiAgentBackgroundTarget, AiAgentLoopState, AiAgentStepStatus, AiAgentStepView,
     AiChatJobOutput, AiChatJobResult, AiChatWorkerEvent, AiDiscoveryJobResult,

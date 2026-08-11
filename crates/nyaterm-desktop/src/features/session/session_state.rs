@@ -115,6 +115,12 @@ impl NyaTermApp {
                     format!("{}{}{}", config.data_bits, config.parity, config.stop_bits),
                 ));
             }
+            SessionLaunchConfig::Rdp(config) => {
+                details.push((self.tr("sessionInfo.launch"), "RDP".to_string()));
+                details.push((self.tr("sessionInfo.host"), config.host.clone()));
+                details.push((self.tr("sessionInfo.port"), config.port.to_string()));
+                details.push((self.tr("sessionInfo.username"), config.username.clone()));
+            }
         }
 
         Some(details)
@@ -127,11 +133,19 @@ impl NyaTermApp {
         self.terminal.reset_assist_for_session_switch();
         let previous_session_id = self.session.active_id_owned();
         let switching_sessions = previous_session_id.as_deref() != Some(session_id);
+        let target_is_rdp = self.remote_desktop.is_session(session_id);
         if switching_sessions && let Some(previous_session_id) = previous_session_id.as_deref() {
+            self.release_rdp_keys(previous_session_id);
+        }
+        if switching_sessions
+            && let Some(previous_session_id) = previous_session_id.as_deref()
+            && !self.remote_desktop.is_session(previous_session_id)
+        {
             self.clear_terminal_selection_state_for_session(previous_session_id);
         }
         if previous_session_id.as_deref() != Some(session_id)
             && let Some(previous_session_id) = previous_session_id.as_deref()
+            && !self.remote_desktop.is_session(previous_session_id)
         {
             self.cache_transfer_browser_session(previous_session_id);
         }
@@ -162,8 +176,12 @@ impl NyaTermApp {
             // Keep favorites map coherent for the active connection without wiping UI.
             self.sync_transfer_browser_favorites_for_active_session();
         }
-        let live_snapshot_missing = self.terminal.activate_session_view(session_id);
-        if switching_sessions && self.terminal.input_focus_is_active() {
+        let live_snapshot_missing = if target_is_rdp {
+            false
+        } else {
+            self.terminal.activate_session_view(session_id)
+        };
+        if !target_is_rdp && switching_sessions && self.terminal.input_focus_is_active() {
             if let Some(previous_session_id) = previous_session_id.as_deref() {
                 self.write_terminal_focus_report_to_session(previous_session_id, false);
             }
@@ -172,7 +190,7 @@ impl NyaTermApp {
         self.sync_terminal_windows_active_tab(session_id);
         // Priority was refreshed via sync_workspace_split_from_active_tab.
         // Recover paint immediately if this tab was backgrounded without grids.
-        if live_snapshot_missing {
+        if !target_is_rdp && live_snapshot_missing {
             self.request_terminal_live_snapshot(session_id);
         }
         previous_session_id
@@ -198,6 +216,10 @@ impl NyaTermApp {
         session_id: &str,
         cx: &mut Context<Self>,
     ) {
+        if self.remote_desktop.is_session(session_id) {
+            cx.notify();
+            return;
+        }
         let notify_session_ids =
             terminal_activation_surface_notify_ids(previous_session_id.as_deref(), session_id);
         if notify_session_ids.is_empty() {

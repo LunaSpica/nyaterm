@@ -117,9 +117,10 @@ pub use gpu::{
 };
 pub use local_fs::{LocalDirectoryChild, LocalFileService};
 pub use rdp::{
-    RdpCertificatePolicy, RdpCertificateRequest, RdpClipboardConfig, RdpClipboardMode,
-    RdpDisplayConfig, RdpDisplayMode, RdpFrameEvent, RdpInputEvent, RdpPointerButton,
-    RdpReconnectConfig, RdpRuntimeEvent, RdpSessionConfig, RdpSessionManager, RdpSessionState,
+    RdpCapability, RdpCertificatePolicy, RdpCertificateRequest, RdpCertificateResponse,
+    RdpClipboardConfig, RdpClipboardMode, RdpDisplayConfig, RdpDisplayMode, RdpError, RdpErrorKind,
+    RdpFrameEvent, RdpInputEvent, RdpPointerButton, RdpReconnectConfig, RdpRuntimeEvent,
+    RdpSessionConfig, RdpSessionDrain, RdpSessionManager, RdpSessionState,
     parse_rdp_certificate_policy, parse_rdp_clipboard_mode, parse_rdp_display_mode,
 };
 pub use recording::{

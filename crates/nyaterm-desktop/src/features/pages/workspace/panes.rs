@@ -144,6 +144,9 @@ impl NyaTermApp {
                 .workspace_reconnect_failed_state(session_id, error, cx)
                 .into_any_element();
         }
+        if self.remote_desktop.is_session(&session_id) {
+            return self.remote_desktop_view(session_id, cx);
+        }
         self.terminal_canvas_for(session_id, cx).into_any_element()
     }
 
@@ -170,7 +173,11 @@ impl NyaTermApp {
                     .cursor_pointer()
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.activate_workspace_pane(focus_id.clone(), cx);
-                        window.focus(this.terminal.input_focus(), cx);
+                        if this.remote_desktop.is_session(&focus_id) {
+                            window.focus(this.remote_desktop.focus(), cx);
+                        } else {
+                            window.focus(this.terminal.input_focus(), cx);
+                        }
                         cx.notify();
                     }));
                 if show_chrome {

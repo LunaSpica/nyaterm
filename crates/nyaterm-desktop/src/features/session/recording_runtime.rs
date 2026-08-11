@@ -23,6 +23,12 @@ impl NyaTermApp {
         session_name: String,
         cx: &mut Context<Self>,
     ) {
+        if self.remote_desktop.is_session(&session_id) {
+            self.shell
+                .set_status("recording is not supported for RDP sessions".to_string());
+            cx.notify();
+            return;
+        }
         if !self.recording.begin_path_prompt(kind) {
             self.shell
                 .set_status("recording path picker is already open".to_string());
@@ -416,6 +422,13 @@ fn recording_launch_context(
             Some(config.port_name.clone()),
             None,
             None,
+        ),
+        SessionLaunchConfig::Rdp(config) => (
+            config.name.clone(),
+            "rdp".to_string(),
+            Some(config.host.clone()),
+            Some(config.port),
+            Some(config.username.clone()),
         ),
     }
 }
