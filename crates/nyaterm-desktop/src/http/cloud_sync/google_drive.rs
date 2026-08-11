@@ -339,6 +339,95 @@ impl NativeGoogleDriveRemote {
         })?;
         google_drive_expect_success(response, "Google Drive file update")
     }
+
+    fn delete_file(&self, file_id: &str) -> Result<(), CloudSyncError> {
+        let url = format!("{GOOGLE_DRIVE_FILES_URL}/{file_id}");
+        let response = self.send_authorized(|client, token| {
+            client
+                .delete(&url)
+                .header(AUTHORIZATION, format!("Bearer {token}"))
+        })?;
+        if response.status().is_success() || response.status() == StatusCode::NOT_FOUND {
+            return Ok(());
+        }
+        let status = response.status();
+        let body = response.text().unwrap_or_default();
+        Err(CloudSyncError::Remote(format!(
+            "Google Drive file delete failed ({status}): {}",
+            body.trim()
+        )))
+    }
+
+    fn list_child_files(&self, parent_id: &str) -> Result<Vec<String>, CloudSyncError> {
+        let query = format!(
+            "{} in parents and trashed = false",
+            google_drive_query_literal(parent_id)
+        );
+        let mut page_token: Option<String> = None;
+        let mut names = Vec::new();
+        loop {
+            let response = self.send_authorized(|client, token| {
+                let mut request = client
+                    .get(GOOGLE_DRIVE_FILES_URL)
+                    .header(AUTHORIZATION, format!("Bearer {token}"))
+                    .query(&[
+                        ("q", query.as_str()),
+                        ("pageSize", "1000"),
+                        ("fields", "nextPageToken,files(id,name,mimeType)"),
+                    ]);
+                if let Some(token) = page_token.as_deref() {
+                    request = request.query(&[("pageToken", token)]);
+                }
+                request
+            })?;
+            let status = response.status();
+            let body = response.text().map_err(map_google_drive_http_error)?;
+            if !status.is_success() {
+                return Err(CloudSyncError::Remote(format!(
+                    "Google Drive file list failed ({status}): {}",
+                    body.trim()
+                )));
+            }
+            let page = parse_google_drive_list_page(&body)?;
+            names.extend(page.names);
+            page_token = page.next_page_token;
+            if page_token.is_none() {
+                break;
+            }
+        }
+        Ok(names)
+    }
+}
+
+pub(super) struct GoogleDriveListPage {
+    pub(super) names: Vec<String>,
+    pub(super) next_page_token: Option<String>,
+}
+
+pub(super) fn parse_google_drive_list_page(
+    body: &str,
+) -> Result<GoogleDriveListPage, CloudSyncError> {
+    let value: serde_json::Value = serde_json::from_str(body)?;
+    let names = value
+        .get("files")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|file| {
+            file.get("mimeType").and_then(serde_json::Value::as_str)
+                != Some(GOOGLE_DRIVE_FOLDER_MIME)
+        })
+        .filter_map(|file| file.get("name").and_then(serde_json::Value::as_str))
+        .map(ToOwned::to_owned)
+        .collect();
+    let next_page_token = value
+        .get("nextPageToken")
+        .and_then(serde_json::Value::as_str)
+        .map(ToOwned::to_owned);
+    Ok(GoogleDriveListPage {
+        names,
+        next_page_token,
+    })
 }
 
 impl CloudSyncRemote for NativeGoogleDriveRemote {
@@ -350,11 +439,6 @@ impl CloudSyncRemote for NativeGoogleDriveRemote {
         let segments = drive_remote_segments(&self.root, path);
         self.ensure_folder_segments(&segments)?;
         Ok(())
-    }
-
-    fn read(&self, path: &str) -> Result<Vec<u8>, CloudSyncError> {
-        self.read_if_exists(path)?
-            .ok_or_else(|| CloudSyncError::Remote(format!("Google Drive file '{path}' not found")))
     }
 
     fn read_if_exists(&self, path: &str) -> Result<Option<Vec<u8>>, CloudSyncError> {
@@ -377,6 +461,33 @@ impl CloudSyncRemote for NativeGoogleDriveRemote {
         } else {
             self.create_file(&parent_id, file_name, bytes)
         }
+    }
+
+    fn delete(&self, path: &str) -> Result<(), CloudSyncError> {
+        let Some(file) = self.locate_file(path)? else {
+            return Ok(());
+        };
+        self.delete_file(&file.id)
+    }
+
+    fn list_files(&self, path: &str) -> Result<Vec<String>, CloudSyncError> {
+        let segments = drive_remote_segments(&self.root, path);
+        let Some(parent_id) = self.locate_folder_segments(&segments)? else {
+            return Ok(Vec::new());
+        };
+        let prefix = path.trim().trim_matches('/');
+        self.list_child_files(&parent_id).map(|names| {
+            names
+                .into_iter()
+                .map(|name| {
+                    if prefix.is_empty() {
+                        name
+                    } else {
+                        format!("{prefix}/{name}")
+                    }
+                })
+                .collect()
+        })
     }
 }
 

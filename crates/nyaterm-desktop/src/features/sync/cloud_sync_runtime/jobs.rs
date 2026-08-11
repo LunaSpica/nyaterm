@@ -2,14 +2,19 @@ use std::time::Instant;
 
 use gpui::{AppContext, Context};
 use nyaterm_core::{
-    CLOUD_SYNC_HISTORY_LIMIT, CloudSyncHistoryEntry, LocalCloudSyncOptions,
-    append_cloud_sync_history, pull_local_snapshot, push_local_snapshot, read_cloud_sync_history,
+    CLOUD_SYNC_HISTORY_LIMIT, CloudSyncHistoryEntry, CloudSyncSettings, LocalCloudSyncOptions,
+    LocalDirectoryRemote, RemoteSyncPointer, append_cloud_sync_history,
+    cleanup_sync_snapshots_with_remote, pull_local_snapshot, push_local_snapshot,
+    read_cloud_sync_history, recover_local_current_snapshot,
 };
 
 use crate::features::NyaTermApp;
 use crate::features::formatting::{cloud_sync_history_status, configured_cloud_sync_provider};
 
-use super::super::{pull_provider_snapshot, push_provider_snapshot, test_provider_connection};
+use super::super::{
+    cleanup_provider_snapshots, pull_provider_snapshot, push_provider_snapshot,
+    recover_provider_snapshot, test_provider_connection,
+};
 
 impl NyaTermApp {
     pub(in crate::features) fn run_provider_cloud_sync_test(&mut self, cx: &mut Context<Self>) {
@@ -55,6 +60,7 @@ impl NyaTermApp {
             return;
         }
         let options = self.local_cloud_sync_options(master_password);
+        let cleanup_options = options.clone();
         let state = self.cloud_sync.state().clone();
         let started_at = Instant::now();
         self.cloud_sync.set_status(if force {
@@ -69,6 +75,12 @@ impl NyaTermApp {
             let _ = this.update(cx, |this, cx| {
                 match result {
                     Ok(result) => {
+                        schedule_cloud_sync_cleanup(
+                            None,
+                            cleanup_options,
+                            result.pointer.clone(),
+                            cx,
+                        );
                         let mut history = CloudSyncHistoryEntry::sync(
                             "success",
                             if force {
@@ -135,6 +147,7 @@ impl NyaTermApp {
             return;
         }
         let options = self.local_cloud_sync_options(master_password);
+        let cleanup_options = options.clone();
         let state = self.cloud_sync.state().clone();
         let started_at = Instant::now();
         self.cloud_sync.set_status(if force {
@@ -149,6 +162,12 @@ impl NyaTermApp {
             let _ = this.update(cx, |this, cx| {
                 match result {
                     Ok(result) => {
+                        schedule_cloud_sync_cleanup(
+                            None,
+                            cleanup_options,
+                            result.pointer.clone(),
+                            cx,
+                        );
                         let mut history = CloudSyncHistoryEntry::sync(
                             "success",
                             if force {
@@ -216,8 +235,10 @@ impl NyaTermApp {
             return;
         }
         let options = self.local_cloud_sync_options(master_password);
+        let cleanup_options = options.clone();
         let state = self.cloud_sync.state().clone();
         let settings = self.cloud_sync.settings().clone();
+        let cleanup_settings = settings.clone();
         let result_settings = settings.clone();
         let provider = configured_cloud_sync_provider(&settings);
         let started_at = Instant::now();
@@ -236,6 +257,12 @@ impl NyaTermApp {
             let _ = this.update(cx, |this, cx| {
                 match result {
                     Ok(result) => {
+                        schedule_cloud_sync_cleanup(
+                            Some(cleanup_settings),
+                            cleanup_options,
+                            result.pointer.clone(),
+                            cx,
+                        );
                         let mut history = CloudSyncHistoryEntry::sync(
                             "success",
                             if force {
@@ -302,8 +329,10 @@ impl NyaTermApp {
             return;
         }
         let options = self.local_cloud_sync_options(master_password);
+        let cleanup_options = options.clone();
         let state = self.cloud_sync.state().clone();
         let settings = self.cloud_sync.settings().clone();
+        let cleanup_settings = settings.clone();
         let result_settings = settings.clone();
         let provider = configured_cloud_sync_provider(&settings);
         let started_at = Instant::now();
@@ -322,6 +351,12 @@ impl NyaTermApp {
             let _ = this.update(cx, |this, cx| {
                 match result {
                     Ok(result) => {
+                        schedule_cloud_sync_cleanup(
+                            Some(cleanup_settings),
+                            cleanup_options,
+                            result.pointer.clone(),
+                            cx,
+                        );
                         let mut history = CloudSyncHistoryEntry::sync(
                             "success",
                             if force {
@@ -392,6 +427,93 @@ impl NyaTermApp {
         }
     }
 
+    pub(in crate::features) fn run_cloud_sync_recovery(
+        &mut self,
+        master_password: String,
+        provider_action: bool,
+        cx: &mut Context<Self>,
+    ) {
+        if self.block_cloud_sync_for_settings_draft(cx) || !self.begin_cloud_sync_job(cx) {
+            return;
+        }
+        let options = self.local_cloud_sync_options(master_password);
+        let cleanup_options = options.clone();
+        let settings = self.cloud_sync.settings().clone();
+        let cleanup_settings = settings.clone();
+        let provider = if provider_action {
+            configured_cloud_sync_provider(&settings)
+        } else {
+            "local_directory".to_string()
+        };
+        let started_at = Instant::now();
+        self.cloud_sync
+            .set_status("recovering incomplete cloud sync metadata".to_string());
+        self.shell
+            .set_status("cloud sync metadata recovery started".to_string());
+        let task = cx.background_spawn(async move {
+            if provider_action {
+                recover_provider_snapshot(&settings, &options)
+            } else {
+                recover_local_current_snapshot(&options)
+            }
+        });
+        cx.spawn(async move |this, cx| {
+            let result = task.await;
+            let _ = this.update(cx, |this, cx| {
+                match result {
+                    Ok(result) => {
+                        schedule_cloud_sync_cleanup(
+                            provider_action.then_some(cleanup_settings),
+                            cleanup_options,
+                            result.pointer.clone(),
+                            cx,
+                        );
+                        let mut history = CloudSyncHistoryEntry::sync(
+                            "success",
+                            "recover_current_remote",
+                            Some(result.status.provider.clone()),
+                            result
+                                .pointer
+                                .as_ref()
+                                .map(|pointer| pointer.revision_id.clone()),
+                            result.status.message.clone(),
+                        );
+                        history.duration_ms = Some(started_at.elapsed().as_millis() as u64);
+                        this.record_cloud_sync_history(&history);
+                        this.refresh_cloud_sync_history();
+                        this.cloud_sync
+                            .complete_job(result.state, result.status.message.clone());
+                        this.shell.set_status(result.status.message);
+                        this.refresh_store_from_runtime_and_sync_theme(cx);
+                    }
+                    Err(error) => {
+                        let status = cloud_sync_history_status(&error);
+                        this.cloud_sync.fail_job(
+                            &error,
+                            format!("cloud sync metadata recovery failed: {error}"),
+                            provider.clone(),
+                            provider_action,
+                        );
+                        let mut history = CloudSyncHistoryEntry::sync(
+                            status,
+                            "recover_current_remote",
+                            Some(provider.clone()),
+                            None,
+                            this.cloud_sync.status().to_string(),
+                        );
+                        history.duration_ms = Some(started_at.elapsed().as_millis() as u64);
+                        this.record_cloud_sync_history(&history);
+                        this.refresh_cloud_sync_history();
+                        this.shell.set_status(this.cloud_sync.status().to_string());
+                    }
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
     fn begin_cloud_sync_job(&mut self, cx: &mut Context<Self>) -> bool {
         if !self.cloud_sync.begin_job() {
             self.shell
@@ -427,4 +549,33 @@ impl NyaTermApp {
         self.cloud_sync.toggle_history_details(entry_id);
         cx.notify();
     }
+}
+
+fn schedule_cloud_sync_cleanup(
+    settings: Option<CloudSyncSettings>,
+    options: LocalCloudSyncOptions,
+    latest: Option<RemoteSyncPointer>,
+    cx: &mut Context<NyaTermApp>,
+) {
+    let provider = settings
+        .as_ref()
+        .map(configured_cloud_sync_provider)
+        .unwrap_or_else(|| "local_directory".to_string());
+    let task = cx.background_spawn(async move {
+        if let Some(settings) = settings {
+            cleanup_provider_snapshots(&settings, &options, latest.as_ref())
+        } else {
+            let remote = LocalDirectoryRemote::new(options.remote_dir.clone());
+            cleanup_sync_snapshots_with_remote(&options, &remote, latest.as_ref())
+        }
+    });
+    cx.spawn(async move |_, _| {
+        if task.await.is_err() {
+            tracing::warn!(
+                provider = %provider,
+                "cloud sync snapshot cleanup failed after a successful sync"
+            );
+        }
+    })
+    .detach();
 }

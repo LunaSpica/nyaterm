@@ -64,7 +64,9 @@ impl NyaTermApp {
                 | SnapshotPasswordPromptKind::CloudProviderPush
                 | SnapshotPasswordPromptKind::CloudProviderPull
                 | SnapshotPasswordPromptKind::CloudProviderForcePush
-                | SnapshotPasswordPromptKind::CloudProviderForcePull => {
+                | SnapshotPasswordPromptKind::CloudProviderForcePull
+                | SnapshotPasswordPromptKind::CloudRecoverCurrent
+                | SnapshotPasswordPromptKind::CloudProviderRecoverCurrent => {
                     "enter password for encrypted cloud sync snapshot"
                 }
             }
@@ -81,7 +83,9 @@ impl NyaTermApp {
             | SnapshotPasswordPromptKind::CloudProviderPush
             | SnapshotPasswordPromptKind::CloudProviderPull
             | SnapshotPasswordPromptKind::CloudProviderForcePush
-            | SnapshotPasswordPromptKind::CloudProviderForcePull => {
+            | SnapshotPasswordPromptKind::CloudProviderForcePull
+            | SnapshotPasswordPromptKind::CloudRecoverCurrent
+            | SnapshotPasswordPromptKind::CloudProviderRecoverCurrent => {
                 self.tr("runtimePrompt.cloudPush")
             }
         };
@@ -175,7 +179,9 @@ impl NyaTermApp {
             | SnapshotPasswordPromptKind::CloudProviderPush
             | SnapshotPasswordPromptKind::CloudProviderPull
             | SnapshotPasswordPromptKind::CloudProviderForcePush
-            | SnapshotPasswordPromptKind::CloudProviderForcePull => {
+            | SnapshotPasswordPromptKind::CloudProviderForcePull
+            | SnapshotPasswordPromptKind::CloudRecoverCurrent
+            | SnapshotPasswordPromptKind::CloudProviderRecoverCurrent => {
                 self.settings.restore_snapshot_password_prompt(state.kind);
                 self.shell.set_status(
                     "cloud sync password prompt must be submitted from settings".to_string(),
@@ -224,6 +230,12 @@ impl NyaTermApp {
                 SnapshotPasswordPromptKind::CloudProviderForcePull => {
                     "enter password for forced provider cloud sync pull"
                 }
+                SnapshotPasswordPromptKind::CloudRecoverCurrent => {
+                    "enter password to recover cloud sync metadata"
+                }
+                SnapshotPasswordPromptKind::CloudProviderRecoverCurrent => {
+                    "enter password to recover provider cloud sync metadata"
+                }
             }
             .to_string(),
         );
@@ -233,7 +245,9 @@ impl NyaTermApp {
             | SnapshotPasswordPromptKind::CloudProviderPush
             | SnapshotPasswordPromptKind::CloudProviderPull
             | SnapshotPasswordPromptKind::CloudProviderForcePush
-            | SnapshotPasswordPromptKind::CloudProviderForcePull => {
+            | SnapshotPasswordPromptKind::CloudProviderForcePull
+            | SnapshotPasswordPromptKind::CloudRecoverCurrent
+            | SnapshotPasswordPromptKind::CloudProviderRecoverCurrent => {
                 "awaiting cloud sync password".to_string()
             }
             _ => "awaiting .nya master password".to_string(),
@@ -282,6 +296,12 @@ impl NyaTermApp {
             SnapshotPasswordPromptKind::CloudProviderForcePull => {
                 self.run_provider_cloud_sync_pull(password, true, cx);
             }
+            SnapshotPasswordPromptKind::CloudRecoverCurrent => {
+                self.run_cloud_sync_recovery(password, false, cx);
+            }
+            SnapshotPasswordPromptKind::CloudProviderRecoverCurrent => {
+                self.run_cloud_sync_recovery(password, true, cx);
+            }
         }
     }
 
@@ -310,6 +330,12 @@ impl NyaTermApp {
             }
             SnapshotPasswordPromptKind::CloudProviderForcePull => {
                 "forced provider cloud sync pull cancelled".to_string()
+            }
+            SnapshotPasswordPromptKind::CloudRecoverCurrent => {
+                "cloud sync metadata recovery cancelled".to_string()
+            }
+            SnapshotPasswordPromptKind::CloudProviderRecoverCurrent => {
+                "provider cloud sync metadata recovery cancelled".to_string()
             }
         });
         self.settings.set_store_message("config picker cancelled");

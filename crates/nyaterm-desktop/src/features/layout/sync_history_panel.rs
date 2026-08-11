@@ -1,7 +1,7 @@
 use gpui::{
     ClipboardItem, Context, FontWeight, IntoElement, SharedString, div, prelude::*, px, rgb, svg,
 };
-use nyaterm_core::truncate_preview;
+use nyaterm_core::{CloudConflictKind, truncate_preview};
 
 use crate::features::NyaTermApp;
 use crate::features::formatting::{
@@ -279,6 +279,9 @@ impl NyaTermApp {
                     ),
             )
             .when_some(conflict, |this, conflict| {
+                let preview = conflict.preview;
+                let remote_inconsistent = preview.kind == CloudConflictKind::RemoteInconsistent;
+                let recovery_revision = preview.recovery_revision.clone();
                 this.child(
                     div()
                         .flex_none()
@@ -301,7 +304,11 @@ impl NyaTermApp {
                                         .text_size(px(12.))
                                         .font_weight(FontWeight(700.))
                                         .text_color(rgb(palette.warning))
-                                        .child(self.tr("settings.syncConflictTitle")),
+                                        .child(if remote_inconsistent {
+                                            self.tr("settings.syncRemoteIncompleteTitle")
+                                        } else {
+                                            self.tr("settings.syncConflictTitle")
+                                        }),
                                 ),
                         )
                         .child(
@@ -310,32 +317,68 @@ impl NyaTermApp {
                                 .py_2()
                                 .text_size(px(11.))
                                 .text_color(rgb(palette.text))
-                                .child(conflict.message.clone()),
+                                .child(preview.message.clone()),
                         )
                         .child(
-                            div().px_3().pb_2().grid().grid_cols(1).gap_2().child(
-                                div()
-                                    .rounded_md()
-                                    .border_1()
-                                    .border_color(rgb(palette.border))
-                                    .bg(rgb(palette.input))
-                                    .px_2()
-                                    .py_1()
-                                    .child(
+                            div()
+                                .px_3()
+                                .pb_2()
+                                .grid()
+                                .grid_cols(1)
+                                .gap_2()
+                                .child(
+                                    div()
+                                        .rounded_md()
+                                        .border_1()
+                                        .border_color(rgb(palette.border))
+                                        .bg(rgb(palette.input))
+                                        .px_2()
+                                        .py_1()
+                                        .child(
+                                            div()
+                                                .text_size(px(10.))
+                                                .text_color(rgb(palette.text_muted))
+                                                .child(self.tr("settings.providerLabel")),
+                                        )
+                                        .child(
+                                            div()
+                                                .mt_0()
+                                                .font_family(
+                                                    crate::features::gpui_code_font_family(),
+                                                )
+                                                .text_size(px(11.))
+                                                .text_color(rgb(palette.text))
+                                                .child(format_cloud_provider(&preview.provider)),
+                                        ),
+                                )
+                                .when_some(recovery_revision, |this, revision| {
+                                    this.child(
                                         div()
-                                            .text_size(px(10.))
-                                            .text_color(rgb(palette.text_muted))
-                                            .child(self.tr("settings.providerLabel")),
+                                            .rounded_md()
+                                            .border_1()
+                                            .border_color(rgb(palette.border))
+                                            .bg(rgb(palette.input))
+                                            .px_2()
+                                            .py_1()
+                                            .child(
+                                                div()
+                                                    .text_size(px(10.))
+                                                    .text_color(rgb(palette.text_muted))
+                                                    .child(
+                                                        self.tr("settings.currentRemoteSnapshot"),
+                                                    ),
+                                            )
+                                            .child(
+                                                div()
+                                                    .font_family(
+                                                        crate::features::gpui_code_font_family(),
+                                                    )
+                                                    .text_size(px(11.))
+                                                    .text_color(rgb(palette.text))
+                                                    .child(truncate_preview(&revision, 16)),
+                                            ),
                                     )
-                                    .child(
-                                        div()
-                                            .mt_0()
-                                            .font_family(crate::features::gpui_code_font_family())
-                                            .text_size(px(11.))
-                                            .text_color(rgb(palette.text))
-                                            .child(format_cloud_provider(&conflict.provider)),
-                                    ),
-                            ),
+                                }),
                         )
                         .child(
                             div()
@@ -343,21 +386,41 @@ impl NyaTermApp {
                                 .pb_3()
                                 .flex()
                                 .gap_2()
-                                .child(small_button(
-                                    palette,
-                                    "sync-panel-force-pull",
-                                    self.tr("settings.downloadRemoteVersion"),
-                                    cx.listener({
-                                        let provider_action = conflict.provider_action;
-                                        move |this, _, window, cx| {
-                                            this.prompt_cloud_sync_force_pull(
-                                                provider_action,
-                                                window,
-                                                cx,
-                                            );
-                                        }
-                                    }),
-                                ))
+                                .child(if remote_inconsistent {
+                                    small_button(
+                                        palette,
+                                        "sync-panel-recover-current",
+                                        self.tr("settings.useCurrentRemoteSnapshot"),
+                                        cx.listener({
+                                            let provider_action = conflict.provider_action;
+                                            move |this, _, window, cx| {
+                                                this.prompt_cloud_sync_recover_current(
+                                                    provider_action,
+                                                    window,
+                                                    cx,
+                                                );
+                                            }
+                                        }),
+                                    )
+                                    .into_any_element()
+                                } else {
+                                    small_button(
+                                        palette,
+                                        "sync-panel-force-pull",
+                                        self.tr("settings.downloadRemoteVersion"),
+                                        cx.listener({
+                                            let provider_action = conflict.provider_action;
+                                            move |this, _, window, cx| {
+                                                this.prompt_cloud_sync_force_pull(
+                                                    provider_action,
+                                                    window,
+                                                    cx,
+                                                );
+                                            }
+                                        }),
+                                    )
+                                    .into_any_element()
+                                })
                                 .child(dialog_action_button(
                                     palette,
                                     "sync-panel-force-push",

@@ -3,12 +3,12 @@ use gpui::{
     MouseDownEvent, SharedString, div, prelude::*, px, rgb, rgba, svg, uniform_list,
 };
 use nyaterm_core::truncate_preview;
-use nyaterm_transport::SftpFileType;
 use nyaterm_ui::{NyaContextMenu, NyaHorizontalScrollbar, NyaInput, NyaUniformListScrollbar};
 
 use crate::features::{NyaTermApp, TextInputSetup, format_file_size};
 use crate::models::TransferBrowserSortColumn;
 
+use super::super::browser_filter::transfer_browser_footer_stats;
 use super::super::{
     TransferBrowserAvailability, TransferBrowserEntryRowPresentation,
     TransferBrowserSortHeaderState, normalized_transfer_browser_path, sort_header_cell,
@@ -111,20 +111,27 @@ impl NyaTermApp {
             direction: self.transfer.browser_view().sort_direction,
             resizing_column,
         };
-        let selected_entries = self.selected_transfer_entries();
-        let selected_count = selected_entries.len();
-        let total_count = self.transfer.browser_view().entries.len();
-        let files_total_size: u64 = self
-            .transfer
-            .browser_view()
-            .entries
-            .iter()
-            .filter(|entry| entry.file_type != SftpFileType::Directory)
-            .map(|entry| entry.size.unwrap_or(0))
-            .sum();
+        let show_hidden_files = self.settings.summary().ui_file_explorer_show_hidden_files;
+        let browser = self.transfer.browser_view();
+        let footer_stats = transfer_browser_footer_stats(
+            browser.entries,
+            &visible_entries,
+            browser.selected_remote_path.as_deref(),
+            browser.selected_remote_paths,
+            show_hidden_files,
+        );
+        let footer_size_text =
+            if footer_stats.selected_item_count > 0 && footer_stats.selected_file_size > 0 {
+                format!(
+                    "{}/{}",
+                    format_file_size(Some(footer_stats.selected_file_size)),
+                    format_file_size(Some(footer_stats.total_file_size))
+                )
+            } else {
+                format_file_size(Some(footer_stats.total_file_size))
+            };
         let search_active = !self.transfer.browser_view().search.trim().is_empty();
         let search_expanded = self.transfer.browser_view().search_expanded || search_active;
-        let show_hidden_files = self.settings.summary().ui_file_explorer_show_hidden_files;
         let app = cx.entity();
         let search_input = search_expanded.then(|| {
             let field = self.text_input(
@@ -377,7 +384,7 @@ impl NyaTermApp {
                             "transfer-browser-download-selected",
                             "icons/fe/download.svg",
                             self.tr("fileExplorer.downloadSelected"),
-                            selected_count > 0,
+                            footer_stats.selected_item_count > 0,
                             cx.listener(|this, _, window, cx| {
                                 this.start_selected_sftp_download_jobs(window, cx);
                             }),
@@ -387,7 +394,7 @@ impl NyaTermApp {
                             "transfer-browser-delete-selected",
                             "icons/fe/delete.svg",
                             self.tr("fileExplorer.delete"),
-                            selected_count > 0,
+                            footer_stats.selected_item_count > 0,
                             cx.listener(|this, _, window, cx| {
                                 this.open_selected_transfer_delete_dialog(window, cx);
                             }),
@@ -639,15 +646,25 @@ impl NyaTermApp {
                             .when(
                                 !self.transfer.browser_view().loading
                                     && self.transfer.browser_view().error.is_none()
-                                    && total_count > 0,
+                                    && footer_stats.total_item_count > 0,
                                 |this| {
-                                    this.child(
-                                        self.tr("fileExplorer.totalItems")
-                                            .replace("{{count}}", &total_count.to_string()),
-                                    )
-                                    .when(files_total_size > 0, |this| {
-                                        this.child(format_file_size(Some(files_total_size)))
+                                    this.child(if footer_stats.selected_item_count > 0 {
+                                        self.tr("fileExplorer.selectedItems")
+                                            .replace(
+                                                "{{selected}}",
+                                                &footer_stats.selected_item_count.to_string(),
+                                            )
+                                            .replace(
+                                                "{{total}}",
+                                                &footer_stats.total_item_count.to_string(),
+                                            )
+                                    } else {
+                                        self.tr("fileExplorer.totalItems").replace(
+                                            "{{count}}",
+                                            &footer_stats.total_item_count.to_string(),
+                                        )
                                     })
+                                    .child(footer_size_text)
                                 },
                             ),
                     )

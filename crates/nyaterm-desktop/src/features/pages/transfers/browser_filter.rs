@@ -1,5 +1,7 @@
 use gpui::{Context, KeyDownEvent, Window};
-use nyaterm_transport::SftpFileEntry;
+use nyaterm_transport::{SftpFileEntry, SftpFileType};
+
+use std::collections::HashSet;
 
 use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::TransferBrowserSortColumn;
@@ -132,18 +134,78 @@ fn transfer_browser_entry_is_visible(
         && (normalized_query.is_empty() || entry.name.to_lowercase().contains(normalized_query))
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct TransferBrowserFooterStats {
+    pub selected_file_size: u64,
+    pub selected_item_count: usize,
+    pub total_file_size: u64,
+    pub total_item_count: usize,
+}
+
+pub(super) fn transfer_browser_footer_stats(
+    all_entries: &[SftpFileEntry],
+    visible_entries: &[SftpFileEntry],
+    selected_path: Option<&str>,
+    selected_paths: &HashSet<String>,
+    show_hidden_files: bool,
+) -> TransferBrowserFooterStats {
+    let totals = all_entries
+        .iter()
+        .filter(|entry| show_hidden_files || !entry.name.starts_with('.'));
+    let mut total_item_count = 0;
+    let mut total_file_size = 0u64;
+    for entry in totals {
+        total_item_count += 1;
+        if entry.file_type != SftpFileType::Directory {
+            total_file_size = total_file_size.saturating_add(entry.size.unwrap_or(0));
+        }
+    }
+
+    let is_selected = |entry: &SftpFileEntry| {
+        if selected_paths.is_empty() {
+            selected_path == Some(entry.path.as_str())
+        } else {
+            selected_paths.contains(&entry.path)
+        }
+    };
+    let mut selected_item_count = 0;
+    let mut selected_file_size = 0u64;
+    for entry in visible_entries.iter().filter(|entry| is_selected(entry)) {
+        selected_item_count += 1;
+        if entry.file_type != SftpFileType::Directory {
+            selected_file_size = selected_file_size.saturating_add(entry.size.unwrap_or(0));
+        }
+    }
+
+    TransferBrowserFooterStats {
+        selected_file_size,
+        selected_item_count,
+        total_file_size,
+        total_item_count,
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{transfer_browser_entry_is_visible, transfer_browser_search_text_for_key};
+    use std::collections::HashSet;
+
+    use super::{
+        transfer_browser_entry_is_visible, transfer_browser_footer_stats,
+        transfer_browser_search_text_for_key,
+    };
     use gpui::{KeyDownEvent, Keystroke, Modifiers};
     use nyaterm_transport::{SftpFileEntry, SftpFileType};
 
     fn entry(name: &str) -> SftpFileEntry {
+        sized_entry(name, SftpFileType::File, 0)
+    }
+
+    fn sized_entry(name: &str, file_type: SftpFileType, size: u64) -> SftpFileEntry {
         SftpFileEntry {
             name: name.to_string(),
             path: format!("/tmp/{name}"),
-            file_type: SftpFileType::File,
-            size: Some(0),
+            file_type,
+            size: Some(size),
             permissions: None,
             owner: String::new(),
             group: String::new(),
@@ -212,5 +274,65 @@ mod tests {
             )),
             None
         );
+    }
+
+    #[test]
+    fn footer_totals_ignore_search_but_follow_hidden_setting() {
+        let entries = vec![
+            sized_entry("report.log", SftpFileType::File, 10),
+            sized_entry("notes.txt", SftpFileType::File, 20),
+            sized_entry(".secret", SftpFileType::File, 30),
+        ];
+        let visible = vec![entries[0].clone()];
+
+        let hidden =
+            transfer_browser_footer_stats(&entries, &visible, None, &HashSet::new(), false);
+        assert_eq!(hidden.total_item_count, 2);
+        assert_eq!(hidden.total_file_size, 30);
+
+        let shown = transfer_browser_footer_stats(&entries, &visible, None, &HashSet::new(), true);
+        assert_eq!(shown.total_item_count, 3);
+        assert_eq!(shown.total_file_size, 60);
+    }
+
+    #[test]
+    fn footer_selected_stats_only_include_visible_items() {
+        let entries = vec![
+            sized_entry("visible.txt", SftpFileType::File, 12),
+            sized_entry("filtered.txt", SftpFileType::File, 24),
+            sized_entry("folder", SftpFileType::Directory, 4096),
+            sized_entry("empty", SftpFileType::File, 0),
+        ];
+        let visible = vec![entries[0].clone(), entries[2].clone(), entries[3].clone()];
+        let selected = entries
+            .iter()
+            .map(|entry| entry.path.clone())
+            .collect::<HashSet<_>>();
+
+        let stats = transfer_browser_footer_stats(&entries, &visible, None, &selected, false);
+
+        assert_eq!(stats.selected_item_count, 3);
+        assert_eq!(stats.selected_file_size, 12);
+        assert_eq!(stats.total_item_count, 4);
+        assert_eq!(stats.total_file_size, 36);
+    }
+
+    #[test]
+    fn footer_single_selection_disappears_when_search_hides_it() {
+        let selected = sized_entry("selected.txt", SftpFileType::File, 42);
+        let visible = sized_entry("visible.txt", SftpFileType::File, 7);
+        let entries = vec![selected.clone(), visible.clone()];
+
+        let stats = transfer_browser_footer_stats(
+            &entries,
+            &[visible],
+            Some(&selected.path),
+            &HashSet::new(),
+            false,
+        );
+
+        assert_eq!(stats.selected_item_count, 0);
+        assert_eq!(stats.selected_file_size, 0);
+        assert_eq!(stats.total_item_count, 2);
     }
 }

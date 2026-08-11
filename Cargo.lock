@@ -5368,6 +5368,7 @@ dependencies = [
  "nyaterm-terminal-gpui",
  "nyaterm-transport",
  "nyaterm-ui",
+ "quick-xml 0.40.1",
  "rand 0.10.2",
  "regex",
  "rqrr",

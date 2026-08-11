@@ -410,11 +410,6 @@ impl CloudSyncRemote for NativeAliyunDriveRemote {
         Ok(())
     }
 
-    fn read(&self, path: &str) -> Result<Vec<u8>, CloudSyncError> {
-        self.read_if_exists(path)?
-            .ok_or_else(|| CloudSyncError::Remote(format!("Aliyun Drive file '{path}' not found")))
-    }
-
     fn read_if_exists(&self, path: &str) -> Result<Option<Vec<u8>>, CloudSyncError> {
         let Some(item) = self.get_by_path(path)? else {
             return Ok(None);
@@ -469,6 +464,80 @@ impl CloudSyncRemote for NativeAliyunDriveRemote {
         self.upload_part(&upload_url, bytes)?;
         self.complete_upload(&file_id, &upload_id)
     }
+
+    fn delete(&self, path: &str) -> Result<(), CloudSyncError> {
+        let Some(item) = self.get_by_path(path)? else {
+            return Ok(());
+        };
+        self.delete_file(&item.file_id)
+    }
+
+    fn list_files(&self, path: &str) -> Result<Vec<String>, CloudSyncError> {
+        let parent_id = match self.get_by_path(path)? {
+            Some(item) if item.is_folder() => item.file_id,
+            Some(_) => {
+                return Err(CloudSyncError::Remote(format!(
+                    "Aliyun Drive path '{path}' is not a folder"
+                )));
+            }
+            None => return Ok(Vec::new()),
+        };
+        let drive_id = self.drive_id()?;
+        let mut marker = String::new();
+        let mut names = Vec::new();
+        loop {
+            let value = self.send_json_expect_success(
+                "/adrive/v1.0/openFile/list",
+                &json!({
+                    "drive_id": drive_id,
+                    "parent_file_id": parent_id,
+                    "limit": 100,
+                    "marker": marker,
+                }),
+                "Aliyun Drive file list",
+            )?;
+            let page = parse_aliyun_drive_list_page(&value);
+            names.extend(page.names);
+            marker = page.next_marker;
+            if marker.is_empty() {
+                break;
+            }
+        }
+        let prefix = path.trim().trim_matches('/');
+        Ok(names
+            .into_iter()
+            .map(|name| {
+                if prefix.is_empty() {
+                    name
+                } else {
+                    format!("{prefix}/{name}")
+                }
+            })
+            .collect())
+    }
+}
+
+pub(super) struct AliyunDriveListPage {
+    pub(super) names: Vec<String>,
+    pub(super) next_marker: String,
+}
+
+pub(super) fn parse_aliyun_drive_list_page(value: &serde_json::Value) -> AliyunDriveListPage {
+    let names = value
+        .get("items")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|item| item.get("type").and_then(serde_json::Value::as_str) == Some("file"))
+        .filter_map(|item| item.get("name").and_then(serde_json::Value::as_str))
+        .map(ToOwned::to_owned)
+        .collect();
+    let next_marker = value
+        .get("next_marker")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default()
+        .to_string();
+    AliyunDriveListPage { names, next_marker }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -686,6 +686,10 @@ impl NyaTermApp {
             SnapshotPasswordPromptKind::CloudProviderForcePull => {
                 self.tr("runtimePrompt.cloudProviderForcePull")
             }
+            SnapshotPasswordPromptKind::CloudRecoverCurrent
+            | SnapshotPasswordPromptKind::CloudProviderRecoverCurrent => {
+                self.tr("settings.useCurrentRemoteSnapshot")
+            }
         };
         let description = match prompt.kind {
             SnapshotPasswordPromptKind::CloudForcePush
@@ -693,7 +697,9 @@ impl NyaTermApp {
             | SnapshotPasswordPromptKind::CloudProviderPush
             | SnapshotPasswordPromptKind::CloudProviderPull
             | SnapshotPasswordPromptKind::CloudProviderForcePush
-            | SnapshotPasswordPromptKind::CloudProviderForcePull => {
+            | SnapshotPasswordPromptKind::CloudProviderForcePull
+            | SnapshotPasswordPromptKind::CloudRecoverCurrent
+            | SnapshotPasswordPromptKind::CloudProviderRecoverCurrent => {
                 self.tr("runtimePrompt.cloudSnapshotDescription")
             }
             _ => self.tr("runtimePrompt.localSnapshotDescription"),

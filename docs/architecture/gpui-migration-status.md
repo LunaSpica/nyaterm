@@ -10,6 +10,29 @@ Last updated from the working tree on 2026-08-11.
 
 ## Tauri Main Parity Refreshes
 
+- 2026-08-11 fast-forwarded the clean reference Tauri repository from
+  `21d0f04e` to `266db741` and audited the five intervening commits. Native
+  GPUI now carries the behavior-value changes without importing React/Tauri
+  manager abstractions: cloud sync uses immutable revision snapshots, a
+  verified pointer commit, concurrent-head detection, explicit recovery from
+  a valid compatibility snapshot, conservative asynchronous retention cleanup,
+  and typed incomplete-remote conflicts owned by `CloudSyncFeatureState`.
+  Activity Bar coloring uses the GPUI panel surface while preserving wallpaper
+  transparency, and the 28px file-browser footer reports visible selection
+  count/bytes against hidden-setting-aware directory totals. English and
+  Simplified Chinese catalogs contain the corresponding native labels.
+- The cloud-sync pointer written by GPUI is schema v2. A pointer without
+  `schema_version` remains a supported v1 document, and existing
+  `sync/latest.redb`, `sync/current.redb.enc`, and
+  `sync/snapshots/{revision}.redb.enc` paths are unchanged. When a v1-era
+  immutable snapshot is absent, GPUI recreates it only if the encrypted
+  compatibility snapshot validates against the pointer. A mismatch is surfaced
+  as `RemoteInconsistent`; it is never silently applied. Recovery validates and
+  commits the compatibility snapshot before making a local safety backup and
+  applying it. Provider listing/deletion stays behind `CloudSyncRemote`, and
+  cleanup is a separate best-effort GPUI background job that retains the active
+  pointer, five newest snapshots, all snapshots younger than 24 hours, and any
+  unreadable or unrecognized object.
 - 2026-08-11 fast-forwarded the clean reference Tauri repository from the
   previously audited `32df0957` baseline to `21d0f04e` and audited exactly the
   four intervening commits. GPUI now carries their behavior in native owners:
@@ -89,8 +112,8 @@ Last updated from the working tree on 2026-08-11.
 | `use super::*` imports in terminal-GPUI | 0 | Cleared in production and test modules. The crate root is no longer a shared import bucket. |
 | `features/prelude.rs` rough exported-token count | 0 | The transitional shared prelude is removed and guarded against reintroduction. |
 | `cargo check -p nyaterm-app` desktop warnings | 0 | Cleared. The current cleanup either wired complete capabilities or removed superseded state and adapters. |
-| Desktop clippy warnings | 5 | Stable Rust 1.97.1 reports four library warnings and one test-only warning. `cargo clippy --workspace --all-targets` still exits successfully. |
-| Other workspace clippy warnings | 17 | Stable Rust 1.97.1 reports 9 core, 2 terminal, 5 UI and 1 terminal-GPUI warnings in unchanged source. Transport, OTP, store and app are clean. Cargo also reports the upstream `proc-macro-error2 v2.0.1` future-incompatibility notice. |
+| Desktop clippy warnings | 14 | Stable Rust 1.97.1 reports 12 library warnings and 2 additional test-only warnings in unchanged source. `cargo clippy --workspace --all-targets` still exits successfully. |
+| Other workspace clippy warnings | 24 | Stable Rust 1.97.1 reports 10 core, 2 terminal, 6 transport, 5 UI and 1 terminal-GPUI warnings in unchanged source. OTP, store and app are clean. Vendored `ironrdp-connector` reports two additional warnings, and Cargo reports the upstream `proc-macro-error2 v2.0.1` future-incompatibility notice. |
 | Entity Store structs | 3 | `WindowRuntime`, `StartupRestore`, `Overlay`. Each owns state the app does not. |
 | Snapshot structs | 0 | Cleared. No store is a projection of `NyaTermApp` any more. |
 | `replace_snapshot` methods | 0 | Cleared. |
@@ -120,7 +143,7 @@ child-module boundary:
 | `crates/nyaterm-desktop/src/features/session/state.rs` | 2333 | 897 | The 16 restore, prompt, dialog and start-lifecycle owner tests live in `state/tests.rs`. |
 | `crates/nyaterm-terminal/src/lib.rs` | 1966 | 1147 | The 75 terminal state-machine and snapshot tests live in `src/tests.rs` with explicit imports. |
 | `crates/nyaterm-terminal/src/graphics.rs` | 1597 | 1289 | The 35 ingress, Kitty, iTerm2 and Sixel tests live in `graphics/tests.rs`; parser and graphics-state behavior remain in the production module. |
-| `crates/nyaterm-core/src/cloud_sync.rs` | 1937 | 878 | The 19 remote, history, provider, conflict and encrypted snapshot tests live in `cloud_sync/tests.rs`; persistence and compatibility logic remain unchanged. |
+| `crates/nyaterm-core/src/cloud_sync.rs` | 2168 | 1469 | Transactional protocol and conservative retention logic live in the normal `cloud_sync/protocol.rs` and `cloud_sync/gc.rs` child modules; remote, history, provider, conflict, compatibility, recovery and failure-path tests remain in `cloud_sync/tests.rs`. |
 | `crates/nyaterm-terminal-gpui/src/element.rs` | 1648 | 1168 | The 41 layout, shaping, row-cache and decoration tests live in `element/layout_cache_tests.rs`; GPUI layout and paint implementation remain together. |
 | `crates/nyaterm-transport/src/trzsz.rs` | 1925 | 1214 | The 42 detector, protocol, download and upload engine tests live in `trzsz/tests.rs` with explicit imports. |
 

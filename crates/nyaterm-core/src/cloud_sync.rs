@@ -16,8 +16,14 @@ use time::{OffsetDateTime, macros::format_description};
 
 use crate::{
     ConfigBackupInfo, ConnectionStore, PortableSnapshotError, PortableSnapshotKind,
-    RawPortableSnapshot, StorageError, decode_encrypted_raw_portable_snapshot,
-    encode_encrypted_raw_portable_snapshot,
+    RawPortableSnapshot, StorageError,
+};
+
+mod gc;
+mod protocol;
+
+pub use gc::{
+    SYNC_SNAPSHOT_GC_GRACE_PERIOD, SYNC_SNAPSHOT_KEEP_RECENT, cleanup_sync_snapshots_with_remote,
 };
 
 type HmacSha256 = Hmac<Sha256>;
@@ -29,6 +35,7 @@ pub const MASKED_SECRET_VALUE: &str = "__SET__";
 pub const CLOUD_SYNC_HISTORY_DOMAIN: &str = "cloud_sync.history";
 pub const CLOUD_SYNC_HISTORY_EVENT: &str = "entry";
 pub const CLOUD_SYNC_HISTORY_LIMIT: usize = 100;
+pub const REMOTE_SYNC_POINTER_SCHEMA_VERSION: u32 = 2;
 
 const REMOTE_SYNC_POINTER_TABLE: TableDefinition<&str, &str> = TableDefinition::new("sync_pointer");
 const REMOTE_SYNC_POINTER_KEY: &str = "latest";
@@ -37,14 +44,36 @@ const REMOTE_SYNC_POINTER_KEY: &str = "latest";
 pub enum CloudSyncError {
     #[error("cloud sync is disabled")]
     Disabled,
-    #[error("cloud sync conflict detected: {0}")]
-    Conflict(String),
+    #[error("cloud sync conflict detected: {}", .0.message)]
+    Conflict(Box<CloudConflictPreview>),
     #[error("remote snapshot is newer than local state; pull first")]
     RemoteNewer,
     #[error("no remote sync snapshot found")]
     NoRemoteSnapshot,
     #[error("no newer remote sync snapshot is available")]
     NoNewerRemoteSnapshot,
+    #[error(
+        "remote sync metadata is inconsistent: latest points to {revision} but the referenced snapshot is missing"
+    )]
+    SnapshotMissing { revision: String },
+    #[error(
+        "remote sync snapshot revision mismatch: latest points to {pointer_revision} but snapshot contains {snapshot_revision}"
+    )]
+    RevisionMismatch {
+        pointer_revision: String,
+        snapshot_revision: String,
+    },
+    #[error("remote sync snapshot hash mismatch: expected {expected} but got {actual}")]
+    HashMismatch { expected: String, actual: String },
+    #[error(
+        "remote sync was updated by another device: expected {expected_revision:?} but found {actual_revision:?}"
+    )]
+    ConcurrentUpdate {
+        expected_revision: Option<String>,
+        actual_revision: Option<String>,
+    },
+    #[error("remote sync snapshot {revision} is corrupted")]
+    CorruptedSnapshot { revision: String },
     #[error("invalid remote path '{path}'")]
     InvalidRemotePath { path: String },
     #[error("cloud sync remote error: {0}")]
@@ -88,11 +117,17 @@ pub enum CloudSyncError {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RemoteSyncPointer {
+    #[serde(default = "default_remote_sync_pointer_schema_version")]
+    pub schema_version: u32,
     pub revision_id: String,
     pub created_at_ms: u64,
     pub payload_hash: String,
     pub device_id: String,
     pub app_version: String,
+}
+
+fn default_remote_sync_pointer_schema_version() -> u32 {
+    1
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -121,15 +156,31 @@ impl Default for CloudSyncState {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum CloudConflictKind {
+    #[default]
+    ContentConflict,
+    RemoteInconsistent,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CloudConflictPreview {
     pub detected_at_ms: u64,
     pub provider: String,
+    #[serde(default)]
+    pub kind: CloudConflictKind,
     pub local_payload_hash: String,
     pub remote_payload_hash: String,
     pub remote_revision: String,
     pub remote_created_at_ms: u64,
     pub remote_device_id: String,
+    #[serde(default)]
+    pub recovery_revision: Option<String>,
+    #[serde(default)]
+    pub recovery_payload_hash: Option<String>,
+    #[serde(default)]
+    pub recovery_created_at_ms: Option<u64>,
     pub message: String,
 }
 
@@ -540,9 +591,10 @@ pub struct CloudSyncResult {
 pub trait CloudSyncRemote {
     fn provider(&self) -> &'static str;
     fn create_dir(&self, path: &str) -> Result<(), CloudSyncError>;
-    fn read(&self, path: &str) -> Result<Vec<u8>, CloudSyncError>;
     fn read_if_exists(&self, path: &str) -> Result<Option<Vec<u8>>, CloudSyncError>;
     fn write(&self, path: &str, bytes: &[u8]) -> Result<(), CloudSyncError>;
+    fn delete(&self, path: &str) -> Result<(), CloudSyncError>;
+    fn list_files(&self, path: &str) -> Result<Vec<String>, CloudSyncError>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -550,6 +602,7 @@ pub enum S3HttpMethod {
     Get,
     Head,
     Put,
+    Delete,
 }
 
 impl S3HttpMethod {
@@ -558,6 +611,7 @@ impl S3HttpMethod {
             Self::Get => "GET",
             Self::Head => "HEAD",
             Self::Put => "PUT",
+            Self::Delete => "DELETE",
         }
     }
 }
@@ -589,6 +643,24 @@ pub fn build_s3_signed_request(
     payload_sha256: &str,
     timestamp: SystemTime,
 ) -> Result<S3SignedRequest, CloudSyncError> {
+    build_s3_signed_request_with_query(
+        settings,
+        method,
+        path,
+        &BTreeMap::new(),
+        payload_sha256,
+        timestamp,
+    )
+}
+
+pub fn build_s3_signed_request_with_query(
+    settings: &S3SyncSettings,
+    method: S3HttpMethod,
+    path: &str,
+    query: &BTreeMap<String, String>,
+    payload_sha256: &str,
+    timestamp: SystemTime,
+) -> Result<S3SignedRequest, CloudSyncError> {
     let access_key_id = required_secret(
         settings.access_key_id.as_deref(),
         "S3 access key ID is required",
@@ -600,6 +672,17 @@ pub fn build_s3_signed_request(
     let region = s3_region(settings);
     let (short_date, amz_date) = s3_timestamp(timestamp)?;
     let target = s3_object_target(settings, path)?;
+    let canonical_query = query
+        .iter()
+        .map(|(key, value)| {
+            format!(
+                "{}={}",
+                s3_percent_encode_segment(key),
+                s3_percent_encode_segment(value)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("&");
 
     let mut headers = BTreeMap::from([
         ("host".to_string(), target.host.clone()),
@@ -627,9 +710,10 @@ pub fn build_s3_signed_request(
         .collect::<String>();
     let signed_headers = headers.keys().cloned().collect::<Vec<_>>().join(";");
     let canonical_request = format!(
-        "{}\n{}\n\n{}\n{}\n{}",
+        "{}\n{}\n{}\n{}\n{}\n{}",
         method.as_str(),
         target.canonical_uri,
+        canonical_query,
         canonical_headers,
         signed_headers,
         payload_sha256
@@ -650,7 +734,11 @@ pub fn build_s3_signed_request(
 
     Ok(S3SignedRequest {
         method,
-        url: target.url,
+        url: if canonical_query.is_empty() {
+            target.url
+        } else {
+            format!("{}?{canonical_query}", target.url)
+        },
         headers,
     })
 }
@@ -822,6 +910,7 @@ pub const SNIPPET_REMOTE_FILE_SUFFIX: &str = ".blob";
 pub trait SnippetBlobBackend {
     fn fetch_blob(&self, filename: &str) -> Result<Option<String>, CloudSyncError>;
     fn patch_blobs(&self, files: BTreeMap<String, Option<String>>) -> Result<(), CloudSyncError>;
+    fn list_blob_names(&self) -> Result<Vec<String>, CloudSyncError>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -932,6 +1021,10 @@ where
         })?;
         ensure_snippet_http_success("Gitee snippet", response.status, &response.body)
     }
+
+    fn list_blob_names(&self) -> Result<Vec<String>, CloudSyncError> {
+        Ok(self.fetch_document()?.files.into_keys().collect())
+    }
 }
 
 impl<C> GiteeSnippetHttpBackend<C>
@@ -1035,6 +1128,10 @@ where
             return ensure_snippet_http_success("GitHub Gist", retry.status, &retry.body);
         }
         ensure_snippet_http_success("GitHub Gist", response.status, &response.body)
+    }
+
+    fn list_blob_names(&self) -> Result<Vec<String>, CloudSyncError> {
+        Ok(self.fetch_document()?.files.into_keys().collect())
     }
 }
 
@@ -1195,14 +1292,6 @@ where
         Ok(())
     }
 
-    fn read(&self, path: &str) -> Result<Vec<u8>, CloudSyncError> {
-        self.read_if_exists(path)?
-            .ok_or_else(|| CloudSyncError::ReadFile {
-                path: PathBuf::from(path),
-                source: std::io::Error::new(std::io::ErrorKind::NotFound, "snippet blob missing"),
-            })
-    }
-
     fn read_if_exists(&self, path: &str) -> Result<Option<Vec<u8>>, CloudSyncError> {
         let filename = snippet_remote_filename(path);
         self.backend
@@ -1218,6 +1307,23 @@ where
             Some(encode_snippet_blob(bytes)),
         );
         self.backend.patch_blobs(files)
+    }
+
+    fn delete(&self, path: &str) -> Result<(), CloudSyncError> {
+        let mut files = BTreeMap::new();
+        files.insert(snippet_remote_filename(path), None);
+        self.backend.patch_blobs(files)
+    }
+
+    fn list_files(&self, path: &str) -> Result<Vec<String>, CloudSyncError> {
+        let prefix = path.trim_start_matches('/');
+        Ok(self
+            .backend
+            .list_blob_names()?
+            .into_iter()
+            .filter_map(|filename| snippet_remote_path(&filename))
+            .filter(|remote_path| remote_path.starts_with(prefix))
+            .collect())
     }
 }
 
@@ -1286,11 +1392,6 @@ impl CloudSyncRemote for LocalDirectoryRemote {
         })
     }
 
-    fn read(&self, path: &str) -> Result<Vec<u8>, CloudSyncError> {
-        let path = self.path_for(path)?;
-        std::fs::read(&path).map_err(|source| CloudSyncError::ReadFile { path, source })
-    }
-
     fn read_if_exists(&self, path: &str) -> Result<Option<Vec<u8>>, CloudSyncError> {
         let path = self.path_for(path)?;
         if !path.exists() {
@@ -1310,6 +1411,38 @@ impl CloudSyncRemote for LocalDirectoryRemote {
             })?;
         }
         std::fs::write(&path, bytes).map_err(|source| CloudSyncError::WriteFile { path, source })
+    }
+
+    fn delete(&self, path: &str) -> Result<(), CloudSyncError> {
+        let path = self.path_for(path)?;
+        match std::fs::remove_file(&path) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(source) => Err(CloudSyncError::WriteFile { path, source }),
+        }
+    }
+
+    fn list_files(&self, path: &str) -> Result<Vec<String>, CloudSyncError> {
+        let directory = self.path_for(path)?;
+        if !directory.exists() {
+            return Ok(Vec::new());
+        }
+        let prefix = path.trim().trim_matches('/');
+        std::fs::read_dir(&directory)
+            .map_err(|source| CloudSyncError::ReadFile {
+                path: directory.clone(),
+                source,
+            })?
+            .filter_map(Result::ok)
+            .filter_map(|entry| {
+                entry
+                    .file_type()
+                    .ok()
+                    .filter(|kind| kind.is_file())
+                    .map(|_| entry.file_name().to_string_lossy().into_owned())
+            })
+            .map(|name| Ok(remote_path(prefix, &name)))
+            .collect()
     }
 }
 
@@ -1423,6 +1556,23 @@ pub fn push_snapshot_with_remote(
     if let Some(remote_pointer) = &latest
         && remote_pointer.payload_hash == local_hash
     {
+        match protocol::resolve_remote_snapshot(remote, options, remote_pointer)? {
+            protocol::RemoteSnapshotResolution::Current(_)
+            | protocol::RemoteSnapshotResolution::LegacyMigrated(_) => {}
+            protocol::RemoteSnapshotResolution::Inconsistent {
+                pointer,
+                recovery_candidate,
+            } => {
+                return Err(CloudSyncError::Conflict(Box::new(
+                    remote_inconsistent_preview(
+                        remote.provider(),
+                        &local_hash,
+                        &pointer,
+                        &recovery_candidate,
+                    ),
+                )));
+            }
+        }
         next_state.last_synced_payload_hash = Some(local_hash);
         next_state.last_applied_remote_revision = Some(remote_pointer.revision_id.clone());
         next_state.last_checked_at_ms = Some(current_time_ms());
@@ -1455,21 +1605,19 @@ pub fn push_snapshot_with_remote(
         if local_changed {
             let conflict =
                 conflict_preview(options, remote.provider(), &local_hash, &remote_pointer);
-            return Err(CloudSyncError::Conflict(conflict.message));
+            return Err(CloudSyncError::Conflict(Box::new(conflict)));
         }
         return Err(CloudSyncError::RemoteNewer);
     }
 
-    write_current_sync_snapshot(remote, &options.remote_root, options, &snapshot)?;
-    let pointer = RemoteSyncPointer {
-        revision_id: snapshot.meta.revision_id.clone(),
-        created_at_ms: snapshot.meta.created_at_ms,
-        payload_hash: snapshot.meta.payload_hash.clone(),
-        device_id: snapshot.meta.device_id.clone(),
-        app_version: snapshot.meta.app_version.clone(),
-    };
+    protocol::upload_sync_snapshot(remote, options, &snapshot)?;
+    let pointer = protocol::pointer_from_snapshot(&snapshot);
+    protocol::read_snapshot_for_pointer(remote, options, &pointer)?;
+    if !force {
+        protocol::ensure_remote_head_unchanged(remote, &options.remote_root, latest.as_ref())?;
+    }
     write_sync_pointer(remote, &options.remote_root, &pointer)?;
-
+    let _ = protocol::write_current_sync_snapshot_compat(remote, options, &snapshot);
     next_state.last_synced_payload_hash = Some(pointer.payload_hash.clone());
     next_state.last_applied_remote_revision = Some(pointer.revision_id.clone());
     next_state.last_synced_at_ms = Some(current_time_ms());
@@ -1509,6 +1657,23 @@ pub fn pull_snapshot_with_remote(
     let mut next_state = normalized_state(state, &options.device_id);
     let mut local_snapshot = build_sync_snapshot(options)?;
     local_snapshot.recalculate_hash()?;
+    let remote_snapshot = match protocol::resolve_remote_snapshot(remote, options, &latest)? {
+        protocol::RemoteSnapshotResolution::Current(snapshot)
+        | protocol::RemoteSnapshotResolution::LegacyMigrated(snapshot) => snapshot,
+        protocol::RemoteSnapshotResolution::Inconsistent {
+            pointer,
+            recovery_candidate,
+        } => {
+            return Err(CloudSyncError::Conflict(Box::new(
+                remote_inconsistent_preview(
+                    remote.provider(),
+                    &local_snapshot.meta.payload_hash,
+                    &pointer,
+                    &recovery_candidate,
+                ),
+            )));
+        }
+    };
 
     if latest.payload_hash == local_snapshot.meta.payload_hash {
         next_state.last_synced_payload_hash = Some(latest.payload_hash.clone());
@@ -1543,16 +1708,15 @@ pub fn pull_snapshot_with_remote(
             &local_snapshot.meta.payload_hash,
             &latest,
         );
-        return Err(CloudSyncError::Conflict(conflict.message));
+        return Err(CloudSyncError::Conflict(Box::new(conflict)));
     }
     if !remote_changed && !force {
         return Err(CloudSyncError::NoNewerRemoteSnapshot);
     }
 
-    let snapshot = read_sync_snapshot(remote, &options.remote_root, options, &latest)?;
+    let snapshot = remote_snapshot;
     let backup = apply_sync_snapshot(options, &snapshot)?;
-    write_current_sync_snapshot(remote, &options.remote_root, options, &snapshot)?;
-
+    let _ = protocol::write_current_sync_snapshot_compat(remote, options, &snapshot);
     next_state.last_synced_payload_hash = Some(snapshot.meta.payload_hash.clone());
     next_state.last_applied_remote_revision = Some(snapshot.meta.revision_id.clone());
     next_state.last_synced_at_ms = Some(current_time_ms());
@@ -1563,6 +1727,43 @@ pub fn pull_snapshot_with_remote(
         "idle",
         "Cloud sync snapshot downloaded",
         Some(latest),
+        None,
+        Some(backup),
+    );
+    persist_cloud_sync_state(options, &result.state)?;
+    Ok(result)
+}
+
+pub fn recover_local_current_snapshot(
+    options: &LocalCloudSyncOptions,
+) -> Result<CloudSyncResult, CloudSyncError> {
+    let remote = LocalDirectoryRemote::new(options.remote_dir.clone());
+    recover_current_snapshot_with_remote(options, &remote)
+}
+
+pub fn recover_current_snapshot_with_remote(
+    options: &LocalCloudSyncOptions,
+    remote: &dyn CloudSyncRemote,
+) -> Result<CloudSyncResult, CloudSyncError> {
+    ensure_enabled(options)?;
+    ensure_remote_layout(remote, &options.remote_root)?;
+    let snapshot = protocol::recover_current_remote_snapshot(remote, options)?;
+    let backup = apply_sync_snapshot(options, &snapshot)?;
+    let pointer = protocol::pointer_from_snapshot(&snapshot);
+    let now = current_time_ms();
+    let state = CloudSyncState {
+        device_id: options.device_id.clone(),
+        last_synced_payload_hash: Some(pointer.payload_hash.clone()),
+        last_applied_remote_revision: Some(pointer.revision_id.clone()),
+        last_checked_at_ms: Some(now),
+        last_synced_at_ms: Some(now),
+    };
+    let result = result(
+        state,
+        remote.provider(),
+        "idle",
+        "Cloud sync metadata recovered",
+        Some(pointer),
         None,
         Some(backup),
     );
@@ -1619,43 +1820,6 @@ fn build_sync_snapshot(
         options.app_version.clone(),
     )?;
     Ok(snapshot)
-}
-
-fn write_current_sync_snapshot(
-    remote: &dyn CloudSyncRemote,
-    remote_root: &str,
-    options: &LocalCloudSyncOptions,
-    snapshot: &RawPortableSnapshot,
-) -> Result<(), CloudSyncError> {
-    let bytes = encode_encrypted_raw_portable_snapshot(snapshot, &options.master_password)?;
-    remote.write(&remote_path(remote_root, SYNC_CURRENT_FILE), &bytes)?;
-    remote.write(
-        &remote_path(
-            remote_root,
-            &legacy_sync_snapshot_file(&snapshot.meta.revision_id),
-        ),
-        &bytes,
-    )
-}
-
-fn read_sync_snapshot(
-    remote: &dyn CloudSyncRemote,
-    remote_root: &str,
-    options: &LocalCloudSyncOptions,
-    pointer: &RemoteSyncPointer,
-) -> Result<RawPortableSnapshot, CloudSyncError> {
-    if let Some(bytes) = remote.read_if_exists(&remote_path(remote_root, SYNC_CURRENT_FILE))? {
-        let snapshot = decode_encrypted_raw_portable_snapshot(&bytes, &options.master_password)?;
-        if snapshot.meta.revision_id == pointer.revision_id {
-            return Ok(snapshot);
-        }
-    }
-    let legacy = legacy_sync_snapshot_file(&pointer.revision_id);
-    let bytes = remote.read(&remote_path(remote_root, &legacy))?;
-    Ok(decode_encrypted_raw_portable_snapshot(
-        &bytes,
-        &options.master_password,
-    )?)
 }
 
 fn apply_sync_snapshot(
@@ -1764,15 +1928,42 @@ fn conflict_preview(
     CloudConflictPreview {
         detected_at_ms: current_time_ms(),
         provider: provider.to_string(),
+        kind: CloudConflictKind::ContentConflict,
         local_payload_hash: local_hash.to_string(),
         remote_payload_hash: remote.payload_hash.clone(),
         remote_revision: remote.revision_id.clone(),
         remote_created_at_ms: remote.created_at_ms,
         remote_device_id: remote.device_id.clone(),
+        recovery_revision: None,
+        recovery_payload_hash: None,
+        recovery_created_at_ms: None,
         message: format!(
             "Both local and cloud state changed since last sync ({})",
             options.remote_dir.display()
         ),
+    }
+}
+
+fn remote_inconsistent_preview(
+    provider: &str,
+    local_hash: &str,
+    pointer: &RemoteSyncPointer,
+    recovery_candidate: &RawPortableSnapshot,
+) -> CloudConflictPreview {
+    CloudConflictPreview {
+        detected_at_ms: current_time_ms(),
+        provider: provider.to_string(),
+        kind: CloudConflictKind::RemoteInconsistent,
+        local_payload_hash: local_hash.to_string(),
+        remote_payload_hash: pointer.payload_hash.clone(),
+        remote_revision: pointer.revision_id.clone(),
+        remote_created_at_ms: pointer.created_at_ms,
+        remote_device_id: pointer.device_id.clone(),
+        recovery_revision: Some(recovery_candidate.meta.revision_id.clone()),
+        recovery_payload_hash: Some(recovery_candidate.meta.payload_hash.clone()),
+        recovery_created_at_ms: Some(recovery_candidate.meta.created_at_ms),
+        message: "Remote cloud sync metadata is incomplete. The latest pointer references a missing snapshot, but current.redb.enc contains a recoverable snapshot."
+            .to_string(),
     }
 }
 

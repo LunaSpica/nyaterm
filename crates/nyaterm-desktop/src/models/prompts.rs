@@ -399,6 +399,8 @@ pub(crate) enum SnapshotPasswordPromptKind {
     CloudProviderPull,
     CloudProviderForcePush,
     CloudProviderForcePull,
+    CloudRecoverCurrent,
+    CloudProviderRecoverCurrent,
 }
 
 #[derive(Clone)]
@@ -419,8 +421,7 @@ impl std::fmt::Debug for SnapshotPasswordPromptState {
 
 #[derive(Debug, Clone)]
 pub(crate) struct CloudSyncConflictState {
-    pub(crate) provider: String,
-    pub(crate) message: String,
+    pub(crate) preview: nyaterm_core::CloudConflictPreview,
     pub(crate) provider_action: bool,
 }
 

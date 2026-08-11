@@ -237,7 +237,7 @@ impl NyaTermApp {
             .border_color(rgb(palette.border))
             .when(side == ActivitySide::Left, |this| this.border_r_1())
             .when(side == ActivitySide::Right, |this| this.border_l_1())
-            .bg(self.shell_surface_color(palette.bg))
+            .bg(self.shell_surface_color(palette.surface))
             .child(top)
             .child(bottom)
     }

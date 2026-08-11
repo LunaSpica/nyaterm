@@ -1,6 +1,8 @@
 use std::time::Duration;
 
 use nyaterm_core::{CloudSyncError, CloudSyncRemote, WebdavSyncSettings};
+use quick_xml::Reader;
+use quick_xml::events::Event;
 use zed_reqwest::header::AUTHORIZATION;
 use zed_reqwest::{Method, StatusCode};
 
@@ -62,7 +64,17 @@ impl NativeWebdavRemote {
         url: &str,
         body: Option<Vec<u8>>,
     ) -> Result<zed_reqwest::blocking::Response, CloudSyncError> {
-        let response = self.send_once(method.clone(), url, body.clone(), None)?;
+        self.send_with_headers(method, url, body, &[])
+    }
+
+    fn send_with_headers(
+        &self,
+        method: Method,
+        url: &str,
+        body: Option<Vec<u8>>,
+        headers: &[(&str, &str)],
+    ) -> Result<zed_reqwest::blocking::Response, CloudSyncError> {
+        let response = self.send_once(method.clone(), url, body.clone(), None, headers)?;
         if response.status() != StatusCode::UNAUTHORIZED {
             return Ok(response);
         }
@@ -81,7 +93,7 @@ impl NativeWebdavRemote {
             &webdav_cnonce(),
             "00000001",
         )?;
-        self.send_once(method, url, body, Some(auth))
+        self.send_once(method, url, body, Some(auth), headers)
     }
 
     fn send_once(
@@ -90,6 +102,7 @@ impl NativeWebdavRemote {
         url: &str,
         body: Option<Vec<u8>>,
         authorization: Option<String>,
+        headers: &[(&str, &str)],
     ) -> Result<zed_reqwest::blocking::Response, CloudSyncError> {
         let mut request = self.client.request(method, url);
         if let Some(authorization) = authorization {
@@ -99,6 +112,9 @@ impl NativeWebdavRemote {
         }
         if let Some(body) = body {
             request = request.body(body);
+        }
+        for (name, value) in headers {
+            request = request.header(*name, *value);
         }
         request.send().map_err(map_webdav_http_error)
     }
@@ -138,23 +154,6 @@ impl CloudSyncRemote for NativeWebdavRemote {
             }
         }
         Ok(())
-    }
-
-    fn read(&self, path: &str) -> Result<Vec<u8>, CloudSyncError> {
-        let url = self.url_for(path);
-        let response = self.send(Method::GET, &url, None)?;
-        let status = response.status();
-        if status.is_success() {
-            return response
-                .bytes()
-                .map(|bytes| bytes.to_vec())
-                .map_err(map_webdav_http_error);
-        }
-        let body = response.text().unwrap_or_default();
-        Err(CloudSyncError::Remote(format!(
-            "WebDAV GET failed ({status}): {}",
-            body.trim()
-        )))
     }
 
     fn read_if_exists(&self, path: &str) -> Result<Option<Vec<u8>>, CloudSyncError> {
@@ -197,4 +196,105 @@ impl CloudSyncRemote for NativeWebdavRemote {
             body.trim()
         )))
     }
+
+    fn delete(&self, path: &str) -> Result<(), CloudSyncError> {
+        let response = self.send(Method::DELETE, &self.url_for(path), None)?;
+        if response.status().is_success() || response.status() == StatusCode::NOT_FOUND {
+            return Ok(());
+        }
+        let status = response.status();
+        let body = response.text().unwrap_or_default();
+        Err(CloudSyncError::Remote(format!(
+            "WebDAV DELETE failed ({status}): {}",
+            body.trim()
+        )))
+    }
+
+    fn list_files(&self, path: &str) -> Result<Vec<String>, CloudSyncError> {
+        let method = Method::from_bytes(b"PROPFIND").map_err(|error| {
+            CloudSyncError::Remote(format!("failed to build WebDAV PROPFIND method: {error}"))
+        })?;
+        let response = self.send_with_headers(
+            method,
+            &self.url_for(path),
+            Some(b"<?xml version=\"1.0\"?><propfind xmlns=\"DAV:\"><prop><resourcetype/></prop></propfind>".to_vec()),
+            &[("Depth", "1"), ("Content-Type", "application/xml")],
+        )?;
+        let status = response.status();
+        let body = response.text().map_err(map_webdav_http_error)?;
+        if !status.is_success() && status.as_u16() != 207 {
+            return Err(CloudSyncError::Remote(format!(
+                "WebDAV PROPFIND failed ({status}): {}",
+                body.trim()
+            )));
+        }
+        parse_webdav_file_names(&body).map(|names| {
+            let prefix = trim_remote_path(path);
+            names
+                .into_iter()
+                .map(|name| format!("{prefix}/{name}"))
+                .collect()
+        })
+    }
+}
+
+pub(super) fn parse_webdav_file_names(body: &str) -> Result<Vec<String>, CloudSyncError> {
+    let mut reader = Reader::from_str(body);
+    reader.config_mut().trim_text(true);
+    let mut in_href = false;
+    let mut names = Vec::new();
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(event)) if event.local_name().as_ref() == b"href" => in_href = true,
+            Ok(Event::End(event)) if event.local_name().as_ref() == b"href" => in_href = false,
+            Ok(Event::Text(text)) if in_href => {
+                let href = text.decode().map_err(|error| {
+                    CloudSyncError::Remote(format!("invalid WebDAV PROPFIND response: {error}"))
+                })?;
+                let href = href.trim_end_matches('/');
+                if let Some(name) = href
+                    .rsplit('/')
+                    .next()
+                    .filter(|name| name.ends_with(".redb.enc"))
+                {
+                    names.push(percent_decode_path_segment(name)?);
+                }
+            }
+            Ok(Event::Eof) => break,
+            Ok(_) => {}
+            Err(error) => {
+                return Err(CloudSyncError::Remote(format!(
+                    "invalid WebDAV PROPFIND response: {error}"
+                )));
+            }
+        }
+    }
+    Ok(names)
+}
+
+fn percent_decode_path_segment(value: &str) -> Result<String, CloudSyncError> {
+    let bytes = value.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%' {
+            let Some(encoded) = bytes.get(index + 1..index + 3) else {
+                return Err(CloudSyncError::Remote(
+                    "invalid WebDAV percent encoding".to_string(),
+                ));
+            };
+            let encoded = std::str::from_utf8(encoded).map_err(|_| {
+                CloudSyncError::Remote("invalid WebDAV percent encoding".to_string())
+            })?;
+            decoded.push(u8::from_str_radix(encoded, 16).map_err(|_| {
+                CloudSyncError::Remote("invalid WebDAV percent encoding".to_string())
+            })?);
+            index += 3;
+        } else {
+            decoded.push(bytes[index]);
+            index += 1;
+        }
+    }
+    String::from_utf8(decoded)
+        .map_err(|_| CloudSyncError::Remote("WebDAV path is not valid UTF-8".to_string()))
 }

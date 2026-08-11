@@ -315,13 +315,12 @@ impl CloudSyncFeatureState {
     pub(super) fn capture_conflict(
         &mut self,
         error: &CloudSyncError,
-        provider: String,
+        _provider: String,
         provider_action: bool,
     ) {
-        if let CloudSyncError::Conflict(message) = error {
+        if let CloudSyncError::Conflict(preview) = error {
             self.conflict = Some(CloudSyncConflictState {
-                provider,
-                message: message.clone(),
+                preview: preview.as_ref().clone(),
                 provider_action,
             });
         }
@@ -502,7 +501,10 @@ impl CloudSyncFeatureState {
 mod tests {
     use std::sync::atomic::Ordering;
 
-    use nyaterm_core::{CloudSyncError, CloudSyncHistoryEntry, CloudSyncSettings, CloudSyncState};
+    use nyaterm_core::{
+        CloudConflictKind, CloudConflictPreview, CloudSyncError, CloudSyncHistoryEntry,
+        CloudSyncSettings, CloudSyncState,
+    };
 
     use crate::models::{
         CloudSyncInputField, CloudSyncSecretDraft, GithubGistAuthEvent, GithubGistAuthJobEvent,
@@ -577,14 +579,27 @@ mod tests {
         assert!(cloud_sync.begin_job());
         assert!(!cloud_sync.begin_job());
         cloud_sync.fail_job(
-            &CloudSyncError::Conflict("remote changed".to_string()),
+            &CloudSyncError::Conflict(Box::new(CloudConflictPreview {
+                detected_at_ms: 1,
+                provider: "webdav".to_string(),
+                kind: CloudConflictKind::ContentConflict,
+                local_payload_hash: "local".to_string(),
+                remote_payload_hash: "remote".to_string(),
+                remote_revision: "revision".to_string(),
+                remote_created_at_ms: 2,
+                remote_device_id: "remote-device".to_string(),
+                recovery_revision: None,
+                recovery_payload_hash: None,
+                recovery_created_at_ms: None,
+                message: "remote changed".to_string(),
+            })),
             "push failed".to_string(),
             "webdav".to_string(),
             true,
         );
         assert!(!cloud_sync.job_running());
         assert_eq!(cloud_sync.status(), "push failed");
-        assert_eq!(cloud_sync.conflict().unwrap().provider, "webdav");
+        assert_eq!(cloud_sync.conflict().unwrap().preview.provider, "webdav");
 
         assert!(cloud_sync.begin_job());
         let completed_state = CloudSyncState {
@@ -596,6 +611,48 @@ mod tests {
         assert!(cloud_sync.conflict().is_none());
         assert_eq!(cloud_sync.state().device_id, "device-2");
         assert_eq!(cloud_sync.status(), "push complete");
+    }
+
+    #[test]
+    fn remote_inconsistent_conflict_preserves_typed_recovery_candidate() {
+        let mut cloud_sync = CloudSyncFeatureState::new(
+            CloudSyncSettings::default(),
+            CloudSyncState::default(),
+            Vec::new(),
+        );
+        let preview = CloudConflictPreview {
+            detected_at_ms: 1,
+            provider: "s3".to_string(),
+            kind: CloudConflictKind::RemoteInconsistent,
+            local_payload_hash: "local".to_string(),
+            remote_payload_hash: "missing-hash".to_string(),
+            remote_revision: "missing-revision".to_string(),
+            remote_created_at_ms: 2,
+            remote_device_id: "remote-device".to_string(),
+            recovery_revision: Some("recoverable-revision".to_string()),
+            recovery_payload_hash: Some("recoverable-hash".to_string()),
+            recovery_created_at_ms: Some(3),
+            message: "remote incomplete".to_string(),
+        };
+
+        assert!(cloud_sync.begin_job());
+        cloud_sync.fail_job(
+            &CloudSyncError::Conflict(Box::new(preview.clone())),
+            "recovery required".to_string(),
+            "s3".to_string(),
+            true,
+        );
+
+        let conflict = cloud_sync.conflict().expect("typed conflict");
+        assert_eq!(conflict.preview, preview);
+        assert!(conflict.provider_action);
+        assert!(!cloud_sync.job_running());
+
+        assert!(cloud_sync.begin_job());
+        cloud_sync.complete_job(CloudSyncState::default(), "recovered".to_string());
+        assert!(cloud_sync.conflict().is_none());
+        assert!(!cloud_sync.job_running());
+        assert_eq!(cloud_sync.status(), "recovered");
     }
 
     #[test]

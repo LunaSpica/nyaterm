@@ -2,7 +2,7 @@ use gpui::{
     AnyElement, App, ClickEvent, Context, FontWeight, IntoElement, SharedString, Window, div,
     prelude::*, px, rgb, rgba,
 };
-use nyaterm_core::CloudSyncSettings;
+use nyaterm_core::{CloudConflictKind, CloudSyncSettings};
 use nyaterm_ui::{NyaNumberInputOptions, NyaSelectOption};
 
 use crate::features::{
@@ -81,20 +81,26 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let provider_action = conflict.provider_action;
-        let local_hash = self
-            .cloud_sync
-            .state()
-            .last_synced_payload_hash
-            .as_deref()
-            .map(compact_id)
-            .unwrap_or_else(|| "unsynced".to_string());
-        let remote_revision = self
-            .cloud_sync
-            .state()
-            .last_applied_remote_revision
-            .as_deref()
-            .map(compact_id)
-            .unwrap_or_else(|| "unknown".to_string());
+        let preview = conflict.preview;
+        let remote_inconsistent = preview.kind == CloudConflictKind::RemoteInconsistent;
+        let local_hash = compact_id(&preview.local_payload_hash);
+        let remote_revision = format!(
+            "{} / {}",
+            compact_id(&preview.remote_revision),
+            format_history_timestamp_ms(preview.remote_created_at_ms)
+        );
+        let recovery_candidate = preview.recovery_revision.as_deref().map(|revision| {
+            let hash = preview
+                .recovery_payload_hash
+                .as_deref()
+                .map(compact_id)
+                .unwrap_or_else(|| "unknown".to_string());
+            let timestamp = preview
+                .recovery_created_at_ms
+                .map(format_history_timestamp_ms)
+                .unwrap_or_else(|| "unknown".to_string());
+            format!("{} / {hash} / {timestamp}", compact_id(revision))
+        });
 
         div()
             .rounded_md()
@@ -115,14 +121,18 @@ impl NyaTermApp {
                             .text_sm()
                             .font_weight(FontWeight(700.))
                             .text_color(rgb(palette.text))
-                            .child(self.tr("settings.syncConflictTitle")),
+                            .child(if remote_inconsistent {
+                                self.tr("settings.syncRemoteIncompleteTitle")
+                            } else {
+                                self.tr("settings.syncConflictTitle")
+                            }),
                     )
                     .child(
                         div()
                             .text_xs()
                             .line_height(px(18.))
                             .text_color(rgb(palette.text_muted))
-                            .child(conflict.message),
+                            .child(preview.message.clone()),
                     ),
             )
             .child(
@@ -139,27 +149,47 @@ impl NyaTermApp {
                         palette,
                         self.tr("settings.remoteSnapshot"),
                         remote_revision,
-                    )),
+                    ))
+                    .when_some(recovery_candidate, |this, recovery_candidate| {
+                        this.child(cloud_sync_conflict_stat(
+                            palette,
+                            self.tr("settings.currentRemoteSnapshot"),
+                            recovery_candidate,
+                        ))
+                    }),
             )
             .child(
                 div()
                     .text_size(px(11.))
                     .text_color(rgb(palette.text_muted))
-                    .child(format_cloud_provider(&conflict.provider)),
+                    .child(format_cloud_provider(&preview.provider)),
             )
             .child(
                 div()
                     .flex()
                     .flex_wrap()
                     .gap_2()
-                    .child(small_button(
-                        palette,
-                        "cloud-conflict-force-pull",
-                        self.tr("settings.downloadRemoteVersion"),
-                        cx.listener(move |this, _, window, cx| {
-                            this.prompt_cloud_sync_force_pull(provider_action, window, cx);
-                        }),
-                    ))
+                    .child(if remote_inconsistent {
+                        small_button(
+                            palette,
+                            "cloud-conflict-recover-current",
+                            self.tr("settings.useCurrentRemoteSnapshot"),
+                            cx.listener(move |this, _, window, cx| {
+                                this.prompt_cloud_sync_recover_current(provider_action, window, cx);
+                            }),
+                        )
+                        .into_any_element()
+                    } else {
+                        small_button(
+                            palette,
+                            "cloud-conflict-force-pull",
+                            self.tr("settings.downloadRemoteVersion"),
+                            cx.listener(move |this, _, window, cx| {
+                                this.prompt_cloud_sync_force_pull(provider_action, window, cx);
+                            }),
+                        )
+                        .into_any_element()
+                    })
                     .child(dialog_action_button(
                         palette,
                         "cloud-conflict-force-push",
@@ -186,6 +216,8 @@ impl NyaTermApp {
                     | SnapshotPasswordPromptKind::CloudProviderPull
                     | SnapshotPasswordPromptKind::CloudProviderForcePush
                     | SnapshotPasswordPromptKind::CloudProviderForcePull
+                    | SnapshotPasswordPromptKind::CloudRecoverCurrent
+                    | SnapshotPasswordPromptKind::CloudProviderRecoverCurrent
             )
         });
         let cloud_conflict = self.cloud_sync.conflict().cloned();

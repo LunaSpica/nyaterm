@@ -5,16 +5,17 @@ use std::time::{Duration, UNIX_EPOCH};
 
 use super::{
     CLOUD_SYNC_HISTORY_DOMAIN, CLOUD_SYNC_HISTORY_EVENT, CLOUD_SYNC_HISTORY_LIMIT,
-    CloudRemoteCheckDecision, CloudSyncError, CloudSyncHistoryEntry, CloudSyncRemote,
-    CloudSyncSettings, CloudSyncState, GiteeSnippetHttpBackend, GiteeSnippetSyncSettings,
-    GithubGistHttpBackend, GithubGistSyncSettings, LocalCloudSyncOptions, MASKED_SECRET_VALUE,
-    RemoteSyncPointer, S3HttpMethod, S3SyncSettings, SnippetBlobBackend, SnippetHttpClient,
-    SnippetHttpMethod, SnippetHttpRequest, SnippetHttpResponse, SnippetRemote,
-    append_cloud_sync_history, build_s3_signed_request, decide_cloud_remote_check,
-    decode_snippet_blob, drive_remote_segments, encode_snippet_blob, gitee_snippet_patch_body,
-    github_gist_patch_body, google_drive_query_literal, merge_masked_cloud_sync_settings,
-    pull_local_snapshot, pull_snapshot_with_remote, push_local_snapshot, push_snapshot_with_remote,
-    read_cloud_sync_history, remote_path, s3_payload_sha256, snippet_remote_filename,
+    CloudConflictKind, CloudRemoteCheckDecision, CloudSyncError, CloudSyncHistoryEntry,
+    CloudSyncRemote, CloudSyncSettings, CloudSyncState, GiteeSnippetHttpBackend,
+    GiteeSnippetSyncSettings, GithubGistHttpBackend, GithubGistSyncSettings, LocalCloudSyncOptions,
+    MASKED_SECRET_VALUE, RemoteSyncPointer, S3HttpMethod, S3SyncSettings, SnippetBlobBackend,
+    SnippetHttpClient, SnippetHttpMethod, SnippetHttpRequest, SnippetHttpResponse, SnippetRemote,
+    append_cloud_sync_history, build_s3_signed_request, build_s3_signed_request_with_query,
+    decide_cloud_remote_check, decode_snippet_blob, drive_remote_segments, encode_snippet_blob,
+    gitee_snippet_patch_body, github_gist_patch_body, google_drive_query_literal,
+    merge_masked_cloud_sync_settings, pull_local_snapshot, pull_snapshot_with_remote,
+    push_local_snapshot, push_snapshot_with_remote, read_cloud_sync_history,
+    recover_current_snapshot_with_remote, remote_path, s3_payload_sha256, snippet_remote_filename,
     snippet_remote_path,
 };
 use crate::{AiExecutionProfile, ConnectionStore, ConnectionType, SavedConnection, SessionsConfig};
@@ -22,6 +23,16 @@ use crate::{AiExecutionProfile, ConnectionStore, ConnectionType, SavedConnection
 #[derive(Default)]
 struct MemoryRemote {
     files: Mutex<HashMap<String, Vec<u8>>>,
+    fail_writes_containing: Mutex<VecDeque<String>>,
+}
+
+impl MemoryRemote {
+    fn fail_next_write_containing(&self, path_fragment: &str) {
+        self.fail_writes_containing
+            .lock()
+            .expect("failure queue lock")
+            .push_back(path_fragment.to_string());
+    }
 }
 
 #[derive(Default)]
@@ -101,6 +112,16 @@ impl SnippetBlobBackend for MemorySnippetBackend {
         }
         Ok(())
     }
+
+    fn list_blob_names(&self) -> Result<Vec<String>, CloudSyncError> {
+        Ok(self
+            .blobs
+            .lock()
+            .expect("snippet lock")
+            .keys()
+            .cloned()
+            .collect())
+    }
 }
 
 impl CloudSyncRemote for MemoryRemote {
@@ -112,28 +133,113 @@ impl CloudSyncRemote for MemoryRemote {
         Ok(())
     }
 
-    fn read(&self, path: &str) -> Result<Vec<u8>, CloudSyncError> {
-        self.files
-            .lock()
-            .expect("memory lock")
-            .get(path)
-            .cloned()
-            .ok_or_else(|| CloudSyncError::ReadFile {
-                path: PathBuf::from(path),
-                source: std::io::Error::new(std::io::ErrorKind::NotFound, "missing"),
-            })
-    }
-
     fn read_if_exists(&self, path: &str) -> Result<Option<Vec<u8>>, CloudSyncError> {
         Ok(self.files.lock().expect("memory lock").get(path).cloned())
     }
 
     fn write(&self, path: &str, bytes: &[u8]) -> Result<(), CloudSyncError> {
+        let mut failures = self
+            .fail_writes_containing
+            .lock()
+            .expect("failure queue lock");
+        if failures
+            .front()
+            .is_some_and(|fragment| path.contains(fragment))
+        {
+            failures.pop_front();
+            return Err(CloudSyncError::Remote(format!(
+                "injected write failure for {path}"
+            )));
+        }
+        drop(failures);
         self.files
             .lock()
             .expect("memory lock")
             .insert(path.to_string(), bytes.to_vec());
         Ok(())
+    }
+
+    fn delete(&self, path: &str) -> Result<(), CloudSyncError> {
+        self.files.lock().expect("memory lock").remove(path);
+        Ok(())
+    }
+
+    fn list_files(&self, path: &str) -> Result<Vec<String>, CloudSyncError> {
+        Ok(self
+            .files
+            .lock()
+            .expect("memory lock")
+            .keys()
+            .filter(|key| key.starts_with(path))
+            .cloned()
+            .collect())
+    }
+}
+
+#[derive(Default)]
+struct ConcurrentUpdateRemote {
+    inner: MemoryRemote,
+    latest_reads_until_replace: Mutex<Option<usize>>,
+    replacement_latest: Mutex<Option<Vec<u8>>>,
+}
+
+impl ConcurrentUpdateRemote {
+    fn replace_latest_on_second_read(&self, bytes: Vec<u8>) {
+        *self
+            .latest_reads_until_replace
+            .lock()
+            .expect("read counter lock") = Some(2);
+        *self.replacement_latest.lock().expect("replacement lock") = Some(bytes);
+    }
+}
+
+impl CloudSyncRemote for ConcurrentUpdateRemote {
+    fn provider(&self) -> &'static str {
+        "concurrent-memory"
+    }
+
+    fn create_dir(&self, path: &str) -> Result<(), CloudSyncError> {
+        self.inner.create_dir(path)
+    }
+
+    fn read_if_exists(&self, path: &str) -> Result<Option<Vec<u8>>, CloudSyncError> {
+        if path.ends_with(super::SYNC_LATEST_FILE) {
+            let mut counter = self
+                .latest_reads_until_replace
+                .lock()
+                .expect("read counter lock");
+            if let Some(remaining) = counter.as_mut() {
+                *remaining = remaining.saturating_sub(1);
+                if *remaining == 0 {
+                    if let Some(bytes) = self
+                        .replacement_latest
+                        .lock()
+                        .expect("replacement lock")
+                        .take()
+                    {
+                        self.inner
+                            .files
+                            .lock()
+                            .expect("memory lock")
+                            .insert(path.to_string(), bytes);
+                    }
+                    *counter = None;
+                }
+            }
+        }
+        self.inner.read_if_exists(path)
+    }
+
+    fn write(&self, path: &str, bytes: &[u8]) -> Result<(), CloudSyncError> {
+        self.inner.write(path, bytes)
+    }
+
+    fn delete(&self, path: &str) -> Result<(), CloudSyncError> {
+        self.inner.delete(path)
+    }
+
+    fn list_files(&self, path: &str) -> Result<Vec<String>, CloudSyncError> {
+        self.inner.list_files(path)
     }
 }
 
@@ -148,6 +254,19 @@ fn remote_path_joins_without_duplicate_slashes() {
         "nyaterm/sync/latest.redb"
     );
     assert_eq!(remote_path("", "sync/latest.redb"), "sync/latest.redb");
+}
+
+#[test]
+fn remote_pointer_defaults_legacy_documents_to_schema_v1() {
+    let pointer: RemoteSyncPointer = serde_json::from_value(serde_json::json!({
+        "revision_id": "r1",
+        "created_at_ms": 1,
+        "payload_hash": "hash",
+        "device_id": "device",
+        "app_version": "1"
+    }))
+    .expect("legacy pointer");
+    assert_eq!(pointer.schema_version, 1);
 }
 
 #[test]
@@ -241,6 +360,42 @@ fn s3_signed_request_supports_virtual_host_style() {
         Some("nyaterm.objects.example.com")
     );
     assert!(request.headers["authorization"].contains("/19700101/us-east-1/s3/aws4_request"));
+}
+
+#[test]
+fn s3_signed_list_request_sorts_and_encodes_query_parameters() {
+    let settings = S3SyncSettings {
+        endpoint: "https://s3.example.com".to_string(),
+        bucket: "bucket".to_string(),
+        region: "us-east-1".to_string(),
+        access_key_id: Some("key".to_string()),
+        secret_access_key: Some("secret".to_string()),
+        ..S3SyncSettings::default()
+    };
+    let query = BTreeMap::from([
+        ("prefix".to_string(), "nyaterm/sync snapshots/".to_string()),
+        ("list-type".to_string(), "2".to_string()),
+        ("continuation-token".to_string(), "next+/=".to_string()),
+    ]);
+
+    let request = build_s3_signed_request_with_query(
+        &settings,
+        S3HttpMethod::Get,
+        "",
+        &query,
+        &s3_payload_sha256(&[]),
+        UNIX_EPOCH + Duration::from_secs(1_704_067_200),
+    )
+    .expect("signed list request");
+
+    assert_eq!(
+        request.url,
+        "https://s3.example.com/bucket?continuation-token=next%2B%2F%3D&list-type=2&prefix=nyaterm%2Fsync%20snapshots%2F"
+    );
+    assert!(
+        request.headers["authorization"]
+            .contains("SignedHeaders=host;x-amz-content-sha256;x-amz-date")
+    );
 }
 
 #[test]
@@ -439,6 +594,350 @@ fn cloud_sync_algorithm_uses_remote_backend_abstraction() {
     std::fs::remove_dir_all(source_dir).ok();
     std::fs::remove_dir_all(target_dir).ok();
     std::fs::remove_dir_all(remote_dir).ok();
+}
+
+#[test]
+fn snapshot_upload_failure_does_not_commit_latest_pointer() {
+    let source_dir = unique_temp_dir("cloud-upload-failure-source");
+    let unused_remote = unique_temp_dir("cloud-upload-failure-unused");
+    let source_options = options(&source_dir, &unused_remote, "source-device");
+    let remote = MemoryRemote::default();
+    remote.fail_next_write_containing("sync/snapshots/");
+
+    let error =
+        push_snapshot_with_remote(&source_options, &remote, &CloudSyncState::default(), false)
+            .expect_err("snapshot upload must fail");
+
+    assert!(matches!(error, CloudSyncError::Remote(_)));
+    assert!(
+        super::load_sync_pointer_from_remote(&remote, &source_options.remote_root)
+            .expect("load latest")
+            .is_none()
+    );
+    std::fs::remove_dir_all(source_dir).ok();
+    std::fs::remove_dir_all(unused_remote).ok();
+}
+
+#[test]
+fn pointer_commit_failure_keeps_previous_head_readable() {
+    let source_dir = unique_temp_dir("cloud-pointer-failure-source");
+    let unused_remote = unique_temp_dir("cloud-pointer-failure-unused");
+    let source_options = options(&source_dir, &unused_remote, "source-device");
+    let remote = MemoryRemote::default();
+    let store = ConnectionStore::open(&source_dir).expect("source store");
+    store
+        .replace_sessions(&SessionsConfig {
+            groups: Vec::new(),
+            connections: vec![local_connection("first", "First", "bash")],
+        })
+        .expect("seed first");
+    drop(store);
+    let first =
+        push_snapshot_with_remote(&source_options, &remote, &CloudSyncState::default(), false)
+            .expect("first push");
+    ConnectionStore::open(&source_dir)
+        .expect("source store reopen")
+        .replace_sessions(&SessionsConfig {
+            groups: Vec::new(),
+            connections: vec![local_connection("second", "Second", "zsh")],
+        })
+        .expect("seed second");
+    remote.fail_next_write_containing(super::SYNC_LATEST_FILE);
+
+    let error = push_snapshot_with_remote(&source_options, &remote, &first.state, false)
+        .expect_err("pointer commit must fail");
+
+    assert!(matches!(error, CloudSyncError::Remote(_)));
+    let latest = super::load_sync_pointer_from_remote(&remote, &source_options.remote_root)
+        .expect("load latest")
+        .expect("previous latest");
+    assert_eq!(
+        latest.revision_id,
+        first.pointer.expect("first pointer").revision_id
+    );
+    super::protocol::read_snapshot_for_pointer(&remote, &source_options, &latest)
+        .expect("previous snapshot remains readable");
+    std::fs::remove_dir_all(source_dir).ok();
+    std::fs::remove_dir_all(unused_remote).ok();
+}
+
+#[test]
+fn compatibility_snapshot_failure_does_not_reverse_committed_push() {
+    let source_dir = unique_temp_dir("cloud-current-failure-source");
+    let unused_remote = unique_temp_dir("cloud-current-failure-unused");
+    let source_options = options(&source_dir, &unused_remote, "source-device");
+    let remote = MemoryRemote::default();
+    remote.fail_next_write_containing(super::SYNC_CURRENT_FILE);
+
+    let pushed =
+        push_snapshot_with_remote(&source_options, &remote, &CloudSyncState::default(), false)
+            .expect("committed push");
+
+    let pointer = pushed.pointer.expect("pointer");
+    let latest = super::load_sync_pointer_from_remote(&remote, &source_options.remote_root)
+        .expect("load latest")
+        .expect("latest");
+    assert_eq!(latest.revision_id, pointer.revision_id);
+    super::protocol::read_snapshot_for_pointer(&remote, &source_options, &pointer)
+        .expect("immutable snapshot");
+    assert!(
+        remote
+            .read_if_exists(&remote_path(
+                &source_options.remote_root,
+                super::SYNC_CURRENT_FILE
+            ))
+            .expect("read current")
+            .is_none()
+    );
+    std::fs::remove_dir_all(source_dir).ok();
+    std::fs::remove_dir_all(unused_remote).ok();
+}
+
+#[test]
+fn concurrent_pointer_update_is_rejected_before_commit() {
+    let source_dir = unique_temp_dir("cloud-concurrent-source");
+    let unused_remote = unique_temp_dir("cloud-concurrent-unused");
+    let source_options = options(&source_dir, &unused_remote, "source-device");
+    let remote = ConcurrentUpdateRemote::default();
+    let store = ConnectionStore::open(&source_dir).expect("source store");
+    store
+        .replace_sessions(&SessionsConfig {
+            groups: Vec::new(),
+            connections: vec![local_connection("first", "First", "bash")],
+        })
+        .expect("seed first");
+    drop(store);
+    let first =
+        push_snapshot_with_remote(&source_options, &remote, &CloudSyncState::default(), false)
+            .expect("first push");
+    ConnectionStore::open(&source_dir)
+        .expect("source store reopen")
+        .replace_sessions(&SessionsConfig {
+            groups: Vec::new(),
+            connections: vec![local_connection("second", "Second", "zsh")],
+        })
+        .expect("seed second");
+    let competitor = remote_pointer("competitor", "competing-hash");
+    remote.replace_latest_on_second_read(
+        super::encode_redb_json_doc(&competitor).expect("encode competing pointer"),
+    );
+
+    let error = push_snapshot_with_remote(&source_options, &remote, &first.state, false)
+        .expect_err("concurrent update");
+
+    assert!(matches!(error, CloudSyncError::ConcurrentUpdate { .. }));
+    let latest = super::load_sync_pointer_from_remote(&remote, &source_options.remote_root)
+        .expect("load latest")
+        .expect("latest");
+    assert_eq!(latest.revision_id, competitor.revision_id);
+    std::fs::remove_dir_all(source_dir).ok();
+    std::fs::remove_dir_all(unused_remote).ok();
+}
+
+#[test]
+fn pull_rejects_hash_revision_and_corrupted_snapshot_data() {
+    let source_dir = unique_temp_dir("cloud-validation-source");
+    let target_dir = unique_temp_dir("cloud-validation-target");
+    let unused_remote = unique_temp_dir("cloud-validation-unused");
+    let source_options = options(&source_dir, &unused_remote, "source-device");
+    let target_options = options(&target_dir, &unused_remote, "target-device");
+    let remote = MemoryRemote::default();
+    let pushed =
+        push_snapshot_with_remote(&source_options, &remote, &CloudSyncState::default(), false)
+            .expect("push");
+    let pointer = pushed.pointer.expect("pointer");
+    let snapshot_path = remote_path(
+        &source_options.remote_root,
+        &super::legacy_sync_snapshot_file(&pointer.revision_id),
+    );
+    let encrypted = remote
+        .read_if_exists(&snapshot_path)
+        .expect("read snapshot")
+        .expect("snapshot");
+
+    let mut wrong_hash = pointer.clone();
+    wrong_hash.payload_hash = "wrong-hash".to_string();
+    remote
+        .write(
+            &remote_path(&source_options.remote_root, super::SYNC_LATEST_FILE),
+            &super::encode_redb_json_doc(&wrong_hash).expect("encode wrong hash pointer"),
+        )
+        .expect("write wrong hash pointer");
+    assert!(matches!(
+        pull_snapshot_with_remote(&target_options, &remote, &CloudSyncState::default(), true),
+        Err(CloudSyncError::HashMismatch { .. })
+    ));
+
+    let mut wrong_revision = pointer.clone();
+    wrong_revision.revision_id = "wrong-revision".to_string();
+    remote
+        .write(
+            &remote_path(
+                &source_options.remote_root,
+                &super::legacy_sync_snapshot_file(&wrong_revision.revision_id),
+            ),
+            &encrypted,
+        )
+        .expect("write aliased snapshot");
+    remote
+        .write(
+            &remote_path(&source_options.remote_root, super::SYNC_LATEST_FILE),
+            &super::encode_redb_json_doc(&wrong_revision).expect("encode wrong revision pointer"),
+        )
+        .expect("write wrong revision pointer");
+    assert!(matches!(
+        pull_snapshot_with_remote(&target_options, &remote, &CloudSyncState::default(), true),
+        Err(CloudSyncError::RevisionMismatch { .. })
+    ));
+
+    remote
+        .write(
+            &remote_path(&source_options.remote_root, super::SYNC_LATEST_FILE),
+            &super::encode_redb_json_doc(&pointer).expect("encode pointer"),
+        )
+        .expect("restore pointer");
+    remote
+        .write(&snapshot_path, b"broken")
+        .expect("write corrupt snapshot");
+    assert!(matches!(
+        pull_snapshot_with_remote(&target_options, &remote, &CloudSyncState::default(), true),
+        Err(CloudSyncError::CorruptedSnapshot { .. })
+    ));
+
+    std::fs::remove_dir_all(source_dir).ok();
+    std::fs::remove_dir_all(target_dir).ok();
+    std::fs::remove_dir_all(unused_remote).ok();
+}
+
+#[test]
+fn missing_immutable_snapshot_is_migrated_from_matching_current() {
+    let source_dir = unique_temp_dir("cloud-migrate-source");
+    let target_dir = unique_temp_dir("cloud-migrate-target");
+    let unused_remote = unique_temp_dir("cloud-migrate-unused");
+    let source_options = options(&source_dir, &unused_remote, "source-device");
+    let target_options = options(&target_dir, &unused_remote, "target-device");
+    let remote = MemoryRemote::default();
+    ConnectionStore::open(&source_dir)
+        .expect("source")
+        .replace_sessions(&SessionsConfig {
+            groups: Vec::new(),
+            connections: vec![local_connection("conn", "Migrated", "bash")],
+        })
+        .expect("seed");
+
+    let pushed =
+        push_snapshot_with_remote(&source_options, &remote, &CloudSyncState::default(), false)
+            .expect("push");
+    let pointer = pushed.pointer.expect("pointer");
+    let snapshot_path = remote_path(
+        &source_options.remote_root,
+        &super::legacy_sync_snapshot_file(&pointer.revision_id),
+    );
+    remote.files.lock().expect("memory").remove(&snapshot_path);
+
+    pull_snapshot_with_remote(&target_options, &remote, &CloudSyncState::default(), true)
+        .expect("legacy migration pull");
+
+    assert!(
+        remote
+            .files
+            .lock()
+            .expect("memory")
+            .contains_key(&snapshot_path)
+    );
+    std::fs::remove_dir_all(source_dir).ok();
+    std::fs::remove_dir_all(target_dir).ok();
+    std::fs::remove_dir_all(unused_remote).ok();
+}
+
+#[test]
+fn inconsistent_remote_requires_explicit_current_recovery() {
+    let first_dir = unique_temp_dir("cloud-recover-first");
+    let second_dir = unique_temp_dir("cloud-recover-second");
+    let target_dir = unique_temp_dir("cloud-recover-target");
+    let unused_remote = unique_temp_dir("cloud-recover-unused");
+    let first_options = options(&first_dir, &unused_remote, "first-device");
+    let second_options = options(&second_dir, &unused_remote, "second-device");
+    let target_options = options(&target_dir, &unused_remote, "target-device");
+    let remote = MemoryRemote::default();
+
+    ConnectionStore::open(&first_dir)
+        .expect("first")
+        .replace_sessions(&SessionsConfig {
+            groups: Vec::new(),
+            connections: vec![local_connection("first", "Recover Me", "bash")],
+        })
+        .expect("seed first");
+    let first =
+        push_snapshot_with_remote(&first_options, &remote, &CloudSyncState::default(), false)
+            .expect("first push");
+    let current_path = remote_path(&first_options.remote_root, super::SYNC_CURRENT_FILE);
+    let recoverable_current = remote
+        .files
+        .lock()
+        .expect("memory")
+        .get(&current_path)
+        .cloned()
+        .expect("current");
+
+    ConnectionStore::open(&second_dir)
+        .expect("second")
+        .replace_sessions(&SessionsConfig {
+            groups: Vec::new(),
+            connections: vec![local_connection("second", "New Head", "zsh")],
+        })
+        .expect("seed second");
+    let second =
+        push_snapshot_with_remote(&second_options, &remote, &CloudSyncState::default(), true)
+            .expect("second push");
+    let second_pointer = second.pointer.expect("second pointer");
+    let second_snapshot_path = remote_path(
+        &second_options.remote_root,
+        &super::legacy_sync_snapshot_file(&second_pointer.revision_id),
+    );
+    {
+        let mut files = remote.files.lock().expect("memory");
+        files.remove(&second_snapshot_path);
+        files.insert(current_path, recoverable_current);
+    }
+
+    let error =
+        pull_snapshot_with_remote(&target_options, &remote, &CloudSyncState::default(), true)
+            .expect_err("remote must be inconsistent");
+    let CloudSyncError::Conflict(preview) = error else {
+        panic!("expected structured conflict");
+    };
+    assert_eq!(preview.kind, CloudConflictKind::RemoteInconsistent);
+    assert_eq!(
+        preview.recovery_revision.as_deref(),
+        first
+            .pointer
+            .as_ref()
+            .map(|pointer| pointer.revision_id.as_str())
+    );
+
+    let recovered =
+        recover_current_snapshot_with_remote(&target_options, &remote).expect("recover current");
+    assert_eq!(
+        recovered
+            .pointer
+            .as_ref()
+            .map(|pointer| pointer.revision_id.as_str()),
+        first
+            .pointer
+            .as_ref()
+            .map(|pointer| pointer.revision_id.as_str())
+    );
+    let sessions = ConnectionStore::open(&target_dir)
+        .expect("target")
+        .load_sessions()
+        .expect("sessions");
+    assert_eq!(sessions.connections[0].name, "Recover Me");
+
+    std::fs::remove_dir_all(first_dir).ok();
+    std::fs::remove_dir_all(second_dir).ok();
+    std::fs::remove_dir_all(target_dir).ok();
+    std::fs::remove_dir_all(unused_remote).ok();
 }
 
 #[test]
@@ -813,6 +1312,7 @@ fn masked_cloud_sync_merge_preserves_provider_secrets() {
 
 fn remote_pointer(revision_id: &str, payload_hash: &str) -> RemoteSyncPointer {
     RemoteSyncPointer {
+        schema_version: super::REMOTE_SYNC_POINTER_SCHEMA_VERSION,
         revision_id: revision_id.to_string(),
         created_at_ms: 2,
         payload_hash: payload_hash.to_string(),

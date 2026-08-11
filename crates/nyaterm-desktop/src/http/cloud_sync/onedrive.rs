@@ -269,11 +269,6 @@ impl CloudSyncRemote for NativeOneDriveRemote {
         self.ensure_folder_segments(path)
     }
 
-    fn read(&self, path: &str) -> Result<Vec<u8>, CloudSyncError> {
-        self.read_if_exists(path)?
-            .ok_or_else(|| CloudSyncError::Remote(format!("OneDrive file '{path}' not found")))
-    }
-
     fn read_if_exists(&self, path: &str) -> Result<Option<Vec<u8>>, CloudSyncError> {
         let url = self.content_url(path)?;
         let response = self.send_authorized(|client, token| {
@@ -326,6 +321,92 @@ impl CloudSyncRemote for NativeOneDriveRemote {
             body.trim()
         )))
     }
+
+    fn delete(&self, path: &str) -> Result<(), CloudSyncError> {
+        let url = self.metadata_url(path);
+        let response = self.send_authorized(|client, token| {
+            client
+                .delete(&url)
+                .header(AUTHORIZATION, format!("Bearer {token}"))
+        })?;
+        if response.status().is_success() || response.status() == StatusCode::NOT_FOUND {
+            return Ok(());
+        }
+        let status = response.status();
+        let body = response.text().unwrap_or_default();
+        Err(CloudSyncError::Remote(format!(
+            "OneDrive file delete failed ({status}): {}",
+            body.trim()
+        )))
+    }
+
+    fn list_files(&self, path: &str) -> Result<Vec<String>, CloudSyncError> {
+        let parent_path = onedrive_item_path(&self.root, path);
+        let mut next_url = Some(self.children_url(&parent_path));
+        let mut first_page = true;
+        let mut names = Vec::new();
+        while let Some(url) = next_url.take() {
+            let response = self.send_authorized(|client, token| {
+                let request = client
+                    .get(&url)
+                    .header(AUTHORIZATION, format!("Bearer {token}"));
+                if first_page {
+                    request.query(&[("$select", "name,file,folder"), ("$top", "200")])
+                } else {
+                    request
+                }
+            })?;
+            let status = response.status();
+            let body = response.text().map_err(map_onedrive_http_error)?;
+            if status == StatusCode::NOT_FOUND {
+                return Ok(Vec::new());
+            }
+            if !status.is_success() {
+                return Err(CloudSyncError::Remote(format!(
+                    "OneDrive file list failed ({status}): {}",
+                    body.trim()
+                )));
+            }
+            let page = parse_onedrive_list_page(&body)?;
+            names.extend(page.names);
+            next_url = page.next_link;
+            first_page = false;
+        }
+        let prefix = path.trim().trim_matches('/');
+        Ok(names
+            .into_iter()
+            .map(|name| {
+                if prefix.is_empty() {
+                    name
+                } else {
+                    format!("{prefix}/{name}")
+                }
+            })
+            .collect())
+    }
+}
+
+pub(super) struct OneDriveListPage {
+    pub(super) names: Vec<String>,
+    pub(super) next_link: Option<String>,
+}
+
+pub(super) fn parse_onedrive_list_page(body: &str) -> Result<OneDriveListPage, CloudSyncError> {
+    let value: serde_json::Value = serde_json::from_str(body)?;
+    let names = value
+        .get("value")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|item| item.get("file").is_some())
+        .filter_map(|item| item.get("name").and_then(serde_json::Value::as_str))
+        .map(ToOwned::to_owned)
+        .collect();
+    let next_link = value
+        .get("@odata.nextLink")
+        .and_then(serde_json::Value::as_str)
+        .map(ToOwned::to_owned);
+    Ok(OneDriveListPage { names, next_link })
 }
 
 pub(super) fn onedrive_item_path(base_root: &str, child: &str) -> String {

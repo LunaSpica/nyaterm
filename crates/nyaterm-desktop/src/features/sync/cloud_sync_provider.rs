@@ -4,9 +4,56 @@ use crate::http::cloud_sync::{
 };
 use nyaterm_core::{
     CloudSyncError, CloudSyncResult, CloudSyncSettings, CloudSyncState, GiteeSnippetHttpBackend,
-    GithubGistHttpBackend, LocalCloudSyncOptions, SnippetRemote, pull_local_snapshot,
-    pull_snapshot_with_remote, push_local_snapshot, push_snapshot_with_remote,
+    GithubGistHttpBackend, LocalCloudSyncOptions, RemoteSyncPointer, SnippetRemote,
+    cleanup_sync_snapshots_with_remote, pull_local_snapshot, pull_snapshot_with_remote,
+    push_local_snapshot, push_snapshot_with_remote, recover_current_snapshot_with_remote,
 };
+
+macro_rules! with_provider_remote {
+    ($settings:expr, $remote:ident, $body:block) => {{
+        match $settings.provider.as_str() {
+            "webdav" => {
+                let $remote = NativeWebdavRemote::new(&$settings.webdav)?;
+                $body
+            }
+            "s3" => {
+                let $remote = NativeS3Remote::new(&$settings.s3)?;
+                $body
+            }
+            "google_drive" => {
+                let $remote = NativeGoogleDriveRemote::new(&$settings.google_drive)?;
+                $body
+            }
+            "onedrive" => {
+                let $remote = NativeOneDriveRemote::new(&$settings.onedrive)?;
+                $body
+            }
+            "aliyun_drive" => {
+                let $remote = NativeAliyunDriveRemote::new(&$settings.aliyun_drive)?;
+                $body
+            }
+            "gitee_snippet" => {
+                let backend = GiteeSnippetHttpBackend::new(
+                    &$settings.gitee_snippet,
+                    NativeSnippetHttpClient::new()?,
+                )?;
+                let $remote = SnippetRemote::new("gitee_snippet", backend);
+                $body
+            }
+            "github_gist" => {
+                let backend = GithubGistHttpBackend::new(
+                    &$settings.github_gist,
+                    NativeSnippetHttpClient::new()?,
+                )?;
+                let $remote = SnippetRemote::new("github_gist", backend);
+                $body
+            }
+            provider => Err(CloudSyncError::Remote(format!(
+                "native cloud provider '{provider}' is not wired yet"
+            ))),
+        }
+    }};
+}
 
 pub(in crate::features) fn test_provider_connection(
     settings: &CloudSyncSettings,
@@ -150,4 +197,23 @@ pub(in crate::features) fn pull_provider_snapshot(
             "native cloud provider '{provider}' is not wired yet"
         ))),
     }
+}
+
+pub(in crate::features) fn recover_provider_snapshot(
+    settings: &CloudSyncSettings,
+    options: &LocalCloudSyncOptions,
+) -> Result<CloudSyncResult, CloudSyncError> {
+    with_provider_remote!(settings, remote, {
+        recover_current_snapshot_with_remote(options, &remote)
+    })
+}
+
+pub(in crate::features) fn cleanup_provider_snapshots(
+    settings: &CloudSyncSettings,
+    options: &LocalCloudSyncOptions,
+    latest: Option<&RemoteSyncPointer>,
+) -> Result<(), CloudSyncError> {
+    with_provider_remote!(settings, remote, {
+        cleanup_sync_snapshots_with_remote(options, &remote, latest)
+    })
 }

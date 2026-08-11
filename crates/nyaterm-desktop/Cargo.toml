@@ -25,6 +25,7 @@ nyaterm-transport.workspace = true
 nyaterm-ui.workspace = true
 regex.workspace = true
 rand.workspace = true
+quick-xml.workspace = true
 rqrr = "0.9"
 serde.workspace = true
 serde_json.workspace = true
