@@ -834,6 +834,61 @@ impl NyaTermApp {
         Ok(())
     }
 
+    /// Write secret user input without recording, history, suggestion tracking,
+    /// or sync-input fanout. The payload still follows the session charset.
+    pub(in crate::features) fn write_session_sensitive_input(
+        &mut self,
+        session_id: &str,
+        bytes: &[u8],
+    ) -> Result<(), String> {
+        let disposition = terminal_wire_write_disposition(TerminalWireWriteKind::SensitiveInput);
+        debug_assert!(disposition.encode_session_charset);
+        debug_assert!(!disposition.record_logical_input);
+        debug_assert!(!disposition.record_raw_input);
+        debug_assert!(!disposition.allow_command_history);
+        let encoded = self.encode_session_outgoing(session_id, bytes);
+        self.session
+            .manager()
+            .write(session_id, &encoded)
+            .map_err(|error| error.to_string())
+    }
+
+    pub(in crate::features) fn send_sensitive_input_to_active_session(
+        &mut self,
+        bytes: Vec<u8>,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if bytes.is_empty() {
+            return false;
+        }
+        let Some(session_id) = self.session.active_id_owned() else {
+            return false;
+        };
+        if self.session.is_disconnected(&session_id) {
+            return false;
+        }
+        let is_terminal = self
+            .session
+            .session_info(&session_id)
+            .is_some_and(|session| session.kind != nyaterm_transport::SessionKind::Rdp);
+        if !is_terminal {
+            return false;
+        }
+        self.terminal.view.frame_pipeline.arm_output_event_wake();
+        match self.write_session_sensitive_input(&session_id, &bytes) {
+            Ok(()) => {
+                self.arm_terminal_input_wake(cx);
+                true
+            }
+            Err(error) => {
+                self.security
+                    .set_status(format!("sensitive terminal input failed: {error}"));
+                cx.notify();
+                false
+            }
+        }
+    }
+
     /// Write bytes already prepared for the PTY while recording a separate
     /// logical input stream. Used when protocol framing (for example bracketed
     /// paste) should reach the session but not pollute input recordings.

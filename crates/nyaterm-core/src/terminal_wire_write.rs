@@ -1,6 +1,7 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TerminalWireWriteKind {
     LogicalInput,
+    SensitiveInput,
     RawInput,
     FramedInput,
     ProtocolResponse,
@@ -23,6 +24,12 @@ pub fn terminal_wire_write_disposition(
             record_logical_input: true,
             record_raw_input: false,
             allow_command_history: true,
+        },
+        TerminalWireWriteKind::SensitiveInput => TerminalWireWriteDisposition {
+            encode_session_charset: true,
+            record_logical_input: false,
+            record_raw_input: false,
+            allow_command_history: false,
         },
         TerminalWireWriteKind::RawInput => TerminalWireWriteDisposition {
             encode_session_charset: false,
@@ -71,6 +78,12 @@ mod tests {
         assert!(logical.record_logical_input);
         assert!(!logical.record_raw_input);
         assert!(logical.allow_command_history);
+
+        let sensitive = terminal_wire_write_disposition(TerminalWireWriteKind::SensitiveInput);
+        assert!(sensitive.encode_session_charset);
+        assert!(!sensitive.record_logical_input);
+        assert!(!sensitive.record_raw_input);
+        assert!(!sensitive.allow_command_history);
 
         let raw = terminal_wire_write_disposition(TerminalWireWriteKind::RawInput);
         assert!(!raw.encode_session_charset);

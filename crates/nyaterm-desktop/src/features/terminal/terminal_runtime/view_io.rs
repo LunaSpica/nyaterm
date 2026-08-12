@@ -501,6 +501,15 @@ impl NyaTermApp {
         cx.notify();
     }
 
+    pub(in crate::features) fn focus_terminal_input(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        window.focus(&self.terminal.input.focus, cx);
+        cx.notify();
+    }
+
     pub(in crate::features) fn active_terminal_visible_text(&self) -> String {
         self.active_terminal_snapshot()
             .rows()
