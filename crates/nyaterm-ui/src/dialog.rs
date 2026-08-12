@@ -3,7 +3,7 @@ use gpui::{
     Window, px,
 };
 use gpui_component::{
-    WindowExt as _,
+    Disableable as _, WindowExt as _,
     button::{Button, ButtonVariant, ButtonVariants as _},
     dialog::{Dialog, DialogAction, DialogButtonProps, DialogClose, DialogFooter},
 };
@@ -57,6 +57,20 @@ impl NyaDialog {
             .inner
             .button_props(footer.button_props())
             .footer(footer.into_footer());
+        self
+    }
+
+    /// Uses the standard dialog actions while allowing a reactive footer
+    /// element to render their current disabled/loading state.
+    pub fn confirm_with_footer(
+        mut self,
+        footer: NyaDialogFooter,
+        footer_element: impl IntoElement,
+    ) -> Self {
+        self.inner = self
+            .inner
+            .button_props(footer.button_props())
+            .footer(footer_element);
         self
     }
 
@@ -142,6 +156,8 @@ pub struct NyaDialogFooter {
     cancel_label: SharedString,
     action_label: SharedString,
     danger: bool,
+    disabled: bool,
+    loading: bool,
 }
 
 impl NyaDialogFooter {
@@ -153,12 +169,28 @@ impl NyaDialogFooter {
             cancel_label: cancel_label.into(),
             action_label: action_label.into(),
             danger: false,
+            disabled: false,
+            loading: false,
         }
     }
 
     pub fn danger(mut self) -> Self {
         self.danger = true;
         self
+    }
+
+    pub fn disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
+        self
+    }
+
+    pub fn loading(mut self, loading: bool) -> Self {
+        self.loading = loading;
+        self
+    }
+
+    pub fn into_element(self) -> impl IntoElement {
+        self.into_footer()
     }
 
     fn button_props(&self) -> DialogButtonProps {
@@ -180,16 +212,29 @@ impl NyaDialogFooter {
             ButtonVariant::Primary
         };
 
+        let cancel = Button::new("nya-dialog-cancel")
+            .outline()
+            .label(self.cancel_label)
+            .disabled(self.disabled)
+            .debug_selector(|| "nya-dialog-cancel-button".to_string());
+        let action = Button::new("nya-dialog-action")
+            .label(self.action_label)
+            .with_variant(action_variant)
+            .loading(self.loading)
+            .disabled(self.disabled)
+            .debug_selector(|| "nya-dialog-action-button".to_string());
+
         DialogFooter::new()
-            .child(
-                DialogClose::new().child(
-                    Button::new("nya-dialog-cancel")
-                        .outline()
-                        .label(self.cancel_label)
-                        .debug_selector(|| "nya-dialog-cancel-button".to_string()),
-                ),
-            )
-            .child(nya_dialog_action(self.action_label, action_variant))
+            .child(if self.disabled {
+                cancel.into_any_element()
+            } else {
+                DialogClose::new().child(cancel).into_any_element()
+            })
+            .child(if self.disabled {
+                action.into_any_element()
+            } else {
+                DialogAction::new().child(action).into_any_element()
+            })
     }
 }
 

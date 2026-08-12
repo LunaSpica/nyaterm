@@ -8,6 +8,7 @@ mod menu;
 mod number_input;
 mod popover;
 mod root;
+mod selectable_text;
 mod selection;
 mod settings;
 mod sizing;
@@ -27,6 +28,7 @@ pub use number_input::{
 };
 pub use popover::NyaPopover;
 pub use root::{NyaRoot, NyaWindowHandle, nya_root};
+pub use selectable_text::NyaSelectableText;
 pub use selection::{
     NyaCheckbox, NyaRadioGroup, NyaSelect, NyaSelectEvent, NyaSelectOption, NyaSelectState,
     NyaSwitch,

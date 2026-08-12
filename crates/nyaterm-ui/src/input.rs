@@ -19,6 +19,7 @@ pub struct NyaInputState {
     pending_value: Option<SharedString>,
     placeholder: SharedString,
     masked: bool,
+    applied_masked: bool,
     multi_line: bool,
     rows: Option<usize>,
     disabled: bool,
@@ -38,6 +39,7 @@ impl NyaInputState {
             pending_value: None,
             placeholder: SharedString::default(),
             masked: false,
+            applied_masked: false,
             multi_line: false,
             rows: None,
             disabled: false,
@@ -70,9 +72,23 @@ impl NyaInputState {
         self
     }
 
+    pub fn set_masked(&mut self, masked: bool, cx: &mut Context<Self>) {
+        if self.masked != masked {
+            self.masked = masked;
+            cx.notify();
+        }
+    }
+
     pub fn disabled(mut self, disabled: bool) -> Self {
         self.disabled = disabled;
         self
+    }
+
+    pub fn set_disabled(&mut self, disabled: bool, cx: &mut Context<Self>) {
+        if self.disabled != disabled {
+            self.disabled = disabled;
+            cx.notify();
+        }
     }
 
     pub fn readonly(mut self, readonly: bool) -> Self {
@@ -187,6 +203,7 @@ impl NyaInputState {
             });
         self.subscription = Some(subscription);
         self.state = Some(state.clone());
+        self.applied_masked = masked;
         state
     }
 }
@@ -223,6 +240,11 @@ impl Focusable for NyaInputState {
 impl Render for NyaInputState {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let state = self.ensure_component(window, cx);
+        if !self.multi_line && self.applied_masked != self.masked {
+            let masked = self.masked;
+            state.update(cx, |state, cx| state.set_masked(masked, window, cx));
+            self.applied_masked = masked;
+        }
         let component_focus = state.read(cx).focus_handle(cx);
         if self.focus.is_focused(window) && !component_focus.is_focused(window) {
             state.update(cx, |state, cx| state.focus(window, cx));
@@ -253,12 +275,18 @@ impl NyaInput {
 impl RenderOnce for NyaInput {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let input_state = self.state.clone();
-        let (state, disabled, multi_line, focused) = input_state.update(cx, |state, cx| {
+        let (state, disabled, multi_line, focused) = input_state.update(cx, |input, cx| {
+            let state = input.ensure_component(window, cx);
+            if !input.multi_line && input.applied_masked != input.masked {
+                let masked = input.masked;
+                state.update(cx, |component, cx| component.set_masked(masked, window, cx));
+                input.applied_masked = masked;
+            }
             (
-                state.ensure_component(window, cx),
-                state.disabled,
-                state.multi_line,
-                state.focus.is_focused(window),
+                state,
+                input.disabled,
+                input.multi_line,
+                input.focus.is_focused(window),
             )
         });
         if focused {

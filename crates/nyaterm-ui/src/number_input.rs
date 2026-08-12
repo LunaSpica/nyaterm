@@ -138,6 +138,13 @@ impl NyaNumberInputState {
         cx.notify();
     }
 
+    pub fn set_disabled(&mut self, disabled: bool, cx: &mut Context<Self>) {
+        if self.options.disabled != disabled {
+            self.options.disabled = disabled;
+            cx.notify();
+        }
+    }
+
     pub fn focus_handle(&self) -> FocusHandle {
         self.focus.clone()
     }
@@ -198,7 +205,7 @@ impl NyaNumberInputState {
                         StepAction::Decrement => NyaNumberStep::Decrement,
                         StepAction::Increment => NyaNumberStep::Increment,
                     };
-                    let next = this.stepped_value(&input.read(cx).value().to_string(), step);
+                    let next = this.stepped_value(input.read(cx).value().as_ref(), step);
                     input.update(cx, |input, cx| {
                         input.set_value(SharedString::from(next.clone()), window, cx);
                     });
@@ -216,7 +223,7 @@ impl NyaNumberInputState {
                         ));
                     }
                     InputEvent::PressEnter { .. } => {
-                        let committed = this.committed_value(&input.read(cx).value().to_string());
+                        let committed = this.committed_value(input.read(cx).value().as_ref());
                         input.update(cx, |input, cx| {
                             input.set_value(SharedString::from(committed.clone()), window, cx);
                         });
@@ -300,7 +307,7 @@ impl RenderOnce for NyaNumberInput {
         if focused {
             state.update(cx, |state, cx| state.focus(window, cx));
         }
-        let input = NumberInput::new(&state)
+        NumberInput::new(&state)
             .with_size(form_control_size())
             .h(form_control_height())
             .appearance(self.appearance)
@@ -310,8 +317,7 @@ impl RenderOnce for NyaNumberInput {
             })
             .when_some(options.suffix, |this, suffix| {
                 this.suffix(text_affix(suffix).into_any_element())
-            });
-        input
+            })
     }
 }
 
@@ -335,7 +341,7 @@ fn stepped_number_text(
         NyaNumberStep::Decrement => -options.step.abs(),
         NyaNumberStep::Increment => options.step.abs(),
     };
-    let current = text.trim().parse::<f64>().unwrap_or_else(|_| {
+    let current = text.trim().parse::<f64>().unwrap_or({
         if delta > 0.0 {
             options.min - delta
         } else {
