@@ -246,6 +246,7 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.clear_terminal_mouse_report_for_session(session_id);
+        self.session.remove_remote_file_service(session_id);
         let Some(update) = self.session.mark_session_disconnected(session_id) else {
             return;
         };

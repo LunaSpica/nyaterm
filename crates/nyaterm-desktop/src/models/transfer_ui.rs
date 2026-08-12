@@ -88,6 +88,7 @@ pub(crate) struct TransferUnknownFileState {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct TransferRenameState {
     pub(crate) old_path: String,
+    pub(crate) raw_path_token: Option<String>,
     pub(crate) initial_name: String,
     pub(crate) value: String,
 }
@@ -95,6 +96,7 @@ pub(crate) struct TransferRenameState {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct TransferMoveState {
     pub(crate) old_path: String,
+    pub(crate) raw_path_token: Option<String>,
     pub(crate) name: String,
     pub(crate) value: String,
 }
@@ -168,6 +170,7 @@ pub(crate) struct TransferEditorState {
     pub(crate) id: String,
     pub(crate) session_id: Option<String>,
     pub(crate) remote_path: String,
+    pub(crate) raw_path_token: Option<String>,
     pub(crate) name: String,
     pub(crate) content: String,
     pub(crate) search_query: String,
@@ -185,8 +188,27 @@ pub(crate) struct TransferEditorState {
 }
 
 impl TransferEditorState {
+    #[cfg(test)]
     pub(crate) fn tab_id(session_id: Option<&str>, remote_path: &str) -> String {
         format!("{}\n{remote_path}", session_id.unwrap_or_default())
+    }
+
+    pub(crate) fn tab_id_for_remote_path(
+        session_id: Option<&str>,
+        remote_path: &nyaterm_transport::RemoteFilePath,
+    ) -> String {
+        format!(
+            "{}\n{}",
+            session_id.unwrap_or_default(),
+            remote_path.identity_key()
+        )
+    }
+
+    pub(crate) fn remote_file_path(&self) -> nyaterm_transport::RemoteFilePath {
+        nyaterm_transport::RemoteFilePath {
+            display_path: self.remote_path.clone(),
+            raw_path_token: self.raw_path_token.clone(),
+        }
     }
 }
 
@@ -226,6 +248,7 @@ impl TransferEditorWorkspaceState {
         self.tabs.get_mut(active_index)
     }
 
+    #[cfg(test)]
     pub(crate) fn tab_mut(
         &mut self,
         session_id: Option<&str>,
@@ -258,6 +281,7 @@ pub(crate) struct TransferExternalSyncPromptState {
     pub(crate) session_id: Option<String>,
     pub(crate) job_id: String,
     pub(crate) remote_path: String,
+    pub(crate) raw_path_token: Option<String>,
     pub(crate) local_path: PathBuf,
 }
 
@@ -269,6 +293,8 @@ pub(crate) enum TransferEditorField {
 
 #[cfg(test)]
 mod tests {
+    use nyaterm_transport::RemoteFilePath;
+
     use super::{TransferEditorField, TransferEditorState, TransferEditorWorkspaceState};
 
     fn editor_tab(session_id: &str, remote_path: &str) -> TransferEditorState {
@@ -276,6 +302,7 @@ mod tests {
             id: TransferEditorState::tab_id(Some(session_id), remote_path),
             session_id: Some(session_id.to_string()),
             remote_path: remote_path.to_string(),
+            raw_path_token: None,
             name: remote_path
                 .rsplit('/')
                 .next()
@@ -318,6 +345,17 @@ mod tests {
             .dirty = true;
         assert!(workspace.tabs[0].dirty);
         assert!(!workspace.tabs[1].dirty);
+    }
+
+    #[test]
+    fn editor_tab_ids_include_raw_remote_path_identity() {
+        let first = RemoteFilePath::from_raw("/srv/invalid-?", b"/srv/invalid-\xfe");
+        let second = RemoteFilePath::from_raw("/srv/invalid-?", b"/srv/invalid-\xff");
+
+        assert_ne!(
+            TransferEditorState::tab_id_for_remote_path(Some("session"), &first),
+            TransferEditorState::tab_id_for_remote_path(Some("session"), &second)
+        );
     }
 
     #[test]

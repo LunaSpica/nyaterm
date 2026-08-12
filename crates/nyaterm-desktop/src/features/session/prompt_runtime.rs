@@ -54,13 +54,14 @@ impl NyaTermApp {
         let prompt = match self.session.prompts.take_duplicate_resolution(&request_id) {
             PromptResolution::Inactive => {
                 self.shell
-                    .set_status("no SFTP duplicate prompt is active".to_string());
+                    .set_status("no remote transfer duplicate prompt is active".to_string());
                 cx.notify();
                 return;
             }
             PromptResolution::Changed => {
-                self.shell
-                    .set_status("SFTP duplicate prompt changed before response".to_string());
+                self.shell.set_status(
+                    "remote transfer duplicate prompt changed before response".to_string(),
+                );
                 cx.notify();
                 return;
             }
@@ -70,7 +71,7 @@ impl NyaTermApp {
         let target = prompt.request.target_path.clone();
         let _ = prompt.response_tx.send(decision);
         self.shell.set_status(format!(
-            "SFTP duplicate decision for {target}: {}",
+            "remote transfer duplicate decision for {target}: {}",
             duplicate_decision_label(decision)
         ));
         cx.notify();
@@ -411,8 +412,9 @@ impl NyaTermApp {
         let Some(target) = self.session.prompts.activate_next_duplicate() else {
             return false;
         };
-        self.shell
-            .set_status(format!("SFTP duplicate decision required for {target}"));
+        self.shell.set_status(format!(
+            "remote transfer duplicate decision required for {target}"
+        ));
         true
     }
 }

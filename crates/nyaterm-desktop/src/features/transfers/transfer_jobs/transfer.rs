@@ -3,11 +3,12 @@ use std::sync::Arc;
 
 use gpui::{Context, Window};
 use nyaterm_transport::{
-    SftpDuplicatePolicy, SftpDuplicateResolver, SftpPathTransferOptions, SftpTransferControl,
+    RemoteFilePath, SftpDuplicatePolicy, SftpDuplicateResolver, SftpPathTransferOptions,
+    SftpTransferControl,
 };
 
 use crate::features::NyaTermApp;
-use crate::features::transfers::{SftpJobSession, session_sftp_service};
+use crate::features::transfers::SftpJobSession;
 use crate::models::{
     NavItem, TransferJobEvent, TransferJobKind, TransferJobOutput, TransferJobResult,
     TransferJobState, TransferJobStatus,
@@ -18,27 +19,33 @@ use super::helpers::{TransferProgressEventSender, transfer_job_remote_parent_pat
 impl NyaTermApp {
     pub(in crate::features) fn start_sftp_download_job_for_target(
         &mut self,
-        remote_path: String,
+        remote_path: RemoteFilePath,
         local_path: PathBuf,
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(config) = self.session.active_ssh_config_owned() else {
+        if self.session.active_ssh_config_owned().is_none() {
             self.shell
                 .set_status("start an SSH session first".to_string());
             self.ensure_panel_open(NavItem::Transfers);
             cx.notify();
             return;
-        };
+        }
         let duplicate_policy = self.transfer.duplicate_policy();
         let duplicate_resolver = (duplicate_policy == SftpDuplicatePolicy::Ask)
             .then(|| self.session.prompt_duplicate_broker() as Arc<dyn SftpDuplicateResolver>);
         let transfer_options = self.sftp_transfer_options();
-        let multiplex = self.session.active_ssh_multiplex_handle();
+        let service = match self.active_remote_file_service() {
+            Ok(service) => service,
+            Err(error) => {
+                self.shell.set_status(error.to_string());
+                cx.notify();
+                return;
+            }
+        };
         let session = SftpJobSession {
             session_id: self.session.active_id_owned(),
-            config,
-            multiplex,
+            service,
         };
         self.enqueue_sftp_download_job_for_target(
             session,
@@ -52,22 +59,24 @@ impl NyaTermApp {
     pub(in crate::features) fn enqueue_sftp_download_job_for_target(
         &mut self,
         session: SftpJobSession,
-        remote_path: String,
+        remote_path: RemoteFilePath,
         local_path: PathBuf,
         path_options: SftpPathTransferOptions,
         cx: &mut Context<Self>,
     ) {
         let id = self.transfer.next_transfer_job_id("sftp-download");
         let control = SftpTransferControl::new();
+        let display_path = remote_path.display_path.clone();
         self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
             session_id: session.session_id,
             kind: TransferJobKind::Download {
-                remote_path: remote_path.clone(),
+                remote_path: display_path.clone(),
+                raw_path_token: remote_path.raw_path_token.clone(),
                 local_path: local_path.clone(),
             },
             status: TransferJobStatus::Running,
-            detail: format!("Downloading {remote_path}"),
+            detail: format!("Downloading {display_path}"),
             created_at_ms: TransferJobState::now_ms(),
             display_name: String::new(),
             entries: Vec::new(),
@@ -76,23 +85,22 @@ impl NyaTermApp {
             control: Some(control.clone()),
         });
         self.shell
-            .set_status(format!("SFTP download started for {remote_path}"));
+            .set_status(format!("remote download started for {display_path}"));
         let progress_tx = self.transfer.transfer_event_sender();
         let finished_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
             let mut progress_sender = TransferProgressEventSender::new(id.clone(), progress_tx);
-            let result = session_sftp_service(session.config, session.multiplex)
-                .and_then(|service| {
-                    service.download_path_with_progress_and_path_options(
-                        &remote_path,
-                        local_path,
-                        control,
-                        path_options,
-                        move |progress| {
-                            progress_sender.send(progress);
-                        },
-                    )
-                })
+            let result = session
+                .service
+                .download_remote_path_with_progress_and_path_options(
+                    &remote_path,
+                    local_path,
+                    control,
+                    path_options,
+                    move |progress| {
+                        progress_sender.send(progress);
+                    },
+                )
                 .map(TransferJobOutput::Summary)
                 .map_err(|error| error.to_string());
             let _ = finished_tx.send(TransferJobResult {
@@ -129,38 +137,38 @@ impl NyaTermApp {
             progress: None,
             control: Some(control.clone()),
         });
-        self.shell
-            .set_status(format!("SFTP upload started for {}", local_path.display()));
+        self.shell.set_status(format!(
+            "remote upload started for {}",
+            local_path.display()
+        ));
         let progress_tx = self.transfer.transfer_event_sender();
         let finished_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
             let mut progress_sender = TransferProgressEventSender::new(id.clone(), progress_tx);
-            let result = session_sftp_service(session.config, session.multiplex)
-                .and_then(|service| {
-                    service
-                        .upload_path_with_progress_and_path_options(
-                            local_path,
-                            &remote_path,
-                            control,
-                            path_options,
-                            move |progress| {
-                                progress_sender.send(progress);
-                            },
-                        )
-                        .map(|summary| {
-                            if summary.skipped {
-                                return TransferJobOutput::Summary(summary);
-                            }
-                            let parent_path = transfer_job_remote_parent_path(&summary.remote_path);
-                            match service.list_dir(&parent_path) {
-                                Ok(entries) => TransferJobOutput::Uploaded {
-                                    summary,
-                                    parent_path,
-                                    entries,
-                                },
-                                Err(_) => TransferJobOutput::Summary(summary),
-                            }
-                        })
+            let service = session.service;
+            let result = service
+                .upload_path_with_progress_and_path_options(
+                    local_path,
+                    &remote_path,
+                    control,
+                    path_options,
+                    move |progress| {
+                        progress_sender.send(progress);
+                    },
+                )
+                .map(|summary| {
+                    if summary.skipped {
+                        return TransferJobOutput::Summary(summary);
+                    }
+                    let parent_path = transfer_job_remote_parent_path(&summary.remote_path);
+                    match service.list_dir(&parent_path) {
+                        Ok(entries) => TransferJobOutput::Uploaded {
+                            summary,
+                            parent_path,
+                            entries,
+                        },
+                        Err(_) => TransferJobOutput::Summary(summary),
+                    }
                 })
                 .map_err(|error| error.to_string());
             let _ = finished_tx.send(TransferJobResult {
@@ -218,7 +226,7 @@ impl NyaTermApp {
         job.status = TransferJobStatus::Cancelling;
         job.detail = "Cancelling".to_string();
         self.shell
-            .set_status(format!("SFTP transfer cancelling: {}", job.id));
+            .set_status(format!("remote transfer cancelling: {}", job.id));
         cx.notify();
     }
 
@@ -247,7 +255,7 @@ impl NyaTermApp {
         job.status = TransferJobStatus::Paused;
         job.detail = "Paused".to_string();
         self.shell
-            .set_status(format!("SFTP transfer paused: {}", job.id));
+            .set_status(format!("remote transfer paused: {}", job.id));
         cx.notify();
     }
 
@@ -280,7 +288,7 @@ impl NyaTermApp {
         job.status = TransferJobStatus::Running;
         job.detail = "Resuming".to_string();
         self.shell
-            .set_status(format!("SFTP transfer resumed: {}", job.id));
+            .set_status(format!("remote transfer resumed: {}", job.id));
         cx.notify();
     }
 
@@ -290,14 +298,21 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(config) = self.session.active_ssh_config_owned() else {
+        if self.session.active_ssh_config_owned().is_none() {
             self.shell
                 .set_status("start an SSH session first".to_string());
             self.ensure_panel_open(NavItem::Transfers);
             cx.notify();
             return;
+        }
+        let service = match self.active_remote_file_service() {
+            Ok(service) => service,
+            Err(error) => {
+                self.shell.set_status(error.to_string());
+                cx.notify();
+                return;
+            }
         };
-        let multiplex = self.session.active_ssh_multiplex_handle();
         let Some(job) = self.transfer.transfer_job(&job_id) else {
             self.shell.set_status("transfer job not found".to_string());
             cx.notify();
@@ -317,8 +332,13 @@ impl NyaTermApp {
         match kind {
             TransferJobKind::Download {
                 remote_path,
+                raw_path_token,
                 local_path,
             } => {
+                let remote_file_path = RemoteFilePath {
+                    display_path: remote_path.clone(),
+                    raw_path_token,
+                };
                 let duplicate_policy = self.transfer.duplicate_policy();
                 let duplicate_resolver =
                     (duplicate_policy == SftpDuplicatePolicy::Ask).then(|| {
@@ -337,28 +357,26 @@ impl NyaTermApp {
                 job.progress = None;
                 job.control = Some(control.clone());
                 self.shell
-                    .set_status(format!("retrying SFTP download for {remote_path}"));
+                    .set_status(format!("retrying remote download for {remote_path}"));
                 let progress_tx = self.transfer.transfer_event_sender();
                 let finished_tx = self.transfer.transfer_event_sender();
                 std::thread::spawn(move || {
                     let mut progress_sender =
                         TransferProgressEventSender::new(job_id.clone(), progress_tx);
-                    let result = session_sftp_service(config, multiplex)
-                        .and_then(|service| {
-                            service.download_path_with_progress_and_path_options(
-                                &remote_path,
-                                local_path,
-                                control,
-                                SftpPathTransferOptions::new(
-                                    duplicate_policy,
-                                    duplicate_resolver,
-                                    transfer_options,
-                                ),
-                                move |progress| {
-                                    progress_sender.send(progress);
-                                },
-                            )
-                        })
+                    let result = service
+                        .download_remote_path_with_progress_and_path_options(
+                            &remote_file_path,
+                            local_path,
+                            control,
+                            SftpPathTransferOptions::new(
+                                duplicate_policy,
+                                duplicate_resolver,
+                                transfer_options,
+                            ),
+                            move |progress| {
+                                progress_sender.send(progress);
+                            },
+                        )
                         .map(TransferJobOutput::Summary)
                         .map_err(|error| error.to_string());
                     let _ = finished_tx.send(TransferJobResult {
@@ -388,44 +406,42 @@ impl NyaTermApp {
                 job.summary = None;
                 job.progress = None;
                 job.control = Some(control.clone());
-                self.shell
-                    .set_status(format!("retrying SFTP upload for {}", local_path.display()));
+                self.shell.set_status(format!(
+                    "retrying remote upload for {}",
+                    local_path.display()
+                ));
                 let progress_tx = self.transfer.transfer_event_sender();
                 let finished_tx = self.transfer.transfer_event_sender();
                 std::thread::spawn(move || {
                     let mut progress_sender =
                         TransferProgressEventSender::new(job_id.clone(), progress_tx);
-                    let result = session_sftp_service(config, multiplex)
-                        .and_then(|service| {
-                            service
-                                .upload_path_with_progress_and_path_options(
-                                    local_path,
-                                    &remote_path,
-                                    control,
-                                    SftpPathTransferOptions::new(
-                                        duplicate_policy,
-                                        duplicate_resolver,
-                                        transfer_options,
-                                    ),
-                                    move |progress| {
-                                        progress_sender.send(progress);
-                                    },
-                                )
-                                .map(|summary| {
-                                    if summary.skipped {
-                                        return TransferJobOutput::Summary(summary);
-                                    }
-                                    let parent_path =
-                                        transfer_job_remote_parent_path(&summary.remote_path);
-                                    match service.list_dir(&parent_path) {
-                                        Ok(entries) => TransferJobOutput::Uploaded {
-                                            summary,
-                                            parent_path,
-                                            entries,
-                                        },
-                                        Err(_) => TransferJobOutput::Summary(summary),
-                                    }
-                                })
+                    let result = service
+                        .upload_path_with_progress_and_path_options(
+                            local_path,
+                            &remote_path,
+                            control,
+                            SftpPathTransferOptions::new(
+                                duplicate_policy,
+                                duplicate_resolver,
+                                transfer_options,
+                            ),
+                            move |progress| {
+                                progress_sender.send(progress);
+                            },
+                        )
+                        .map(|summary| {
+                            if summary.skipped {
+                                return TransferJobOutput::Summary(summary);
+                            }
+                            let parent_path = transfer_job_remote_parent_path(&summary.remote_path);
+                            match service.list_dir(&parent_path) {
+                                Ok(entries) => TransferJobOutput::Uploaded {
+                                    summary,
+                                    parent_path,
+                                    entries,
+                                },
+                                Err(_) => TransferJobOutput::Summary(summary),
+                            }
                         })
                         .map_err(|error| error.to_string());
                     let _ = finished_tx.send(TransferJobResult {

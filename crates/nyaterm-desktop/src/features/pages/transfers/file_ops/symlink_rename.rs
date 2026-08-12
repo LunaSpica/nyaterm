@@ -1,10 +1,10 @@
 use crate::features::NyaTermApp;
-use crate::features::transfers::session_sftp_service;
 use crate::models::{
     TransferJobEvent, TransferJobKind, TransferJobOutput, TransferJobResult, TransferJobState,
     TransferJobStatus, TransferNewSymlinkState, TransferRenameState, TransferSymlinkField,
 };
 use gpui::{Context, KeyDownEvent, Window};
+use nyaterm_transport::RemoteFilePath;
 
 use super::super::helpers::{
     remote_child_path, remote_file_name, remote_parent_path, remote_sibling_path,
@@ -30,7 +30,8 @@ impl NyaTermApp {
                 focused_field: TransferSymlinkField::Name,
             });
         self.forget_text_inputs("transfer.new-symlink.");
-        self.shell.set_status("SFTP new symlink opened".to_string());
+        self.shell
+            .set_status("remote symlink creation opened".to_string());
         self.open_form_dialog(
             (
                 self.tr("fileExplorer.newSymlink").to_string(),
@@ -53,7 +54,7 @@ impl NyaTermApp {
         self.transfer.close_new_symlink_dialog();
         self.forget_text_inputs("transfer.new-symlink.");
         self.shell
-            .set_status("SFTP new symlink cancelled".to_string());
+            .set_status("remote symlink creation cancelled".to_string());
         cx.notify();
     }
 
@@ -64,7 +65,7 @@ impl NyaTermApp {
     ) -> bool {
         let Some(state) = self.transfer.new_symlink_dialog().cloned() else {
             self.shell
-                .set_status("no SFTP new symlink is active".to_string());
+                .set_status("no remote symlink creation is active".to_string());
             cx.notify();
             return true;
         };
@@ -115,14 +116,14 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(config) = self.session.active_ssh_config_owned() else {
-            self.shell
-                .set_status("start an SSH session first".to_string());
-            self.ensure_panel_open(crate::models::NavItem::Transfers);
-            cx.notify();
-            return;
+        let service = match self.active_remote_file_service() {
+            Ok(service) => service,
+            Err(error) => {
+                self.shell.set_status(error.to_string());
+                cx.notify();
+                return;
+            }
         };
-        let multiplex = self.session.active_ssh_multiplex_handle();
         let id = self.transfer.next_transfer_job_id("sftp-symlink");
         self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
@@ -142,15 +143,12 @@ impl NyaTermApp {
             control: None,
         });
         self.shell
-            .set_status(format!("SFTP symlink started: {link_path}"));
+            .set_status(format!("remote symlink creation started: {link_path}"));
         let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
-            let result = session_sftp_service(config, multiplex)
-                .and_then(|service| {
-                    service
-                        .create_symlink_path(&link_path, &target_path)
-                        .and_then(|_| service.list_dir(&parent_path))
-                })
+            let result = service
+                .create_symlink_path(&link_path, &target_path)
+                .and_then(|_| service.list_dir(&parent_path))
                 .map(|entries| TransferJobOutput::CreatedSymlink {
                     link_path,
                     target_path,
@@ -173,13 +171,13 @@ impl NyaTermApp {
     ) {
         self.forget_text_inputs("transfer.rename.");
         self.ensure_panel_open(crate::models::NavItem::Transfers);
-        let Some(old_path) = self.transfer.browser_view().selected_remote_path.clone() else {
+        let Some(entry) = self.selected_transfer_entry() else {
             self.shell
-                .set_status("select an SFTP list entry before renaming".to_string());
+                .set_status("select a remote file entry before renaming".to_string());
             cx.notify();
             return;
         };
-        if !self.open_transfer_rename_for_path(old_path, cx) {
+        if !self.open_transfer_rename_for_entry(entry, cx) {
             return;
         }
         self.transfer.schedule_rename_focus();
@@ -199,29 +197,54 @@ impl NyaTermApp {
 
     pub(in crate::features) fn open_transfer_rename_for_path(
         &mut self,
-        old_path: String,
+        identity: String,
         cx: &mut Context<Self>,
     ) -> bool {
         self.forget_text_inputs("transfer.rename.");
+        let entry = self
+            .transfer
+            .browser_view()
+            .entries
+            .iter()
+            .find(|entry| entry.matches_identity(&identity))
+            .cloned();
+        let old_path = entry
+            .as_ref()
+            .map(|entry| entry.path.clone())
+            .unwrap_or(identity);
         let initial_name = remote_file_name(&old_path);
         if initial_name.is_empty() || initial_name == "." || initial_name == ".." {
             self.shell.set_status(format!("cannot rename {old_path}"));
             cx.notify();
             return false;
         }
+        let raw_path_token = entry.and_then(|entry| entry.raw_path_token);
         self.transfer.open_rename_dialog(TransferRenameState {
             old_path,
+            raw_path_token,
             value: initial_name.clone(),
             initial_name,
         });
-        self.shell.set_status("SFTP rename opened".to_string());
+        self.shell.set_status("remote rename opened".to_string());
         true
+    }
+
+    fn open_transfer_rename_for_entry(
+        &mut self,
+        entry: nyaterm_transport::SftpFileEntry,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let opened = self.open_transfer_rename_for_path(entry.path.clone(), cx);
+        if opened && let Some(state) = self.transfer.rename_dialog_mut() {
+            state.raw_path_token = entry.raw_path_token;
+        }
+        opened
     }
 
     pub(in crate::features) fn close_transfer_rename_dialog(&mut self, cx: &mut Context<Self>) {
         self.forget_text_inputs("transfer.rename.");
         self.transfer.close_rename_dialog();
-        self.shell.set_status("SFTP rename cancelled".to_string());
+        self.shell.set_status("remote rename cancelled".to_string());
         cx.notify();
     }
 
@@ -243,7 +266,7 @@ impl NyaTermApp {
     ) {
         let Some(state) = self.transfer.rename_dialog().cloned() else {
             self.shell
-                .set_status("no SFTP rename is active".to_string());
+                .set_status("no remote rename is active".to_string());
             cx.notify();
             return;
         };
@@ -262,13 +285,21 @@ impl NyaTermApp {
         }
         if new_name == state.initial_name {
             self.transfer.close_rename_dialog();
-            self.shell.set_status("SFTP rename unchanged".to_string());
+            self.shell.set_status("remote rename unchanged".to_string());
             cx.notify();
             return;
         }
         let new_path = remote_sibling_path(&state.old_path, &new_name);
         self.transfer.close_rename_dialog();
-        self.start_sftp_rename_job(state.old_path, new_path, window, cx);
+        self.start_sftp_rename_job(
+            RemoteFilePath {
+                display_path: state.old_path,
+                raw_path_token: state.raw_path_token,
+            },
+            new_path,
+            window,
+            cx,
+        );
     }
 
     pub(in crate::features) fn handle_transfer_rename_key_down(
@@ -313,31 +344,32 @@ impl NyaTermApp {
 
     pub(in crate::features) fn start_sftp_rename_job(
         &mut self,
-        old_path: String,
+        old_path: RemoteFilePath,
         new_path: String,
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(config) = self.session.active_ssh_config_owned() else {
-            self.shell
-                .set_status("start an SSH session first".to_string());
-            self.ensure_panel_open(crate::models::NavItem::Transfers);
-            cx.notify();
-            return;
+        let service = match self.active_remote_file_service() {
+            Ok(service) => service,
+            Err(error) => {
+                self.shell.set_status(error.to_string());
+                cx.notify();
+                return;
+            }
         };
-        let multiplex = self.session.active_ssh_multiplex_handle();
-        let parent_path = remote_parent_path(&old_path);
+        let old_display_path = old_path.display_path.clone();
+        let parent_path = remote_parent_path(&old_display_path);
         let id = self.transfer.next_transfer_job_id("sftp-rename");
         self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
             session_id: self.session.active_id_owned(),
             kind: TransferJobKind::Rename {
-                old_path: old_path.clone(),
+                old_path: old_display_path.clone(),
                 new_path: new_path.clone(),
                 parent_path: parent_path.clone(),
             },
             status: TransferJobStatus::Running,
-            detail: format!("Renaming {old_path}"),
+            detail: format!("Renaming {old_display_path}"),
             created_at_ms: TransferJobState::now_ms(),
             display_name: String::new(),
             entries: Vec::new(),
@@ -345,18 +377,16 @@ impl NyaTermApp {
             progress: None,
             control: None,
         });
-        self.shell
-            .set_status(format!("SFTP rename started: {old_path} -> {new_path}"));
+        self.shell.set_status(format!(
+            "remote rename started: {old_display_path} -> {new_path}"
+        ));
         let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
-            let result = session_sftp_service(config, multiplex)
-                .and_then(|service| {
-                    service
-                        .rename_path(&old_path, &new_path)
-                        .and_then(|_| service.list_dir(&parent_path))
-                })
+            let result = service
+                .rename_remote_paths(&old_path, &RemoteFilePath::new(&new_path))
+                .and_then(|_| service.list_dir(&parent_path))
                 .map(|entries| TransferJobOutput::Renamed {
-                    old_path,
+                    old_path: old_display_path,
                     new_path,
                     parent_path,
                     entries,

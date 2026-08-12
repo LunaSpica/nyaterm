@@ -980,7 +980,7 @@ impl NyaTermApp {
             ) => {
                 if has_dirs {
                     self.shell.set_status(
-                        "folders cannot be uploaded via ZMODEM — use the file explorer for SFTP"
+                        "folders cannot be uploaded via ZMODEM; use the remote file browser"
                             .to_string(),
                     );
                     cx.notify();

@@ -105,6 +105,7 @@ pub(in crate::features) struct TransferBrowserView<'a> {
 /// SFTP browser: current listing, navigation history, selection and menus.
 pub(super) struct TransferBrowserState {
     pub(super) path: String,
+    pub(super) raw_path_token: Option<String>,
     pub(super) home_dir: String,
     pub(super) home_dir_pending: bool,
     pub(super) path_draft: String,
@@ -226,6 +227,7 @@ impl TransferFeatureState {
             paths: TransferPathState::new(remote_path, local_path, duplicate_policy),
             browser: TransferBrowserState {
                 path: ".".to_string(),
+                raw_path_token: None,
                 home_dir: String::new(),
                 home_dir_pending: false,
                 path_draft: String::new(),
@@ -425,6 +427,10 @@ impl TransferFeatureState {
 
     pub(in crate::features) fn rename_dialog(&self) -> Option<&TransferRenameState> {
         self.file_ops.rename()
+    }
+
+    pub(in crate::features) fn rename_dialog_mut(&mut self) -> Option<&mut TransferRenameState> {
+        self.file_ops.rename_mut()
     }
 
     pub(in crate::features) fn rename_dialog_is_open(&self) -> bool {
@@ -1010,6 +1016,10 @@ impl TransferFileOpsState {
 
     fn rename(&self) -> Option<&TransferRenameState> {
         self.rename.as_ref()
+    }
+
+    fn rename_mut(&mut self) -> Option<&mut TransferRenameState> {
+        self.rename.as_mut()
     }
 
     fn open_rename(&mut self, state: TransferRenameState) {

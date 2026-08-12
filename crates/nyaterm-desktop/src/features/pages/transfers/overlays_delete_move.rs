@@ -14,6 +14,7 @@ impl NyaTermApp {
             .cloned()
             .unwrap_or(TransferMoveState {
                 old_path: String::new(),
+                raw_path_token: None,
                 name: String::new(),
                 value: String::new(),
             });

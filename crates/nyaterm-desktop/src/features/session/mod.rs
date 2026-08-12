@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use nyaterm_transport::SshMultiplexHandle;
+use nyaterm_transport::{RemoteFileService, SshMultiplexHandle};
 
 mod auth_runtime;
 mod prompt_runtime;
@@ -22,6 +22,7 @@ mod zmodem_runtime;
 struct SessionProtocolRuntimeState {
     zmodem: HashMap<String, zmodem_runtime::ZmodemSessionState>,
     trzsz: HashMap<String, trzsz_runtime::TrzszSessionState>,
+    remote_files: HashMap<String, RemoteFileService>,
     multiplex_handles: HashMap<String, SshMultiplexHandle>,
 }
 

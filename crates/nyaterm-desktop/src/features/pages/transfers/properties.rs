@@ -1,9 +1,8 @@
 use gpui::{Context, Window};
 use nyaterm_core::truncate_preview;
-use nyaterm_transport::{SftpAttributeUpdate, SftpFileEntry, SftpFileType};
+use nyaterm_transport::{RemoteFilePath, SftpAttributeUpdate, SftpFileEntry, SftpFileType};
 
 use crate::features::NyaTermApp;
-use crate::features::transfers::session_sftp_service;
 use crate::models::{
     TransferJobEvent, TransferJobKind, TransferJobOutput, TransferJobResult, TransferJobState,
     TransferJobStatus, TransferPropertiesField,
@@ -37,6 +36,8 @@ impl NyaTermApp {
             owner: String::new(),
             group: String::new(),
             modified_at: None,
+            raw_path_token: None,
+            symlink_target_is_directory: false,
         };
         self.open_transfer_properties(entry, window, cx);
     }
@@ -61,7 +62,7 @@ impl NyaTermApp {
         self.shell
             .set_status("remote properties opened".to_string());
         self.open_transfer_properties_component_dialog(window, cx);
-        self.start_sftp_properties_load_job(entry.path, window, cx);
+        self.start_sftp_properties_load_job(entry.remote_path(), window, cx);
         cx.notify();
     }
 
@@ -82,7 +83,7 @@ impl NyaTermApp {
         self.shell
             .set_status("remote properties opened".to_string());
         self.open_transfer_properties_component_dialog(window, cx);
-        self.start_sftp_properties_load_job(entry.path, window, cx);
+        self.start_sftp_properties_load_job(entry.remote_path(), window, cx);
         cx.notify();
     }
 
@@ -154,26 +155,28 @@ impl NyaTermApp {
 
     pub(super) fn start_sftp_properties_load_job(
         &mut self,
-        remote_path: String,
+        remote_path: RemoteFilePath,
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(config) = self.session.active_ssh_config_owned() else {
-            self.shell
-                .set_status("start an SSH session first".to_string());
-            cx.notify();
-            return;
+        let service = match self.active_remote_file_service() {
+            Ok(service) => service,
+            Err(error) => {
+                self.shell.set_status(error.to_string());
+                cx.notify();
+                return;
+            }
         };
-        let multiplex = self.session.active_ssh_multiplex_handle();
+        let remote_display_path = remote_path.display_path.clone();
         let id = self.transfer.next_transfer_job_id("sftp-properties");
         self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
             session_id: self.session.active_id_owned(),
             kind: TransferJobKind::LoadProperties {
-                remote_path: remote_path.clone(),
+                remote_path: remote_display_path.clone(),
             },
             status: TransferJobStatus::Running,
-            detail: format!("Loading properties for {remote_path}"),
+            detail: format!("Loading properties for {remote_display_path}"),
             created_at_ms: TransferJobState::now_ms(),
             display_name: String::new(),
             entries: Vec::new(),
@@ -182,13 +185,13 @@ impl NyaTermApp {
             control: None,
         });
         self.transfer
-            .set_browser_status(format!("Loading properties for {remote_path}"));
+            .set_browser_status(format!("Loading properties for {remote_display_path}"));
         let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
-            let result = session_sftp_service(config, multiplex)
-                .and_then(|service| service.file_properties(&remote_path))
+            let result = service
+                .remote_file_properties(&remote_path)
                 .map(|properties| TransferJobOutput::PropertiesLoaded {
-                    remote_path,
+                    remote_path: remote_display_path,
                     properties,
                 })
                 .map_err(|error| error.to_string());
@@ -249,7 +252,7 @@ impl NyaTermApp {
             mode: (state.mode_value != initial_mode).then_some(mode),
             owner: owner_changed.then_some(owner),
             group: group_changed.then_some(group),
-            recursive: state.recursive && properties.file_type == SftpFileType::Directory,
+            recursive: state.recursive && properties.is_directory(),
         };
         if update.mode.is_none() && update.owner.is_none() && update.group.is_none() {
             self.close_transfer_properties(cx);
@@ -257,7 +260,10 @@ impl NyaTermApp {
         }
         self.transfer.begin_properties_save();
         self.start_sftp_properties_update_job(
-            properties.path,
+            RemoteFilePath {
+                display_path: properties.path,
+                raw_path_token: state.entry.raw_path_token,
+            },
             remote_parent_path(&state.entry.path),
             update,
             window,
@@ -268,29 +274,31 @@ impl NyaTermApp {
 
     pub(super) fn start_sftp_properties_update_job(
         &mut self,
-        remote_path: String,
+        remote_path: RemoteFilePath,
         parent_path: String,
         update: SftpAttributeUpdate,
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(config) = self.session.active_ssh_config_owned() else {
-            self.shell
-                .set_status("start an SSH session first".to_string());
-            cx.notify();
-            return;
+        let service = match self.active_remote_file_service() {
+            Ok(service) => service,
+            Err(error) => {
+                self.shell.set_status(error.to_string());
+                cx.notify();
+                return;
+            }
         };
-        let multiplex = self.session.active_ssh_multiplex_handle();
+        let remote_display_path = remote_path.display_path.clone();
         let id = self.transfer.next_transfer_job_id("sftp-update-properties");
         self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
             session_id: self.session.active_id_owned(),
             kind: TransferJobKind::UpdateProperties {
-                remote_path: remote_path.clone(),
+                remote_path: remote_display_path.clone(),
                 parent_path: parent_path.clone(),
             },
             status: TransferJobStatus::Running,
-            detail: format!("Updating properties for {remote_path}"),
+            detail: format!("Updating properties for {remote_display_path}"),
             created_at_ms: TransferJobState::now_ms(),
             display_name: String::new(),
             entries: Vec::new(),
@@ -299,16 +307,15 @@ impl NyaTermApp {
             control: None,
         });
         self.transfer
-            .set_browser_status(format!("Updating properties for {remote_path}"));
+            .set_browser_status(format!("Updating properties for {remote_display_path}"));
         let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
             let result = (|| {
-                let service = session_sftp_service(config, multiplex)?;
-                service.update_path_attributes(&remote_path, update)?;
-                let properties = service.file_properties(&remote_path)?;
+                service.update_remote_path_attributes(&remote_path, update)?;
+                let properties = service.remote_file_properties(&remote_path)?;
                 let entries = service.list_dir(&parent_path)?;
                 Ok(TransferJobOutput::PropertiesUpdated {
-                    remote_path,
+                    remote_path: remote_display_path,
                     parent_path,
                     properties,
                     entries,

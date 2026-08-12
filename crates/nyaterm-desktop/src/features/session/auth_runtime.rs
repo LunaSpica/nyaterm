@@ -343,12 +343,12 @@ impl SftpDuplicatePromptBroker {
         };
         self.pending
             .lock()
-            .map_err(|_| "SFTP duplicate prompt queue is poisoned".to_string())?
+            .map_err(|_| "remote transfer duplicate prompt queue is poisoned".to_string())?
             .push_back(request);
 
         response_rx
             .recv_timeout(Duration::from_secs(300))
-            .map_err(|_| "SFTP duplicate prompt timed out".to_string())
+            .map_err(|_| "remote transfer duplicate prompt timed out".to_string())
     }
 
     pub(in crate::features) fn pop_pending(&self) -> Option<SftpDuplicatePromptRequest> {

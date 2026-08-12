@@ -218,6 +218,8 @@ fn file_entry_from_path(path: &Path, name: String) -> anyhow::Result<SftpFileEnt
         owner: owner_string(&metadata),
         group: group_string(&metadata),
         modified_at: modified_time_secs(&metadata).try_into().ok(),
+        raw_path_token: None,
+        symlink_target_is_directory: symlink_metadata.file_type().is_symlink() && metadata.is_dir(),
     })
 }
 
@@ -242,6 +244,8 @@ fn file_properties_from_path(path: &Path) -> anyhow::Result<SftpFileProperties> 
         gid: gid(&metadata),
         modified_at: modified_time_secs(&metadata).try_into().ok(),
         accessed_at: accessed_time_secs(&metadata).try_into().ok(),
+        raw_path_token: None,
+        symlink_target_is_directory: symlink_metadata.file_type().is_symlink() && metadata.is_dir(),
     })
 }
 

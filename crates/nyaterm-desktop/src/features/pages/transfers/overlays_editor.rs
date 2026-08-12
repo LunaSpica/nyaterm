@@ -283,6 +283,7 @@ impl NyaTermApp {
                 id: String::new(),
                 session_id: None,
                 remote_path: String::new(),
+                raw_path_token: None,
                 name: String::new(),
                 content: String::new(),
                 search_query: String::new(),
@@ -688,9 +689,11 @@ impl NyaTermApp {
                                                 state.conflict = false;
                                                 state.reload_confirm = false;
                                                 let session_id = state.session_id.clone();
-                                                let remote_path = state.remote_path.clone();
+                                                let tab_id = state.id.clone();
+                                                let remote_path = state.remote_file_path();
                                                 this.start_sftp_editor_load_job(
                                                     session_id,
+                                                    tab_id,
                                                     remote_path,
                                                     window,
                                                     cx,
@@ -956,9 +959,11 @@ impl NyaTermApp {
                                         state.conflict = false;
                                         state.reload_confirm = false;
                                         let session_id = state.session_id.clone();
-                                        let remote_path = state.remote_path.clone();
+                                        let tab_id = state.id.clone();
+                                        let remote_path = state.remote_file_path();
                                         this.start_sftp_editor_load_job(
                                             session_id,
+                                            tab_id,
                                             remote_path,
                                             window,
                                             cx,
@@ -1057,9 +1062,11 @@ impl NyaTermApp {
                                             state.conflict = false;
                                             state.reload_confirm = false;
                                             let session_id = state.session_id.clone();
-                                            let remote_path = state.remote_path.clone();
+                                            let tab_id = state.id.clone();
+                                            let remote_path = state.remote_file_path();
                                             this.start_sftp_editor_load_job(
                                                 session_id,
+                                                tab_id,
                                                 remote_path,
                                                 window,
                                                 cx,

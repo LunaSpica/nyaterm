@@ -108,7 +108,7 @@ impl NyaTermApp {
                                 self.tr("fileExplorer.octal"),
                                 mode_input,
                             ))
-                            .when(entry.file_type == SftpFileType::Directory, |this| {
+                            .when(entry.is_directory(), |this| {
                                 this.child(
                                     NyaCheckbox::new("transfer-properties-recursive")
                                         .checked(state.recursive)

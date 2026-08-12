@@ -52,6 +52,8 @@ fn file_entry(path: &str) -> SftpFileEntry {
         owner: "owner".to_string(),
         group: "group".to_string(),
         modified_at: Some(1),
+        raw_path_token: None,
+        symlink_target_is_directory: false,
     }
 }
 
@@ -162,6 +164,8 @@ fn file_properties(path: &str) -> SftpFileProperties {
         gid: Some(1000),
         modified_at: Some(2),
         accessed_at: Some(3),
+        raw_path_token: None,
+        symlink_target_is_directory: false,
     }
 }
 
@@ -201,6 +205,7 @@ fn browser_session_restore_clamps_history_and_clears_interaction() {
         TransferBrowserSessionCacheState {
             entries: vec![file_entry("/srv/current.txt")],
             current_path: "/srv".to_string(),
+            current_raw_path_token: None,
             home_dir: "/home/test".to_string(),
             history: VecDeque::from(["/srv".to_string()]),
             history_index: 99,
@@ -226,6 +231,30 @@ fn browser_session_restore_clamps_history_and_clears_interaction() {
 }
 
 #[test]
+fn browser_session_restore_preserves_the_raw_directory_token() {
+    let cx = TestAppContext::single();
+    let mut transfer = transfer_state(&cx);
+    let remote =
+        nyaterm_transport::RemoteFilePath::from_raw("/srv/non-utf8-?", b"/srv/non-utf8-\xff");
+    transfer.store_browser_session_cache(
+        "session-a".to_string(),
+        TransferBrowserSessionCacheState {
+            entries: Vec::new(),
+            current_path: remote.display_path.clone(),
+            current_raw_path_token: remote.raw_path_token.clone(),
+            home_dir: "/home/test".to_string(),
+            history: VecDeque::from([remote.display_path.clone()]),
+            history_index: 0,
+            visited_history: VecDeque::new(),
+        },
+    );
+
+    transfer.restore_browser_session_cache("session-a").unwrap();
+
+    assert_eq!(transfer.browser_remote_file_path(), remote);
+}
+
+#[test]
 fn browser_navigation_restores_the_stable_pending_snapshot() {
     let cx = TestAppContext::single();
     let mut transfer = transfer_state(&cx);
@@ -241,6 +270,7 @@ fn browser_navigation_restores_the_stable_pending_snapshot() {
     let stable = TransferBrowserNavigationSnapshot {
         remote_path: "/stable".to_string(),
         browser_path: "/stable".to_string(),
+        browser_raw_path_token: None,
         entries: vec![file_entry("/stable/file.txt")],
         loading: false,
         error: None,
@@ -309,6 +339,7 @@ fn transfer_session_id_migration_preserves_reconnected_sftp_state() {
     let cache = TransferBrowserSessionCacheState {
         entries: vec![file_entry("/srv/app.txt")],
         current_path: "/srv".to_string(),
+        current_raw_path_token: None,
         home_dir: "/home/nya".to_string(),
         history: VecDeque::from(["/srv".to_string()]),
         history_index: 0,
@@ -320,6 +351,7 @@ fn transfer_session_id_migration_preserves_reconnected_sftp_state() {
         TransferBrowserSessionCacheState {
             entries: vec![file_entry("/stale/file.txt")],
             current_path: "/stale".to_string(),
+            current_raw_path_token: None,
             home_dir: "/stale".to_string(),
             history: VecDeque::from(["/stale".to_string()]),
             history_index: 0,
@@ -335,6 +367,7 @@ fn transfer_session_id_migration_preserves_reconnected_sftp_state() {
         TransferBrowserNavigationSnapshot {
             remote_path: "/srv".to_string(),
             browser_path: "/srv".to_string(),
+            browser_raw_path_token: None,
             entries: vec![file_entry("/srv/old.txt")],
             loading: true,
             error: None,
@@ -353,6 +386,7 @@ fn transfer_session_id_migration_preserves_reconnected_sftp_state() {
         TransferBrowserNavigationSnapshot {
             remote_path: "/tmp".to_string(),
             browser_path: "/tmp".to_string(),
+            browser_raw_path_token: None,
             entries: Vec::new(),
             loading: false,
             error: None,
@@ -371,6 +405,7 @@ fn transfer_session_id_migration_preserves_reconnected_sftp_state() {
         session_id: Some("old-session".to_string()),
         kind: TransferJobKind::Download {
             remote_path: "/srv/app.txt".to_string(),
+            raw_path_token: None,
             local_path: PathBuf::from("/tmp/app.txt"),
         },
         status: TransferJobStatus::Running,
@@ -498,6 +533,7 @@ fn transfer_job(
         session_id: Some(session_id.to_string()),
         kind: TransferJobKind::Download {
             remote_path: format!("/remote/{id}"),
+            raw_path_token: None,
             local_path: PathBuf::from(format!("/local/{id}")),
         },
         status,
@@ -516,6 +552,7 @@ fn external_sync_prompt(session_id: Option<&str>, job_id: &str) -> TransferExter
         session_id: session_id.map(str::to_string),
         job_id: job_id.to_string(),
         remote_path: format!("/remote/{job_id}.txt"),
+        raw_path_token: None,
         local_path: PathBuf::from(format!("/local/{job_id}.txt")),
     }
 }
@@ -525,6 +562,7 @@ fn editor_tab(session_id: &str, remote_path: &str) -> TransferEditorState {
         id: TransferEditorState::tab_id(Some(session_id), remote_path),
         session_id: Some(session_id.to_string()),
         remote_path: remote_path.to_string(),
+        raw_path_token: None,
         name: remote_path.rsplit('/').next().unwrap().to_string(),
         content: String::new(),
         search_query: String::new(),
@@ -600,6 +638,7 @@ fn transfer_file_ops_track_real_rename_input_focus_and_creation_options() {
     assert!(!transfer.rename_focus_is_pending());
     transfer.open_rename_dialog(TransferRenameState {
         old_path: "/srv/old".to_string(),
+        raw_path_token: None,
         initial_name: "old".to_string(),
         value: "old".to_string(),
     });

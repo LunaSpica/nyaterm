@@ -4,7 +4,8 @@ use std::sync::Arc;
 use gpui::{Context, PathPromptOptions, SharedString, Window};
 use nyaterm_core::truncate_preview;
 use nyaterm_transport::{
-    SftpDuplicatePolicy, SftpDuplicateResolver, SftpPathTransferOptions, SshSessionConfig,
+    RemoteFilePath, SftpDuplicatePolicy, SftpDuplicateResolver, SftpPathTransferOptions,
+    SshSessionConfig,
 };
 
 use crate::features::NyaTermApp;
@@ -179,7 +180,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn prompt_transfer_download_directory_and_start(
         &mut self,
-        remote_paths: Vec<String>,
+        remote_paths: Vec<RemoteFilePath>,
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -354,7 +355,7 @@ impl NyaTermApp {
 
     fn apply_transfer_download_start_prompt_result(
         &mut self,
-        remote_paths: Vec<String>,
+        remote_paths: Vec<RemoteFilePath>,
         session_id: Option<String>,
         config: SshSessionConfig,
         path_options: SftpPathTransferOptions,
@@ -374,17 +375,27 @@ impl NyaTermApp {
                     return;
                 };
                 let total = remote_paths.len();
-                let multiplex = session_id.as_deref().and_then(|session_id| {
-                    self.session.ssh_multiplex_handle_for_session(session_id)
-                });
+                let Some(service_session_id) = session_id.as_deref() else {
+                    self.shell
+                        .set_status("source session is unavailable".to_string());
+                    return;
+                };
+                let service = match self.remote_file_service_for_session(service_session_id, config)
+                {
+                    Ok(service) => service,
+                    Err(error) => {
+                        self.shell.set_status(error.to_string());
+                        return;
+                    }
+                };
                 let session = SftpJobSession {
                     session_id,
-                    config,
-                    multiplex,
+                    service,
                 };
                 for remote_path in remote_paths {
-                    let local_path =
-                        directory.join(download_file_name_from_remote_path(&remote_path));
+                    let local_path = directory.join(download_file_name_from_remote_path(
+                        &remote_path.display_path,
+                    ));
                     self.enqueue_sftp_download_job_for_target(
                         session.clone(),
                         remote_path,
@@ -394,7 +405,7 @@ impl NyaTermApp {
                     );
                 }
                 self.shell
-                    .set_status(format!("{total} SFTP download job(s) started"));
+                    .set_status(format!("{total} remote download job(s) started"));
                 self.transfer.browser.status =
                     format!("Downloading {total} item(s) to {}", directory.display());
             }
@@ -554,13 +565,21 @@ impl NyaTermApp {
                 truncate_preview(&remote_path, 48)
             )
         };
-        let multiplex = session_id
-            .as_deref()
-            .and_then(|session_id| self.session.ssh_multiplex_handle_for_session(session_id));
+        let Some(service_session_id) = session_id.as_deref() else {
+            self.shell
+                .set_status("source session is unavailable".to_string());
+            return;
+        };
+        let service = match self.remote_file_service_for_session(service_session_id, config) {
+            Ok(service) => service,
+            Err(error) => {
+                self.shell.set_status(error.to_string());
+                return;
+            }
+        };
         let session = SftpJobSession {
             session_id,
-            config,
-            multiplex,
+            service,
         };
         for path in paths {
             let upload_name = transfer_upload_local_name(&path, fallback_name);

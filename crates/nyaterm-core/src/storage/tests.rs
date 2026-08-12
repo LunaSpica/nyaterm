@@ -13,13 +13,13 @@ use sha2::{Digest, Sha256};
 use super::{
     AiSettings, COMMAND_HISTORY_PREFIX, COMMAND_HISTORY_TABLE, CONNECTION_PASSWORD_PREFIX,
     CREDENTIALS_TABLE, ConnectionPasswordRecord, ConnectionStore, DATABASE_FILE, Group,
-    KnownHostCheck, LEGACY_TEXT_CLOUD_SYNC_STATE, LEGACY_TEXT_KNOWN_HOSTS, META_MASTER_KEY,
-    META_TABLE, OTP_ACCOUNTS_TABLE, OTP_PREFIX, QuickCommand, QuickCommandCategory,
-    QuickCommandsConfig, SETTINGS_CLOUD_SYNC, SETTINGS_DEFAULT, SETTINGS_QUICK_COMMANDS,
-    SETTINGS_TABLE, SSH_KEY_FILE_IMPORT_MAX_BYTES, SSH_KEY_PREFIX, SavedConnection, SessionsConfig,
-    StorageError, TEXT_DOCS_TABLE, TUNNELS_TABLE, TunnelConfig, TunnelGroup, current_time_ms,
-    default_settings_value, deserialize_json, entity_key, json_path, set_nested_json_value,
-    write_json_in_txn,
+    KnownHostCheck, LEGACY_TEXT_CLOUD_SYNC_STATE, LEGACY_TEXT_KNOWN_HOSTS,
+    LEGACY_TEXT_REMOTE_FILE_BACKEND_CACHE, META_MASTER_KEY, META_TABLE, OTP_ACCOUNTS_TABLE,
+    OTP_PREFIX, QuickCommand, QuickCommandCategory, QuickCommandsConfig, SETTINGS_CLOUD_SYNC,
+    SETTINGS_DEFAULT, SETTINGS_QUICK_COMMANDS, SETTINGS_TABLE, SSH_KEY_FILE_IMPORT_MAX_BYTES,
+    SSH_KEY_PREFIX, SavedConnection, SessionsConfig, StorageError, TEXT_DOCS_TABLE, TUNNELS_TABLE,
+    TunnelConfig, TunnelGroup, current_time_ms, default_settings_value, deserialize_json,
+    entity_key, json_path, set_nested_json_value, write_json_in_txn,
 };
 
 #[test]
@@ -1109,6 +1109,90 @@ fn imports_legacy_text_doc_known_hosts() {
             .check_known_host("legacy.example.com", "ssh-rsa", "AAAA")
             .expect("legacy"),
         KnownHostCheck::Match
+    );
+
+    std::fs::remove_dir_all(dir).ok();
+}
+
+#[test]
+fn remote_file_backend_cache_round_trips_and_preserves_unknown_fields() {
+    let dir = unique_temp_dir("remote-file-backend-cache");
+    let store = ConnectionStore::open(&dir).expect("store");
+    let legacy = serde_json::json!({
+        "schema_hint": "keep-me",
+        "entries": {
+            "example.com:22:alice": {
+                "last_working_backend": "scp_enhanced",
+                "sftp_unavailable": true,
+                "last_failure_reason": "subsystem unavailable",
+                "updated_at": 10,
+                "future_field": 42
+            }
+        }
+    });
+    {
+        let txn = store.db.begin_write().expect("txn");
+        txn.open_table(TEXT_DOCS_TABLE)
+            .expect("text docs")
+            .insert(
+                LEGACY_TEXT_REMOTE_FILE_BACKEND_CACHE,
+                serde_json::to_string(&legacy).expect("json").as_str(),
+            )
+            .expect("insert legacy cache");
+        txn.commit().expect("commit");
+    }
+
+    let loaded = store.load_remote_file_backend_cache().expect("load legacy");
+    assert_eq!(
+        loaded
+            .entries
+            .get("example.com:22:alice")
+            .expect("entry")
+            .extra
+            .get("future_field"),
+        Some(&serde_json::json!(42))
+    );
+    store
+        .update_remote_file_backend_cache_entry("example.com:22:alice", "sftp", false, None)
+        .expect("update cache");
+    let updated = store.load_remote_file_backend_cache().expect("reload");
+    assert_eq!(
+        updated.extra.get("schema_hint"),
+        Some(&serde_json::json!("keep-me"))
+    );
+    let entry = updated
+        .entries
+        .get("example.com:22:alice")
+        .expect("updated entry");
+    assert_eq!(entry.last_working_backend, "sftp");
+    assert_eq!(
+        entry.extra.get("future_field"),
+        Some(&serde_json::json!(42))
+    );
+
+    std::fs::remove_dir_all(dir).ok();
+}
+
+#[test]
+fn corrupt_remote_file_backend_cache_is_not_overwritten() {
+    let dir = unique_temp_dir("corrupt-remote-file-backend-cache");
+    let store = ConnectionStore::open(&dir).expect("store");
+    {
+        let txn = store.db.begin_write().expect("txn");
+        txn.open_table(SETTINGS_TABLE)
+            .expect("settings")
+            .insert(
+                super::SETTINGS_REMOTE_FILE_BACKEND_CACHE,
+                b"not-json".as_slice(),
+            )
+            .expect("insert corrupt cache");
+        txn.commit().expect("commit");
+    }
+    assert!(store.load_remote_file_backend_cache().is_err());
+    assert!(
+        store
+            .update_remote_file_backend_cache_entry("host:22:user", "sftp", false, None)
+            .is_err()
     );
 
     std::fs::remove_dir_all(dir).ok();

@@ -5,7 +5,8 @@ use std::time::Instant;
 use gpui::FocusHandle;
 use nyaterm_core::{AiExecutionProfile, SavedConnection};
 use nyaterm_transport::{
-    SessionEvent, SessionInfo, SessionKind, SessionManager, SshMultiplexHandle, SshSessionConfig,
+    RemoteFileBackendPreferenceStore, RemoteFileService, SessionEvent, SessionInfo, SessionKind,
+    SessionManager, SshMultiplexHandle, SshSessionConfig,
 };
 
 use crate::features::runtime_jobs::SessionStartResult;
@@ -692,7 +693,6 @@ impl SessionFeatureState {
 
     pub(in crate::features) fn active_ssh_file_browser_config(&self) -> Option<&SshSessionConfig> {
         self.active_ssh_config()
-            .filter(|config| config.remote_file_browser_enabled())
     }
 
     pub(in crate::features) fn active_ssh_multiplex_handle(
@@ -700,6 +700,28 @@ impl SessionFeatureState {
     ) -> Option<SshMultiplexHandle> {
         let session_id = self.active_id_owned()?;
         self.ssh_multiplex_handle_for_session(&session_id)
+    }
+
+    pub(in crate::features) fn remote_file_service_for_session(
+        &mut self,
+        session_id: &str,
+        config: SshSessionConfig,
+        preference_store: std::sync::Arc<dyn RemoteFileBackendPreferenceStore>,
+    ) -> anyhow::Result<RemoteFileService> {
+        if let Some(service) = self.protocols.remote_files.get(session_id) {
+            return Ok(service.clone());
+        }
+        let multiplex = self.ssh_multiplex_handle_for_session(session_id);
+        let service =
+            RemoteFileService::with_preference_store(config, multiplex, preference_store)?;
+        self.protocols
+            .remote_files
+            .insert(session_id.to_string(), service.clone());
+        Ok(service)
+    }
+
+    pub(in crate::features) fn remove_remote_file_service(&mut self, session_id: &str) -> bool {
+        self.protocols.remote_files.remove(session_id).is_some()
     }
 
     pub(in crate::features) fn ssh_multiplex_handle_for_session(
@@ -1361,6 +1383,7 @@ impl SessionFeatureState {
     ) -> Option<String> {
         self.remove_zmodem_session_runtime(session_id);
         self.remove_trzsz_session_runtime(session_id);
+        self.remove_remote_file_service(session_id);
         self.order.retain(|id| id != session_id);
         let multiplex_key = self
             .metadata

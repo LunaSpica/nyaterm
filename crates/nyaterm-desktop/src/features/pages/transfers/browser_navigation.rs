@@ -1,5 +1,6 @@
 use gpui::{Context, Window};
 use nyaterm_core::ConnectionStore;
+use nyaterm_transport::{RemoteFilePath, SftpFileEntry};
 
 use std::collections::VecDeque;
 
@@ -24,6 +25,7 @@ impl NyaTermApp {
             return;
         }
 
+        let current_raw_path_token = self.transfer.browser_remote_file_path().raw_path_token;
         let browser = self.transfer.browser_view();
         let mut history = browser.history.clone();
         if history.is_empty() {
@@ -41,6 +43,7 @@ impl NyaTermApp {
         let cache = TransferBrowserSessionCacheState {
             entries: browser.entries.clone(),
             current_path,
+            current_raw_path_token,
             home_dir,
             history,
             history_index,
@@ -98,23 +101,44 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let rollback = self.prepare_transfer_browser_navigation();
-        self.open_transfer_browser_directory_with_history_and_rollback(path, true, rollback, cx);
+        self.open_transfer_browser_directory_with_history_and_rollback(
+            RemoteFilePath::new(path),
+            true,
+            rollback,
+            cx,
+        );
+    }
+
+    pub(in crate::features::pages::transfers) fn open_transfer_browser_entry_directory(
+        &mut self,
+        entry: SftpFileEntry,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let rollback = self.prepare_transfer_browser_navigation();
+        self.open_transfer_browser_directory_with_history_and_rollback(
+            entry.remote_path(),
+            true,
+            rollback,
+            cx,
+        );
     }
 
     fn open_transfer_browser_directory_with_history_and_rollback(
         &mut self,
-        path: String,
+        path: RemoteFilePath,
         record_history: bool,
         rollback: TransferBrowserNavigationSnapshot,
         cx: &mut Context<Self>,
     ) {
         self.forget_text_inputs("transfer.browser.path");
-        self.transfer.set_remote_path(path.clone());
-        self.transfer.begin_browser_directory_load(path.clone());
+        let display_path = path.display_path.clone();
+        self.transfer.set_remote_path(display_path.clone());
+        self.transfer.begin_browser_directory_load_path(path);
         if record_history {
-            self.record_transfer_browser_history(path);
+            self.record_transfer_browser_history(display_path);
         } else {
-            self.record_transfer_browser_visited_history(path);
+            self.record_transfer_browser_visited_history(display_path);
         }
         self.start_sftp_list_job(None, rollback, cx);
     }
@@ -134,7 +158,12 @@ impl NyaTermApp {
                 return;
             }
         };
-        self.open_transfer_browser_directory_with_history_and_rollback(path, false, rollback, cx);
+        self.open_transfer_browser_directory_with_history_and_rollback(
+            RemoteFilePath::new(path),
+            false,
+            rollback,
+            cx,
+        );
     }
 
     pub(in crate::features::pages::transfers) fn record_transfer_browser_history(
@@ -363,7 +392,11 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        let parent = remote_parent_path(&current_path);
+        let current_identity = self.transfer.browser_remote_file_path();
+        let parent_identity = current_identity
+            .parent()
+            .unwrap_or_else(|_| RemoteFilePath::new(remote_parent_path(&current_path)));
+        let parent = parent_identity.display_path.clone();
         if parent == current_path {
             self.transfer
                 .set_browser_status("remote parent directory is unavailable");
@@ -371,14 +404,15 @@ impl NyaTermApp {
             return;
         }
         self.transfer.set_remote_path(parent.clone());
-        self.transfer.begin_browser_parent_load(parent.clone());
+        self.transfer
+            .begin_browser_parent_load_path(parent_identity);
         self.record_transfer_browser_history(parent);
         self.start_sftp_list_job(Some(current_path), rollback, cx);
     }
 
     pub(in crate::features::pages::transfers) fn refresh_transfer_browser(
         &mut self,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let path = if self.transfer.browser_view().path.trim().is_empty() {
@@ -386,7 +420,13 @@ impl NyaTermApp {
         } else {
             self.transfer.browser_view().path.clone()
         };
-        self.open_transfer_browser_directory(path, window, cx);
+        let rollback = self.prepare_transfer_browser_navigation();
+        let path = if path == self.transfer.browser_view().path.as_str() {
+            self.transfer.browser_remote_file_path()
+        } else {
+            RemoteFilePath::new(path)
+        };
+        self.open_transfer_browser_directory_with_history_and_rollback(path, true, rollback, cx);
     }
 }
 

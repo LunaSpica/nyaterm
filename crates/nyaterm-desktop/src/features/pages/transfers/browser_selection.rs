@@ -2,7 +2,7 @@ use gpui::{
     ClickEvent, ClipboardItem, Context, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Window,
 };
 use nyaterm_core::truncate_preview;
-use nyaterm_transport::{SftpFileEntry, SftpFileType};
+use nyaterm_transport::SftpFileEntry;
 
 use std::collections::HashSet;
 use std::time::Duration;
@@ -15,18 +15,27 @@ use super::{TransferPathPart, remote_file_name, transfer_path_part_value};
 impl NyaTermApp {
     pub(in crate::features::pages::transfers) fn select_transfer_browser_entry(
         &mut self,
-        path: String,
+        identity: String,
         cx: &mut Context<Self>,
     ) {
-        self.transfer.select_browser_entry(path.clone());
-        self.transfer.set_remote_path(path.clone());
-        self.shell.set_status(format!("selected remote {path}"));
+        let display_path = self
+            .transfer
+            .browser_view()
+            .entries
+            .iter()
+            .find(|entry| entry.matches_identity(&identity))
+            .map(|entry| entry.path.clone())
+            .unwrap_or_else(|| identity.clone());
+        self.transfer.select_browser_entry(identity);
+        self.transfer.set_remote_path(display_path.clone());
+        self.shell
+            .set_status(format!("selected remote {display_path}"));
         cx.notify();
     }
 
     pub(in crate::features::pages::transfers) fn select_transfer_browser_entry_from_click(
         &mut self,
-        path: String,
+        identity: String,
         event: &ClickEvent,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -41,12 +50,12 @@ impl NyaTermApp {
                 .browser_view()
                 .entries
                 .iter()
-                .find(|entry| entry.path == path)
+                .find(|entry| entry.matches_identity(&identity))
                 .cloned();
-            self.select_transfer_browser_entry(path, cx);
+            self.select_transfer_browser_entry(identity, cx);
             if let Some(entry) = entry {
-                if entry.file_type == SftpFileType::Directory {
-                    self.open_transfer_browser_directory(entry.path, window, cx);
+                if entry.is_directory() {
+                    self.open_transfer_browser_entry_directory(entry, window, cx);
                 } else {
                     self.open_transfer_default(entry, window, cx);
                 }
@@ -289,8 +298,12 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let entries = self.visible_transfer_browser_entries();
-        let anchor_index = entries.iter().position(|entry| entry.path == anchor_path);
-        let target_index = entries.iter().position(|entry| entry.path == target_path);
+        let anchor_index = entries
+            .iter()
+            .position(|entry| entry.matches_identity(&anchor_path));
+        let target_index = entries
+            .iter()
+            .position(|entry| entry.matches_identity(&target_path));
 
         let (Some(anchor_index), Some(target_index)) = (anchor_index, target_index) else {
             if additive {
@@ -312,13 +325,14 @@ impl NyaTermApp {
         let start = anchor_index.min(target_index);
         let end = anchor_index.max(target_index);
         for entry in &entries[start..=end] {
-            next_selection.insert(entry.path.clone());
+            next_selection.insert(entry.identity_key());
         }
 
         let selected_count = self
             .transfer
             .replace_browser_selection(next_selection, Some(target_path.clone()));
-        self.transfer.set_remote_path(target_path);
+        let display_path = entries[target_index].path.clone();
+        self.transfer.set_remote_path(display_path);
         self.shell
             .set_status(format!("{} remote item(s) marked", selected_count));
         cx.notify();
@@ -341,13 +355,13 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let entries = self.visible_transfer_browser_entries();
-        let active_path = entries.first().map(|entry| entry.path.clone());
-        let selected_paths = entries.iter().map(|entry| entry.path.clone()).collect();
+        let active_path = entries.first().map(SftpFileEntry::identity_key);
+        let selected_paths = entries.iter().map(SftpFileEntry::identity_key).collect();
         let selected_count = self
             .transfer
             .replace_browser_selection(selected_paths, active_path.clone());
-        if let Some(path) = active_path {
-            self.transfer.set_remote_path(path);
+        if let Some(entry) = entries.first() {
+            self.transfer.set_remote_path(entry.path.clone());
         }
         self.shell
             .set_status(format!("{} remote item(s) marked", selected_count));
@@ -358,11 +372,19 @@ impl NyaTermApp {
         &self,
         part: TransferPathPart,
     ) -> Option<String> {
-        let path = self
+        let identity = self
             .transfer
             .browser_view()
             .selected_remote_path
             .as_deref()?;
+        let path = self
+            .transfer
+            .browser_view()
+            .entries
+            .iter()
+            .find(|entry| entry.matches_identity(identity))
+            .map(|entry| entry.path.as_str())
+            .unwrap_or(identity);
         Some(transfer_path_part_value(path, part))
     }
 
@@ -423,7 +445,7 @@ impl NyaTermApp {
             .browser_view()
             .entries
             .iter()
-            .find(|entry| entry.path == selected)
+            .find(|entry| entry.matches_identity(selected))
             .cloned()
     }
 
@@ -444,7 +466,7 @@ impl NyaTermApp {
                 self.transfer
                     .browser_view()
                     .selected_remote_paths
-                    .contains(&entry.path)
+                    .contains(&entry.identity_key())
             })
             .collect()
     }
@@ -464,7 +486,7 @@ impl NyaTermApp {
         if self.settings.summary().transfer_ask_save_location {
             let remote_paths = entries
                 .into_iter()
-                .map(|entry| entry.path)
+                .map(|entry| entry.remote_path())
                 .collect::<Vec<_>>();
             self.prompt_transfer_download_directory_and_start(remote_paths, window, cx);
             return;
@@ -482,10 +504,10 @@ impl NyaTermApp {
             } else {
                 base_local_path.join(remote_file_name(&entry.path))
             };
-            self.start_sftp_download_job_for_target(entry.path, local_path, window, cx);
+            self.start_sftp_download_job_for_target(entry.remote_path(), local_path, window, cx);
         }
         self.shell
-            .set_status(format!("{total} SFTP download job(s) started"));
+            .set_status(format!("{total} remote download job(s) started"));
         cx.notify();
     }
 }

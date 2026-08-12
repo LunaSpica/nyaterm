@@ -28,6 +28,8 @@ impl NyaTermApp {
                         owner: String::new(),
                         group: String::new(),
                         modified_at: None,
+                        raw_path_token: None,
+                        symlink_target_is_directory: false,
                     },
                 });
         let name = if state.entry.name.trim().is_empty() {

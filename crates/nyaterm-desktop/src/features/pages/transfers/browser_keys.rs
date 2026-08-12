@@ -1,6 +1,5 @@
 use super::browser_filter::transfer_browser_search_text_for_key;
 use gpui::{Context, KeyDownEvent, Window};
-use nyaterm_transport::SftpFileType;
 
 use crate::features::NyaTermApp;
 use crate::shortcuts::shortcut_matches;
@@ -49,8 +48,8 @@ impl NyaTermApp {
         if unmodified && keystroke.key.eq_ignore_ascii_case("enter") {
             cx.stop_propagation();
             if let Some(entry) = self.selected_transfer_entry() {
-                if entry.file_type == SftpFileType::Directory {
-                    self.open_transfer_browser_directory(entry.path, window, cx);
+                if entry.is_directory() {
+                    self.open_transfer_browser_entry_directory(entry, window, cx);
                 } else {
                     self.open_transfer_default(entry, window, cx);
                 }

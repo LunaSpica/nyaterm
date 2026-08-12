@@ -24,6 +24,7 @@ mod config_backup;
 mod keyword_highlights;
 mod known_hosts;
 mod portable;
+mod remote_file_backend;
 mod vault;
 
 use self::command_history::replace_command_history_in_txn;
@@ -37,6 +38,7 @@ use self::keyword_highlights::{
 };
 use self::known_hosts::replace_known_hosts_text_in_txn;
 pub use self::known_hosts::{KnownHostCheck, RdpCertificateMetadata};
+pub use self::remote_file_backend::{RemoteFileBackendCache, RemoteFileBackendCacheEntry};
 
 const DATABASE_FILE: &str = "nyaterm.redb";
 const GROUP_PREFIX: &str = "groups/";
@@ -66,7 +68,9 @@ const SETTINGS_PROXY_GROUPS: &str = "settings/doc/proxy-groups";
 const SETTINGS_CLOUD_SYNC: &str = "settings/doc/cloud-sync";
 const SETTINGS_QUICK_COMMANDS: &str = "settings/doc/quick-command";
 const SETTINGS_CLOUD_SYNC_STATE: &str = "settings/doc/cloud-sync-state";
+const SETTINGS_REMOTE_FILE_BACKEND_CACHE: &str = "settings/doc/file-backend-cache";
 const LEGACY_TEXT_CLOUD_SYNC_STATE: &str = "cloud-sync-state";
+const LEGACY_TEXT_REMOTE_FILE_BACKEND_CACHE: &str = "file-backend-cache";
 
 const META_TABLE: TableDefinition<&str, &str> = TableDefinition::new("meta");
 const TEXT_DOCS_TABLE: TableDefinition<&str, &str> = TableDefinition::new("text_docs");

@@ -231,17 +231,16 @@ impl TransferFeatureState {
             .unwrap_or_default()
     }
 
-    pub(in crate::features) fn set_editor_tab_error(
+    pub(in crate::features) fn set_editor_tab_error_by_id(
         &mut self,
-        session_id: Option<&str>,
-        remote_path: &str,
+        tab_id: &str,
         error: String,
     ) -> bool {
         let Some(tab) = self
             .editor
             .workspace
             .as_mut()
-            .and_then(|workspace| workspace.tab_mut(session_id, remote_path))
+            .and_then(|workspace| workspace.tabs.iter_mut().find(|tab| tab.id == tab_id))
         else {
             return false;
         };
@@ -249,17 +248,16 @@ impl TransferFeatureState {
         true
     }
 
-    pub(in crate::features) fn fail_editor_load(
+    pub(in crate::features) fn fail_editor_load_tab(
         &mut self,
-        session_id: Option<&str>,
-        remote_path: &str,
+        tab_id: &str,
         error: String,
     ) -> bool {
         let Some(tab) = self
             .editor
             .workspace
             .as_mut()
-            .and_then(|workspace| workspace.tab_mut(session_id, remote_path))
+            .and_then(|workspace| workspace.tabs.iter_mut().find(|tab| tab.id == tab_id))
         else {
             return false;
         };
@@ -313,17 +311,16 @@ impl TransferFeatureState {
         }
     }
 
-    pub(in crate::features) fn complete_editor_load(
+    pub(in crate::features) fn complete_editor_load_tab(
         &mut self,
-        session_id: Option<&str>,
-        remote_path: &str,
+        tab_id: &str,
         file: SftpRemoteTextFile,
     ) -> bool {
         let Some(tab) = self
             .editor
             .workspace
             .as_mut()
-            .and_then(|workspace| workspace.tab_mut(session_id, remote_path))
+            .and_then(|workspace| workspace.tabs.iter_mut().find(|tab| tab.id == tab_id))
         else {
             return false;
         };
@@ -340,14 +337,32 @@ impl TransferFeatureState {
         true
     }
 
+    #[cfg(test)]
     pub(in crate::features) fn complete_editor_save(
         &mut self,
         session_id: Option<&str>,
         remote_path: &str,
         result: SftpWriteTextResult,
     ) -> Option<TransferEditorSaveOutcome> {
+        let tab_id = self
+            .editor
+            .workspace
+            .as_ref()?
+            .tabs
+            .iter()
+            .find(|tab| tab.session_id.as_deref() == session_id && tab.remote_path == remote_path)?
+            .id
+            .clone();
+        self.complete_editor_save_tab(&tab_id, result)
+    }
+
+    pub(in crate::features) fn complete_editor_save_tab(
+        &mut self,
+        tab_id: &str,
+        result: SftpWriteTextResult,
+    ) -> Option<TransferEditorSaveOutcome> {
         let workspace = self.editor.workspace.as_mut()?;
-        let tab = workspace.tab_mut(session_id, remote_path)?;
+        let tab = workspace.tabs.iter_mut().find(|tab| tab.id == tab_id)?;
         let mut remove_tab_id = None;
         let outcome = match result {
             SftpWriteTextResult::Saved { modified_at, size } => {
@@ -394,16 +409,15 @@ impl TransferFeatureState {
         }
     }
 
-    pub(in crate::features) fn fail_editor_operation(
+    pub(in crate::features) fn fail_editor_operation_tab(
         &mut self,
-        session_id: Option<&str>,
-        remote_path: &str,
+        tab_id: &str,
         error: String,
     ) -> bool {
         let Some(workspace) = self.editor.workspace.as_mut() else {
             return false;
         };
-        let Some(tab) = workspace.tab_mut(session_id, remote_path) else {
+        let Some(tab) = workspace.tabs.iter_mut().find(|tab| tab.id == tab_id) else {
             return false;
         };
         tab.loading = false;

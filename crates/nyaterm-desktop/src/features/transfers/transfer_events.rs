@@ -16,6 +16,8 @@ use crate::models::{
     TransferJobKind, TransferJobOutput, TransferJobStatus,
 };
 
+type ExternalEditorSyncStart = (Option<String>, String, String, Option<String>, PathBuf);
+
 use super::state::{TransferEditorSaveOutcome, TransferFeatureState};
 use super::transfer_widgets::{format_file_size, format_transfer_progress};
 
@@ -161,8 +163,7 @@ impl NyaTermApp {
                     self.load_transfer_browser_event_session(session_id);
                     snapshot
                 });
-            let mut external_sync_to_start: Option<(Option<String>, String, String, PathBuf)> =
-                None;
+            let mut external_sync_to_start: Option<ExternalEditorSyncStart> = None;
             let mut external_sync_prompt_to_open: Option<String> = None;
             let mut zmodem_upload_after_probe: Option<(String, Vec<PathBuf>)> = None;
             let mut open_after_create: Option<SftpFileEntry> = None;
@@ -185,6 +186,7 @@ impl NyaTermApp {
                 }
                 TransferJobEvent::ExternalModified {
                     remote_path,
+                    raw_path_token,
                     local_path,
                 } => {
                     job.detail = format!("External edit changed {}", local_path.display());
@@ -194,6 +196,7 @@ impl NyaTermApp {
                             job_session_id.clone(),
                             job.id.clone(),
                             remote_path.clone(),
+                            raw_path_token.clone(),
                             local_path.clone(),
                         ));
                     } else if let Some(session_id) = job_session_id.clone() {
@@ -204,6 +207,7 @@ impl NyaTermApp {
                                 session_id: Some(session_id),
                                 job_id: job.id.clone(),
                                 remote_path: remote_path.clone(),
+                                raw_path_token,
                                 local_path: local_path.clone(),
                             },
                         );
@@ -237,7 +241,9 @@ impl NyaTermApp {
                     self.transfer
                         .browser
                         .selected_remote_paths
-                        .retain(|path| entries.iter().any(|entry| &entry.path == path));
+                        .retain(|identity| {
+                            entries.iter().any(|entry| entry.matches_identity(identity))
+                        });
                     if let Some(select_after) = select_after
                         && entries.iter().any(|entry| entry.path == select_after)
                     {
@@ -254,14 +260,14 @@ impl NyaTermApp {
                     job.progress = None;
                     job.control = None;
                     self.shell
-                        .set_status(format!("SFTP list completed: {}", job.detail));
+                        .set_status(format!("remote file list completed: {}", job.detail));
                 }
                 TransferJobEvent::Finished(Ok(TransferJobOutput::ChildEntries {
                     remote_path,
                     mut entries,
                 })) => {
                     entries.retain(|entry| {
-                        entry.file_type == SftpFileType::Directory
+                        entry.is_directory()
                             && entry.name != "."
                             && entry.name != ".."
                             && (self.settings.summary().ui_file_explorer_show_hidden_files
@@ -317,8 +323,7 @@ impl NyaTermApp {
                     job.summary = None;
                     job.progress = None;
                     job.control = None;
-                    self.shell
-                        .set_status("SFTP remote home resolved".to_string());
+                    self.shell.set_status("remote home resolved".to_string());
                 }
                 TransferJobEvent::Finished(Ok(TransferJobOutput::CwdSynced {
                     remote_path,
@@ -341,7 +346,8 @@ impl NyaTermApp {
                     job.summary = None;
                     job.progress = None;
                     job.control = None;
-                    self.shell.set_status("SFTP cwd sync completed".to_string());
+                    self.shell
+                        .set_status("remote cwd sync completed".to_string());
                 }
                 TransferJobEvent::Finished(Ok(TransferJobOutput::Renamed {
                     old_path,
@@ -369,7 +375,7 @@ impl NyaTermApp {
                         .insert(new_path.clone());
                     self.transfer.set_remote_path(new_path.clone());
                     self.shell.set_status(format!(
-                        "SFTP rename completed in {parent_path}: {new_path}"
+                        "remote rename completed in {parent_path}: {new_path}"
                     ));
                 }
                 TransferJobEvent::Finished(Ok(TransferJobOutput::Moved {
@@ -398,7 +404,7 @@ impl NyaTermApp {
                         .insert(new_path.clone());
                     self.transfer.set_remote_path(new_path.clone());
                     self.shell.set_status(format!(
-                        "SFTP move completed from {parent_path}: {new_path}"
+                        "remote move completed from {parent_path}: {new_path}"
                     ));
                 }
                 TransferJobEvent::Finished(Ok(TransferJobOutput::Deleted {
@@ -425,7 +431,7 @@ impl NyaTermApp {
                         .selected_remote_paths
                         .remove(&remote_path);
                     self.shell.set_status(format!(
-                        "SFTP delete completed in {parent_path}: {remote_path}"
+                        "remote delete completed in {parent_path}: {remote_path}"
                     ));
                 }
                 TransferJobEvent::Finished(Ok(TransferJobOutput::CreatedDirectory {
@@ -455,7 +461,7 @@ impl NyaTermApp {
                         .insert(remote_path.clone());
                     self.transfer.set_remote_path(remote_path.clone());
                     self.shell.set_status(format!(
-                        "SFTP directory created in {parent_path}: {remote_path}"
+                        "remote directory created in {parent_path}: {remote_path}"
                     ));
                 }
                 TransferJobEvent::Finished(Ok(TransferJobOutput::CreatedFile {
@@ -480,8 +486,9 @@ impl NyaTermApp {
                         .selected_remote_paths
                         .insert(remote_path.clone());
                     self.transfer.set_remote_path(remote_path.clone());
-                    self.shell
-                        .set_status(format!("SFTP file created in {parent_path}: {remote_path}"));
+                    self.shell.set_status(format!(
+                        "remote file created in {parent_path}: {remote_path}"
+                    ));
                     if should_open && job_session_id.as_deref() == self.session.active_id() {
                         open_after_create = Some(
                             entries
@@ -501,6 +508,8 @@ impl NyaTermApp {
                                     owner: String::new(),
                                     group: String::new(),
                                     modified_at: None,
+                                    raw_path_token: None,
+                                    symlink_target_is_directory: false,
                                 }),
                         );
                     }
@@ -528,7 +537,7 @@ impl NyaTermApp {
                         .insert(link_path.clone());
                     self.transfer.set_remote_path(link_path.clone());
                     self.shell.set_status(format!(
-                        "SFTP symlink created in {parent_path}: {link_path}"
+                        "remote symlink created in {parent_path}: {link_path}"
                     ));
                 }
                 TransferJobEvent::Finished(Ok(TransferJobOutput::PropertiesLoaded {
@@ -570,7 +579,7 @@ impl NyaTermApp {
                     );
                     self.transfer.browser.status = format!("properties loaded for {remote_path}");
                     self.shell
-                        .set_status(format!("SFTP properties loaded: {remote_path}"));
+                        .set_status(format!("remote properties loaded: {remote_path}"));
                 }
                 TransferJobEvent::Finished(Ok(TransferJobOutput::PropertiesUpdated {
                     remote_path,
@@ -603,10 +612,11 @@ impl NyaTermApp {
                         window.close_nya_dialog(cx);
                     }
                     self.shell.set_status(format!(
-                        "SFTP properties updated in {parent_path}: {remote_path}"
+                        "remote properties updated in {parent_path}: {remote_path}"
                     ));
                 }
                 TransferJobEvent::Finished(Ok(TransferJobOutput::EditorLoaded {
+                    tab_id,
                     remote_path,
                     file,
                 })) => {
@@ -615,14 +625,10 @@ impl NyaTermApp {
                     job.summary = None;
                     job.progress = None;
                     job.control = None;
-                    self.transfer.complete_editor_load(
-                        job_session_id.as_deref(),
-                        &remote_path,
-                        file,
-                    );
+                    self.transfer.complete_editor_load_tab(&tab_id, file);
                     self.transfer.browser.status = format!("opened text file {remote_path}");
                     self.shell
-                        .set_status(format!("SFTP text file opened: {remote_path}"));
+                        .set_status(format!("remote text file opened: {remote_path}"));
                 }
                 TransferJobEvent::Finished(Ok(TransferJobOutput::AiFileActionLoaded {
                     remote_path,
@@ -664,6 +670,7 @@ impl NyaTermApp {
                     }
                 }
                 TransferJobEvent::Finished(Ok(TransferJobOutput::EditorSaved {
+                    tab_id,
                     remote_path,
                     result,
                 })) => {
@@ -672,20 +679,16 @@ impl NyaTermApp {
                     job.summary = None;
                     job.progress = None;
                     job.control = None;
-                    if let Some(outcome) = self.transfer.complete_editor_save(
-                        job_session_id.as_deref(),
-                        &remote_path,
-                        result,
-                    ) {
+                    if let Some(outcome) = self.transfer.complete_editor_save_tab(&tab_id, result) {
                         self.shell.set_status(match outcome {
                             TransferEditorSaveOutcome::Saved => {
-                                format!("SFTP text file saved: {remote_path}")
+                                format!("remote text file saved: {remote_path}")
                             }
                             TransferEditorSaveOutcome::Conflict => {
-                                format!("SFTP text save conflict: {remote_path}")
+                                format!("remote text save conflict: {remote_path}")
                             }
                             TransferEditorSaveOutcome::SavedAndClosed => {
-                                format!("SFTP text file saved and closed: {remote_path}")
+                                format!("remote text file saved and closed: {remote_path}")
                             }
                         });
                     }
@@ -703,7 +706,7 @@ impl NyaTermApp {
                     job.control = None;
                     self.transfer.browser.status = format!("opened external {remote_path}");
                     self.shell.set_status(format!(
-                        "SFTP file opened externally: {}",
+                        "remote file opened externally: {}",
                         local_path.display()
                     ));
                 }
@@ -731,7 +734,7 @@ impl NyaTermApp {
                     });
                     job.summary = Some(summary);
                     self.shell
-                        .set_status(format!("SFTP transfer completed: {}", job.detail));
+                        .set_status(format!("remote transfer completed: {}", job.detail));
                     job.control = None;
                 }
                 TransferJobEvent::Finished(Ok(TransferJobOutput::Uploaded {
@@ -777,7 +780,7 @@ impl NyaTermApp {
 
                     job.entries = entries;
                     self.shell.set_status(format!(
-                        "SFTP upload completed in {parent_path}: {}",
+                        "remote upload completed in {parent_path}: {}",
                         job.detail
                     ));
                 }
@@ -823,8 +826,8 @@ impl NyaTermApp {
                     let property_remote_path = match &job.kind {
                         TransferJobKind::LoadProperties { remote_path }
                         | TransferJobKind::UpdateProperties { remote_path, .. }
-                        | TransferJobKind::LoadEditor { remote_path }
-                        | TransferJobKind::SaveEditor { remote_path }
+                        | TransferJobKind::LoadEditor { remote_path, .. }
+                        | TransferJobKind::SaveEditor { remote_path, .. }
                         | TransferJobKind::OpenExternal { remote_path, .. }
                         | TransferJobKind::AiFileAction { remote_path, .. } => {
                             Some(remote_path.clone())
@@ -855,12 +858,12 @@ impl NyaTermApp {
                         job.status = TransferJobStatus::Cancelled;
                         job.detail = "Cancelled".to_string();
                         self.shell
-                            .set_status(format!("SFTP transfer cancelled: {}", job.id));
+                            .set_status(format!("remote transfer cancelled: {}", job.id));
                     } else {
                         job.status = TransferJobStatus::Failed;
                         job.detail = error.clone();
                         self.shell
-                            .set_status(format!("SFTP transfer failed: {error}"));
+                            .set_status(format!("remote transfer failed: {error}"));
                     }
                     if browser_load_failed {
                         self.transfer.browser.loading = false;
@@ -878,12 +881,10 @@ impl NyaTermApp {
                             error.clone(),
                         );
                     }
-                    if let Some(remote_path) = property_remote_path.as_ref() {
-                        self.transfer.fail_editor_operation(
-                            job_session_id.as_deref(),
-                            remote_path,
-                            error,
-                        );
+                    if let TransferJobKind::LoadEditor { tab_id, .. }
+                    | TransferJobKind::SaveEditor { tab_id, .. } = &job.kind
+                    {
+                        self.transfer.fail_editor_operation_tab(tab_id, error);
                     }
                     job.summary = None;
                     job.control = None;
@@ -909,8 +910,16 @@ impl NyaTermApp {
                     self.transfer.browser.error = Some(error);
                 }
             }
-            if let Some((session_id, job_id, remote_path, local_path)) = external_sync_to_start {
-                self.spawn_external_editor_sync_upload(session_id, job_id, remote_path, local_path);
+            if let Some((session_id, job_id, remote_path, raw_path_token, local_path)) =
+                external_sync_to_start
+            {
+                self.spawn_external_editor_sync_upload(
+                    session_id,
+                    job_id,
+                    remote_path,
+                    raw_path_token,
+                    local_path,
+                );
             }
             if let Some((session_id, files)) = zmodem_upload_after_probe {
                 self.begin_zmodem_upload_after_probe(session_id, files, cx);
@@ -1049,6 +1058,7 @@ mod tests {
         assert!(!transfer_event_needs_browser_context(
             &TransferJobKind::Download {
                 remote_path: "/tmp/file".to_string(),
+                raw_path_token: None,
                 local_path: PathBuf::from("/tmp/file"),
             },
             &TransferJobEvent::Progress(SftpTransferProgress {

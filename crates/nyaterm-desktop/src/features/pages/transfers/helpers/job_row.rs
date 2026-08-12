@@ -166,8 +166,8 @@ fn transfer_job_file_name(job: &TransferJobState) -> String {
         .unwrap_or_else(|| match &job.kind {
             TransferJobKind::Download { remote_path, .. }
             | TransferJobKind::OpenExternal { remote_path, .. }
-            | TransferJobKind::LoadEditor { remote_path }
-            | TransferJobKind::SaveEditor { remote_path }
+            | TransferJobKind::LoadEditor { remote_path, .. }
+            | TransferJobKind::SaveEditor { remote_path, .. }
             | TransferJobKind::LoadProperties { remote_path }
             | TransferJobKind::UpdateProperties { remote_path, .. }
             | TransferJobKind::AiFileAction { remote_path, .. } => remote_file_name(remote_path),
@@ -345,6 +345,7 @@ mod tests {
     fn job(status: TransferJobStatus) -> TransferJobState {
         let kind = TransferJobKind::Download {
             remote_path: "/remote/file.bin".to_string(),
+            raw_path_token: None,
             local_path: PathBuf::from("/local/file.bin"),
         };
         TransferJobState {
@@ -385,6 +386,7 @@ mod tests {
     fn directory_transfer_title_stays_on_root_item_name() {
         let kind = TransferJobKind::Download {
             remote_path: "/remote/project".to_string(),
+            raw_path_token: None,
             local_path: PathBuf::from("/downloads/project"),
         };
         let job = TransferJobState {

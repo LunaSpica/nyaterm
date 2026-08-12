@@ -27,6 +27,7 @@ mod gpu;
 mod local_fs;
 mod rdp;
 mod recording;
+mod remote_file;
 mod remote_process;
 mod session_config;
 mod session_event_queue;
@@ -67,8 +68,9 @@ pub use session_types::{
     TerminalTransport,
 };
 pub use sftp::{
-    SFTP_TRANSFER_CANCELLED, SftpAttributeUpdate, SftpFileEntry, SftpFileProperties, SftpFileType,
-    SftpRemoteTextFile, SftpService, SftpTransferControl, SftpWriteTextResult,
+    RemoteBinaryFile, RemoteFilePath, SFTP_TRANSFER_CANCELLED, SftpAttributeUpdate, SftpFileEntry,
+    SftpFileProperties, SftpFileType, SftpRemoteTextFile, SftpService, SftpTransferControl,
+    SftpWriteTextResult,
 };
 pub use sftp_transfer_types::{
     SFTP_TRANSFER_DEFAULT_BUFFER_SIZE, SFTP_TRANSFER_DEFAULT_DIRECTORY_UPLOAD_THREADS,
@@ -129,6 +131,10 @@ pub use recording::{
     RecordingManager, RecordingMode, RecordingProfile, RecordingRotationPolicy, RecordingStatus,
     RecordingStatusState, TerminalHistorySearchRequest, TerminalHistorySearchResponse,
     TerminalHistorySearchResult, safe_recording_name,
+};
+pub use remote_file::{
+    FileCopyRequest, FileCopySummary, FileTransferEndpoint, RemoteFileBackendKind,
+    RemoteFileBackendPreference, RemoteFileBackendPreferenceStore, RemoteFileService,
 };
 pub use remote_process::{
     PROCESS_LIST_SCRIPT, PROCESS_LIST_UNSUPPORTED_ERROR, PROCESS_LIST_UNSUPPORTED_MARKER,

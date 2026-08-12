@@ -163,9 +163,9 @@ pub(super) fn transfer_browser_footer_stats(
 
     let is_selected = |entry: &SftpFileEntry| {
         if selected_paths.is_empty() {
-            selected_path == Some(entry.path.as_str())
+            selected_path == Some(entry.identity_key().as_str())
         } else {
-            selected_paths.contains(&entry.path)
+            selected_paths.contains(&entry.identity_key())
         }
     };
     let mut selected_item_count = 0;
@@ -210,6 +210,8 @@ mod tests {
             owner: String::new(),
             group: String::new(),
             modified_at: None,
+            raw_path_token: None,
+            symlink_target_is_directory: false,
         }
     }
 

@@ -1,5 +1,5 @@
 use gpui::Context;
-use nyaterm_transport::{SftpFileEntry, SftpFileType};
+use nyaterm_transport::SftpFileEntry;
 use nyaterm_ui::NyaMenuItem;
 
 use crate::features::NyaTermApp;
@@ -28,7 +28,7 @@ impl NyaTermApp {
                     .browser_view()
                     .entries
                     .iter()
-                    .find(|entry| entry.path == path)
+                    .find(|entry| entry.matches_identity(&path))
                     .cloned()
                 else {
                     return Vec::new();
@@ -132,7 +132,7 @@ impl NyaTermApp {
     ) -> Vec<NyaMenuItem> {
         let show_open_internal = self.show_transfer_open_internal_menu_entry(&entry);
         let show_open_external = self.show_transfer_open_external_menu_entry(&entry);
-        let is_directory = entry.file_type == SftpFileType::Directory;
+        let is_directory = entry.is_directory();
 
         let mut items = vec![
             NyaMenuItem::action(self.tr("fileExplorer.cmRefresh"))

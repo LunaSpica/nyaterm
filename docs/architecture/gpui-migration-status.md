@@ -6,9 +6,21 @@ remaining entries here describe targeted parity, compatibility, ownership, and
 cleanup work rather than a broad half-migrated application state. Keep dynamic
 counts here instead of in `AGENTS.md`.
 
-Last updated from the working tree on 2026-08-11.
+Last updated from the working tree on 2026-08-12.
 
 ## Tauri Main Parity Refreshes
+
+- 2026-08-12 aligned the native remote-file backend with the former Tauri
+  selection contract. `nyaterm-transport::RemoteFileService` now performs
+  cached-first lazy selection followed by the exact SFTP, enhanced-SCP,
+  normal-SCP order and never falls back after selection. Desktop owns one
+  service per session and adapts the core backend preference document without
+  introducing a core/transport dependency. SFTP raw path tokens now survive
+  browser selection, navigation rollback, session-local browser restore,
+  properties, mutation, editor load/save, external-editor sync, and recursive
+  download. The cache compatibility, capability matrix, privacy rules, and
+  remaining POSIX/SCP limitations are recorded in
+  `docs/architecture/remote-file-backends.md`.
 
 - 2026-08-11 completed the native connection-editor parity audit against the
   clean Tauri reference at `266db741`. The SSH algorithm editor is again a

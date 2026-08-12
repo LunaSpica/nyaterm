@@ -3,7 +3,7 @@ use gpui::{
     StatefulInteractiveElement as _, Window, div, prelude::*, px, rgb, svg,
 };
 use nyaterm_core::truncate_preview;
-use nyaterm_transport::{SftpFileEntry, SftpFileType};
+use nyaterm_transport::SftpFileEntry;
 use nyaterm_ui::NyaInput;
 
 use crate::features::{NyaTermApp, TextInputSetup};
@@ -762,7 +762,7 @@ fn transfer_browser_child_directories(
     let mut directories = entries
         .iter()
         .filter(|entry| {
-            entry.file_type == SftpFileType::Directory
+            entry.is_directory()
                 && entry.name != "."
                 && entry.name != ".."
                 && (show_hidden_files || !entry.name.starts_with('.'))
@@ -942,6 +942,8 @@ mod tests {
             owner: String::new(),
             group: String::new(),
             modified_at: None,
+            raw_path_token: None,
+            symlink_target_is_directory: false,
         }
     }
 

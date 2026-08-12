@@ -4,6 +4,7 @@ use std::collections::{HashSet, VecDeque};
 use std::time::Instant;
 
 use gpui::{Pixels, ScrollHandle, ScrollStrategy};
+use nyaterm_transport::RemoteFilePath;
 
 use crate::models::{
     TransferBrowserColumnResizeState, TransferBrowserContextTarget,
@@ -257,6 +258,7 @@ impl TransferFeatureState {
         let cache = self.browser.session_cache.get(session_id)?.clone();
         let remote_path = cache.current_path.clone();
         self.browser.path = cache.current_path;
+        self.browser.raw_path_token = cache.current_raw_path_token;
         self.browser.home_dir = cache.home_dir;
         self.browser.home_dir_pending = false;
         self.browser.path_draft.clear();
@@ -281,6 +283,7 @@ impl TransferFeatureState {
 
     pub(in crate::features) fn reset_browser_for_session(&mut self, ssh_active: bool) {
         self.browser.path = ".".to_string();
+        self.browser.raw_path_token = None;
         self.browser.home_dir.clear();
         self.browser.home_dir_pending = false;
         self.browser.path_draft.clear();
@@ -302,9 +305,14 @@ impl TransferFeatureState {
     }
 
     pub(in crate::features) fn begin_browser_directory_load(&mut self, path: String) {
+        self.begin_browser_directory_load_path(RemoteFilePath::new(path));
+    }
+
+    pub(in crate::features) fn begin_browser_directory_load_path(&mut self, path: RemoteFilePath) {
         self.browser.list_scroll = gpui::UniformListScrollHandle::new();
         self.browser.horizontal_scroll = ScrollHandle::new();
-        self.browser.path = path;
+        self.browser.path = path.display_path;
+        self.browser.raw_path_token = path.raw_path_token;
         self.browser.path_draft.clear();
         self.browser.path_editing = false;
         self.browser.path_menu = None;
@@ -321,6 +329,7 @@ impl TransferFeatureState {
         self.browser.list_scroll = gpui::UniformListScrollHandle::new();
         self.browser.horizontal_scroll = ScrollHandle::new();
         self.browser.path = path;
+        self.browser.raw_path_token = None;
         self.browser.selected_remote_path = None;
         self.browser.selected_remote_paths.clear();
         self.browser.context_target = TransferBrowserContextTarget::CurrentDirectory;
@@ -328,6 +337,18 @@ impl TransferFeatureState {
         self.browser.status = "Loading parent directory...".to_string();
         self.browser.loading = true;
         self.browser.error = None;
+    }
+
+    pub(in crate::features) fn begin_browser_parent_load_path(&mut self, path: RemoteFilePath) {
+        self.begin_browser_parent_load(path.display_path.clone());
+        self.browser.raw_path_token = path.raw_path_token;
+    }
+
+    pub(in crate::features) fn browser_remote_file_path(&self) -> RemoteFilePath {
+        RemoteFilePath {
+            display_path: self.browser.path.clone(),
+            raw_path_token: self.browser.raw_path_token.clone(),
+        }
     }
 
     pub(in crate::features) fn browser_history_destination(
@@ -616,6 +637,7 @@ impl TransferBrowserState {
         TransferBrowserNavigationSnapshot {
             remote_path,
             browser_path: self.path.clone(),
+            browser_raw_path_token: self.raw_path_token.clone(),
             entries: self.entries.clone(),
             loading: self.loading,
             error: self.error.clone(),
@@ -632,6 +654,7 @@ impl TransferBrowserState {
 
     fn restore_navigation(&mut self, snapshot: TransferBrowserNavigationSnapshot) {
         self.path = snapshot.browser_path;
+        self.raw_path_token = snapshot.browser_raw_path_token;
         self.entries = snapshot.entries;
         self.loading = snapshot.loading;
         self.error = snapshot.error;

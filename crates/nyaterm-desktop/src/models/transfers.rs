@@ -20,6 +20,7 @@ pub(crate) enum TransferJobKind {
     SyncCwd,
     Download {
         remote_path: String,
+        raw_path_token: Option<String>,
         local_path: PathBuf,
     },
     Upload {
@@ -62,9 +63,11 @@ pub(crate) enum TransferJobKind {
     },
     LoadEditor {
         remote_path: String,
+        tab_id: String,
     },
     SaveEditor {
         remote_path: String,
+        tab_id: String,
     },
     OpenExternal {
         remote_path: String,
@@ -139,8 +142,8 @@ impl TransferJobState {
         match kind {
             TransferJobKind::Download { remote_path, .. }
             | TransferJobKind::OpenExternal { remote_path, .. }
-            | TransferJobKind::LoadEditor { remote_path }
-            | TransferJobKind::SaveEditor { remote_path }
+            | TransferJobKind::LoadEditor { remote_path, .. }
+            | TransferJobKind::SaveEditor { remote_path, .. }
             | TransferJobKind::LoadProperties { remote_path }
             | TransferJobKind::UpdateProperties { remote_path, .. }
             | TransferJobKind::AiFileAction { remote_path, .. }
@@ -238,6 +241,7 @@ mod transfer_job_state_tests {
         let download = job(
             TransferJobKind::Download {
                 remote_path: "/remote/file".to_string(),
+                raw_path_token: None,
                 local_path: PathBuf::from("/local/file"),
             },
             Some("session-a"),
@@ -291,6 +295,7 @@ mod transfer_job_state_tests {
         assert_eq!(
             TransferJobState::display_name_for_kind(&TransferJobKind::Download {
                 remote_path: "/remote/project/".to_string(),
+                raw_path_token: None,
                 local_path: PathBuf::from("/tmp/project"),
             }),
             "project"
@@ -318,6 +323,7 @@ pub(crate) enum TransferJobEvent {
     },
     ExternalModified {
         remote_path: String,
+        raw_path_token: Option<String>,
         local_path: PathBuf,
     },
     Progress(SftpTransferProgress),
@@ -388,10 +394,12 @@ pub(crate) enum TransferJobOutput {
         entries: Vec<SftpFileEntry>,
     },
     EditorLoaded {
+        tab_id: String,
         remote_path: String,
         file: SftpRemoteTextFile,
     },
     EditorSaved {
+        tab_id: String,
         remote_path: String,
         result: SftpWriteTextResult,
     },
@@ -418,6 +426,7 @@ pub(crate) enum TransferJobOutput {
 pub(crate) struct TransferBrowserSessionCacheState {
     pub(crate) entries: Vec<SftpFileEntry>,
     pub(crate) current_path: String,
+    pub(crate) current_raw_path_token: Option<String>,
     pub(crate) home_dir: String,
     pub(crate) history: VecDeque<String>,
     pub(crate) history_index: usize,
@@ -428,6 +437,7 @@ pub(crate) struct TransferBrowserSessionCacheState {
 pub(crate) struct TransferBrowserNavigationSnapshot {
     pub(crate) remote_path: String,
     pub(crate) browser_path: String,
+    pub(crate) browser_raw_path_token: Option<String>,
     pub(crate) entries: Vec<SftpFileEntry>,
     pub(crate) loading: bool,
     pub(crate) error: Option<String>,

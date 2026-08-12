@@ -4,10 +4,9 @@ use std::process::Command;
 use std::time::{Instant, SystemTime};
 
 use nyaterm_transport::{
-    SftpTransferControl, SftpTransferOptions, SshMultiplexHandle, SshSessionConfig,
+    RemoteFilePath, RemoteFileService, SftpTransferControl, SftpTransferOptions,
 };
 
-use crate::features::transfers::session_sftp_service;
 use crate::models::{TransferJobEvent, TransferJobOutput, TransferJobResult};
 
 use super::{
@@ -316,7 +315,7 @@ impl LocalFileFingerprint {
 
 pub(super) fn watch_external_editor_file(
     job_id: String,
-    remote_path: String,
+    remote_path: RemoteFilePath,
     local_path: PathBuf,
     transfer_tx: std::sync::mpsc::Sender<TransferJobResult>,
 ) {
@@ -357,7 +356,8 @@ pub(super) fn watch_external_editor_file(
         let _ = transfer_tx.send(TransferJobResult {
             id: job_id.clone(),
             event: TransferJobEvent::ExternalModified {
-                remote_path: remote_path.clone(),
+                remote_path: remote_path.display_path.clone(),
+                raw_path_token: remote_path.raw_path_token.clone(),
                 local_path: local_path.clone(),
             },
         });
@@ -372,10 +372,10 @@ pub(super) fn external_editor_watch_key(remote_path: &str, local_path: &Path) ->
 }
 
 pub(super) fn upload_external_editor_file(
-    config: &SshSessionConfig,
-    multiplex: Option<SshMultiplexHandle>,
+    service: RemoteFileService,
     job_id: &str,
     remote_path: &str,
+    raw_path_token: Option<String>,
     local_path: &Path,
     transfer_options: SftpTransferOptions,
     transfer_tx: &std::sync::mpsc::Sender<TransferJobResult>,
@@ -389,21 +389,23 @@ pub(super) fn upload_external_editor_file(
     let control = SftpTransferControl::new();
     let progress_id = job_id.to_string();
     let progress_tx = transfer_tx.clone();
-    let result = session_sftp_service(config.clone(), multiplex)
-        .and_then(|service| {
-            service.upload_file_with_progress_and_control_options(
-                local_path.to_path_buf(),
-                remote_path,
-                control,
-                transfer_options,
-                move |progress| {
-                    let _ = progress_tx.send(TransferJobResult {
-                        id: progress_id.clone(),
-                        event: TransferJobEvent::Progress(progress),
-                    });
-                },
-            )
-        })
+    let remote_file_path = RemoteFilePath {
+        display_path: remote_path.to_string(),
+        raw_path_token,
+    };
+    let result = service
+        .upload_remote_file_with_progress_and_control_options(
+            local_path.to_path_buf(),
+            &remote_file_path,
+            control,
+            transfer_options,
+            move |progress| {
+                let _ = progress_tx.send(TransferJobResult {
+                    id: progress_id.clone(),
+                    event: TransferJobEvent::Progress(progress),
+                });
+            },
+        )
         .map(TransferJobOutput::Summary)
         .map_err(|error| error.to_string());
     let _ = transfer_tx.send(TransferJobResult {

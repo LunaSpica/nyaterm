@@ -1,7 +1,6 @@
 use gpui::{Context, Window};
-use nyaterm_transport::SshSessionConfig;
+use nyaterm_transport::{RemoteFilePath, SshSessionConfig};
 
-use crate::features::transfers::session_sftp_service;
 use crate::features::{
     NyaTermApp, TransferEditorCloseAfterSave, TransferEditorCloseOutcome,
     TransferEditorDiscardOutcome,
@@ -124,27 +123,36 @@ impl NyaTermApp {
     pub(in crate::features) fn start_sftp_editor_load_job(
         &mut self,
         session_id: Option<String>,
-        remote_path: String,
+        tab_id: String,
+        remote_file_path: RemoteFilePath,
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let remote_path = remote_file_path.display_path.clone();
         let Some(config) = self.transfer_editor_ssh_config(session_id.as_deref()) else {
             let error = self.tr("fileEditor.sourceSessionUnavailable").to_string();
-            self.transfer
-                .fail_editor_load(session_id.as_deref(), &remote_path, error.clone());
+            self.transfer.fail_editor_load_tab(&tab_id, error.clone());
             self.shell.set_status(error);
             cx.notify();
             return;
         };
-        let multiplex = session_id
-            .as_deref()
-            .and_then(|id| self.session.ssh_multiplex_handle_for_session(id));
+        let service = match self.transfer_remote_file_service(session_id.as_deref(), config) {
+            Ok(service) => service,
+            Err(error) => {
+                let error = error.to_string();
+                self.transfer.fail_editor_load_tab(&tab_id, error.clone());
+                self.shell.set_status(error);
+                cx.notify();
+                return;
+            }
+        };
         let id = self.transfer.next_transfer_job_id("sftp-open-text");
         self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
             session_id,
             kind: TransferJobKind::LoadEditor {
                 remote_path: remote_path.clone(),
+                tab_id: tab_id.clone(),
             },
             status: TransferJobStatus::Running,
             detail: format!("Opening {remote_path}"),
@@ -157,9 +165,13 @@ impl NyaTermApp {
         });
         let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
-            let result = session_sftp_service(config, multiplex)
-                .and_then(|service| service.read_text_file(&remote_path, NATIVE_EDITOR_MAX_BYTES))
-                .map(|file| TransferJobOutput::EditorLoaded { remote_path, file })
+            let result = service
+                .read_text_file_path(&remote_file_path, NATIVE_EDITOR_MAX_BYTES)
+                .map(|file| TransferJobOutput::EditorLoaded {
+                    tab_id,
+                    remote_path,
+                    file,
+                })
                 .map_err(|error| error.to_string());
             let _ = transfer_tx.send(TransferJobResult {
                 id,
@@ -211,11 +223,8 @@ impl NyaTermApp {
         }
         let Some(config) = self.transfer_editor_ssh_config(snapshot.session_id.as_deref()) else {
             let error = self.tr("fileEditor.sourceSessionUnavailable").to_string();
-            self.transfer.set_editor_tab_error(
-                snapshot.session_id.as_deref(),
-                &snapshot.remote_path,
-                error.clone(),
-            );
+            self.transfer
+                .set_editor_tab_error_by_id(&snapshot.id, error.clone());
             self.shell.set_status(error);
             cx.notify();
             return;
@@ -223,10 +232,12 @@ impl NyaTermApp {
         if !self.transfer.begin_editor_tab_save(tab_id) {
             return;
         }
+        let remote_file_path = snapshot.remote_file_path();
         self.start_sftp_editor_save_job(
             snapshot.session_id,
             config,
-            snapshot.remote_path,
+            snapshot.id,
+            remote_file_path,
             snapshot.content,
             snapshot.base_modified_at,
             snapshot.base_size,
@@ -262,7 +273,8 @@ impl NyaTermApp {
         &mut self,
         session_id: Option<String>,
         config: SshSessionConfig,
-        remote_path: String,
+        tab_id: String,
+        remote_file_path: RemoteFilePath,
         content: String,
         expected_modified_at: Option<u64>,
         expected_size: Option<u64>,
@@ -270,15 +282,24 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let multiplex = session_id
-            .as_deref()
-            .and_then(|id| self.session.ssh_multiplex_handle_for_session(id));
+        let remote_path = remote_file_path.display_path.clone();
+        let service = match self.transfer_remote_file_service(session_id.as_deref(), config) {
+            Ok(service) => service,
+            Err(error) => {
+                self.transfer
+                    .set_editor_tab_error_by_id(&tab_id, error.to_string());
+                self.shell.set_status(error.to_string());
+                cx.notify();
+                return;
+            }
+        };
         let id = self.transfer.next_transfer_job_id("sftp-save-text");
         self.transfer.enqueue_transfer_job(TransferJobState {
             id: id.clone(),
             session_id,
             kind: TransferJobKind::SaveEditor {
                 remote_path: remote_path.clone(),
+                tab_id: tab_id.clone(),
             },
             status: TransferJobStatus::Running,
             detail: format!("Saving {remote_path}"),
@@ -291,17 +312,16 @@ impl NyaTermApp {
         });
         let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
-            let result = session_sftp_service(config, multiplex)
-                .and_then(|service| {
-                    service.write_text_file(
-                        &remote_path,
-                        &content,
-                        expected_modified_at,
-                        expected_size,
-                        force,
-                    )
-                })
+            let result = service
+                .write_text_file_path(
+                    &remote_file_path,
+                    &content,
+                    expected_modified_at,
+                    expected_size,
+                    force,
+                )
                 .map(|result| TransferJobOutput::EditorSaved {
+                    tab_id,
                     remote_path,
                     result,
                 })

@@ -5,7 +5,7 @@ use gpui::{
     MouseDownEvent, ParentElement as _, Pixels, Rgba, SharedString,
     StatefulInteractiveElement as _, Styled as _, div, prelude::FluentBuilder as _, px, rgb, rgba,
 };
-use nyaterm_transport::{SftpFileEntry, SftpFileType};
+use nyaterm_transport::SftpFileEntry;
 
 use crate::features::NyaTermApp;
 use crate::models::{TransferBrowserSortColumn, TransferBrowserSortDirection};
@@ -135,8 +135,8 @@ pub(in crate::features::pages::transfers) fn compare_transfer_browser_entries(
     direction: TransferBrowserSortDirection,
 ) -> Ordering {
     if left.file_type != right.file_type {
-        let left_dir = left.file_type == SftpFileType::Directory;
-        let right_dir = right.file_type == SftpFileType::Directory;
+        let left_dir = left.is_directory();
+        let right_dir = right.is_directory();
         if left_dir != right_dir {
             return if left_dir {
                 Ordering::Less

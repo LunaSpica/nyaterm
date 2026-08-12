@@ -4,7 +4,7 @@ use gpui::{Context, Window};
 use nyaterm_transport::SftpCwdFollowMode;
 
 use crate::features::NyaTermApp;
-use crate::features::transfers::{session_sftp_service, session_ssh_process_service};
+use crate::features::transfers::session_ssh_process_service;
 use crate::models::{
     NavItem, TransferBrowserChildrenMenuStatus, TransferBrowserNavigationSnapshot,
     TransferBrowserPathMenuKind, TransferBrowserPathMenuState, TransferJobEvent, TransferJobKind,
@@ -17,7 +17,7 @@ impl NyaTermApp {
         remote_path: String,
         cx: &mut Context<Self>,
     ) {
-        let Some(config) = self.session.active_ssh_config_owned() else {
+        if self.session.active_ssh_config_owned().is_none() {
             if let Some(TransferBrowserPathMenuState {
                 kind: TransferBrowserPathMenuKind::Children { status, .. },
                 ..
@@ -29,8 +29,15 @@ impl NyaTermApp {
             }
             cx.notify();
             return;
+        }
+        let service = match self.active_remote_file_service() {
+            Ok(service) => service,
+            Err(error) => {
+                self.transfer.browser.status = error.to_string();
+                cx.notify();
+                return;
+            }
         };
-        let multiplex = self.session.active_ssh_multiplex_handle();
         let id = self.transfer.next_transfer_job_id("sftp-children");
         if let Some(TransferBrowserPathMenuState {
             kind:
@@ -68,8 +75,8 @@ impl NyaTermApp {
         });
         let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
-            let result = session_sftp_service(config, multiplex)
-                .and_then(|service| service.list_dir(&remote_path))
+            let result = service
+                .list_dir(&remote_path)
                 .map(|entries| TransferJobOutput::ChildEntries {
                     remote_path,
                     entries,
@@ -89,16 +96,25 @@ impl NyaTermApp {
         rollback: TransferBrowserNavigationSnapshot,
         cx: &mut Context<Self>,
     ) {
-        let Some(config) = self.session.active_ssh_config_owned() else {
+        if self.session.active_ssh_config_owned().is_none() {
             self.restore_transfer_browser_navigation(rollback);
             self.shell
                 .set_status("start an SSH session first".to_string());
             self.ensure_panel_open(NavItem::Transfers);
             cx.notify();
             return;
+        }
+        let service = match self.active_remote_file_service() {
+            Ok(service) => service,
+            Err(error) => {
+                self.restore_transfer_browser_navigation(rollback);
+                self.shell.set_status(error.to_string());
+                cx.notify();
+                return;
+            }
         };
-        let multiplex = self.session.active_ssh_multiplex_handle();
-        let remote_path = self.transfer.normalized_remote_path();
+        let remote_file_path = self.transfer.browser_remote_file_path();
+        let remote_path = remote_file_path.display_path.clone();
         self.transfer.browser.path = remote_path.clone();
         self.transfer.browser.status = format!("Listing {remote_path}...");
         self.transfer.browser.loading = true;
@@ -132,11 +148,11 @@ impl NyaTermApp {
             control: None,
         });
         self.shell
-            .set_status(format!("SFTP list started for {remote_path}"));
+            .set_status(format!("remote file list started for {remote_path}"));
         let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
-            let result = session_sftp_service(config, multiplex)
-                .and_then(|service| service.list_dir(&remote_path))
+            let result = service
+                .list_dir_path(&remote_file_path)
                 .map(TransferJobOutput::Entries)
                 .map_err(|error| error.to_string());
             let _ = transfer_tx.send(TransferJobResult {
@@ -164,24 +180,15 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        if !config.sftp.enabled {
-            self.transfer.browser.status = "SFTP is disabled for this connection".to_string();
-            self.transfer.browser.loading = false;
-            self.transfer.browser.error = Some("SFTP is disabled for this connection".to_string());
-            self.shell
-                .set_status("SFTP is disabled for this connection".to_string());
-            cx.notify();
-            return;
-        }
         let shell_cwd = match config.sftp.cwd_follow_mode {
             SftpCwdFollowMode::Off => {
                 self.transfer.browser.status =
-                    "SFTP cwd follow is disabled for this connection".to_string();
+                    "remote cwd follow is disabled for this connection".to_string();
                 self.transfer.browser.loading = false;
                 self.transfer.browser.error =
-                    Some("SFTP cwd follow is disabled for this connection".to_string());
+                    Some("remote cwd follow is disabled for this connection".to_string());
                 self.shell
-                    .set_status("SFTP cwd follow is disabled for this connection".to_string());
+                    .set_status("remote cwd follow is disabled for this connection".to_string());
                 cx.notify();
                 return;
             }
@@ -232,7 +239,16 @@ impl NyaTermApp {
         self.transfer.browser.status = "Resolving remote cwd...".to_string();
         self.transfer.browser.loading = true;
         self.transfer.browser.error = None;
-        self.shell.set_status("SFTP cwd sync started".to_string());
+        self.shell.set_status("remote cwd sync started".to_string());
+        let service = match self.active_remote_file_service() {
+            Ok(service) => service,
+            Err(error) => {
+                self.transfer.browser.loading = false;
+                self.transfer.browser.error = Some(error.to_string());
+                cx.notify();
+                return;
+            }
+        };
         let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
             let result = (|| {
@@ -267,8 +283,7 @@ impl NyaTermApp {
                             .to_string()
                     }
                 };
-                let entries = session_sftp_service(config, multiplex)
-                    .map_err(|error| error.to_string())?
+                let entries = service
                     .list_dir(&remote_path)
                     .map_err(|error| error.to_string())?;
                 Ok(TransferJobOutput::CwdSynced {
@@ -303,12 +318,19 @@ impl NyaTermApp {
         if self.transfer.browser.home_dir_pending || !self.transfer.browser.home_dir.is_empty() {
             return;
         }
-        let Some(config) = self.session.active_ssh_config_owned() else {
+        if self.session.active_ssh_config_owned().is_none() {
             self.transfer.browser.status = "remote home requires an SSH session".to_string();
             cx.notify();
             return;
+        }
+        let service = match self.active_remote_file_service() {
+            Ok(service) => service,
+            Err(error) => {
+                self.transfer.browser.status = error.to_string();
+                cx.notify();
+                return;
+            }
         };
-        let multiplex = self.session.active_ssh_multiplex_handle();
         self.transfer.browser.home_dir_pending = true;
         let id = self.transfer.next_transfer_job_id("sftp-home");
         self.transfer.enqueue_transfer_job(TransferJobState {
@@ -328,28 +350,7 @@ impl NyaTermApp {
         let transfer_tx = self.transfer.transfer_event_sender();
         std::thread::spawn(move || {
             let result = (|| {
-                let output = session_ssh_process_service(config, multiplex)
-                    .map_err(|error| error.to_string())?
-                    .run_command("printf '%s\\n' \"$HOME\"", Duration::from_secs(10))
-                    .map_err(|error| error.to_string())?;
-                if output.exit_status.is_some_and(|status| status != 0) {
-                    let detail = output
-                        .stderr
-                        .trim()
-                        .lines()
-                        .next()
-                        .or_else(|| output.stdout.trim().lines().next())
-                        .unwrap_or("remote home lookup failed");
-                    return Err(detail.to_string());
-                }
-                let home_dir = output
-                    .stdout
-                    .lines()
-                    .map(str::trim)
-                    .find(|line| line.starts_with('/'))
-                    .ok_or_else(|| "remote home did not return an absolute path".to_string())?
-                    .trim_end_matches('/')
-                    .to_string();
+                let home_dir = service.home_dir().map_err(|error| error.to_string())?;
                 Ok(TransferJobOutput::HomeDir(home_dir))
             })();
             let _ = transfer_tx.send(TransferJobResult {

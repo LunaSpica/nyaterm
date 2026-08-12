@@ -94,22 +94,24 @@ pub(super) fn transfer_browser_entry_row(
         rename_state,
         rename_input,
     } = presentation;
-    let entry_path = entry.path.clone();
-    let mouse_down_path = entry.path.clone();
-    let mouse_move_path = entry.path.clone();
-    let context_path = entry.path.clone();
-    let is_selected = selected_remote_path.as_deref() == Some(entry.path.as_str());
-    let is_marked = selected_remote_paths.contains(&entry.path);
-    let inline_rename = rename_state.filter(|state| state.old_path == entry.path);
+    let entry_identity = entry.identity_key();
+    let mouse_down_path = entry_identity.clone();
+    let mouse_move_path = entry_identity.clone();
+    let context_path = entry_identity.clone();
+    let is_selected = selected_remote_path.as_deref() == Some(entry_identity.as_str());
+    let is_marked = selected_remote_paths.contains(&entry_identity);
+    let inline_rename = rename_state.filter(|state| {
+        state.old_path == entry.path && state.raw_path_token == entry.raw_path_token
+    });
     let is_renaming = inline_rename.is_some();
-    let name_click_path = entry.path.clone();
+    let name_click_path = entry_identity.clone();
     let rename_input_path = entry.path.clone();
     let mut rename_input = rename_input;
     let rename_has_error = inline_rename.as_ref().is_some_and(|state| {
         let trimmed = state.value.trim();
         trimmed.is_empty() || trimmed.contains('/') || trimmed == "." || trimmed == ".."
     });
-    let is_directory = entry.file_type == SftpFileType::Directory;
+    let is_directory = entry.is_directory();
     let is_marked_or_selected = is_selected || is_marked;
     let size_display = if is_directory {
         "-".to_string()
@@ -118,7 +120,7 @@ pub(super) fn transfer_browser_entry_row(
     };
     div()
         .id(SharedString::from(format!(
-            "transfer-browser-entry-{entry_path}"
+            "transfer-browser-entry-{entry_identity}"
         )))
         .h(px(30.))
         .flex()
@@ -165,7 +167,7 @@ pub(super) fn transfer_browser_entry_row(
         .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
             if !is_renaming {
                 this.select_transfer_browser_entry_from_click(
-                    entry_path.clone(),
+                    entry_identity.clone(),
                     event,
                     window,
                     cx,

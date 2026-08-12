@@ -22,6 +22,7 @@ pub(in crate::features) fn transfer_job_title(kind: &TransferJobKind) -> String 
         TransferJobKind::Download {
             remote_path,
             local_path,
+            ..
         } => format!("Download {remote_path} -> {}", local_path.display()),
         TransferJobKind::Upload {
             local_path,
@@ -47,8 +48,8 @@ pub(in crate::features) fn transfer_job_title(kind: &TransferJobKind) -> String 
         TransferJobKind::UpdateProperties { remote_path, .. } => {
             format!("Update properties {remote_path}")
         }
-        TransferJobKind::LoadEditor { remote_path } => format!("Open text {remote_path}"),
-        TransferJobKind::SaveEditor { remote_path } => format!("Save text {remote_path}"),
+        TransferJobKind::LoadEditor { remote_path, .. } => format!("Open text {remote_path}"),
+        TransferJobKind::SaveEditor { remote_path, .. } => format!("Save text {remote_path}"),
         TransferJobKind::OpenExternal {
             remote_path,
             local_path,
