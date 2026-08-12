@@ -1,12 +1,13 @@
 use gpui::{
     Context, InteractiveElement as _, IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent,
-    SharedString, Styled as _, deferred, prelude::FluentBuilder as _,
+    SharedString, StatefulInteractiveElement as _, Styled as _, deferred,
+    prelude::FluentBuilder as _,
 };
 use nyaterm_core::ConnectionStore;
 
 use crate::features::{
     NyaTermApp, horizontal_resize_handle_visual, settings::UiLayoutSettingsUpdate,
-    vertical_resize_handle_visual,
+    shell::state::RESIZE_HANDLE_HOVER_DELAY, vertical_resize_handle_visual,
 };
 use crate::models::{
     BottomPanelMode, NavItem, PanelResizeSide, PanelSide, panel_collapsed_from_persistence,
@@ -15,8 +16,45 @@ use crate::models::{
 const QUICK_CMD_HEIGHT_MIN: f32 = 36.;
 const SERIAL_SEND_HEIGHT_MIN: f32 = 60.;
 const BOTTOM_PANEL_HEIGHT_MAX: f32 = 520.;
-
 impl NyaTermApp {
+    pub(in crate::features) fn update_resize_handle_hover(
+        &mut self,
+        id: SharedString,
+        hovered: bool,
+        cx: &mut Context<Self>,
+    ) {
+        if !hovered {
+            if self.shell.leave_resize_handle_hover(&id) {
+                cx.notify();
+            }
+            return;
+        }
+        let Some(generation) = self.shell.begin_resize_handle_hover(id.clone()) else {
+            return;
+        };
+        cx.notify();
+        cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(RESIZE_HANDLE_HOVER_DELAY)
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                if this.shell.activate_resize_handle_hover(&id, generation) {
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
+    }
+
+    pub(in crate::features) fn activate_resize_handle_immediately(
+        &mut self,
+        id: SharedString,
+        cx: &mut Context<Self>,
+    ) {
+        self.shell.activate_resize_handle_immediately(id);
+        cx.notify();
+    }
+
     pub(in crate::features) fn set_bottom_panel_mode(&mut self, mode: BottomPanelMode) {
         self.shell.bottom_panel.mode = mode;
         self.persist_ui_layout();
@@ -213,6 +251,8 @@ impl NyaTermApp {
                 PanelResizeSide::Right => "right",
             }
         ));
+        let hover_id = id.clone();
+        let drag_id = id.clone();
         deferred(
             vertical_resize_handle_visual(
                 palette,
@@ -220,13 +260,17 @@ impl NyaTermApp {
                     .panels
                     .resize
                     .is_some_and(|resize| resize.side == side),
-                id.clone(),
+                self.shell.resize_handle_is_highlighted(&id),
             )
-            .id(id)
+            .id(id.clone())
             .cursor_col_resize()
+            .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
+                this.update_resize_handle_hover(hover_id.clone(), *hovered, cx);
+            }))
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(move |this, event: &MouseDownEvent, _, cx| {
+                    this.activate_resize_handle_immediately(drag_id.clone(), cx);
                     this.start_panel_resize(side, event, cx);
                 }),
             ),
@@ -275,17 +319,23 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let id = SharedString::from("transfer-height-resize");
+        let hover_id = id.clone();
+        let drag_id = id.clone();
         deferred(
             horizontal_resize_handle_visual(
                 palette,
                 self.transfer.panel_height_is_resizing(),
-                id.clone(),
+                self.shell.resize_handle_is_highlighted(&id),
             )
-            .id(id)
+            .id(id.clone())
             .cursor_row_resize()
+            .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
+                this.update_resize_handle_hover(hover_id.clone(), *hovered, cx);
+            }))
             .on_mouse_down(
                 MouseButton::Left,
-                cx.listener(|this, event: &MouseDownEvent, _, cx| {
+                cx.listener(move |this, event: &MouseDownEvent, _, cx| {
+                    this.activate_resize_handle_immediately(drag_id.clone(), cx);
                     this.start_transfer_height_resize(event, cx);
                 }),
             ),
@@ -333,21 +383,27 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         let palette = self.theme_palette();
         let id = SharedString::from("bottom-panel-resize");
+        let hover_id = id.clone();
+        let drag_id = id.clone();
         deferred(
             horizontal_resize_handle_visual(
                 palette,
                 self.shell.bottom_panel.resize.is_some(),
-                id.clone(),
+                self.shell.resize_handle_is_highlighted(&id),
             )
-            .id(id)
+            .id(id.clone())
             .cursor_row_resize()
+            .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
+                this.update_resize_handle_hover(hover_id.clone(), *hovered, cx);
+            }))
             .when(
                 self.shell.bottom_panel.mode == BottomPanelMode::Hidden,
                 |this| this.h_0().mt_0().mb_0(),
             )
             .on_mouse_down(
                 MouseButton::Left,
-                cx.listener(|this, event: &MouseDownEvent, _, cx| {
+                cx.listener(move |this, event: &MouseDownEvent, _, cx| {
+                    this.activate_resize_handle_immediately(drag_id.clone(), cx);
                     this.start_bottom_panel_resize(event, cx);
                 }),
             ),

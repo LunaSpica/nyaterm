@@ -925,6 +925,8 @@ impl NyaTermApp {
             above_id,
             below_id
         ));
+        let hover_id = id.clone();
+        let drag_id = id.clone();
         deferred(
             crate::features::horizontal_resize_handle_visual(
                 palette,
@@ -937,13 +939,17 @@ impl NyaTermApp {
                             && resize.above_id == above_id
                             && resize.below_id == below_id
                     }),
-                id.clone(),
+                self.shell.resize_handle_is_highlighted(&id),
             )
-            .id(id)
+            .id(id.clone())
             .cursor_row_resize()
+            .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
+                this.update_resize_handle_hover(hover_id.clone(), *hovered, cx);
+            }))
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(move |this, event: &MouseDownEvent, _, cx| {
+                    this.activate_resize_handle_immediately(drag_id.clone(), cx);
                     let open = this.side_open_panel_ids(side);
                     let total_weight: f32 = open.iter().map(|id| this.panel_stack_weight(id)).sum();
                     let container_height = 480.0_f32.max(total_weight * 120.);

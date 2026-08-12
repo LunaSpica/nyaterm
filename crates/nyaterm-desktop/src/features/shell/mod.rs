@@ -21,6 +21,8 @@ pub(in crate::features) use activity_bar_runtime::{
 pub(in crate::features) use appearance::{
     appearance_font_options, appearance_font_stack, gpui_code_font_family,
 };
+#[cfg(test)]
+pub(in crate::features) use state::ResizeHandleHoverState;
 pub(in crate::features) use state::{ShellFeatureInit, ShellFeatureState};
 pub(in crate::features) use tab_mouse::{
     SessionTabDragPayload, SessionTabDragPreview, SessionTabTooltip, TAB_MOUSE_ACTIONS,

@@ -7,7 +7,7 @@
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
-use gpui::{Entity, Pixels, ScrollHandle};
+use gpui::{Entity, Pixels, ScrollHandle, SharedString};
 use nyaterm_ui::{NyaAppMenuBar, NyaWindowHandle};
 
 use super::super::app_state::SettingsDraftSnapshot;
@@ -18,6 +18,8 @@ use crate::models::{
     PanelStackResizeState, RightFocus, SettingsTab, WorkspacePaneNode, WorkspaceSplitResizeState,
     WorkspaceSplitState,
 };
+
+pub(in crate::features) const RESIZE_HANDLE_HOVER_DELAY: Duration = Duration::from_millis(250);
 
 pub(in crate::features) struct ShellFeatureState {
     /// Application-wide transient status shown by shell chrome and terminal overlays.
@@ -31,6 +33,14 @@ pub(in crate::features) struct ShellFeatureState {
     pub(super) chrome: ShellChromeState,
     pub(super) workspace: ShellWorkspaceState,
     pub(super) diagnostics: ShellDiagnosticState,
+    resize_handle_hover: ResizeHandleHoverState,
+}
+
+#[derive(Default)]
+pub(in crate::features) struct ResizeHandleHoverState {
+    pending_id: Option<SharedString>,
+    active_id: Option<SharedString>,
+    generation: u64,
 }
 
 #[derive(Default)]
@@ -203,7 +213,35 @@ impl ShellFeatureState {
                 pane_layout_restored: false,
             },
             diagnostics: ShellDiagnosticState::default(),
+            resize_handle_hover: ResizeHandleHoverState::default(),
         }
+    }
+
+    pub(in crate::features) fn begin_resize_handle_hover(
+        &mut self,
+        id: SharedString,
+    ) -> Option<u64> {
+        self.resize_handle_hover.begin(id)
+    }
+
+    pub(in crate::features) fn activate_resize_handle_hover(
+        &mut self,
+        id: &SharedString,
+        generation: u64,
+    ) -> bool {
+        self.resize_handle_hover.activate(id, generation)
+    }
+
+    pub(in crate::features) fn activate_resize_handle_immediately(&mut self, id: SharedString) {
+        self.resize_handle_hover.activate_immediately(id);
+    }
+
+    pub(in crate::features) fn leave_resize_handle_hover(&mut self, id: &SharedString) -> bool {
+        self.resize_handle_hover.leave(id)
+    }
+
+    pub(in crate::features) fn resize_handle_is_highlighted(&self, id: &SharedString) -> bool {
+        self.resize_handle_hover.is_highlighted(id)
     }
 
     pub(in crate::features) fn status(&self) -> &str {
@@ -649,6 +687,50 @@ impl ShellFeatureState {
     }
 }
 
+impl ResizeHandleHoverState {
+    pub(in crate::features) fn begin(&mut self, id: SharedString) -> Option<u64> {
+        if self.pending_id.as_ref() == Some(&id) || self.active_id.as_ref() == Some(&id) {
+            return None;
+        }
+        self.generation = self.generation.wrapping_add(1);
+        self.pending_id = Some(id);
+        self.active_id = None;
+        Some(self.generation)
+    }
+
+    pub(in crate::features) fn activate(&mut self, id: &SharedString, generation: u64) -> bool {
+        if self.generation != generation || self.pending_id.as_ref() != Some(id) {
+            return false;
+        }
+        self.pending_id = None;
+        self.active_id = Some(id.clone());
+        true
+    }
+
+    pub(in crate::features) fn activate_immediately(&mut self, id: SharedString) {
+        self.generation = self.generation.wrapping_add(1);
+        self.pending_id = None;
+        self.active_id = Some(id);
+    }
+
+    pub(in crate::features) fn leave(&mut self, id: &SharedString) -> bool {
+        let pending = self.pending_id.as_ref() == Some(id);
+        let active = self.active_id.as_ref() == Some(id);
+        if pending {
+            self.generation = self.generation.wrapping_add(1);
+            self.pending_id = None;
+        }
+        if active {
+            self.active_id = None;
+        }
+        active
+    }
+
+    pub(in crate::features) fn is_highlighted(&self, id: &SharedString) -> bool {
+        self.active_id.as_ref() == Some(id)
+    }
+}
+
 impl ShellDiagnosticState {
     pub(in crate::features) fn should_log(
         &mut self,
@@ -911,7 +993,7 @@ mod tests {
     use std::collections::HashMap;
     use std::time::{Duration, Instant};
 
-    use gpui::px;
+    use gpui::{SharedString, px};
 
     use super::{ShellFeatureInit, ShellFeatureState};
     use crate::models::{
@@ -961,6 +1043,53 @@ mod tests {
         assert_eq!(shell.status(), "connected");
         shell.set_status(String::new());
         assert!(shell.status().is_empty());
+    }
+
+    #[test]
+    fn resize_handle_hover_ignores_stale_activation_and_reuses_same_dwell() {
+        let mut shell = shell(BottomPanelMode::Hidden);
+        let first = SharedString::from("first-resize-handle");
+        let second = SharedString::from("second-resize-handle");
+
+        let first_generation = shell
+            .begin_resize_handle_hover(first.clone())
+            .expect("first enter should arm dwell");
+        assert!(shell.begin_resize_handle_hover(first.clone()).is_none());
+        assert!(!shell.resize_handle_is_highlighted(&first));
+
+        assert!(!shell.leave_resize_handle_hover(&first));
+        assert!(!shell.activate_resize_handle_hover(&first, first_generation));
+
+        let reentered_generation = shell
+            .begin_resize_handle_hover(first.clone())
+            .expect("re-enter should arm a new dwell");
+        assert_ne!(reentered_generation, first_generation);
+        assert!(shell.activate_resize_handle_hover(&first, reentered_generation));
+        assert!(shell.resize_handle_is_highlighted(&first));
+        assert!(shell.begin_resize_handle_hover(first.clone()).is_none());
+
+        let second_generation = shell
+            .begin_resize_handle_hover(second.clone())
+            .expect("another handle should replace the active handle");
+        assert!(!shell.resize_handle_is_highlighted(&first));
+        assert!(shell.activate_resize_handle_hover(&second, second_generation));
+        assert!(shell.leave_resize_handle_hover(&second));
+        assert!(!shell.resize_handle_is_highlighted(&second));
+    }
+
+    #[test]
+    fn resize_handle_mouse_down_activates_immediately_and_invalidates_pending_dwell() {
+        let mut shell = shell(BottomPanelMode::Hidden);
+        let id = SharedString::from("resize-handle");
+        let generation = shell
+            .begin_resize_handle_hover(id.clone())
+            .expect("enter should arm dwell");
+
+        shell.activate_resize_handle_immediately(id.clone());
+
+        assert!(shell.resize_handle_is_highlighted(&id));
+        assert!(!shell.activate_resize_handle_hover(&id, generation));
+        assert!(shell.leave_resize_handle_hover(&id));
     }
 
     #[test]
