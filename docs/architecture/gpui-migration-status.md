@@ -2444,3 +2444,11 @@ a deliberately deferred architectural decision.
    removed with that feature rather than kept as a compatibility facade.
 8. Revisit `nyaterm-store` only after storage modules have clearer internal
    boundaries and consumers can move without changing persistence compatibility.
+
+## Security Authentication Parity
+
+The native GPUI security authentication panel now follows the retired Tauri
+interaction model for SSH keys, saved passwords, OTP entries, and prompt-based
+credentials. Editors and private-key viewing use `nyaterm-ui` dialogs, OTP input
+uses the sensitive terminal write policy, and credential drag ordering persists
+through the compatibility `sort_order` field and a single storage transaction.
