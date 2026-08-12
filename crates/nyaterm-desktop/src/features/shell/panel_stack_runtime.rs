@@ -3,8 +3,8 @@ use std::collections::HashSet;
 use gpui::{
     AnyElement, App, ClickEvent, Context, InteractiveElement as _, IntoElement, MouseButton,
     MouseDownEvent, MouseMoveEvent, ParentElement as _, SharedString,
-    StatefulInteractiveElement as _, Styled as _, Window, div, prelude::FluentBuilder as _, px,
-    rgb, svg,
+    StatefulInteractiveElement as _, Styled as _, Window, deferred, div,
+    prelude::FluentBuilder as _, px, rgb, svg,
 };
 use nyaterm_core::{AgentCommandExecutionMode, truncate_preview};
 
@@ -916,19 +916,7 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let above = above_id.clone();
         let below = below_id.clone();
-        crate::features::horizontal_resize_handle_visual(
-            palette,
-            self.shell
-                .panels
-                .stack_resize
-                .as_ref()
-                .is_some_and(|resize| {
-                    resize.side == side
-                        && resize.above_id == above_id
-                        && resize.below_id == below_id
-                }),
-        )
-        .id(SharedString::from(format!(
+        let id = SharedString::from(format!(
             "panel-stack-resize-{}-{}-{}",
             match side {
                 PanelSide::Left => "left",
@@ -936,23 +924,39 @@ impl NyaTermApp {
             },
             above_id,
             below_id
-        )))
-        .cursor_row_resize()
-        .on_mouse_down(
-            MouseButton::Left,
-            cx.listener(move |this, event: &MouseDownEvent, _, cx| {
-                let open = this.side_open_panel_ids(side);
-                let total_weight: f32 = open.iter().map(|id| this.panel_stack_weight(id)).sum();
-                let container_height = 480.0_f32.max(total_weight * 120.);
-                this.start_panel_stack_resize(
-                    side,
-                    above.clone(),
-                    below.clone(),
-                    event,
-                    container_height,
-                    cx,
-                );
-            }),
+        ));
+        deferred(
+            crate::features::horizontal_resize_handle_visual(
+                palette,
+                self.shell
+                    .panels
+                    .stack_resize
+                    .as_ref()
+                    .is_some_and(|resize| {
+                        resize.side == side
+                            && resize.above_id == above_id
+                            && resize.below_id == below_id
+                    }),
+                id.clone(),
+            )
+            .id(id)
+            .cursor_row_resize()
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |this, event: &MouseDownEvent, _, cx| {
+                    let open = this.side_open_panel_ids(side);
+                    let total_weight: f32 = open.iter().map(|id| this.panel_stack_weight(id)).sum();
+                    let container_height = 480.0_f32.max(total_weight * 120.);
+                    this.start_panel_stack_resize(
+                        side,
+                        above.clone(),
+                        below.clone(),
+                        event,
+                        container_height,
+                        cx,
+                    );
+                }),
+            ),
         )
     }
 }

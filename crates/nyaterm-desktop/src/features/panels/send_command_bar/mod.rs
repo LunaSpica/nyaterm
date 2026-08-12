@@ -1,4 +1,4 @@
-use gpui::{Context, IntoElement, div, prelude::*, px, rgb};
+use gpui::{Context, IntoElement, div, prelude::*, px};
 
 use crate::features::NyaTermApp;
 
@@ -24,8 +24,6 @@ impl NyaTermApp {
             .flex_none()
             .flex()
             .flex_col()
-            .border_t_1()
-            .border_color(rgb(palette.border))
             .bg(self.shell_surface_color(palette.surface))
             .child(
                 div()

@@ -1,4 +1,4 @@
-use gpui::{Context, div, prelude::*, px, rgb};
+use gpui::{Context, div, prelude::*, px};
 
 use crate::features::NyaTermApp;
 use crate::models::BottomPanelMode;
@@ -14,8 +14,6 @@ impl NyaTermApp {
                 div()
                     .h(px(self.shell.quick_commands_height().clamp(36., 520.)))
                     .flex_none()
-                    .border_t_1()
-                    .border_color(rgb(palette.border))
                     .bg(self.shell_surface_color(palette.surface))
                     .child(self.quick_commands_panel(cx))
                     .into_any_element()

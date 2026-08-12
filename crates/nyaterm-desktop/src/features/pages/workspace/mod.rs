@@ -1,10 +1,43 @@
 use gpui::{Context, IntoElement, div, prelude::*};
 
 use super::super::NyaTermApp;
-use crate::models::WorkspacePaneNode;
+use crate::models::{WorkspacePaneNode, WorkspaceSplitDirection};
 
 mod panes;
 mod terminal_windows;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct PaneBorderEdges {
+    top: bool,
+    right: bool,
+    bottom: bool,
+    left: bool,
+}
+
+impl PaneBorderEdges {
+    const ALL: Self = Self {
+        top: true,
+        right: true,
+        bottom: true,
+        left: true,
+    };
+
+    fn split(self, direction: WorkspaceSplitDirection) -> (Self, Self) {
+        let mut first = self;
+        let mut second = self;
+        match direction {
+            WorkspaceSplitDirection::Horizontal => {
+                first.bottom = false;
+                second.top = false;
+            }
+            WorkspaceSplitDirection::Vertical => {
+                first.right = false;
+                second.left = false;
+            }
+        }
+        (first, second)
+    }
+}
 
 impl NyaTermApp {
     pub(in crate::features) fn workspace_view(
@@ -67,7 +100,7 @@ impl NyaTermApp {
                 .min_h_0()
                 .min_w_0()
                 .bg(self.shell_transparent_color(palette.bg))
-                .child(self.render_terminal_window_node(window_root, cx))
+                .child(self.render_terminal_window_node(window_root, PaneBorderEdges::ALL, cx))
                 .into_any_element();
         }
         let root =
@@ -81,7 +114,50 @@ impl NyaTermApp {
             .min_h_0()
             .min_w_0()
             .bg(self.shell_transparent_color(palette.bg))
-            .child(self.render_workspace_pane_node(root, show_chrome, cx))
+            .child(self.render_workspace_pane_node(root, show_chrome, PaneBorderEdges::ALL, cx))
             .into_any_element()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PaneBorderEdges;
+    use crate::models::WorkspaceSplitDirection;
+
+    #[test]
+    fn vertical_split_only_suppresses_the_shared_edges() {
+        let (first, second) = PaneBorderEdges::ALL.split(WorkspaceSplitDirection::Vertical);
+
+        assert_eq!(
+            first,
+            PaneBorderEdges {
+                top: true,
+                right: false,
+                bottom: true,
+                left: true,
+            }
+        );
+        assert_eq!(
+            second,
+            PaneBorderEdges {
+                top: true,
+                right: true,
+                bottom: true,
+                left: false,
+            }
+        );
+    }
+
+    #[test]
+    fn nested_split_preserves_already_suppressed_outer_edges() {
+        let (left, _) = PaneBorderEdges::ALL.split(WorkspaceSplitDirection::Vertical);
+        let (top, bottom) = left.split(WorkspaceSplitDirection::Horizontal);
+
+        assert!(!top.right);
+        assert!(!bottom.right);
+        assert!(!top.bottom);
+        assert!(!bottom.top);
+        assert!(top.top && top.left);
+        assert!(bottom.bottom && bottom.left);
     }
 }

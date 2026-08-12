@@ -311,7 +311,7 @@ impl NyaTermApp {
                 .when(
                     has_left_activity_items && self.left_side_open() && !left_overlay_mode,
                     |this| {
-                        this.child(self.sidebar(window, cx))
+                        this.child(self.sidebar(false, window, cx))
                             .child(self.panel_resize_handle(PanelResizeSide::Left, cx))
                     },
                 )
@@ -320,7 +320,7 @@ impl NyaTermApp {
                     has_right_activity_items && self.right_side_open() && !right_overlay_mode,
                     |this| {
                         this.child(self.panel_resize_handle(PanelResizeSide::Right, cx))
-                            .child(self.right_panel(window, cx))
+                            .child(self.right_panel(false, window, cx))
                     },
                 )
                 .when(has_right_activity_items, |this| {
@@ -364,7 +364,7 @@ impl NyaTermApp {
                                         .flex_1()
                                         .min_h_0()
                                         .flex()
-                                        .child(self.sidebar(window, cx)),
+                                        .child(self.sidebar(true, window, cx)),
                                 ),
                         ),
                 );
@@ -392,7 +392,7 @@ impl NyaTermApp {
                                         .flex_1()
                                         .min_h_0()
                                         .flex()
-                                        .child(self.right_panel(window, cx)),
+                                        .child(self.right_panel(true, window, cx)),
                                 ),
                         ),
                 );

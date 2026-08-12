@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use gpui::{
     Context, InteractiveElement as _, IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent,
-    SharedString, Styled as _, Window,
+    SharedString, Styled as _, Window, deferred,
 };
 use nyaterm_core::{ConnectionStore, uuid};
 
@@ -397,8 +397,8 @@ impl NyaTermApp {
             .is_some_and(|resize| resize.split_id == split_id);
         let id = SharedString::from(format!("workspace-split-resize-{split_id}"));
         match direction {
-            WorkspaceSplitDirection::Horizontal => {
-                horizontal_resize_handle_visual(palette, dragging)
+            WorkspaceSplitDirection::Horizontal => deferred(
+                horizontal_resize_handle_visual(palette, dragging, id.clone())
                     .id(id)
                     .cursor_row_resize()
                     .on_mouse_down(
@@ -406,19 +406,21 @@ impl NyaTermApp {
                         cx.listener(move |this, event: &MouseDownEvent, _, cx| {
                             this.start_workspace_split_resize(split_id.clone(), event, cx);
                         }),
-                    )
-                    .into_any_element()
-            }
-            WorkspaceSplitDirection::Vertical => vertical_resize_handle_visual(palette, dragging)
-                .id(id)
-                .cursor_col_resize()
-                .on_mouse_down(
-                    MouseButton::Left,
-                    cx.listener(move |this, event: &MouseDownEvent, _, cx| {
-                        this.start_workspace_split_resize(split_id.clone(), event, cx);
-                    }),
-                )
-                .into_any_element(),
+                    ),
+            )
+            .into_any_element(),
+            WorkspaceSplitDirection::Vertical => deferred(
+                vertical_resize_handle_visual(palette, dragging, id.clone())
+                    .id(id)
+                    .cursor_col_resize()
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(move |this, event: &MouseDownEvent, _, cx| {
+                            this.start_workspace_split_resize(split_id.clone(), event, cx);
+                        }),
+                    ),
+            )
+            .into_any_element(),
         }
     }
     pub(in crate::features) fn persist_workspace_pane_layout(&mut self) {

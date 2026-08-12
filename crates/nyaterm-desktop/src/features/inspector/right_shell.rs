@@ -6,6 +6,7 @@ use crate::models::{NavItem, PanelSide};
 impl NyaTermApp {
     pub(in crate::features) fn right_panel(
         &mut self,
+        draw_shared_edge: bool,
         window: &mut gpui::Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
@@ -19,7 +20,7 @@ impl NyaTermApp {
             .flex_none()
             .flex()
             .flex_col()
-            .border_l_1()
+            .when(draw_shared_edge, |this| this.border_l_1())
             .border_color(rgb(palette.border))
             .bg(self.shell_surface_color(palette.surface))
             .child(self.side_panel_stack(PanelSide::Right, window, cx))

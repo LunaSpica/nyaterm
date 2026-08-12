@@ -6,6 +6,7 @@ use gpui::{
 };
 
 use super::super::super::{NyaTermApp, short_id};
+use super::PaneBorderEdges;
 use crate::models::{WorkspacePaneNode, WorkspaceSplitDirection};
 use crate::widgets::small_button;
 use nyaterm_core::truncate_preview;
@@ -154,6 +155,7 @@ impl NyaTermApp {
         &mut self,
         node: WorkspacePaneNode,
         show_chrome: bool,
+        border_edges: PaneBorderEdges,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
         let palette = self.theme_palette();
@@ -182,11 +184,16 @@ impl NyaTermApp {
                     }));
                 if show_chrome {
                     // Tauri PaneWorkspace uses the pane border as the only split chrome.
-                    pane = pane.border_1().border_color(if is_active {
-                        rgb(palette.primary)
-                    } else {
-                        rgb(palette.border)
-                    });
+                    pane = pane
+                        .border_t(if border_edges.top { px(1.) } else { px(0.) })
+                        .border_r(if border_edges.right { px(1.) } else { px(0.) })
+                        .border_b(if border_edges.bottom { px(1.) } else { px(0.) })
+                        .border_l(if border_edges.left { px(1.) } else { px(0.) })
+                        .border_color(if is_active {
+                            rgb(palette.primary)
+                        } else {
+                            rgb(palette.border)
+                        });
                 }
                 pane.child(div().flex_1().min_h_0().overflow_hidden().child(content))
                     .into_any_element()
@@ -198,8 +205,9 @@ impl NyaTermApp {
                 first,
                 second,
             } => {
-                let first_el = self.render_workspace_pane_node(*first, true, cx);
-                let second_el = self.render_workspace_pane_node(*second, true, cx);
+                let (first_edges, second_edges) = border_edges.split(direction);
+                let first_el = self.render_workspace_pane_node(*first, true, first_edges, cx);
+                let second_el = self.render_workspace_pane_node(*second, true, second_edges, cx);
                 let divider = self.workspace_split_resize_handle(id.clone(), direction, cx);
                 let primary_basis =
                     relative(WorkspacePaneNode::primary_weight(ratio_percent) / 100.);

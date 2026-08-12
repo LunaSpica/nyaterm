@@ -1,6 +1,6 @@
 use gpui::{
     Context, InteractiveElement as _, IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent,
-    SharedString, Styled as _, prelude::FluentBuilder as _,
+    SharedString, Styled as _, deferred, prelude::FluentBuilder as _,
 };
 use nyaterm_core::ConnectionStore;
 
@@ -206,26 +206,30 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        vertical_resize_handle_visual(
-            palette,
-            self.shell
-                .panels
-                .resize
-                .is_some_and(|resize| resize.side == side),
-        )
-        .id(SharedString::from(format!(
+        let id = SharedString::from(format!(
             "panel-resize-{}",
             match side {
                 PanelResizeSide::Left => "left",
                 PanelResizeSide::Right => "right",
             }
-        )))
-        .cursor_col_resize()
-        .on_mouse_down(
-            MouseButton::Left,
-            cx.listener(move |this, event: &MouseDownEvent, _, cx| {
-                this.start_panel_resize(side, event, cx);
-            }),
+        ));
+        deferred(
+            vertical_resize_handle_visual(
+                palette,
+                self.shell
+                    .panels
+                    .resize
+                    .is_some_and(|resize| resize.side == side),
+                id.clone(),
+            )
+            .id(id)
+            .cursor_col_resize()
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |this, event: &MouseDownEvent, _, cx| {
+                    this.start_panel_resize(side, event, cx);
+                }),
+            ),
         )
     }
 }
@@ -270,15 +274,22 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        horizontal_resize_handle_visual(palette, self.transfer.panel_height_is_resizing())
-            .id(SharedString::from("transfer-height-resize"))
+        let id = SharedString::from("transfer-height-resize");
+        deferred(
+            horizontal_resize_handle_visual(
+                palette,
+                self.transfer.panel_height_is_resizing(),
+                id.clone(),
+            )
+            .id(id)
             .cursor_row_resize()
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, event: &MouseDownEvent, _, cx| {
                     this.start_transfer_height_resize(event, cx);
                 }),
-            )
+            ),
+        )
     }
 }
 
@@ -321,18 +332,25 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        horizontal_resize_handle_visual(palette, self.shell.bottom_panel.resize.is_some())
-            .id("bottom-panel-resize")
+        let id = SharedString::from("bottom-panel-resize");
+        deferred(
+            horizontal_resize_handle_visual(
+                palette,
+                self.shell.bottom_panel.resize.is_some(),
+                id.clone(),
+            )
+            .id(id)
             .cursor_row_resize()
             .when(
                 self.shell.bottom_panel.mode == BottomPanelMode::Hidden,
-                |this| this.h_0(),
+                |this| this.h_0().mt_0().mb_0(),
             )
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, event: &MouseDownEvent, _, cx| {
                     this.start_bottom_panel_resize(event, cx);
                 }),
-            )
+            ),
+        )
     }
 }

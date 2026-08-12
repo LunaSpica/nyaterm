@@ -7,6 +7,7 @@ use super::super::super::{
     NyaTermApp, SessionTabDragPayload, SessionTabDragPreview, SessionTabTooltip, ThemePalette,
     session_kind_label, short_id,
 };
+use super::PaneBorderEdges;
 use crate::models::{
     TabDockEdge, TabDockZone, TerminalWindowNode, WorkspacePaneNode, WorkspaceSplitDirection,
 };
@@ -15,6 +16,7 @@ impl NyaTermApp {
     pub(super) fn render_terminal_window_node(
         &mut self,
         node: TerminalWindowNode,
+        border_edges: PaneBorderEdges,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
         let palette = self.theme_palette();
@@ -382,7 +384,10 @@ impl NyaTermApp {
                     .min_w_0()
                     .flex()
                     .flex_col()
-                    .border_1()
+                    .border_t(if border_edges.top { px(1.) } else { px(0.) })
+                    .border_r(if border_edges.right { px(1.) } else { px(0.) })
+                    .border_b(if border_edges.bottom { px(1.) } else { px(0.) })
+                    .border_l(if border_edges.left { px(1.) } else { px(0.) })
                     .border_color(rgb(palette.border))
                     .overflow_hidden()
                     .on_mouse_down(
@@ -406,8 +411,9 @@ impl NyaTermApp {
                 first,
                 second,
             } => {
-                let first_el = self.render_terminal_window_node(*first, cx);
-                let second_el = self.render_terminal_window_node(*second, cx);
+                let (first_edges, second_edges) = border_edges.split(direction);
+                let first_el = self.render_terminal_window_node(*first, first_edges, cx);
+                let second_el = self.render_terminal_window_node(*second, second_edges, cx);
                 let primary_basis =
                     relative(WorkspacePaneNode::primary_weight(ratio_percent) / 100.);
                 let secondary_basis =

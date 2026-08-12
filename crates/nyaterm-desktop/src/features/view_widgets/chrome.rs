@@ -19,16 +19,20 @@ pub(in crate::features) fn logo_mark(palette: ThemePalette) -> impl IntoElement 
 pub(in crate::features) fn vertical_resize_handle_visual(
     palette: ThemePalette,
     dragging: bool,
+    hover_group: SharedString,
 ) -> gpui::Div {
     div()
         .relative()
-        .w(px(3.))
+        .w(px(5.))
+        .ml(px(-2.))
+        .mr(px(-2.))
         .h_full()
         .flex_none()
+        .group(hover_group.clone())
         .child(
             div()
                 .absolute()
-                .left(px(1.))
+                .left(px(2.))
                 .top_0()
                 .bottom_0()
                 .w(px(1.))
@@ -37,44 +41,54 @@ pub(in crate::features) fn vertical_resize_handle_visual(
         .child(
             div()
                 .absolute()
-                .inset_0()
+                .left(px(1.))
+                .top_0()
+                .bottom_0()
+                .w(px(3.))
                 .bg(if dragging {
                     rgb(palette.primary)
                 } else {
                     rgba(0x00000000)
                 })
-                .hover(move |this| this.bg(rgb(palette.primary))),
+                .group_hover(hover_group, move |this| this.bg(rgb(palette.primary))),
         )
 }
 
 pub(in crate::features) fn horizontal_resize_handle_visual(
     palette: ThemePalette,
     dragging: bool,
+    hover_group: SharedString,
 ) -> gpui::Div {
     div()
         .relative()
-        .h(px(3.))
+        .h(px(5.))
+        .mt(px(-2.))
+        .mb(px(-2.))
         .w_full()
         .flex_none()
+        .group(hover_group.clone())
         .child(
             div()
                 .absolute()
                 .left_0()
                 .right_0()
-                .top(px(1.))
+                .top(px(2.))
                 .h(px(1.))
                 .bg(rgb(palette.border)),
         )
         .child(
             div()
                 .absolute()
-                .inset_0()
+                .left_0()
+                .right_0()
+                .top(px(1.))
+                .h(px(3.))
                 .bg(if dragging {
                     rgb(palette.primary)
                 } else {
                     rgba(0x00000000)
                 })
-                .hover(move |this| this.bg(rgb(palette.primary))),
+                .group_hover(hover_group, move |this| this.bg(rgb(palette.primary))),
         )
 }
 
@@ -368,20 +382,112 @@ pub(in crate::features) fn dialog_action_button(
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
     use gpui::{
         Context, InteractiveElement as _, IntoElement, Modifiers, MouseButton, ParentElement as _,
         Render, StatefulInteractiveElement as _, Styled as _, TestAppContext, VisualTestContext,
-        Window, div, point, px,
+        Window, canvas, deferred, div, point, px,
     };
 
-    use super::{bounded_dialog_width, full_window_input_layer};
+    use super::{
+        bounded_dialog_width, full_window_input_layer, horizontal_resize_handle_visual,
+        vertical_resize_handle_visual,
+    };
+    use crate::theme::theme_palette;
 
     struct InputLayerFixture {
         lower_events: Arc<AtomicUsize>,
         backdrop_clicks: Arc<AtomicUsize>,
         child_clicks: Arc<AtomicUsize>,
+    }
+
+    struct ResizeHandleFixture {
+        hovered: Arc<AtomicBool>,
+        hover_paints: Arc<AtomicUsize>,
+        mouse_downs: Arc<AtomicUsize>,
+    }
+
+    impl Render for ResizeHandleFixture {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            let palette = theme_palette("github-dark");
+            let hovered = self.hovered.clone();
+            let hover_paints = self.hover_paints.clone();
+            let mouse_downs = self.mouse_downs.clone();
+            let vertical_group = "test-vertical-resize";
+
+            div()
+                .size(px(120.))
+                .flex()
+                .items_start()
+                .child(
+                    div()
+                        .w(px(20.))
+                        .h(px(40.))
+                        .debug_selector(|| "resize-left-content".to_string()),
+                )
+                .child(deferred(
+                    vertical_resize_handle_visual(palette, false, vertical_group.into())
+                        .id(vertical_group)
+                        .h(px(40.))
+                        .debug_selector(|| "vertical-resize-hitbox".to_string())
+                        .cursor_col_resize()
+                        .on_hover(move |is_hovered, _, _| {
+                            hovered.store(*is_hovered, Ordering::SeqCst);
+                        })
+                        .child(
+                            div()
+                                .absolute()
+                                .inset_0()
+                                .invisible()
+                                .group_hover(vertical_group, |this| this.visible())
+                                .child(canvas(
+                                    |_, _, _| {},
+                                    move |_, _, _, _| {
+                                        hover_paints.fetch_add(1, Ordering::SeqCst);
+                                    },
+                                )),
+                        )
+                        .on_mouse_down(MouseButton::Left, move |_, _, _| {
+                            mouse_downs.fetch_add(1, Ordering::SeqCst);
+                        }),
+                ))
+                .child(
+                    div()
+                        .w(px(20.))
+                        .h(px(40.))
+                        .debug_selector(|| "resize-right-content".to_string()),
+                )
+                .child(
+                    div()
+                        .ml(px(12.))
+                        .w(px(40.))
+                        .flex()
+                        .flex_col()
+                        .child(
+                            div()
+                                .w(px(40.))
+                                .h(px(20.))
+                                .debug_selector(|| "resize-top-content".to_string()),
+                        )
+                        .child(deferred(
+                            horizontal_resize_handle_visual(
+                                palette,
+                                false,
+                                "test-horizontal-resize".into(),
+                            )
+                            .id("test-horizontal-resize")
+                            .debug_selector(|| "horizontal-resize-hitbox".to_string())
+                            .cursor_row_resize(),
+                        ))
+                        .child(
+                            div()
+                                .w(px(40.))
+                                .h(px(20.))
+                                .debug_selector(|| "resize-bottom-content".to_string()),
+                        ),
+                )
+        }
     }
 
     impl Render for InputLayerFixture {
@@ -455,6 +561,47 @@ mod tests {
         assert_eq!(bounded_dialog_width(400., 32., 280., 448.), 368.);
         assert_eq!(bounded_dialog_width(200., 32., 280., 448.), 280.);
         assert_eq!(bounded_dialog_width(f32::NAN, 32., 280., 448.), 448.);
+    }
+
+    #[gpui::test]
+    fn resize_handles_hover_without_clicking_and_keep_one_pixel_layout_gap(
+        cx: &mut TestAppContext,
+    ) {
+        let hovered = Arc::new(AtomicBool::new(false));
+        let hover_paints = Arc::new(AtomicUsize::new(0));
+        let mouse_downs = Arc::new(AtomicUsize::new(0));
+        let fixture = ResizeHandleFixture {
+            hovered: hovered.clone(),
+            hover_paints: hover_paints.clone(),
+            mouse_downs: mouse_downs.clone(),
+        };
+        let (_, cx) = cx.add_window_view(|_, _| fixture);
+        let cx: &mut VisualTestContext = cx;
+        draw(cx);
+
+        let left = cx.debug_bounds("resize-left-content").unwrap();
+        let right = cx.debug_bounds("resize-right-content").unwrap();
+        let vertical = cx.debug_bounds("vertical-resize-hitbox").unwrap();
+        let top = cx.debug_bounds("resize-top-content").unwrap();
+        let bottom = cx.debug_bounds("resize-bottom-content").unwrap();
+        let horizontal = cx.debug_bounds("horizontal-resize-hitbox").unwrap();
+
+        assert_eq!(vertical.size.width, px(5.));
+        assert_eq!(right.left() - left.right(), px(1.));
+        assert_eq!(horizontal.size.height, px(5.));
+        assert_eq!(bottom.top() - top.bottom(), px(1.));
+        assert_eq!(hover_paints.load(Ordering::SeqCst), 0);
+
+        cx.simulate_mouse_move(vertical.center(), None, Modifiers::default());
+        assert!(hovered.load(Ordering::SeqCst));
+        assert_eq!(hover_paints.load(Ordering::SeqCst), 1);
+
+        cx.simulate_mouse_move(point(px(100.), px(100.)), None, Modifiers::default());
+        assert!(!hovered.load(Ordering::SeqCst));
+
+        let hitbox_edge = point(vertical.left() + px(0.5), vertical.center().y);
+        cx.simulate_mouse_down(hitbox_edge, MouseButton::Left, Modifiers::default());
+        assert_eq!(mouse_downs.load(Ordering::SeqCst), 1);
     }
 
     #[gpui::test]
