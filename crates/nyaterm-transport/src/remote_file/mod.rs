@@ -214,7 +214,7 @@ impl RemoteFileService {
                 BackendProbeStage::Cached => "cached_probe",
                 BackendProbeStage::Full => "full_probe",
             };
-            tracing::debug!(
+            tracing::info!(
                 endpoint = %endpoint_key,
                 backend = candidate.cache_name(),
                 stage = stage_name,
@@ -222,7 +222,7 @@ impl RemoteFileService {
             );
             let result = self.probe(candidate);
             if let Err(error) = result.as_ref() {
-                tracing::debug!(
+                tracing::info!(
                     endpoint = %endpoint_key,
                     backend = candidate.cache_name(),
                     stage = "probe_failed",

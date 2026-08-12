@@ -356,7 +356,7 @@ impl NyaTermApp {
                 || self.terminal.frame_queue_metrics().event_count > 0
                 || self.terminal.frame_queue_metrics().pending_event_count > 0;
             if has_runtime_activity {
-                tracing::info!(
+                tracing::debug!(
                     diagnostic = "terminal_perf_heartbeat",
                     active_session_id,
                     visible_session_count,

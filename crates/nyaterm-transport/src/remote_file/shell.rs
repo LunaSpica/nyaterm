@@ -9,7 +9,7 @@ use crate::{
 
 const REMOTE_FILE_COMMAND_TIMEOUT: Duration = Duration::from_secs(30);
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub(super) struct ShellOutput {
     pub(super) stdout: Vec<u8>,
     pub(super) stderr: Vec<u8>,
@@ -147,15 +147,20 @@ async fn send_stdin_and_collect(
     let mut stdout = Vec::new();
     let mut stderr = Vec::new();
     let mut exit_status = None;
+    let mut eof_received = false;
     loop {
-        match channel.wait().await {
-            Some(ChannelMsg::Data { data }) => stdout.extend_from_slice(&data),
-            Some(ChannelMsg::ExtendedData { data, ext: 1 }) => stderr.extend_from_slice(&data),
-            Some(ChannelMsg::ExitStatus {
-                exit_status: status,
-            }) => exit_status = Some(status),
-            Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) | None => break,
-            Some(_) => {}
+        let message = channel.wait().await;
+        let mut output = ShellOutput {
+            stdout,
+            stderr,
+            exit_status,
+        };
+        let keep_collecting = apply_channel_message(&mut output, &mut eof_received, message);
+        stdout = output.stdout;
+        stderr = output.stderr;
+        exit_status = output.exit_status;
+        if !keep_collecting {
+            break;
         }
     }
     let _ = channel.close().await;
@@ -164,6 +169,34 @@ async fn send_stdin_and_collect(
         stderr,
         exit_status,
     })
+}
+
+fn apply_channel_message(
+    output: &mut ShellOutput,
+    eof_received: &mut bool,
+    message: Option<ChannelMsg>,
+) -> bool {
+    match message {
+        Some(ChannelMsg::Data { data }) => output.stdout.extend_from_slice(&data),
+        Some(ChannelMsg::ExtendedData { data, ext: 1 }) => output.stderr.extend_from_slice(&data),
+        Some(ChannelMsg::ExitStatus { exit_status }) => {
+            output.exit_status = Some(exit_status);
+            if *eof_received {
+                return false;
+            }
+        }
+        // RFC 4254 permits exit-status after EOF. Some servers use exactly
+        // that order, so EOF only closes the data stream, not the channel.
+        Some(ChannelMsg::Eof) => {
+            *eof_received = true;
+            if output.exit_status.is_some() {
+                return false;
+            }
+        }
+        Some(ChannelMsg::Close) | None => return false,
+        Some(_) => {}
+    }
+    true
 }
 
 pub(super) fn shell_quote(value: &str) -> String {
@@ -176,12 +209,31 @@ pub(super) fn shell_quote(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::shell_quote;
+    use super::{ShellOutput, apply_channel_message, shell_quote};
+    use russh::ChannelMsg;
 
     #[test]
     fn quotes_posix_shell_paths() {
         assert_eq!(shell_quote(""), "''");
         assert_eq!(shell_quote("a b"), "'a b'");
         assert_eq!(shell_quote("a'b"), "'a'\\''b'");
+    }
+
+    #[test]
+    fn keeps_collecting_exit_status_after_eof() {
+        let mut output = ShellOutput::default();
+        let mut eof_received = false;
+
+        assert!(apply_channel_message(
+            &mut output,
+            &mut eof_received,
+            Some(ChannelMsg::Eof)
+        ));
+        assert!(!apply_channel_message(
+            &mut output,
+            &mut eof_received,
+            Some(ChannelMsg::ExitStatus { exit_status: 0 })
+        ));
+        assert_eq!(output.exit_status, Some(0));
     }
 }
