@@ -15,6 +15,7 @@ members = [
 ]
 resolver = "3"
 exclude = [
+    "vendor/alacritty_terminal",
     "vendor/gpui-component",
     "vendor/russh",
     "vendor/russh-sftp",
@@ -125,6 +126,7 @@ inherits = "dev"
 debug = "full"
 
 [patch.crates-io]
+alacritty_terminal = { path = "vendor/alacritty_terminal" }
 ironrdp-client = { path = "vendor/ironrdp-client" }
 ironrdp-connector = { path = "vendor/ironrdp-connector" }
 sspi = { path = "vendor/sspi" }
