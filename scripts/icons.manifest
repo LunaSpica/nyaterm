@@ -32,6 +32,12 @@ icons/connections.svg	md:filled/dns.svg
 icons/copy.svg	md:filled/content_copy.svg
 icons/docker.svg	si:docker.svg
 icons/eye.svg	md:filled/visibility.svg
+icons/eye-off.svg	md:filled/visibility_off.svg
+icons/edit.svg	md:filled/edit.svg
+icons/delete.svg	md:filled/delete.svg
+icons/drag.svg	md:filled/drag_indicator.svg
+icons/qr.svg	md:filled/qr_code_scanner.svg
+icons/private-key.svg	md:filled/key.svg
 icons/files.svg	md:outlined/folder.svg
 icons/gpu.svg	si:nvidia.svg
 icons/history.svg	md:filled/history.svg
