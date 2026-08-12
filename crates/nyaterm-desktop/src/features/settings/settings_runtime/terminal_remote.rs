@@ -97,14 +97,6 @@ impl NyaTermApp {
         self.save_terminal_settings(cx);
     }
 
-    pub(in crate::features) fn toggle_terminal_timestamp_milliseconds(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) {
-        self.settings.toggle_terminal_timestamp_milliseconds();
-        self.save_terminal_settings(cx);
-    }
-
     pub(in crate::features) fn toggle_multi_line_paste_dialog(&mut self, cx: &mut Context<Self>) {
         self.settings.toggle_multi_line_paste_dialog();
         self.save_terminal_settings(cx);

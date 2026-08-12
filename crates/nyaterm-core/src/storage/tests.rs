@@ -1674,7 +1674,6 @@ fn app_settings_summary_reads_and_updates_host_key_policy() {
     assert!(summary.terminal_show_workspace_padding);
     assert!(summary.terminal_show_line_numbers);
     assert!(summary.terminal_show_timestamps);
-    assert!(summary.terminal_show_timestamp_milliseconds);
     assert!(!summary.terminal_show_multi_line_paste_dialog);
     assert!(!summary.terminal_paste_image_as_path);
     assert!(summary.terminal_low_latency_mode);
@@ -1801,6 +1800,21 @@ fn app_settings_summary_reads_and_updates_host_key_policy() {
     assert_eq!(
         json_path(&stored, &["keybindings", "terminal.find"]).and_then(|value| value.as_str()),
         Some("ctrl+f")
+    );
+
+    let mut terminal_update = summary.clone();
+    terminal_update.terminal_show_line_numbers = false;
+    store
+        .save_terminal_settings(&terminal_update)
+        .expect("save terminal settings");
+    let stored = store
+        .load_settings_value()
+        .expect("stored terminal settings");
+    assert_eq!(
+        json_path(&stored, &["terminal", "show_timestamp_milliseconds"])
+            .and_then(|value| value.as_bool()),
+        Some(true),
+        "the retired legacy key must remain byte-semantically untouched"
     );
 
     let mut transfer_update = summary.clone();

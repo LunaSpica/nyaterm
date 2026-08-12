@@ -149,11 +149,6 @@ impl ConnectionStore {
                 false,
             ),
             terminal_show_timestamps: json_bool(&value, &["terminal", "show_timestamps"], false),
-            terminal_show_timestamp_milliseconds: json_bool(
-                &value,
-                &["terminal", "show_timestamp_milliseconds"],
-                false,
-            ),
             terminal_show_multi_line_paste_dialog: json_bool(
                 &value,
                 &["terminal", "show_multi_line_paste_dialog"],
@@ -1044,11 +1039,6 @@ impl ConnectionStore {
             &mut value,
             &["terminal", "show_timestamps"],
             serde_json::Value::Bool(settings.terminal_show_timestamps),
-        );
-        set_nested_json_value(
-            &mut value,
-            &["terminal", "show_timestamp_milliseconds"],
-            serde_json::Value::Bool(settings.terminal_show_timestamp_milliseconds),
         );
         set_nested_json_value(
             &mut value,

@@ -1988,8 +1988,6 @@
     "showProcessManagerDesc": "Show and manage processes on the active SSH host.",
     "showRemoteStats": "Remote Stats",
     "showRemoteStatsDesc": "Show active SSH host resource usage.",
-    "showTimestampMilliseconds": "Show milliseconds",
-    "showTimestampMillisecondsDesc": "Display timestamps in HH:mm:ss.SSS format.",
     "showTimestamps": "Show Timestamps",
     "showTimestampsDesc": "Show output time in the terminal gutter.",
     "showWorkspacePadding": "Show Padding",

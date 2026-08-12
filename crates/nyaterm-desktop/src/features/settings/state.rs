@@ -360,11 +360,6 @@ impl SettingsFeatureState {
         self.summary.terminal_show_timestamps = !self.summary.terminal_show_timestamps;
     }
 
-    pub(in crate::features) fn toggle_terminal_timestamp_milliseconds(&mut self) {
-        self.summary.terminal_show_timestamp_milliseconds =
-            !self.summary.terminal_show_timestamp_milliseconds;
-    }
-
     pub(in crate::features) fn toggle_multi_line_paste_dialog(&mut self) {
         self.summary.terminal_show_multi_line_paste_dialog =
             !self.summary.terminal_show_multi_line_paste_dialog;

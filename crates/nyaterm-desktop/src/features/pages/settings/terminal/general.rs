@@ -204,21 +204,6 @@ impl NyaTermApp {
                                     div().w_full().max_w(px(520.)).child(timestamp_format_input),
                                 ),
                         )
-                        .child(settings_form_row(
-                            palette,
-                            self.tr("settings.showTimestampMilliseconds"),
-                            Some(SharedString::from(
-                                self.tr("settings.showTimestampMillisecondsDesc"),
-                            )),
-                            settings_switch(
-                                palette,
-                                "terminal-timestamp-ms",
-                                self.settings.summary().terminal_show_timestamp_milliseconds,
-                                cx.listener(|this, _, _, cx| {
-                                    this.toggle_terminal_timestamp_milliseconds(cx);
-                                }),
-                            ),
-                        ))
                     })
                     .child(settings_form_row(
                         palette,

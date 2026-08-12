@@ -6,7 +6,7 @@ use nyaterm_terminal::{TerminalScreen, TerminalSnapshot};
 
 use crate::features::NyaTermApp;
 use crate::features::formatting::{
-    format_terminal_line_timestamp_ms_with_format, terminal_timestamp_format_width_chars,
+    TerminalTimestampFormatter, terminal_gutter_labels, terminal_timestamp_format_width_chars,
 };
 use crate::features::terminal::terminal_runtime::{
     TerminalScrollVisualState, terminal_display_offset_from_state,
@@ -29,7 +29,7 @@ use crate::terminal::{
     NyaTerminalElement, NyaTerminalLayoutCache, TerminalGridSelection,
     TerminalKeywordHighlightSnapshot, TerminalKeywordHighlighter, TerminalLineDecorations,
     compile_terminal_keyword_highlighter,
-    precompute_terminal_keyword_highlights_for_rows_with_stats,
+    precompute_terminal_keyword_highlights_for_rows_with_stats_and_cancel,
     terminal_keyword_highlight_expanded_rows, terminal_keyword_rules_key,
 };
 use crate::theme::ThemePalette;
@@ -188,7 +188,6 @@ pub(in crate::features) struct TerminalSurfacePaintChrome {
     pub cell_height: f32,
     pub show_line_numbers: bool,
     pub show_timestamps: bool,
-    pub show_timestamp_ms: bool,
     pub timestamp_format: String,
     pub is_active: bool,
 }
@@ -275,6 +274,7 @@ pub(in crate::features) struct TerminalSurface {
     keyword_rules: Arc<Vec<nyaterm_core::ResolvedKeywordHighlightRule>>,
     keyword_highlights: Option<Arc<TerminalKeywordHighlightSnapshot>>,
     keyword_highlight_generation: u64,
+    keyword_highlight_cancel_epoch: Arc<AtomicU64>,
     keyword_highlight_task: Option<gpui::Task<()>>,
     keyword_highlight_deferred_task: Option<gpui::Task<()>>,
     keyword_highlight_pending_key: Option<TerminalKeywordHighlightRequestKey>,
@@ -297,7 +297,6 @@ pub(in crate::features) struct TerminalSurface {
     layout_cache: Arc<Mutex<NyaTerminalLayoutCache>>,
     show_line_numbers: bool,
     show_timestamps: bool,
-    show_timestamp_ms: bool,
     timestamp_format: String,
     scroll_offset: usize,
     scroll_residual_lines: f32,
@@ -340,6 +339,7 @@ impl TerminalSurface {
             keyword_rules: Arc::new(Vec::new()),
             keyword_highlights: None,
             keyword_highlight_generation: 0,
+            keyword_highlight_cancel_epoch: Arc::new(AtomicU64::new(0)),
             keyword_highlight_task: None,
             keyword_highlight_deferred_task: None,
             keyword_highlight_pending_key: None,
@@ -362,7 +362,6 @@ impl TerminalSurface {
             layout_cache: Arc::new(Mutex::new(NyaTerminalLayoutCache::default())),
             show_line_numbers: false,
             show_timestamps: false,
-            show_timestamp_ms: false,
             timestamp_format: nyaterm_core::DEFAULT_TERMINAL_TIMESTAMP_FORMAT.to_string(),
             scroll_offset: 0,
             scroll_residual_lines: 0.0,
@@ -1221,7 +1220,6 @@ impl TerminalSurface {
             cell_height,
             show_line_numbers,
             show_timestamps,
-            show_timestamp_ms,
             timestamp_format,
             is_active,
         } = chrome;
@@ -1237,7 +1235,6 @@ impl TerminalSurface {
             && (self.cell_height - cell_height).abs() < f32::EPSILON * 8.0
             && self.show_line_numbers == show_line_numbers
             && self.show_timestamps == show_timestamps
-            && self.show_timestamp_ms == show_timestamp_ms
             && self.timestamp_format == timestamp_format
             && self.is_active == is_active;
         if state_matches {
@@ -1253,7 +1250,6 @@ impl TerminalSurface {
         self.cell_height = cell_height;
         self.show_line_numbers = show_line_numbers;
         self.show_timestamps = show_timestamps;
-        self.show_timestamp_ms = show_timestamp_ms;
         self.timestamp_format = timestamp_format;
         self.is_active = is_active;
         true
@@ -1358,9 +1354,15 @@ impl TerminalSurface {
         if allow_empty_stale && decorations.is_empty() && !self.decorations.is_empty() {
             let show_cursor = show_cursor && !self.visual_scroll_active();
             let cursor_style = cursor_style.into();
-            let changed = !terminal_keyword_rule_sets_equal(&self.keyword_rules, &keyword_rules)
+            let rules_changed =
+                !terminal_keyword_rule_sets_equal(&self.keyword_rules, &keyword_rules);
+            let changed = rules_changed
                 || self.show_cursor != show_cursor
                 || self.cursor_style != cursor_style;
+            if rules_changed {
+                self.keyword_highlight_cancel_epoch
+                    .fetch_add(1, Ordering::AcqRel);
+            }
             self.keyword_rules = keyword_rules;
             self.show_cursor = show_cursor;
             self.cursor_style = cursor_style;
@@ -1378,12 +1380,17 @@ impl TerminalSurface {
     ) -> bool {
         let show_cursor = show_cursor && !self.visual_scroll_active();
         let cursor_style = cursor_style.into();
+        let rules_changed = !terminal_keyword_rule_sets_equal(&self.keyword_rules, &keyword_rules);
         let changed = self.decorations.as_ref() != decorations.as_ref()
-            || !terminal_keyword_rule_sets_equal(&self.keyword_rules, &keyword_rules)
+            || rules_changed
             || self.show_cursor != show_cursor
             || self.cursor_style != cursor_style;
         if !changed {
             return false;
+        }
+        if rules_changed {
+            self.keyword_highlight_cancel_epoch
+                .fetch_add(1, Ordering::AcqRel);
         }
         self.decorations = decorations;
         self.keyword_rules = keyword_rules;
@@ -1471,6 +1478,8 @@ impl TerminalSurface {
         }
         self.keyword_highlight_generation = self.keyword_highlight_generation.saturating_add(1);
         let generation = self.keyword_highlight_generation;
+        let cancel_epoch = self.keyword_highlight_cancel_epoch.clone();
+        let request_cancel_epoch = cancel_epoch.load(Ordering::Acquire);
         let now = Instant::now();
         self.keyword_highlight_last_started_at = Some(now);
         // Keep the last published snapshot drawable while the replacement is parsed in the
@@ -1479,22 +1488,23 @@ impl TerminalSurface {
         let palette = self.palette;
         let previous_highlights = self.keyword_highlights.clone();
         self.keyword_highlight_task = Some(cx.spawn(async move |this, cx| {
-            let (rules, highlighter, highlights, stats, highlight_duration) = cx
+            let (rules, highlighter, result, highlight_duration) = cx
                 .background_spawn(async move {
                     let highlighter = highlighter.unwrap_or_else(|| {
                         Arc::new(compile_terminal_keyword_highlighter(rules.as_ref()))
                     });
                     let highlight_started_at = Instant::now();
-                    let (highlights, stats) =
-                        precompute_terminal_keyword_highlights_for_rows_with_stats(
+                    let result =
+                        precompute_terminal_keyword_highlights_for_rows_with_stats_and_cancel(
                             snapshot.as_ref(),
                             highlighter.as_ref(),
                             palette,
                             previous_highlights.as_deref(),
                             requested_rows,
+                            || cancel_epoch.load(Ordering::Acquire) != request_cancel_epoch,
                         );
                     let highlight_duration = highlight_started_at.elapsed();
-                    (rules, highlighter, highlights, stats, highlight_duration)
+                    (rules, highlighter, result, highlight_duration)
                 })
                 .await;
             let _ = this.update(cx, |this, cx| {
@@ -1503,6 +1513,14 @@ impl TerminalSurface {
                 }
                 this.keyword_highlight_task = None;
                 this.keyword_highlight_pending_key = None;
+                let Some((highlights, stats)) = result else {
+                    this.schedule_keyword_highlights(
+                        clear_if_empty,
+                        this.keyword_highlight_output_pressure,
+                        cx,
+                    );
+                    return;
+                };
                 let publish = terminal_keyword_rule_sets_equal(&this.keyword_rules, &rules);
                 if publish {
                     if highlight_duration >= TERMINAL_KEYWORD_HIGHLIGHT_SLOW {
@@ -1516,6 +1534,9 @@ impl TerminalSurface {
                             known_rows = stats.known_rows,
                             range_count = stats.range_count,
                             reused_rows = stats.reused_rows,
+                            processed_bytes = stats.processed_bytes,
+                            oversized_wrapped_groups = stats.oversized_wrapped_groups,
+                            degraded_rows = stats.degraded_rows,
                             match_duration_us = stats.match_duration_us,
                             range_build_duration_us = stats.range_build_duration_us,
                             duration_us = highlight_duration.as_micros(),
@@ -1593,6 +1614,8 @@ impl TerminalSurface {
             return;
         }
         self.keyword_highlight_generation = self.keyword_highlight_generation.saturating_add(1);
+        self.keyword_highlight_cancel_epoch
+            .fetch_add(1, Ordering::AcqRel);
         self.keyword_highlight_task = None;
         self.keyword_highlight_deferred_task = None;
         self.keyword_highlight_pending_key = None;
@@ -2424,8 +2447,7 @@ impl Render for TerminalSurface {
                 self.show_line_numbers,
                 terminal_line_number_digits(snapshot.as_ref()),
             );
-            let timestamp_width_chars =
-                terminal_timestamp_format_width_chars(&self.timestamp_format);
+            let timestamp_formatter = TerminalTimestampFormatter::new(&self.timestamp_format);
             let line_number_digits = terminal_line_number_digits(snapshot.as_ref());
             let ts_w = gutter_metrics.timestamp_width;
             let ln_w = gutter_metrics.line_number_width;
@@ -2443,31 +2465,14 @@ impl Render for TerminalSurface {
                 .flex_col();
             for line_index in visible_gutter_rows {
                 let snapshot_row = snapshot.row(line_index);
-                let is_wrapped = snapshot_row.is_some_and(|row| row.wrapped);
-                let has_rendered_row =
-                    snapshot.cursor.row == usize::MAX || line_index <= snapshot.cursor.row;
-                let ts_label = if self.show_timestamps && has_rendered_row && !is_wrapped {
-                    snapshot_row
-                        .and_then(|row| row.timestamp_ms)
-                        .map(|ms| {
-                            format_terminal_line_timestamp_ms_with_format(
-                                ms,
-                                &self.timestamp_format,
-                            )
-                        })
-                        .unwrap_or_else(|| " ".repeat(timestamp_width_chars))
-                } else {
-                    String::new()
-                };
-                let line_label = if self.show_line_numbers && has_rendered_row && !is_wrapped {
-                    format!(
-                        "{:>width$}",
-                        abs_start + line_index + 1,
-                        width = line_number_digits,
-                    )
-                } else {
-                    String::new()
-                };
+                let labels = terminal_gutter_labels(
+                    snapshot_row,
+                    abs_start + line_index + 1,
+                    self.show_timestamps,
+                    self.show_line_numbers,
+                    line_number_digits,
+                    &timestamp_formatter,
+                );
                 gutter_rows = gutter_rows.child(
                     div()
                         .flex()
@@ -2481,10 +2486,10 @@ impl Render for TerminalSurface {
                         .font(surface_font.clone())
                         .text_size(px(self.font_size))
                         .when(self.show_timestamps, |this| {
-                            this.child(div().w(px(ts_w)).flex_none().child(ts_label))
+                            this.child(div().w(px(ts_w)).flex_none().child(labels.timestamp))
                         })
                         .when(self.show_line_numbers, |this| {
-                            this.child(div().w(px(ln_w)).flex_none().child(line_label))
+                            this.child(div().w(px(ln_w)).flex_none().child(labels.line_number))
                         }),
                 );
             }

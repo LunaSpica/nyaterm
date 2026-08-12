@@ -198,54 +198,66 @@ pub(in crate::features) fn format_cloud_provider(provider: &str) -> String {
     }
 }
 
-pub(in crate::features) fn format_terminal_line_timestamp_ms_with_format(
-    timestamp_ms: u64,
-    format: &str,
-) -> String {
-    let format = normalized_terminal_timestamp_format(format);
-    let secs = (timestamp_ms / 1000) as i64;
-    let millis = timestamp_ms % 1000;
-    let datetime = time::OffsetDateTime::from_unix_timestamp(secs)
-        .ok()
-        .and_then(|datetime| {
-            time::UtcOffset::current_local_offset()
-                .ok()
-                .map(|offset| datetime.to_offset(offset))
-        })
-        .or_else(|| time::OffsetDateTime::from_unix_timestamp(secs).ok());
-    let Some(datetime) = datetime else {
-        return " ".repeat(terminal_timestamp_format_width_chars(format));
-    };
+#[derive(Debug, Clone)]
+enum TerminalTimestampToken {
+    Year4,
+    Year2,
+    Month2,
+    Month,
+    Day2,
+    Day,
+    Hour2,
+    Hour,
+    Minute2,
+    Minute,
+    Second2,
+    Second,
+    Millis3,
+    Millis2,
+    Millis1,
+    Literal(char),
+}
 
-    render_terminal_timestamp_format(
-        format,
-        datetime.year(),
-        datetime.month() as u8,
-        datetime.day(),
-        datetime.hour(),
-        datetime.minute(),
-        datetime.second(),
-        millis,
-    )
+#[derive(Debug, Clone)]
+pub(in crate::features) struct TerminalTimestampFormatter {
+    tokens: Vec<TerminalTimestampToken>,
+    width_chars: usize,
+    offset: time::UtcOffset,
+}
+
+impl TerminalTimestampFormatter {
+    pub(in crate::features) fn new(format: &str) -> Self {
+        let format = normalized_terminal_timestamp_format(format);
+        let tokens = parse_terminal_timestamp_tokens(format);
+        let width_chars = terminal_timestamp_tokens_width(&tokens);
+        Self {
+            tokens,
+            width_chars,
+            offset: time::UtcOffset::current_local_offset().unwrap_or(time::UtcOffset::UTC),
+        }
+    }
+
+    pub(in crate::features) fn width_chars(&self) -> usize {
+        self.width_chars
+    }
+
+    pub(in crate::features) fn format(&self, timestamp_ms: u64) -> String {
+        let secs = (timestamp_ms / 1000) as i64;
+        let millis = timestamp_ms % 1000;
+        let datetime = time::OffsetDateTime::from_unix_timestamp(secs)
+            .ok()
+            .map(|datetime| datetime.to_offset(self.offset));
+        let Some(datetime) = datetime else {
+            return " ".repeat(self.width_chars);
+        };
+
+        render_terminal_timestamp_tokens(&self.tokens, datetime, millis)
+    }
 }
 
 pub(in crate::features) fn terminal_timestamp_format_width_chars(format: &str) -> usize {
-    let format = normalized_terminal_timestamp_format(format);
-    let mut chars = 0;
-    let mut rest = format;
-    while !rest.is_empty() {
-        if let Some((token, width)) = terminal_timestamp_token_width(rest) {
-            chars += width;
-            rest = &rest[token.len()..];
-        } else {
-            let Some(ch) = rest.chars().next() else {
-                break;
-            };
-            chars += 1;
-            rest = &rest[ch.len_utf8()..];
-        }
-    }
-    chars.clamp(1, 64)
+    let tokens = parse_terminal_timestamp_tokens(normalized_terminal_timestamp_format(format));
+    terminal_timestamp_tokens_width(&tokens)
 }
 
 fn normalized_terminal_timestamp_format(format: &str) -> &str {
@@ -257,95 +269,133 @@ fn normalized_terminal_timestamp_format(format: &str) -> &str {
     }
 }
 
-fn terminal_timestamp_token_width(input: &str) -> Option<(&'static str, usize)> {
-    [
-        ("YYYY", 4),
-        ("SSS", 3),
-        ("YY", 2),
-        ("MM", 2),
-        ("DD", 2),
-        ("HH", 2),
-        ("mm", 2),
-        ("ss", 2),
-        ("SS", 2),
-        ("M", 2),
-        ("D", 2),
-        ("H", 2),
-        ("m", 2),
-        ("s", 2),
-        ("S", 1),
-    ]
-    .into_iter()
-    .find(|(token, _)| input.starts_with(token))
+fn parse_terminal_timestamp_tokens(mut input: &str) -> Vec<TerminalTimestampToken> {
+    let mut tokens = Vec::new();
+    while !input.is_empty() {
+        let (token, consumed) = if input.starts_with("YYYY") {
+            (TerminalTimestampToken::Year4, 4)
+        } else if input.starts_with("SSS") {
+            (TerminalTimestampToken::Millis3, 3)
+        } else if input.starts_with("YY") {
+            (TerminalTimestampToken::Year2, 2)
+        } else if input.starts_with("MM") {
+            (TerminalTimestampToken::Month2, 2)
+        } else if input.starts_with("DD") {
+            (TerminalTimestampToken::Day2, 2)
+        } else if input.starts_with("HH") {
+            (TerminalTimestampToken::Hour2, 2)
+        } else if input.starts_with("mm") {
+            (TerminalTimestampToken::Minute2, 2)
+        } else if input.starts_with("ss") {
+            (TerminalTimestampToken::Second2, 2)
+        } else if input.starts_with("SS") {
+            (TerminalTimestampToken::Millis2, 2)
+        } else {
+            let ch = input.chars().next().expect("non-empty timestamp format");
+            let token = match ch {
+                'M' => TerminalTimestampToken::Month,
+                'D' => TerminalTimestampToken::Day,
+                'H' => TerminalTimestampToken::Hour,
+                'm' => TerminalTimestampToken::Minute,
+                's' => TerminalTimestampToken::Second,
+                'S' => TerminalTimestampToken::Millis1,
+                _ => TerminalTimestampToken::Literal(ch),
+            };
+            (token, ch.len_utf8())
+        };
+        tokens.push(token);
+        input = &input[consumed..];
+    }
+    tokens
 }
 
-fn render_terminal_timestamp_format(
-    format: &str,
-    year: i32,
-    month: u8,
-    day: u8,
-    hour: u8,
-    minute: u8,
-    second: u8,
+fn terminal_timestamp_tokens_width(tokens: &[TerminalTimestampToken]) -> usize {
+    tokens
+        .iter()
+        .map(|token| match token {
+            TerminalTimestampToken::Year4 => 4,
+            TerminalTimestampToken::Year2
+            | TerminalTimestampToken::Month2
+            | TerminalTimestampToken::Month
+            | TerminalTimestampToken::Day2
+            | TerminalTimestampToken::Day
+            | TerminalTimestampToken::Hour2
+            | TerminalTimestampToken::Hour
+            | TerminalTimestampToken::Minute2
+            | TerminalTimestampToken::Minute
+            | TerminalTimestampToken::Second2
+            | TerminalTimestampToken::Second
+            | TerminalTimestampToken::Millis2 => 2,
+            TerminalTimestampToken::Millis3 => 3,
+            TerminalTimestampToken::Millis1 | TerminalTimestampToken::Literal(_) => 1,
+        })
+        .sum::<usize>()
+        .clamp(1, 64)
+}
+
+fn render_terminal_timestamp_tokens(
+    tokens: &[TerminalTimestampToken],
+    datetime: time::OffsetDateTime,
     millis: u64,
 ) -> String {
-    let mut out = String::with_capacity(terminal_timestamp_format_width_chars(format));
-    let mut rest = format;
-    while !rest.is_empty() {
-        if rest.starts_with("YYYY") {
-            out.push_str(&format!("{year:04}"));
-            rest = &rest[4..];
-        } else if rest.starts_with("YY") {
-            out.push_str(&format!("{:02}", year.rem_euclid(100)));
-            rest = &rest[2..];
-        } else if rest.starts_with("MM") {
-            out.push_str(&format!("{month:02}"));
-            rest = &rest[2..];
-        } else if rest.starts_with('M') {
-            out.push_str(&month.to_string());
-            rest = &rest[1..];
-        } else if rest.starts_with("DD") {
-            out.push_str(&format!("{day:02}"));
-            rest = &rest[2..];
-        } else if rest.starts_with('D') {
-            out.push_str(&day.to_string());
-            rest = &rest[1..];
-        } else if rest.starts_with("HH") {
-            out.push_str(&format!("{hour:02}"));
-            rest = &rest[2..];
-        } else if rest.starts_with('H') {
-            out.push_str(&hour.to_string());
-            rest = &rest[1..];
-        } else if rest.starts_with("mm") {
-            out.push_str(&format!("{minute:02}"));
-            rest = &rest[2..];
-        } else if rest.starts_with('m') {
-            out.push_str(&minute.to_string());
-            rest = &rest[1..];
-        } else if rest.starts_with("ss") {
-            out.push_str(&format!("{second:02}"));
-            rest = &rest[2..];
-        } else if rest.starts_with('s') {
-            out.push_str(&second.to_string());
-            rest = &rest[1..];
-        } else if rest.starts_with("SSS") {
-            out.push_str(&format!("{millis:03}"));
-            rest = &rest[3..];
-        } else if rest.starts_with("SS") {
-            out.push_str(&format!("{:02}", millis / 10));
-            rest = &rest[2..];
-        } else if rest.starts_with('S') {
-            out.push_str(&(millis / 100).to_string());
-            rest = &rest[1..];
-        } else {
-            let Some(ch) = rest.chars().next() else {
-                break;
-            };
-            out.push(ch);
-            rest = &rest[ch.len_utf8()..];
+    let mut out = String::with_capacity(terminal_timestamp_tokens_width(tokens));
+    for token in tokens {
+        match token {
+            TerminalTimestampToken::Year4 => out.push_str(&format!("{:04}", datetime.year())),
+            TerminalTimestampToken::Year2 => {
+                out.push_str(&format!("{:02}", datetime.year().rem_euclid(100)))
+            }
+            TerminalTimestampToken::Month2 => {
+                out.push_str(&format!("{:02}", datetime.month() as u8))
+            }
+            TerminalTimestampToken::Month => out.push_str(&(datetime.month() as u8).to_string()),
+            TerminalTimestampToken::Day2 => out.push_str(&format!("{:02}", datetime.day())),
+            TerminalTimestampToken::Day => out.push_str(&datetime.day().to_string()),
+            TerminalTimestampToken::Hour2 => out.push_str(&format!("{:02}", datetime.hour())),
+            TerminalTimestampToken::Hour => out.push_str(&datetime.hour().to_string()),
+            TerminalTimestampToken::Minute2 => out.push_str(&format!("{:02}", datetime.minute())),
+            TerminalTimestampToken::Minute => out.push_str(&datetime.minute().to_string()),
+            TerminalTimestampToken::Second2 => out.push_str(&format!("{:02}", datetime.second())),
+            TerminalTimestampToken::Second => out.push_str(&datetime.second().to_string()),
+            TerminalTimestampToken::Millis3 => out.push_str(&format!("{millis:03}")),
+            TerminalTimestampToken::Millis2 => out.push_str(&format!("{:02}", millis / 10)),
+            TerminalTimestampToken::Millis1 => out.push_str(&(millis / 100).to_string()),
+            TerminalTimestampToken::Literal(ch) => out.push(*ch),
         }
     }
     out
+}
+
+pub(in crate::features) struct TerminalGutterLabels {
+    pub timestamp: String,
+    pub line_number: String,
+}
+
+pub(in crate::features) fn terminal_gutter_labels(
+    row: Option<&nyaterm_terminal::TerminalSnapshotRow>,
+    absolute_line_number: usize,
+    show_timestamps: bool,
+    show_line_numbers: bool,
+    line_number_digits: usize,
+    timestamp_formatter: &TerminalTimestampFormatter,
+) -> TerminalGutterLabels {
+    let wrapped = row.is_some_and(|row| row.wrapped);
+    let timestamp = if show_timestamps && !wrapped {
+        row.and_then(|row| row.timestamp_ms)
+            .map(|timestamp| timestamp_formatter.format(timestamp))
+            .unwrap_or_else(|| " ".repeat(timestamp_formatter.width_chars()))
+    } else {
+        String::new()
+    };
+    let line_number = if show_line_numbers && !wrapped {
+        format!("{absolute_line_number:>line_number_digits$}")
+    } else {
+        String::new()
+    };
+    TerminalGutterLabels {
+        timestamp,
+        line_number,
+    }
 }
 
 pub(in crate::features) fn format_history_timestamp_ms(timestamp_ms: u64) -> String {
@@ -569,5 +619,54 @@ pub(in crate::features) fn format_last_used_ms(last_used_at_ms: Option<u64>) -> 
         format!("{}d ago", secs / 86_400)
     } else {
         format!("{}mo ago", secs / (86_400 * 30))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use nyaterm_terminal::TerminalScreen;
+
+    use super::{
+        TerminalTimestampFormatter, terminal_gutter_labels, terminal_timestamp_format_width_chars,
+    };
+
+    #[test]
+    fn terminal_timestamp_milliseconds_follow_format_tokens_only() {
+        let seconds = TerminalTimestampFormatter::new("HH:mm:ss");
+        let millis = TerminalTimestampFormatter::new("HH:mm:ss.SSS");
+
+        assert_eq!(seconds.width_chars(), 8);
+        assert_eq!(millis.width_chars(), 12);
+        assert!(!seconds.format(123).ends_with(".123"));
+        assert!(millis.format(123).ends_with(".123"));
+        assert_eq!(terminal_timestamp_format_width_chars("H:m:s.S"), 10);
+    }
+
+    #[test]
+    fn gutter_labels_are_independent_of_cursor_and_reserve_missing_timestamp_width() {
+        let mut terminal = TerminalScreen::new(10, 3);
+        terminal.advance(b"first\r\nsecond\r\nthird\x1b[2A");
+        let snapshot = terminal.snapshot();
+        assert_eq!(snapshot.cursor.row, 0);
+        let formatter = TerminalTimestampFormatter::new("HH:mm:ss.SSS");
+
+        let labels = terminal_gutter_labels(snapshot.row(2), 3, true, true, 2, &formatter);
+
+        assert_eq!(labels.line_number, " 3");
+        assert_eq!(labels.timestamp.len(), formatter.width_chars());
+    }
+
+    #[test]
+    fn wrapped_continuation_has_no_duplicate_gutter_labels() {
+        let mut terminal = TerminalScreen::new(4, 2);
+        terminal.advance(b"abcdefgh");
+        let snapshot = terminal.snapshot();
+        assert!(snapshot.row(1).is_some_and(|row| row.wrapped));
+        let formatter = TerminalTimestampFormatter::new("HH:mm:ss");
+
+        let labels = terminal_gutter_labels(snapshot.row(1), 2, true, true, 1, &formatter);
+
+        assert!(labels.timestamp.is_empty());
+        assert!(labels.line_number.is_empty());
     }
 }

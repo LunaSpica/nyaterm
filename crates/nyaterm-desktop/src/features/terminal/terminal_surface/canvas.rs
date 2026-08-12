@@ -10,7 +10,7 @@ use nyaterm_ui::NyaContextMenu;
 
 use crate::features::NyaTermApp;
 use crate::features::formatting::{
-    format_terminal_line_timestamp_ms_with_format, terminal_timestamp_format_width_chars,
+    TerminalTimestampFormatter, terminal_gutter_labels, terminal_timestamp_format_width_chars,
 };
 use crate::features::terminal::terminal_runtime::TerminalMouseReportRequest;
 use crate::features::terminal::terminal_selection_runtime::{
@@ -302,6 +302,7 @@ impl NyaTermApp {
         let show_timestamps = self.settings.summary().terminal_show_timestamps;
         let timestamp_format = self.settings.summary().terminal_timestamp_format.clone();
         let timestamp_width_chars = terminal_timestamp_format_width_chars(&timestamp_format);
+        let timestamp_formatter = TerminalTimestampFormatter::new(&timestamp_format);
         let gutter_enabled = show_line_numbers || show_timestamps;
         // Prefer remote cursor visibility/shape from the terminal model; settings
         // supply the default paint style when the model reports a block cursor.
@@ -524,28 +525,14 @@ impl NyaTermApp {
                 .border_color(rgb(palette.border));
             for line_index in 0..line_count {
                 let snapshot_row = snapshot.row(line_index);
-                let is_wrapped = snapshot_row.is_some_and(|row| row.wrapped);
-                let has_rendered_row =
-                    snapshot.cursor.row == usize::MAX || line_index <= snapshot.cursor.row;
-                let ts_label = if show_timestamps && has_rendered_row && !is_wrapped {
-                    snapshot_row
-                        .and_then(|row| row.timestamp_ms)
-                        .map(|ms| {
-                            format_terminal_line_timestamp_ms_with_format(ms, &timestamp_format)
-                        })
-                        .unwrap_or_else(|| " ".repeat(timestamp_width_chars))
-                } else {
-                    String::new()
-                };
-                let line_label = if show_line_numbers && has_rendered_row && !is_wrapped {
-                    format!(
-                        "{:>width$}",
-                        abs_start + line_index + 1,
-                        width = line_number_digits,
-                    )
-                } else {
-                    String::new()
-                };
+                let labels = terminal_gutter_labels(
+                    snapshot_row,
+                    abs_start + line_index + 1,
+                    show_timestamps,
+                    show_line_numbers,
+                    line_number_digits,
+                    &timestamp_formatter,
+                );
                 gutter = gutter.child(
                     div()
                         .flex()
@@ -559,10 +546,10 @@ impl NyaTermApp {
                         .font(terminal_gpui_font.clone())
                         .text_size(px(self.settings.summary().terminal_font_size as f32))
                         .when(show_timestamps, |this| {
-                            this.child(div().w(px(ts_w)).flex_none().child(ts_label))
+                            this.child(div().w(px(ts_w)).flex_none().child(labels.timestamp))
                         })
                         .when(show_line_numbers, |this| {
-                            this.child(div().w(px(ln_w)).flex_none().child(line_label))
+                            this.child(div().w(px(ln_w)).flex_none().child(labels.line_number))
                         }),
                 );
             }

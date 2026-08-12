@@ -1359,7 +1359,6 @@ pub struct AppSettingsSummary {
     pub terminal_show_workspace_padding: bool,
     pub terminal_show_line_numbers: bool,
     pub terminal_show_timestamps: bool,
-    pub terminal_show_timestamp_milliseconds: bool,
     pub terminal_show_multi_line_paste_dialog: bool,
     pub terminal_paste_image_as_path: bool,
     #[serde(default)]
@@ -1588,7 +1587,6 @@ impl Default for AppSettingsSummary {
             terminal_show_workspace_padding: false,
             terminal_show_line_numbers: false,
             terminal_show_timestamps: false,
-            terminal_show_timestamp_milliseconds: false,
             terminal_show_multi_line_paste_dialog: true,
             terminal_paste_image_as_path: true,
             terminal_low_latency_mode: false,
