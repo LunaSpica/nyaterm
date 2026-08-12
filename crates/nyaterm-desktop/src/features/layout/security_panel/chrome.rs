@@ -83,7 +83,7 @@ impl NyaTermApp {
                 if this.security_secrets_locked() {
                     this.open_security_unlock_prompt(window, cx);
                 } else if this.settings.summary().has_master_password {
-                    this.lock_security_secrets(cx);
+                    this.lock_security_secrets(window, cx);
                 } else {
                     this.open_security_unlock_prompt(window, cx);
                 }

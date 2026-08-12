@@ -1,8 +1,14 @@
-use gpui::{Context, KeyDownEvent, PathPromptOptions, SharedString, Window};
+use gpui::{
+    AppContext, ClipboardItem, Context, IntoElement as _, KeyDownEvent, PathPromptOptions,
+    SharedString, Window,
+};
 use nyaterm_core::{ConnectionStore, SshKey};
+use nyaterm_ui::NyaDialogWindowExt as _;
 
 use crate::features::{NyaTermApp, compact_id};
-use crate::models::{SecurityAuthTab, SecurityKeyEditorField, SecurityKeyEditorState};
+use crate::models::{SecurityAuthTab, SecurityKeyEditorState};
+
+use super::jobs::{SecurityStoreLocation, load_security_catalog};
 
 impl NyaTermApp {
     pub(in crate::features) fn open_security_key_editor(
@@ -28,11 +34,16 @@ impl NyaTermApp {
                 id: Some(key.id),
                 name: key.name,
                 key_file_path: String::new(),
+                key_data: String::new(),
                 cert_file_path: String::new(),
+                cert_data: String::new(),
                 passphrase: String::new(),
+                key_content_mode: false,
+                cert_content_mode: false,
+                cert_expanded: key.has_cert_data,
+                show_passphrase: false,
                 has_key_data: key.has_key_data,
                 has_cert_data: key.has_cert_data,
-                focused_field: SecurityKeyEditorField::Name,
                 error: None,
             }
         } else {
@@ -40,37 +51,132 @@ impl NyaTermApp {
                 id: None,
                 name: String::new(),
                 key_file_path: String::new(),
+                key_data: String::new(),
                 cert_file_path: String::new(),
+                cert_data: String::new(),
                 passphrase: String::new(),
+                key_content_mode: true,
+                cert_content_mode: false,
+                cert_expanded: false,
+                show_passphrase: false,
                 has_key_data: false,
                 has_cert_data: false,
-                focused_field: SecurityKeyEditorField::Name,
                 error: None,
             }
         };
         self.security
             .open_key_editor(editor, "SSH key editor opened".to_string());
         window.focus(self.security.key_editor_focus(), cx);
+        let title = if self
+            .security
+            .key_editor()
+            .is_some_and(|editor| editor.id.is_some())
+        {
+            self.tr("securityAuth.editKeyTitle")
+        } else {
+            self.tr("securityAuth.newKeyTitle")
+        }
+        .to_string();
+        let save = self.tr("common.save").to_string();
+        self.open_guarded_form_dialog(
+            (
+                title,
+                720.,
+                save,
+                |app, _, cx| {
+                    app.security
+                        .key_editor()
+                        .cloned()
+                        .map(|editor| app.security_key_editor_view(editor, cx).into_any_element())
+                        .unwrap_or_else(|| gpui::div().into_any_element())
+                },
+                |app, window, cx| {
+                    app.save_security_key_editor(window, cx);
+                    app.security.key_editor().is_none()
+                },
+                |app, cx| app.close_security_key_editor(cx),
+                |app| app.security.editor_busy(),
+            ),
+            window,
+            cx,
+        );
+        if let Some(key_id) = self
+            .security
+            .key_editor()
+            .and_then(|editor| editor.id.clone())
+        {
+            self.load_security_key_editor_secrets(key_id, cx);
+        }
         cx.notify();
     }
 
     pub(in crate::features) fn close_security_key_editor(&mut self, cx: &mut Context<Self>) {
+        if self.security.editor_busy() {
+            return;
+        }
         self.forget_text_inputs("security.editor.key-");
         self.security.close_key_editor();
         cx.notify();
     }
 
-    pub(in crate::features) fn focus_security_key_field(
+    pub(in crate::features) fn toggle_security_key_content_mode(
         &mut self,
-        field: SecurityKeyEditorField,
-        window: &mut Window,
+        is_cert: bool,
+        content_mode: bool,
         cx: &mut Context<Self>,
     ) {
-        if let Some(editor) = self.security.key_editor_mut() {
-            editor.focused_field = field;
-            editor.error = None;
+        if self.security.editor_busy() {
+            return;
         }
-        window.focus(self.security.key_editor_focus(), cx);
+        let reset_input = if let Some(editor) = self.security.key_editor_mut() {
+            let reset_input = if is_cert {
+                editor.cert_content_mode = content_mode;
+                if content_mode {
+                    editor.cert_file_path.clear();
+                    "security.editor.key-cert-path"
+                } else {
+                    editor.cert_data.clear();
+                    "security.editor.key-cert-data"
+                }
+            } else {
+                editor.key_content_mode = content_mode;
+                if content_mode {
+                    editor.key_file_path.clear();
+                    "security.editor.key-path"
+                } else {
+                    editor.key_data.clear();
+                    "security.editor.key-data"
+                }
+            };
+            editor.error = None;
+            reset_input
+        } else {
+            return;
+        };
+        self.reset_text_input(reset_input, "", cx);
+        cx.notify();
+    }
+
+    pub(in crate::features) fn toggle_security_key_certificate(&mut self, cx: &mut Context<Self>) {
+        if self.security.editor_busy() {
+            return;
+        }
+        if let Some(editor) = self.security.key_editor_mut() {
+            editor.cert_expanded = !editor.cert_expanded;
+        }
+        cx.notify();
+    }
+
+    pub(in crate::features) fn toggle_security_key_passphrase_visibility(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        if self.security.editor_busy() {
+            return;
+        }
+        if let Some(editor) = self.security.key_editor_mut() {
+            editor.show_passphrase = !editor.show_passphrase;
+        }
         cx.notify();
     }
 
@@ -89,7 +195,9 @@ impl NyaTermApp {
         // it, which the boxes leave unconsumed.
         match keystroke.key.as_str() {
             "escape" => {
-                self.close_security_key_editor(cx);
+                if !self.security.editor_busy() {
+                    self.close_security_key_editor(cx);
+                }
             }
             "enter" => {
                 self.save_security_key_editor(window, cx);
@@ -100,7 +208,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn save_security_key_editor(
         &mut self,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(editor) = self.security.key_editor().cloned() else {
@@ -114,7 +222,11 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        if editor.id.is_none() && editor.key_file_path.trim().is_empty() && !editor.has_key_data {
+        if editor.id.is_none()
+            && editor.key_file_path.trim().is_empty()
+            && editor.key_data.trim().is_empty()
+            && !editor.has_key_data
+        {
             if let Some(editor) = self.security.key_editor_mut() {
                 editor.error = Some("select a private key file".to_string());
             }
@@ -122,25 +234,11 @@ impl NyaTermApp {
             return;
         }
 
-        let store = match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        ) {
-            Ok(store) => store,
-            Err(error) => {
-                if let Some(editor) = self.security.key_editor_mut() {
-                    editor.error = Some(error.to_string());
-                }
-                cx.notify();
-                return;
-            }
-        };
-
         let key = SshKey {
             id: editor.id.clone().unwrap_or_default(),
             name,
-            key: None,
-            cert: None,
+            key: (!editor.key_data.trim().is_empty()).then_some(editor.key_data),
+            cert: (!editor.cert_data.trim().is_empty()).then_some(editor.cert_data),
             passphrase: if editor.passphrase.trim().is_empty() {
                 None
             } else {
@@ -159,20 +257,48 @@ impl NyaTermApp {
             has_key_data: false,
             has_cert_data: false,
         };
-
-        match store.save_ssh_key(key) {
-            Ok(id) => {
-                self.refresh_security_catalog();
-                self.security
-                    .finish_key_editor(format!("SSH key saved ({})", compact_id(&id)));
-                self.shell.set_status("SSH key saved".to_string());
-            }
-            Err(error) => {
-                if let Some(editor) = self.security.key_editor_mut() {
-                    editor.error = Some(error.to_string());
+        let Some(request_id) = self.security.begin_editor_request() else {
+            return;
+        };
+        let location = SecurityStoreLocation::new(
+            self.runtime.config_dir(),
+            self.runtime.portable_key_path().map(ToOwned::to_owned),
+        );
+        cx.spawn_in(window, async move |this, cx| {
+            let result = cx
+                .background_spawn(async move {
+                    let store = location.open()?;
+                    let id = store.save_ssh_key(key).map_err(|error| error.to_string())?;
+                    let catalog = load_security_catalog(&store)?;
+                    Ok::<_, String>((id, catalog))
+                })
+                .await;
+            let mut close = false;
+            let _ = this.update(cx, |this, cx| {
+                if !this.security.finish_editor_request(request_id) {
+                    return;
                 }
+                match result {
+                    Ok((id, catalog)) => {
+                        this.security.replace_catalog_state(catalog);
+                        this.security
+                            .finish_key_editor(format!("SSH key saved ({})", compact_id(&id)));
+                        this.shell.set_status("SSH key saved".to_string());
+                        close = true;
+                    }
+                    Err(error) => {
+                        if let Some(editor) = this.security.key_editor_mut() {
+                            editor.error = Some(error);
+                        }
+                    }
+                }
+                cx.notify();
+            });
+            if close {
+                let _ = cx.update(|window, cx| window.close_nya_dialog(cx));
             }
-        }
+        })
+        .detach();
         cx.notify();
     }
 
@@ -199,6 +325,9 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.security.editor_busy() {
+            return;
+        }
         let options = PathPromptOptions {
             files: true,
             directories: false,
@@ -223,15 +352,21 @@ impl NyaTermApp {
             let _ = this.update(cx, |this, cx| {
                 if let Some(path) = selected {
                     let path = path.display().to_string();
+                    let input_id;
                     if let Some(editor) = this.security.key_editor_mut() {
                         if is_cert {
-                            editor.cert_file_path = path;
+                            editor.cert_file_path = path.clone();
+                            editor.cert_data.clear();
                             editor.has_cert_data = true;
+                            input_id = "security.editor.key-cert-path";
                         } else {
-                            editor.key_file_path = path;
+                            editor.key_file_path = path.clone();
+                            editor.key_data.clear();
                             editor.has_key_data = true;
+                            input_id = "security.editor.key-path";
                         }
                         editor.error = None;
+                        this.reset_text_input(input_id, &path, cx);
                         this.security.set_status("key file selected");
                     }
                 } else {
@@ -242,5 +377,130 @@ impl NyaTermApp {
         })
         .detach();
         cx.notify();
+    }
+
+    pub(in crate::features) fn view_security_private_key(
+        &mut self,
+        key_id: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.require_security_secrets_unlocked(
+            window,
+            cx,
+            Some(crate::models::SecurityUnlockAction::ViewPrivateKey(
+                key_id.clone(),
+            )),
+        ) {
+            return;
+        }
+        let Some(name) = self
+            .security
+            .ssh_keys()
+            .iter()
+            .find(|key| key.id == key_id)
+            .map(|key| key.name.clone())
+        else {
+            self.security.set_status("SSH key is no longer available");
+            cx.notify();
+            return;
+        };
+        let request_id = self.security.begin_private_key_view(name);
+        self.open_content_dialog(
+            self.tr("settings.privateKeyDialogTitle").to_string(),
+            720.,
+            |app, _, cx| app.security_private_key_view(cx).into_any_element(),
+            |app, cx| app.close_security_private_key_view(cx),
+            window,
+            cx,
+        );
+
+        let config_dir = self.runtime.config_dir().to_path_buf();
+        let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
+        cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_spawn(async move {
+                    let store = ConnectionStore::open_with_portable_key_path(
+                        config_dir,
+                        portable_key_path,
+                    )?;
+                    store.load_decrypted_ssh_key_by_id(&key_id)
+                })
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                let value = match result {
+                    Ok(Some(key)) => key
+                        .key_data
+                        .filter(|value| !value.is_empty())
+                        .ok_or_else(|| this.tr("settings.privateKeyEmpty").to_string()),
+                    Ok(None) => Err(this.tr("settings.privateKeyEmpty").to_string()),
+                    Err(error) => Err(format!(
+                        "{}: {error}",
+                        this.tr("settings.privateKeyLoadFailed")
+                    )),
+                };
+                if this.security.finish_private_key_view(request_id, value) {
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
+    }
+
+    pub(in crate::features) fn copy_security_private_key(&mut self, cx: &mut Context<Self>) {
+        if let Some((_, value, None)) = self.security.private_key_view()
+            && !value.is_empty()
+        {
+            cx.write_to_clipboard(ClipboardItem::new_string(value.to_string()));
+            self.security
+                .set_status(self.tr("common.copied").to_string());
+            cx.notify();
+        }
+    }
+
+    pub(in crate::features) fn close_security_private_key_view(&mut self, cx: &mut Context<Self>) {
+        self.security.close_private_key_view();
+        cx.notify();
+    }
+
+    fn load_security_key_editor_secrets(&mut self, key_id: String, cx: &mut Context<Self>) {
+        let Some(request_id) = self.security.begin_editor_request() else {
+            return;
+        };
+        let location = SecurityStoreLocation::new(
+            self.runtime.config_dir(),
+            self.runtime.portable_key_path().map(ToOwned::to_owned),
+        );
+        cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_spawn(async move {
+                    let store = location.open()?;
+                    store
+                        .load_decrypted_ssh_key_by_id(&key_id)
+                        .map_err(|error| error.to_string())
+                })
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                if !this.security.finish_editor_request(request_id) {
+                    return;
+                }
+                let Some(editor) = this.security.key_editor_mut() else {
+                    return;
+                };
+                match result {
+                    Ok(Some(key)) => {
+                        editor.key_data = key.key_data.unwrap_or_default();
+                        editor.cert_data = key.cert_data.unwrap_or_default();
+                        editor.passphrase = key.passphrase.unwrap_or_default();
+                        editor.key_content_mode = true;
+                        editor.cert_content_mode = true;
+                    }
+                    Ok(None) => editor.error = Some("SSH key not found".to_string()),
+                    Err(error) => editor.error = Some(error),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
     }
 }

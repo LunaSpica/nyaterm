@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use crate::{
     AiExecutionProfile, CloudSyncSettings, CloudSyncState, CommandHistoryEntry, ConnectionAuth,
     ConnectionType, ExistingFileBehavior, OtpEntry, RecordingMode, RecordingRotationPolicy,
-    SearchEngineConfig, SshKey, export_quick_commands_json,
+    SavedCredential, SearchEngineConfig, SshKey, export_quick_commands_json,
 };
 use aes_gcm::{Aes256Gcm, Key, KeyInit, aead::Aead};
 use base64::{Engine, engine::general_purpose::STANDARD as B64};
@@ -264,6 +264,19 @@ fn exports_and_imports_portable_snapshot() {
             }
         }))
         .expect("seed settings");
+    source_store
+        .save_credential(SavedCredential {
+            id: "credential-1".to_string(),
+            sort_order: 7,
+            name: "Production login".to_string(),
+            username: "deploy".to_string(),
+            password: Some("credential-secret".to_string()),
+            username_prompt_regex: Some("(?i)login:".to_string()),
+            password_prompt_regex: Some("(?i)password:".to_string()),
+            enabled: true,
+            has_password: false,
+        })
+        .expect("seed credential");
     {
         let txn = source_store.db.begin_write().expect("txn");
         write_json_in_txn(
@@ -320,6 +333,13 @@ fn exports_and_imports_portable_snapshot() {
         Some("session-secret")
     );
     assert_eq!(imported.list_ssh_keys().expect("keys")[0].name, "Deploy");
+    let credentials = imported.list_credentials().expect("credentials");
+    assert_eq!(credentials[0].sort_order, 7);
+    let credential = imported
+        .load_decrypted_credential_by_id("credential-1")
+        .expect("load credential")
+        .expect("credential");
+    assert_eq!(credential.password.as_deref(), Some("credential-secret"));
     assert_eq!(imported.list_tunnels().expect("tunnels")[0].name, "DB");
     assert_eq!(
         imported.list_tunnel_groups().expect("tunnel groups")[0].name,
@@ -982,6 +1002,80 @@ fn load_decrypted_otp_entry_reads_legacy_otp_store() {
         .expect("load incremented")
         .expect("entry");
     assert_eq!(incremented.counter, 1);
+
+    std::fs::remove_dir_all(dir).ok();
+}
+
+#[test]
+fn legacy_saved_credential_without_sort_order_defaults_to_zero() {
+    let credential: SavedCredential = serde_json::from_value(serde_json::json!({
+        "id": "legacy-credential",
+        "name": "Legacy",
+        "username": "deploy",
+        "enabled": true
+    }))
+    .expect("legacy credential");
+
+    assert_eq!(credential.sort_order, 0);
+}
+
+#[test]
+fn credential_order_appends_and_reorders_without_exposing_passwords() {
+    let dir = unique_temp_dir("credential-order");
+    let store = ConnectionStore::open(&dir).expect("store");
+    let save = |id: &str, name: &str, sort_order: i32| {
+        store
+            .save_credential(SavedCredential {
+                id: id.to_string(),
+                sort_order,
+                name: name.to_string(),
+                username: format!("{name}-user"),
+                password: Some(format!("{name}-secret")),
+                username_prompt_regex: None,
+                password_prompt_regex: None,
+                enabled: true,
+                has_password: false,
+            })
+            .expect("save credential")
+    };
+
+    save("first", "First", 4);
+    save("second", "Second", 8);
+    let appended_id = save("", "Appended", 0);
+
+    let listed = store.list_credentials().expect("list credentials");
+    assert_eq!(
+        listed
+            .iter()
+            .map(|entry| entry.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["first", "second", appended_id.as_str()]
+    );
+    assert_eq!(listed[2].sort_order, 9);
+    assert!(listed.iter().all(|entry| entry.password.is_none()));
+    assert!(listed.iter().all(|entry| entry.has_password));
+
+    store
+        .reorder_credentials(&[
+            (appended_id.clone(), 0),
+            ("first".to_string(), 1),
+            ("second".to_string(), 2),
+        ])
+        .expect("reorder credentials");
+    let reordered = store.list_credentials().expect("list reordered");
+    assert_eq!(
+        reordered
+            .iter()
+            .map(|entry| entry.id.as_str())
+            .collect::<Vec<_>>(),
+        vec![appended_id.as_str(), "first", "second"]
+    );
+    let decrypted = store
+        .load_decrypted_credential_by_id("first")
+        .expect("decrypt credential")
+        .expect("credential");
+    assert_eq!(decrypted.password.as_deref(), Some("First-secret"));
+    assert_eq!(decrypted.sort_order, 1);
 
     std::fs::remove_dir_all(dir).ok();
 }

@@ -1,8 +1,9 @@
-use gpui::{Context, Window};
-use nyaterm_core::ConnectionStore;
+use gpui::{AppContext, Context, Window};
 
 use crate::features::NyaTermApp;
 use crate::models::SecurityAuthTab;
+
+use super::jobs::{SecurityStoreLocation, load_security_catalog};
 
 impl NyaTermApp {
     pub(in crate::features) fn open_security_delete_dialog(
@@ -32,7 +33,9 @@ impl NyaTermApp {
                 message,
                 self.tr("common.delete").to_string(),
                 true,
-                move |app, _, cx| app.delete_security_item(kind, id.clone(), label.clone(), cx),
+                move |app, window, cx| {
+                    app.delete_security_item(kind, id.clone(), label.clone(), window, cx)
+                },
             ),
             window,
             cx,
@@ -44,40 +47,51 @@ impl NyaTermApp {
         kind: SecurityAuthTab,
         id: String,
         label: String,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        let store = match ConnectionStore::open_with_portable_key_path(
+        let location = SecurityStoreLocation::new(
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
-        ) {
-            Ok(store) => store,
-            Err(error) => {
-                self.security.set_status(error.to_string());
+        );
+        let request_item_id = id.clone();
+        let request_id = self.security.begin_delete_request(id.clone());
+        cx.spawn_in(window, async move |this, cx| {
+            let result = cx
+                .background_spawn(async move {
+                    let store = location.open()?;
+                    match kind {
+                        SecurityAuthTab::Keys => store.delete_ssh_key(&id),
+                        SecurityAuthTab::Passwords => store.delete_password(&id),
+                        SecurityAuthTab::Credentials => store.delete_credential(&id),
+                        SecurityAuthTab::Otp => store.delete_otp_entry(&id),
+                    }
+                    .map_err(|error| error.to_string())?;
+                    load_security_catalog(&store)
+                })
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                if !this
+                    .security
+                    .finish_delete_request(request_id, &request_item_id)
+                {
+                    return;
+                }
+                match result {
+                    Ok(catalog) => {
+                        this.security
+                            .clear_revealed_for_deleted(kind, &request_item_id);
+                        this.security.replace_catalog_state(catalog);
+                        let status = format!("{label} deleted");
+                        this.security.set_status(status.clone());
+                        this.shell.set_status(status);
+                    }
+                    Err(error) => this.security.set_status(error),
+                }
                 cx.notify();
-                return false;
-            }
-        };
-        let result = match kind {
-            SecurityAuthTab::Keys => store.delete_ssh_key(&id),
-            SecurityAuthTab::Passwords => store.delete_password(&id),
-            SecurityAuthTab::Credentials => store.delete_credential(&id),
-            SecurityAuthTab::Otp => store.delete_otp_entry(&id),
-        };
-        match result {
-            Ok(()) => {
-                self.security.clear_revealed_for_deleted(kind, &id);
-                self.refresh_security_catalog();
-                let status = format!("{label} deleted");
-                self.security.set_status(status.clone());
-                self.shell.set_status(status);
-                cx.notify();
-                true
-            }
-            Err(error) => {
-                self.security.set_status(error.to_string());
-                cx.notify();
-                false
-            }
-        }
+            });
+        })
+        .detach();
+        true
     }
 }

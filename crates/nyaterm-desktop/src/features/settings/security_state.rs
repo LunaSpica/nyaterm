@@ -5,15 +5,16 @@
 //! revealed or codes generated for display, and they are cleared through the
 //! same paths as before.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
 use gpui::FocusHandle;
 use nyaterm_core::{OtpEntry, SavedCredential, SavedPassword, SshKey};
 
 use crate::models::{
-    SecurityAuthTab, SecurityCredentialEditorState, SecurityKeyEditorState, SecurityOtpEditorState,
-    SecurityPasswordEditorState, SecurityUnlockAction,
+    SecurityAuthTab, SecurityCredentialDropTarget, SecurityCredentialEditorState,
+    SecurityKeyEditorState, SecurityOtpEditorState, SecurityPasswordEditorState,
+    SecurityUnlockAction,
 };
 
 pub(in crate::features) struct SecurityFeatureState {
@@ -21,6 +22,7 @@ pub(in crate::features) struct SecurityFeatureState {
     auth_tab: SecurityAuthTab,
     editors: SecurityEditorState,
     revealed: SecurityRevealedState,
+    panel: SecurityPanelInteractionState,
     status: String,
     unlock: SecurityUnlockState,
     screen_lock: SecurityScreenLockState,
@@ -70,10 +72,13 @@ struct SecurityEditorState {
     otp: Option<SecurityOtpEditorState>,
     otp_focus: FocusHandle,
     otp_qr_importing: bool,
+    otp_qr_request_id: u64,
     password: Option<SecurityPasswordEditorState>,
     password_focus: FocusHandle,
     credential: Option<SecurityCredentialEditorState>,
     credential_focus: FocusHandle,
+    request_id: u64,
+    busy: bool,
 }
 
 /// Values the user has explicitly revealed, plus generated OTP codes.
@@ -81,6 +86,38 @@ struct SecurityRevealedState {
     otp_codes: HashMap<String, String>,
     passwords: HashMap<String, String>,
     credentials: HashMap<String, String>,
+    private_key: Option<SecurityPrivateKeyViewState>,
+    private_key_request_id: u64,
+}
+
+struct SecurityPrivateKeyViewState {
+    name: String,
+    value: String,
+    error: Option<String>,
+    request_id: u64,
+}
+
+struct SecurityPanelInteractionState {
+    visible_otp_ids: HashSet<String>,
+    otp_refresh_armed: bool,
+    credential_drop_target: Option<SecurityCredentialDropTarget>,
+    request_id: u64,
+    pending_request: Option<SecurityPanelRequest>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SecurityPanelRequestKind {
+    Otp,
+    Password,
+    Credential,
+    Delete,
+    Reorder,
+}
+
+struct SecurityPanelRequest {
+    id: u64,
+    kind: SecurityPanelRequestKind,
+    item_id: String,
 }
 
 /// Master password unlock prompt.
@@ -91,6 +128,8 @@ struct SecurityUnlockState {
     draft: String,
     error: Option<String>,
     pending_action: Option<SecurityUnlockAction>,
+    request_id: u64,
+    busy: bool,
     focus: FocusHandle,
 }
 
@@ -122,15 +161,27 @@ impl SecurityFeatureState {
                 otp: None,
                 otp_focus: focus.otp_editor,
                 otp_qr_importing: false,
+                otp_qr_request_id: 0,
                 password: None,
                 password_focus: focus.password_editor,
                 credential: None,
                 credential_focus: focus.credential_editor,
+                request_id: 0,
+                busy: false,
             },
             revealed: SecurityRevealedState {
                 otp_codes: HashMap::new(),
                 passwords: HashMap::new(),
                 credentials: HashMap::new(),
+                private_key: None,
+                private_key_request_id: 0,
+            },
+            panel: SecurityPanelInteractionState {
+                visible_otp_ids: HashSet::new(),
+                otp_refresh_armed: false,
+                credential_drop_target: None,
+                request_id: 0,
+                pending_request: None,
             },
             status,
             unlock: SecurityUnlockState {
@@ -140,6 +191,8 @@ impl SecurityFeatureState {
                 draft: String::new(),
                 error: None,
                 pending_action: None,
+                request_id: 0,
+                busy: false,
                 focus: focus.unlock,
             },
             screen_lock: SecurityScreenLockState {
@@ -178,6 +231,10 @@ impl SecurityFeatureState {
         self.catalog = SecurityCatalogState::new(ssh_keys, otp_entries, passwords, credentials);
     }
 
+    pub(in crate::features) fn replace_catalog_state(&mut self, catalog: SecurityCatalogState) {
+        self.catalog = catalog;
+    }
+
     pub(in crate::features) fn clear_catalog(&mut self) {
         self.replace_catalog(Vec::new(), Vec::new(), Vec::new(), Vec::new());
     }
@@ -188,6 +245,15 @@ impl SecurityFeatureState {
 
     pub(in crate::features) fn set_auth_tab(&mut self, tab: SecurityAuthTab) {
         self.auth_tab = tab;
+        self.revealed.passwords.clear();
+        self.revealed.credentials.clear();
+        self.revealed.otp_codes.clear();
+        self.revealed.private_key = None;
+        self.panel.visible_otp_ids.clear();
+        self.panel.otp_refresh_armed = false;
+        self.panel.credential_drop_target = None;
+        self.panel.pending_request = None;
+        self.clear_editors();
         self.status = format!("{} tab", tab.label().to_lowercase());
     }
 
@@ -268,12 +334,33 @@ impl SecurityFeatureState {
     }
 
     pub(in crate::features) fn apply_unlock_input(&mut self, text: String) {
+        if self.unlock.busy {
+            return;
+        }
         self.unlock.draft = text;
         self.unlock.error = None;
     }
 
     pub(in crate::features) fn unlock_without_master_password(&mut self) {
         self.unlock.secrets_unlocked = true;
+    }
+
+    pub(in crate::features) fn begin_unlock_request(&mut self) -> Option<(u64, String)> {
+        if self.unlock.busy || !self.unlock.prompt_open {
+            return None;
+        }
+        self.unlock.request_id = self.unlock.request_id.wrapping_add(1).max(1);
+        self.unlock.busy = true;
+        self.unlock.error = None;
+        Some((self.unlock.request_id, self.unlock.draft.clone()))
+    }
+
+    pub(in crate::features) fn finish_unlock_request(&mut self, request_id: u64) -> bool {
+        if !self.unlock.busy || self.unlock.request_id != request_id {
+            return false;
+        }
+        self.unlock.busy = false;
+        true
     }
 
     pub(in crate::features) fn screen_locked(&self) -> bool {
@@ -369,6 +456,244 @@ impl SecurityFeatureState {
         self.revealed.otp_codes.insert(id, code);
     }
 
+    pub(in crate::features) fn otp_code_visible(&self, id: &str) -> bool {
+        self.panel.visible_otp_ids.contains(id)
+    }
+
+    pub(in crate::features) fn toggle_otp_code_visible(&mut self, id: String) -> bool {
+        if self.panel.visible_otp_ids.remove(&id) {
+            self.revealed.otp_codes.remove(&id);
+            return false;
+        }
+        self.panel.visible_otp_ids.insert(id);
+        true
+    }
+
+    pub(in crate::features) fn visible_totp_ids(&self) -> Vec<String> {
+        self.catalog
+            .otp_entries
+            .iter()
+            .filter(|entry| {
+                entry.otp_type.eq_ignore_ascii_case("totp")
+                    && self.panel.visible_otp_ids.contains(&entry.id)
+            })
+            .map(|entry| entry.id.clone())
+            .collect()
+    }
+
+    pub(in crate::features) fn arm_otp_refresh(&mut self) -> bool {
+        if self.panel.otp_refresh_armed {
+            return false;
+        }
+        self.panel.otp_refresh_armed = true;
+        true
+    }
+
+    pub(in crate::features) fn disarm_otp_refresh(&mut self) {
+        self.panel.otp_refresh_armed = false;
+    }
+
+    pub(in crate::features) fn private_key_view(&self) -> Option<(&str, &str, Option<&str>)> {
+        self.revealed.private_key.as_ref().map(|view| {
+            (
+                view.name.as_str(),
+                view.value.as_str(),
+                view.error.as_deref(),
+            )
+        })
+    }
+
+    pub(in crate::features) fn begin_private_key_view(&mut self, name: String) -> u64 {
+        self.revealed.private_key_request_id =
+            self.revealed.private_key_request_id.wrapping_add(1).max(1);
+        let request_id = self.revealed.private_key_request_id;
+        self.revealed.private_key = Some(SecurityPrivateKeyViewState {
+            name,
+            value: String::new(),
+            error: None,
+            request_id,
+        });
+        request_id
+    }
+
+    pub(in crate::features) fn finish_private_key_view(
+        &mut self,
+        request_id: u64,
+        value: Result<String, String>,
+    ) -> bool {
+        let Some(view) = self.revealed.private_key.as_mut() else {
+            return false;
+        };
+        if view.request_id != request_id {
+            return false;
+        }
+        match value {
+            Ok(value) => {
+                view.value = value;
+                view.error = None;
+            }
+            Err(error) => {
+                view.value.clear();
+                view.error = Some(error);
+            }
+        }
+        true
+    }
+
+    pub(in crate::features) fn close_private_key_view(&mut self) {
+        self.revealed.private_key = None;
+    }
+
+    pub(in crate::features) fn credential_drop_target(
+        &self,
+    ) -> Option<&SecurityCredentialDropTarget> {
+        self.panel.credential_drop_target.as_ref()
+    }
+
+    pub(in crate::features) fn editor_busy(&self) -> bool {
+        self.editors.busy
+    }
+
+    pub(in crate::features) fn begin_editor_request(&mut self) -> Option<u64> {
+        if self.editors.busy
+            || (self.editors.key.is_none()
+                && self.editors.otp.is_none()
+                && self.editors.password.is_none()
+                && self.editors.credential.is_none())
+        {
+            return None;
+        }
+        self.editors.request_id = self.editors.request_id.wrapping_add(1).max(1);
+        self.editors.busy = true;
+        Some(self.editors.request_id)
+    }
+
+    pub(in crate::features) fn finish_editor_request(&mut self, request_id: u64) -> bool {
+        if !self.editors.busy || self.editors.request_id != request_id {
+            return false;
+        }
+        self.editors.busy = false;
+        true
+    }
+
+    pub(in crate::features) fn begin_password_request(&mut self, item_id: String) -> u64 {
+        self.begin_panel_request(SecurityPanelRequestKind::Password, item_id)
+    }
+
+    pub(in crate::features) fn begin_otp_request(&mut self, item_id: String) -> u64 {
+        self.begin_panel_request(SecurityPanelRequestKind::Otp, item_id)
+    }
+
+    pub(in crate::features) fn begin_credential_request(&mut self, item_id: String) -> u64 {
+        self.begin_panel_request(SecurityPanelRequestKind::Credential, item_id)
+    }
+
+    pub(in crate::features) fn begin_delete_request(&mut self, item_id: String) -> u64 {
+        self.begin_panel_request(SecurityPanelRequestKind::Delete, item_id)
+    }
+
+    pub(in crate::features) fn begin_reorder_request(&mut self) -> u64 {
+        self.begin_panel_request(SecurityPanelRequestKind::Reorder, String::new())
+    }
+
+    pub(in crate::features) fn finish_password_request(
+        &mut self,
+        request_id: u64,
+        item_id: &str,
+    ) -> bool {
+        self.finish_panel_request(request_id, SecurityPanelRequestKind::Password, item_id)
+    }
+
+    pub(in crate::features) fn finish_otp_request(
+        &mut self,
+        request_id: u64,
+        item_id: &str,
+    ) -> bool {
+        self.finish_panel_request(request_id, SecurityPanelRequestKind::Otp, item_id)
+    }
+
+    pub(in crate::features) fn finish_credential_request(
+        &mut self,
+        request_id: u64,
+        item_id: &str,
+    ) -> bool {
+        self.finish_panel_request(request_id, SecurityPanelRequestKind::Credential, item_id)
+    }
+
+    pub(in crate::features) fn finish_delete_request(
+        &mut self,
+        request_id: u64,
+        item_id: &str,
+    ) -> bool {
+        self.finish_panel_request(request_id, SecurityPanelRequestKind::Delete, item_id)
+    }
+
+    pub(in crate::features) fn finish_reorder_request(&mut self, request_id: u64) -> bool {
+        self.finish_panel_request(request_id, SecurityPanelRequestKind::Reorder, "")
+    }
+
+    fn begin_panel_request(&mut self, kind: SecurityPanelRequestKind, item_id: String) -> u64 {
+        self.panel.request_id = self.panel.request_id.wrapping_add(1).max(1);
+        self.panel.pending_request = Some(SecurityPanelRequest {
+            id: self.panel.request_id,
+            kind,
+            item_id,
+        });
+        self.panel.request_id
+    }
+
+    fn finish_panel_request(
+        &mut self,
+        request_id: u64,
+        kind: SecurityPanelRequestKind,
+        item_id: &str,
+    ) -> bool {
+        let matches = self.panel.pending_request.as_ref().is_some_and(|request| {
+            request.id == request_id && request.kind == kind && request.item_id == item_id
+        });
+        if matches {
+            self.panel.pending_request = None;
+        }
+        matches
+    }
+
+    pub(in crate::features) fn set_credential_drop_target(
+        &mut self,
+        target: Option<SecurityCredentialDropTarget>,
+    ) {
+        self.panel.credential_drop_target = target;
+    }
+
+    pub(in crate::features) fn reordered_credentials(
+        &self,
+        source_id: &str,
+        target_id: &str,
+        after: bool,
+    ) -> Option<Vec<SavedCredential>> {
+        if source_id == target_id {
+            return None;
+        }
+        let source = self
+            .catalog
+            .credentials
+            .iter()
+            .find(|entry| entry.id == source_id)?
+            .clone();
+        let mut next = self
+            .catalog
+            .credentials
+            .iter()
+            .filter(|entry| entry.id != source_id)
+            .cloned()
+            .collect::<Vec<_>>();
+        let target = next.iter().position(|entry| entry.id == target_id)?;
+        next.insert(if after { target + 1 } else { target }, source);
+        for (index, entry) in next.iter_mut().enumerate() {
+            entry.sort_order = index as i32;
+        }
+        Some(next)
+    }
+
     pub(in crate::features) fn clear_revealed_for_deleted(
         &mut self,
         kind: SecurityAuthTab,
@@ -377,6 +702,7 @@ impl SecurityFeatureState {
         match kind {
             SecurityAuthTab::Otp => {
                 self.revealed.otp_codes.remove(id);
+                self.panel.visible_otp_ids.remove(id);
             }
             SecurityAuthTab::Passwords => {
                 self.revealed.passwords.remove(id);
@@ -504,27 +830,57 @@ impl SecurityFeatureState {
         self.status = status;
     }
 
-    pub(in crate::features) fn begin_otp_qr_import(&mut self, status: String) -> bool {
+    pub(in crate::features) fn begin_otp_qr_import(&mut self, status: String) -> Option<u64> {
         if self.editors.otp_qr_importing || self.editors.otp.is_some() {
-            return false;
+            return None;
         }
+        self.editors.otp_qr_request_id = self.editors.otp_qr_request_id.wrapping_add(1).max(1);
         self.editors.otp_qr_importing = true;
         self.status = status;
-        true
+        Some(self.editors.otp_qr_request_id)
     }
 
-    pub(in crate::features) fn finish_otp_qr_import(&mut self) {
+    pub(in crate::features) fn finish_otp_qr_import(&mut self, request_id: u64) -> bool {
+        if !self.editors.otp_qr_importing || self.editors.otp_qr_request_id != request_id {
+            return false;
+        }
         self.editors.otp_qr_importing = false;
+        true
     }
 
     pub(in crate::features) fn apply_editor_input(&mut self, id: &str, text: String) -> bool {
         match id {
-            "key-name" | "key-passphrase" => {
+            "key-name" | "key-data" | "key-path" | "key-cert-data" | "key-cert-path"
+            | "key-passphrase" => {
                 let Some(editor) = self.key_editor_mut() else {
                     return false;
                 };
                 match id {
                     "key-name" => editor.name = text,
+                    "key-data" => {
+                        editor.key_data = text;
+                        if !editor.key_data.trim().is_empty() {
+                            editor.key_file_path.clear();
+                        }
+                    }
+                    "key-path" => {
+                        editor.key_file_path = text;
+                        if !editor.key_file_path.trim().is_empty() {
+                            editor.key_data.clear();
+                        }
+                    }
+                    "key-cert-data" => {
+                        editor.cert_data = text;
+                        if !editor.cert_data.trim().is_empty() {
+                            editor.cert_file_path.clear();
+                        }
+                    }
+                    "key-cert-path" => {
+                        editor.cert_file_path = text;
+                        if !editor.cert_file_path.trim().is_empty() {
+                            editor.cert_data.clear();
+                        }
+                    }
                     _ => editor.passphrase = text,
                 }
             }
@@ -573,6 +929,9 @@ impl SecurityFeatureState {
         self.editors.otp = None;
         self.editors.password = None;
         self.editors.credential = None;
+        self.editors.busy = false;
+        self.editors.otp_qr_importing = false;
+        self.editors.otp_qr_request_id = self.editors.otp_qr_request_id.wrapping_add(1).max(1);
     }
 }
 
@@ -619,18 +978,28 @@ impl SecurityFeatureState {
         self.unlock.prompt_open = false;
         self.unlock.draft.clear();
         self.unlock.error = None;
+        self.unlock.busy = false;
     }
 
     /// Drops every revealed secret and every editor holding one.
     ///
-    /// Revealed OTP codes are display-only and regenerate on demand, so they
-    /// are left alone here exactly as before.
     pub(in crate::features) fn lock_secrets(&mut self) {
         self.unlock.secrets_unlocked = false;
         self.revealed.passwords.clear();
         self.revealed.credentials.clear();
+        self.revealed.private_key = None;
+        self.revealed.otp_codes.clear();
+        self.panel.visible_otp_ids.clear();
+        self.panel.otp_refresh_armed = false;
+        self.panel.credential_drop_target = None;
+        self.panel.pending_request = None;
+        self.editors.key = None;
+        self.editors.otp = None;
         self.editors.password = None;
         self.editors.credential = None;
+        self.editors.busy = false;
+        self.editors.otp_qr_importing = false;
+        self.editors.otp_qr_request_id = self.editors.otp_qr_request_id.wrapping_add(1).max(1);
         self.unlock.pending_action = None;
         self.close_unlock_prompt();
         self.unlock.master_required_prompt_open = false;
@@ -647,8 +1016,7 @@ mod tests {
 
     use super::{SecurityCatalogState, SecurityFeatureFocus, SecurityFeatureState};
     use crate::models::{
-        SecurityKeyEditorField, SecurityKeyEditorState, SecurityPasswordEditorState,
-        SecurityUnlockAction,
+        SecurityKeyEditorState, SecurityPasswordEditorState, SecurityUnlockAction,
     };
 
     fn security_state() -> SecurityFeatureState {
@@ -705,6 +1073,7 @@ mod tests {
             }],
             vec![SavedCredential {
                 id: "credential-id".to_string(),
+                sort_order: 0,
                 name: "credential".to_string(),
                 username: String::new(),
                 password: None,
@@ -750,11 +1119,16 @@ mod tests {
                 id: None,
                 name: String::new(),
                 key_file_path: String::new(),
+                key_data: String::new(),
                 cert_file_path: String::new(),
+                cert_data: String::new(),
                 passphrase: String::new(),
+                key_content_mode: true,
+                cert_content_mode: false,
+                cert_expanded: false,
+                show_passphrase: false,
                 has_key_data: false,
                 has_cert_data: false,
-                focused_field: SecurityKeyEditorField::Name,
                 error: None,
             },
             "SSH key editor opened".to_string(),
@@ -779,13 +1153,139 @@ mod tests {
     fn otp_qr_import_admission_is_owned_by_security_state() {
         let mut security = security_state();
 
-        assert!(security.begin_otp_qr_import("scanning".to_string()));
-        assert!(!security.begin_otp_qr_import("duplicate".to_string()));
+        let request_id = security
+            .begin_otp_qr_import("scanning".to_string())
+            .expect("first import should start");
+        assert!(
+            security
+                .begin_otp_qr_import("duplicate".to_string())
+                .is_none()
+        );
         assert!(security.otp_qr_importing());
         assert_eq!(security.status, "scanning");
 
-        security.finish_otp_qr_import();
+        assert!(security.finish_otp_qr_import(request_id));
         assert!(!security.otp_qr_importing());
+    }
+
+    #[test]
+    fn qr_and_private_key_results_are_rejected_after_replacement() {
+        let mut security = security_state();
+
+        let qr_request = security
+            .begin_otp_qr_import("scanning".to_string())
+            .expect("QR import should start");
+        security.set_auth_tab(crate::models::SecurityAuthTab::Otp);
+        assert!(!security.finish_otp_qr_import(qr_request));
+
+        let first = security.begin_private_key_view("first".to_string());
+        security.close_private_key_view();
+        let second = security.begin_private_key_view("second".to_string());
+        assert_ne!(first, second);
+        assert!(!security.finish_private_key_view(first, Ok("stale".to_string())));
+        assert!(security.finish_private_key_view(second, Ok("current".to_string())));
+    }
+
+    #[test]
+    fn otp_visibility_and_refresh_are_cleared_when_the_tab_changes() {
+        let mut security = security_state();
+        security.replace_catalog(
+            Vec::new(),
+            vec![OtpEntry {
+                id: "totp-id".to_string(),
+                otp_type: "totp".to_string(),
+                issuer: String::new(),
+                username: String::new(),
+                secret: None,
+                algorithm: "SHA1".to_string(),
+                digits: 6,
+                period: 30,
+                counter: 0,
+                has_secret: true,
+            }],
+            Vec::new(),
+            Vec::new(),
+        );
+
+        assert!(security.toggle_otp_code_visible("totp-id".to_string()));
+        assert_eq!(security.visible_totp_ids(), vec!["totp-id".to_string()]);
+        assert!(security.arm_otp_refresh());
+        assert!(!security.arm_otp_refresh());
+
+        security.set_auth_tab(crate::models::SecurityAuthTab::Passwords);
+        assert!(security.visible_totp_ids().is_empty());
+        assert!(security.arm_otp_refresh());
+    }
+
+    #[test]
+    fn credential_reorder_reindexes_entries_without_mutating_catalog() {
+        let mut security = security_state();
+        let credential = |id: &str, sort_order| SavedCredential {
+            id: id.to_string(),
+            sort_order,
+            name: id.to_string(),
+            username: String::new(),
+            password: None,
+            username_prompt_regex: None,
+            password_prompt_regex: None,
+            enabled: true,
+            has_password: false,
+        };
+        security.replace_catalog(
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            vec![credential("a", 0), credential("b", 1), credential("c", 2)],
+        );
+
+        let reordered = security
+            .reordered_credentials("a", "b", true)
+            .expect("valid reorder");
+        assert_eq!(
+            reordered
+                .iter()
+                .map(|entry| (entry.id.as_str(), entry.sort_order))
+                .collect::<Vec<_>>(),
+            vec![("b", 0), ("a", 1), ("c", 2)]
+        );
+        assert_eq!(security.credentials()[0].id, "a");
+    }
+
+    #[test]
+    fn closing_or_switching_tabs_invalidates_editor_requests_and_clears_drafts() {
+        let mut security = security_state();
+        security.open_password_editor(
+            SecurityPasswordEditorState {
+                id: None,
+                name: "draft".to_string(),
+                password: "secret".to_string(),
+                has_password: false,
+                show_password: true,
+                error: None,
+            },
+            "editing".to_string(),
+        );
+        let request_id = security
+            .begin_editor_request()
+            .expect("editor request should start");
+
+        security.set_auth_tab(crate::models::SecurityAuthTab::Otp);
+        assert!(security.password_editor().is_none());
+        assert!(!security.finish_editor_request(request_id));
+    }
+
+    #[test]
+    fn closing_unlock_prompt_invalidates_pending_verification() {
+        let mut security = security_state();
+        security.show_unlock_prompt();
+        security.apply_unlock_input("secret".to_string());
+        let (request_id, _) = security
+            .begin_unlock_request()
+            .expect("unlock request should start");
+
+        security.cancel_unlock_prompt();
+        assert!(!security.finish_unlock_request(request_id));
+        assert!(security.unlock_draft().is_empty());
     }
 
     #[test]
@@ -821,7 +1321,7 @@ mod tests {
     }
 
     #[test]
-    fn locking_secrets_clears_revealed_passwords_and_credentials_but_keeps_otp_codes() {
+    fn locking_secrets_clears_all_revealed_secrets_and_otp_codes() {
         let mut security = security_state();
         security.reveal_password("password-id".to_string(), "value".to_string());
         security.reveal_credential("credential-id".to_string(), "value".to_string());
@@ -832,7 +1332,22 @@ mod tests {
         assert!(!security.secrets_unlocked());
         assert!(security.revealed_password("password-id").is_none());
         assert!(security.revealed_credential("credential-id").is_none());
-        assert!(security.revealed_otp_code("otp-id").is_some());
+        assert!(security.revealed_otp_code("otp-id").is_none());
+    }
+
+    #[test]
+    fn private_key_results_are_ignored_after_close_or_replacement() {
+        let mut security = security_state();
+        let first = security.begin_private_key_view("first".to_string());
+        security.close_private_key_view();
+        assert!(!security.finish_private_key_view(first, Ok("secret".to_string())));
+
+        let second = security.begin_private_key_view("second".to_string());
+        assert!(security.finish_private_key_view(second, Ok("new secret".to_string())));
+        assert_eq!(
+            security.private_key_view(),
+            Some(("second", "new secret", None))
+        );
     }
 
     #[test]

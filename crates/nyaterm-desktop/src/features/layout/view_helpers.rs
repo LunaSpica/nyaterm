@@ -16,7 +16,14 @@ pub(super) fn security_editor_field(
     setup: crate::features::TextInputSetup,
     cx: &mut gpui::Context<NyaTermApp>,
 ) -> gpui::AnyElement {
-    app.text_input_field(format!("security.editor.{id}"), label, &value, setup, cx)
+    let field_id = format!("security.editor.{id}");
+    let field = app.text_input(field_id.clone(), &value, setup.clone(), cx);
+    let busy = app.security.editor_busy();
+    field.update(cx, |field, cx| {
+        field.set_disabled(busy, cx);
+        field.set_masked(setup.masked, cx);
+    });
+    app.text_input_field(field_id, label, &value, setup, cx)
         .into_any_element()
 }
 
@@ -29,6 +36,12 @@ pub(super) fn security_number_editor_field(
     cx: &mut gpui::Context<NyaTermApp>,
 ) -> gpui::AnyElement {
     let palette = app.theme_palette();
+    let field_id = format!("security.editor.{id}");
+    let field = app.number_input(field_id.clone(), &value, setup.clone(), cx);
+    let busy = app.security.editor_busy();
+    field.update(cx, |field, cx| {
+        field.set_disabled(busy, cx);
+    });
     div()
         .flex()
         .flex_col()
@@ -39,7 +52,7 @@ pub(super) fn security_number_editor_field(
                 .text_color(rgb(palette.text_muted))
                 .child(label),
         )
-        .child(app.number_input_box(format!("security.editor.{id}"), &value, setup, cx))
+        .child(app.number_input_box(field_id, &value, setup, cx))
         .into_any_element()
 }
 
@@ -47,6 +60,7 @@ pub(super) fn security_type_chip(
     palette: crate::theme::ThemePalette,
     label: &'static str,
     selected: bool,
+    disabled: bool,
     on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
 ) -> impl IntoElement {
     div()
@@ -58,7 +72,7 @@ pub(super) fn security_type_chip(
         .rounded_sm()
         .text_size(px(10.))
         .font_weight(FontWeight(700.))
-        .cursor_pointer()
+        .when(!disabled, |this| this.cursor_pointer())
         .text_color(if selected {
             rgb(palette.success)
         } else {
@@ -69,9 +83,16 @@ pub(super) fn security_type_chip(
         } else {
             rgb(palette.surface_elevated)
         })
-        .hover(|this| this.bg(rgb(palette.border)))
+        .when(!disabled, |this| {
+            this.hover(|this| this.bg(rgb(palette.border)))
+        })
+        .when(disabled, |this| this.opacity(0.5))
         .child(label)
-        .on_click(on_click)
+        .on_click(move |event, window, cx| {
+            if !disabled {
+                on_click(event, window, cx);
+            }
+        })
 }
 
 pub(super) fn session_action_svg_button(

@@ -1,8 +1,11 @@
-use gpui::{ClipboardItem, Context, KeyDownEvent, Window};
-use nyaterm_core::{ConnectionStore, SavedCredential};
+use gpui::{AppContext, ClipboardItem, Context, IntoElement as _, KeyDownEvent, Window};
+use nyaterm_core::{SavedCredential, validate_prompt_regex};
+use nyaterm_ui::NyaDialogWindowExt as _;
 
 use crate::features::{NyaTermApp, compact_id, none_if_blank};
 use crate::models::{SecurityAuthTab, SecurityCredentialEditorState, SecurityUnlockAction};
+
+use super::jobs::{SecurityStoreLocation, load_security_catalog};
 
 impl NyaTermApp {
     pub(in crate::features) fn open_security_credential_editor(
@@ -43,6 +46,7 @@ impl NyaTermApp {
                 password_prompt_regex: entry.password_prompt_regex.unwrap_or_default(),
                 enabled: entry.enabled,
                 has_password: entry.has_password,
+                show_password: false,
                 error: None,
             }
         } else {
@@ -55,16 +59,62 @@ impl NyaTermApp {
                 password_prompt_regex: String::new(),
                 enabled: true,
                 has_password: false,
+                show_password: false,
                 error: None,
             }
         };
         self.security
             .open_credential_editor(editor, "credential editor opened".to_string());
         window.focus(self.security.credential_editor_focus(), cx);
+        let title = if self
+            .security
+            .credential_editor()
+            .is_some_and(|editor| editor.id.is_some())
+        {
+            self.tr("credentialManager.editTitle")
+        } else {
+            self.tr("credentialManager.newTitle")
+        }
+        .to_string();
+        self.open_guarded_form_dialog(
+            (
+                title,
+                640.,
+                self.tr("common.save").to_string(),
+                |app, _, cx| {
+                    app.security
+                        .credential_editor()
+                        .cloned()
+                        .map(|editor| {
+                            app.security_credential_editor_view(editor, cx)
+                                .into_any_element()
+                        })
+                        .unwrap_or_else(|| gpui::div().into_any_element())
+                },
+                |app, window, cx| {
+                    app.save_security_credential_editor(window, cx);
+                    app.security.credential_editor().is_none()
+                },
+                |app, cx| app.close_security_credential_editor(cx),
+                |app| app.security.editor_busy(),
+            ),
+            window,
+            cx,
+        );
+        if let Some(credential_id) = self
+            .security
+            .credential_editor()
+            .and_then(|editor| editor.id.clone())
+        {
+            self.load_security_credential_editor_secret(credential_id, cx);
+        }
         cx.notify();
     }
 
     pub(in crate::features) fn close_security_credential_editor(&mut self, cx: &mut Context<Self>) {
+        if self.security.editor_busy() {
+            return;
+        }
         self.forget_text_inputs("security.editor.cred-");
         self.security.close_credential_editor();
         cx.notify();
@@ -74,8 +124,24 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
+        if self.security.editor_busy() {
+            return;
+        }
         if let Some(editor) = self.security.credential_editor_mut() {
             editor.enabled = !editor.enabled;
+        }
+        cx.notify();
+    }
+
+    pub(in crate::features) fn toggle_security_credential_editor_visibility(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        if self.security.editor_busy() {
+            return;
+        }
+        if let Some(editor) = self.security.credential_editor_mut() {
+            editor.show_password = !editor.show_password;
         }
         cx.notify();
     }
@@ -106,32 +172,47 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        let store = match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        ) {
-            Ok(store) => store,
-            Err(error) => {
-                self.security.set_status(error.to_string());
-                cx.notify();
-                return;
-            }
-        };
         let mut next = entry;
         next.enabled = !next.enabled;
-        match store.save_credential(next.clone()) {
-            Ok(_) => {
-                self.refresh_security_catalog();
-                self.security.set_status(format!(
-                    "credential {} {}",
-                    next.name,
-                    if next.enabled { "enabled" } else { "disabled" }
-                ));
-            }
-            Err(error) => {
-                self.security.set_status(error.to_string());
-            }
-        }
+        let location = SecurityStoreLocation::new(
+            self.runtime.config_dir(),
+            self.runtime.portable_key_path().map(ToOwned::to_owned),
+        );
+        let request_id = self
+            .security
+            .begin_credential_request(credential_id.clone());
+        cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_spawn(async move {
+                    let store = location.open()?;
+                    store
+                        .save_credential(next.clone())
+                        .map_err(|error| error.to_string())?;
+                    let catalog = load_security_catalog(&store)?;
+                    Ok::<_, String>((next.name, next.enabled, catalog))
+                })
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                if !this
+                    .security
+                    .finish_credential_request(request_id, &credential_id)
+                {
+                    return;
+                }
+                match result {
+                    Ok((name, enabled, catalog)) => {
+                        this.security.replace_catalog_state(catalog);
+                        this.security.set_status(format!(
+                            "credential {name} {}",
+                            if enabled { "enabled" } else { "disabled" }
+                        ));
+                    }
+                    Err(error) => this.security.set_status(error),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
         cx.notify();
     }
 
@@ -150,7 +231,9 @@ impl NyaTermApp {
         // it, which the boxes leave unconsumed.
         match keystroke.key.as_str() {
             "escape" => {
-                self.close_security_credential_editor(cx);
+                if !self.security.editor_busy() {
+                    self.close_security_credential_editor(cx);
+                }
             }
             "enter" => {
                 self.save_security_credential_editor(window, cx);
@@ -161,7 +244,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn save_security_credential_editor(
         &mut self,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(editor) = self.security.credential_editor().cloned() else {
@@ -175,21 +258,31 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        let store = match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        ) {
-            Ok(store) => store,
-            Err(error) => {
+        for (label, pattern) in [
+            ("username", editor.username_prompt_regex.trim()),
+            ("password", editor.password_prompt_regex.trim()),
+        ] {
+            if !pattern.is_empty() && !validate_prompt_regex(pattern) {
                 if let Some(editor) = self.security.credential_editor_mut() {
-                    editor.error = Some(error.to_string());
+                    editor.error = Some(format!("invalid {label} prompt regular expression"));
                 }
                 cx.notify();
                 return;
             }
-        };
+        }
         let entry = SavedCredential {
             id: editor.id.clone().unwrap_or_default(),
+            sort_order: editor
+                .id
+                .as_deref()
+                .and_then(|id| {
+                    self.security
+                        .credentials()
+                        .iter()
+                        .find(|entry| entry.id == id)
+                        .map(|entry| entry.sort_order)
+                })
+                .unwrap_or_default(),
             name,
             username: editor.username.trim().to_string(),
             password: if editor.password.trim().is_empty() {
@@ -202,19 +295,52 @@ impl NyaTermApp {
             enabled: editor.enabled,
             has_password: false,
         };
-        match store.save_credential(entry) {
-            Ok(id) => {
-                self.refresh_security_catalog();
-                self.security
-                    .finish_credential_editor(format!("credential saved ({})", compact_id(&id)));
-                self.shell.set_status("credential saved".to_string());
-            }
-            Err(error) => {
-                if let Some(editor) = self.security.credential_editor_mut() {
-                    editor.error = Some(error.to_string());
+        let Some(request_id) = self.security.begin_editor_request() else {
+            return;
+        };
+        let location = SecurityStoreLocation::new(
+            self.runtime.config_dir(),
+            self.runtime.portable_key_path().map(ToOwned::to_owned),
+        );
+        cx.spawn_in(window, async move |this, cx| {
+            let result = cx
+                .background_spawn(async move {
+                    let store = location.open()?;
+                    let id = store
+                        .save_credential(entry)
+                        .map_err(|error| error.to_string())?;
+                    let catalog = load_security_catalog(&store)?;
+                    Ok::<_, String>((id, catalog))
+                })
+                .await;
+            let mut close = false;
+            let _ = this.update(cx, |this, cx| {
+                if !this.security.finish_editor_request(request_id) {
+                    return;
                 }
+                match result {
+                    Ok((id, catalog)) => {
+                        this.security.replace_catalog_state(catalog);
+                        this.security.finish_credential_editor(format!(
+                            "credential saved ({})",
+                            compact_id(&id)
+                        ));
+                        this.shell.set_status("credential saved".to_string());
+                        close = true;
+                    }
+                    Err(error) => {
+                        if let Some(editor) = this.security.credential_editor_mut() {
+                            editor.error = Some(error);
+                        }
+                    }
+                }
+                cx.notify();
+            });
+            if close {
+                let _ = cx.update(|window, cx| window.close_nya_dialog(cx));
             }
-        }
+        })
+        .detach();
         cx.notify();
     }
 
@@ -270,33 +396,177 @@ impl NyaTermApp {
         ) {
             return;
         }
-        let store = match ConnectionStore::open_with_portable_key_path(
+        let request_credential_id = credential_id.clone();
+        let request_id = self
+            .security
+            .begin_credential_request(credential_id.clone());
+        let location = SecurityStoreLocation::new(
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
-        ) {
-            Ok(store) => store,
-            Err(error) => {
-                self.security.set_status(error.to_string());
-                cx.notify();
-                return;
-            }
-        };
-        match store.load_decrypted_credential_by_id(&credential_id) {
-            Ok(Some(entry)) => {
-                let value = entry.password.unwrap_or_default();
-                if value.is_empty() {
-                    self.security.set_status("credential has no password");
-                } else {
-                    self.security
-                        .reveal_credential(credential_id.clone(), value.clone());
-                    cx.write_to_clipboard(ClipboardItem::new_string(value));
-                    self.security
-                        .set_status("credential password revealed and copied");
+        );
+        cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_spawn(async move {
+                    let store = location.open()?;
+                    store
+                        .load_decrypted_credential_by_id(&credential_id)
+                        .map_err(|error| error.to_string())
+                })
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                if !this
+                    .security
+                    .finish_credential_request(request_id, &request_credential_id)
+                {
+                    return;
                 }
-            }
-            Ok(None) => self.security.set_status("credential not found"),
-            Err(error) => self.security.set_status(error.to_string()),
-        }
+                match result {
+                    Ok(Some(entry)) => {
+                        let value = entry.password.unwrap_or_default();
+                        if value.is_empty() {
+                            this.security.set_status("credential has no password");
+                        } else {
+                            this.security
+                                .reveal_credential(request_credential_id.clone(), value.clone());
+                            cx.write_to_clipboard(ClipboardItem::new_string(value));
+                            this.security
+                                .set_status("credential password revealed and copied");
+                        }
+                    }
+                    Ok(None) => this.security.set_status("credential not found"),
+                    Err(error) => this.security.set_status(error),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
         cx.notify();
+    }
+
+    pub(in crate::features) fn copy_security_credential_username(
+        &mut self,
+        credential_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(username) = self
+            .security
+            .credentials()
+            .iter()
+            .find(|entry| entry.id == credential_id)
+            .map(|entry| entry.username.clone())
+            && !username.is_empty()
+        {
+            cx.write_to_clipboard(ClipboardItem::new_string(username));
+            self.security
+                .set_status(self.tr("common.copied").to_string());
+            cx.notify();
+        }
+    }
+
+    pub(in crate::features) fn copy_security_credential_password(
+        &mut self,
+        credential_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(value) = self.security.revealed_credential(&credential_id)
+            && !value.is_empty()
+        {
+            cx.write_to_clipboard(ClipboardItem::new_string(value.to_string()));
+            self.security
+                .set_status(self.tr("common.copied").to_string());
+            cx.notify();
+        }
+    }
+
+    pub(in crate::features) fn reorder_security_credentials(
+        &mut self,
+        source_id: String,
+        target_id: String,
+        after: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(next) = self
+            .security
+            .reordered_credentials(&source_id, &target_id, after)
+        else {
+            return;
+        };
+        let updates = next
+            .iter()
+            .map(|entry| (entry.id.clone(), entry.sort_order))
+            .collect::<Vec<_>>();
+        let location = SecurityStoreLocation::new(
+            self.runtime.config_dir(),
+            self.runtime.portable_key_path().map(ToOwned::to_owned),
+        );
+        let request_id = self.security.begin_reorder_request();
+        cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_spawn(async move {
+                    let store = location.open()?;
+                    store
+                        .reorder_credentials(&updates)
+                        .map_err(|error| error.to_string())?;
+                    load_security_catalog(&store)
+                })
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                if !this.security.finish_reorder_request(request_id) {
+                    return;
+                }
+                this.security.set_credential_drop_target(None);
+                let status = match result {
+                    Ok(catalog) => {
+                        this.security.replace_catalog_state(catalog);
+                        this.tr("credentialManager.reorderSuccess").to_string()
+                    }
+                    Err(error) => {
+                        format!("{}: {error}", this.tr("credentialManager.reorderFailed"))
+                    }
+                };
+                this.security.set_status(status);
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    fn load_security_credential_editor_secret(
+        &mut self,
+        credential_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(request_id) = self.security.begin_editor_request() else {
+            return;
+        };
+        let location = SecurityStoreLocation::new(
+            self.runtime.config_dir(),
+            self.runtime.portable_key_path().map(ToOwned::to_owned),
+        );
+        cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_spawn(async move {
+                    let store = location.open()?;
+                    store
+                        .load_decrypted_credential_by_id(&credential_id)
+                        .map_err(|error| error.to_string())
+                })
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                if !this.security.finish_editor_request(request_id) {
+                    return;
+                }
+                let Some(editor) = this.security.credential_editor_mut() else {
+                    return;
+                };
+                match result {
+                    Ok(Some(entry)) => editor.password = entry.password.unwrap_or_default(),
+                    Ok(None) => editor.error = Some("credential not found".to_string()),
+                    Err(error) => editor.error = Some(error),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
     }
 }

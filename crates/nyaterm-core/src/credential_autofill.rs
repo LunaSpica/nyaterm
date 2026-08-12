@@ -212,6 +212,7 @@ mod tests {
     ) -> SavedCredential {
         SavedCredential {
             id: id.to_string(),
+            sort_order: 0,
             name: id.to_string(),
             username: username.to_string(),
             password: None,

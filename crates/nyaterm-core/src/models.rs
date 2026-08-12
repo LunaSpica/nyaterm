@@ -412,6 +412,8 @@ pub struct DecryptedSavedPassword {
 pub struct SavedCredential {
     #[serde(default = "uuid_v4")]
     pub id: String,
+    #[serde(default)]
+    pub sort_order: i32,
     pub name: String,
     pub username: String,
     #[serde(default)]
@@ -429,6 +431,7 @@ pub struct SavedCredential {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DecryptedSavedCredential {
     pub id: String,
+    pub sort_order: i32,
     pub name: String,
     pub username: String,
     pub password: Option<String>,

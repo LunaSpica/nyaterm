@@ -342,7 +342,11 @@ impl ConnectionStore {
             credential.has_password = credential.password.is_some();
             credential.password = None;
         }
-        credentials.sort_by(|left, right| left.name.cmp(&right.name).then(left.id.cmp(&right.id)));
+        credentials.sort_by(|left, right| {
+            left.sort_order
+                .cmp(&right.sort_order)
+                .then(left.id.cmp(&right.id))
+        });
         Ok(credentials)
     }
 
@@ -370,6 +374,7 @@ impl ConnectionStore {
         let crypto = self.credential_crypto()?;
         Ok(Some(DecryptedSavedCredential {
             id: entry.id,
+            sort_order: entry.sort_order,
             name: entry.name,
             username: entry.username,
             password: decrypt_optional_secret(
@@ -384,11 +389,24 @@ impl ConnectionStore {
     }
 
     pub fn save_credential(&self, mut entry: SavedCredential) -> Result<String, StorageError> {
-        if entry.id.trim().is_empty() {
+        let is_new = entry.id.trim().is_empty();
+        if is_new {
             entry.id = uuid::Uuid::new_v4().to_string();
         }
         let target_id = entry.id.clone();
         let existing = self.load_credential_by_id(&target_id)?;
+        entry.sort_order = if let Some(existing) = existing.as_ref() {
+            existing.sort_order
+        } else if is_new {
+            self.list_credentials()?
+                .into_iter()
+                .map(|credential| credential.sort_order)
+                .max()
+                .unwrap_or(-1)
+                .saturating_add(1)
+        } else {
+            entry.sort_order
+        };
         let crypto = self.credential_crypto()?;
         entry.password = match entry.password.as_deref().map(str::trim) {
             Some(plain) if !plain.is_empty() => {
@@ -407,6 +425,24 @@ impl ConnectionStore {
         )?;
         txn.commit()?;
         Ok(target_id)
+    }
+
+    pub fn reorder_credentials(&self, updates: &[(String, i32)]) -> Result<(), StorageError> {
+        let txn = self.db.begin_write()?;
+        for (credential_id, sort_order) in updates {
+            let key = entity_key(CREDENTIAL_PREFIX, credential_id);
+            let table = txn.open_table(CREDENTIALS_TABLE)?;
+            let Some(raw) = table.get(key.as_str())? else {
+                continue;
+            };
+            let mut entry: SavedCredential = deserialize_json(raw.value())?;
+            entry.sort_order = *sort_order;
+            drop(raw);
+            drop(table);
+            write_json_in_txn(&txn, CREDENTIALS_TABLE, &key, &entry)?;
+        }
+        txn.commit()?;
+        Ok(())
     }
 
     pub fn delete_credential(&self, credential_id: &str) -> Result<(), StorageError> {

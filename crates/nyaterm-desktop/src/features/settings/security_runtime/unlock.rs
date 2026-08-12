@@ -1,8 +1,10 @@
-use gpui::{Context, KeyDownEvent, Window};
-use nyaterm_core::ConnectionStore;
+use gpui::{AppContext, Context, KeyDownEvent, Window};
+use nyaterm_ui::NyaDialogWindowExt as _;
 
 use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::{NavItem, SecurityAuthTab, SecurityUnlockAction, SettingsTab};
+
+use super::jobs::{SecurityStoreLocation, load_security_catalog};
 
 impl NyaTermApp {
     pub(in crate::features) fn security_secrets_locked(&self) -> bool {
@@ -41,12 +43,6 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn close_security_unlock_prompt(&mut self, cx: &mut Context<Self>) {
-        self.security.close_unlock_prompt();
-        self.forget_text_inputs("security.unlock.password");
-        cx.notify();
-    }
-
     pub(in crate::features) fn cancel_security_unlock_prompt(&mut self, cx: &mut Context<Self>) {
         self.security.cancel_unlock_prompt();
         self.forget_text_inputs("security.unlock.password");
@@ -70,9 +66,14 @@ impl NyaTermApp {
         self.open_page(NavItem::Settings, cx);
     }
 
-    pub(in crate::features) fn lock_security_secrets(&mut self, cx: &mut Context<Self>) {
+    pub(in crate::features) fn lock_security_secrets(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.security.lock_secrets();
         self.forget_text_inputs("security.unlock.password");
+        window.close_all_nya_dialogs(cx);
         cx.notify();
     }
 
@@ -87,32 +88,53 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        match ConnectionStore::open_with_portable_key_path(
+        let Some((request_id, password)) = self.security.begin_unlock_request() else {
+            return;
+        };
+        let location = SecurityStoreLocation::new(
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .and_then(|store| store.verify_master_password(self.security.unlock_draft()))
-        {
-            Ok(true) => {
-                let pending_action = self.security.complete_unlock();
-                self.close_security_unlock_prompt(cx);
-                if let Some(action) = pending_action {
-                    self.execute_security_unlock_action(action, window, cx);
+        );
+        cx.spawn_in(window, async move |this, cx| {
+            let result = cx
+                .background_spawn(async move {
+                    let store = location.open()?;
+                    store
+                        .verify_master_password(&password)
+                        .map_err(|error| error.to_string())
+                })
+                .await;
+            let mut pending_action = None;
+            let _ = this.update(cx, |this, cx| {
+                if !this.security.finish_unlock_request(request_id) {
+                    return;
                 }
-            }
-            Ok(false) => {
-                self.reset_text_input("security.unlock.password", "", cx);
-                let error = self.tr("secretUnlock.wrongPassword").to_string();
-                self.security.reject_unlock(error, "unlock rejected");
+                match result {
+                    Ok(true) => {
+                        pending_action = this.security.complete_unlock();
+                        this.forget_text_inputs("security.unlock.password");
+                    }
+                    Ok(false) => {
+                        this.reset_text_input("security.unlock.password", "", cx);
+                        let error = this.tr("secretUnlock.wrongPassword").to_string();
+                        this.security.reject_unlock(error, "unlock rejected");
+                    }
+                    Err(error) => {
+                        this.reset_text_input("security.unlock.password", "", cx);
+                        this.security.reject_unlock(error, "unlock failed");
+                    }
+                }
                 cx.notify();
+            });
+            if let Some(action) = pending_action {
+                let _ = cx.update(|window, cx| {
+                    let _ = this.update(cx, |this, cx| {
+                        this.execute_security_unlock_action(action, window, cx);
+                    });
+                });
             }
-            Err(error) => {
-                self.reset_text_input("security.unlock.password", "", cx);
-                self.security
-                    .reject_unlock(error.to_string(), "unlock failed");
-                cx.notify();
-            }
-        }
+        })
+        .detach();
     }
 
     pub(in crate::features) fn handle_security_unlock_key_down(
@@ -149,6 +171,9 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         match action {
+            SecurityUnlockAction::ViewPrivateKey(id) => {
+                self.view_security_private_key(id, window, cx);
+            }
             SecurityUnlockAction::OpenPasswordEditor(id) => {
                 self.open_security_password_editor(id, window, cx);
             }
@@ -179,23 +204,34 @@ impl NyaTermApp {
     pub(in crate::features) fn set_security_auth_tab(
         &mut self,
         tab: SecurityAuthTab,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         self.security.set_auth_tab(tab);
+        window.close_all_nya_dialogs(cx);
         cx.notify();
     }
 
-    pub(in crate::features) fn refresh_security_catalog(&mut self) {
-        if let Ok(store) = ConnectionStore::open_with_portable_key_path(
+    pub(in crate::features) fn refresh_security_catalog(&mut self, cx: &mut Context<Self>) {
+        let location = SecurityStoreLocation::new(
             self.runtime.config_dir(),
             self.runtime.portable_key_path().map(ToOwned::to_owned),
-        ) {
-            self.security.replace_catalog(
-                store.list_ssh_keys().unwrap_or_default(),
-                store.list_otp_entries().unwrap_or_default(),
-                store.list_passwords().unwrap_or_default(),
-                store.list_credentials().unwrap_or_default(),
-            );
-        }
+        );
+        cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_spawn(async move {
+                    let store = location.open()?;
+                    load_security_catalog(&store)
+                })
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                match result {
+                    Ok(catalog) => this.security.replace_catalog_state(catalog),
+                    Err(error) => this.security.set_status(error),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
     }
 }

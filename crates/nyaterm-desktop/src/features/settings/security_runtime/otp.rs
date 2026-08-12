@@ -1,17 +1,34 @@
 use gpui::{
-    AppContext, ClipboardItem, Context, KeyDownEvent, PathPromptOptions, SharedString, Window,
+    AppContext, ClipboardItem, Context, IntoElement as _, KeyDownEvent, PathPromptOptions,
+    SharedString, Window,
 };
-use nyaterm_core::{ConnectionStore, OtpEntry};
+use nyaterm_core::OtpEntry;
+use nyaterm_ui::NyaDialogWindowExt as _;
+use std::time::Duration;
 
 use crate::features::{NyaTermApp, compact_id};
 use crate::models::{SecurityAuthTab, SecurityOtpEditorState};
+use nyaterm_transport::SessionKind;
+
+use super::jobs::{SecurityStoreLocation, load_security_catalog};
+
+#[derive(Clone, Copy)]
+enum SecurityOtpCodeAction {
+    Display,
+    Copy,
+    Send,
+}
 
 impl NyaTermApp {
-    pub(in crate::features) fn import_security_otp_from_qr(&mut self, cx: &mut Context<Self>) {
+    pub(in crate::features) fn import_security_otp_from_qr(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let scanning_status = self.tr("otpManager.scanningQr").to_string();
-        if !self.security.begin_otp_qr_import(scanning_status) {
+        let Some(request_id) = self.security.begin_otp_qr_import(scanning_status) else {
             return;
-        }
+        };
         let options = PathPromptOptions {
             files: true,
             directories: false,
@@ -19,7 +36,7 @@ impl NyaTermApp {
             prompt: Some(SharedString::from(self.tr("otpManager.selectQrImage"))),
         };
         let receiver = cx.prompt_for_paths(options);
-        cx.spawn(async move |this, cx| {
+        cx.spawn_in(window, async move |this, cx| {
             let selected = match receiver.await {
                 Ok(Ok(Some(paths))) => paths.into_iter().next(),
                 _ => None,
@@ -31,13 +48,13 @@ impl NyaTermApp {
                 }
                 None => Ok(None),
             };
+            let mut editor = None;
             let _ = this.update(cx, |this, cx| {
-                this.security.finish_otp_qr_import();
+                if !this.security.finish_otp_qr_import(request_id) {
+                    return;
+                }
                 match result {
-                    Ok(Some(editor)) => {
-                        let status = this.tr("otpManager.scanQr").to_string();
-                        this.security.open_otp_editor(editor, status);
-                    }
+                    Ok(Some(decoded)) => editor = Some(decoded),
                     Ok(None) => {
                         let status = this.tr("common.cancel").to_string();
                         this.security.set_status(status);
@@ -50,6 +67,13 @@ impl NyaTermApp {
                 }
                 cx.notify();
             });
+            if let Some(editor) = editor {
+                let _ = cx.update(|window, cx| {
+                    let _ = this.update(cx, |this, cx| {
+                        this.open_security_otp_editor_with_draft(editor, window, cx);
+                    });
+                });
+            }
         })
         .detach();
         cx.notify();
@@ -107,6 +131,19 @@ fn decode_security_otp_qr(path: &std::path::Path) -> Result<SecurityOtpEditorSta
 }
 
 impl NyaTermApp {
+    fn open_security_otp_editor_with_draft(
+        &mut self,
+        editor: SecurityOtpEditorState,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.forget_text_inputs("security.editor.otp-");
+        self.security
+            .open_otp_editor(editor, "OTP editor opened".to_string());
+        window.focus(self.security.otp_editor_focus(), cx);
+        self.open_security_otp_dialog(window, cx);
+    }
+
     pub(in crate::features) fn open_security_otp_editor(
         &mut self,
         otp_id: Option<String>,
@@ -157,10 +194,56 @@ impl NyaTermApp {
         self.security
             .open_otp_editor(editor, "OTP editor opened".to_string());
         window.focus(self.security.otp_editor_focus(), cx);
+        self.open_security_otp_dialog(window, cx);
+        if let Some(otp_id) = self
+            .security
+            .otp_editor()
+            .and_then(|editor| editor.id.clone())
+        {
+            self.load_security_otp_editor_secret(otp_id, cx);
+        }
         cx.notify();
     }
 
+    fn open_security_otp_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let title = if self
+            .security
+            .otp_editor()
+            .is_some_and(|editor| editor.id.is_some())
+        {
+            self.tr("otpManager.editTitle")
+        } else {
+            self.tr("otpManager.newTitle")
+        }
+        .to_string();
+        self.open_guarded_form_dialog(
+            (
+                title,
+                560.,
+                self.tr("common.save").to_string(),
+                |app, _, cx| {
+                    app.security
+                        .otp_editor()
+                        .cloned()
+                        .map(|editor| app.security_otp_editor_view(editor, cx).into_any_element())
+                        .unwrap_or_else(|| gpui::div().into_any_element())
+                },
+                |app, window, cx| {
+                    app.save_security_otp_editor(window, cx);
+                    app.security.otp_editor().is_none()
+                },
+                |app, cx| app.close_security_otp_editor(cx),
+                |app| app.security.editor_busy(),
+            ),
+            window,
+            cx,
+        );
+    }
+
     pub(in crate::features) fn close_security_otp_editor(&mut self, cx: &mut Context<Self>) {
+        if self.security.editor_busy() {
+            return;
+        }
         self.forget_text_inputs("security.editor.otp-");
         self.security.close_otp_editor();
         cx.notify();
@@ -171,6 +254,9 @@ impl NyaTermApp {
         otp_type: &'static str,
         cx: &mut Context<Self>,
     ) {
+        if self.security.editor_busy() {
+            return;
+        }
         if let Some(editor) = self.security.otp_editor_mut() {
             editor.otp_type = otp_type.to_string();
         }
@@ -178,6 +264,9 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn cycle_security_otp_algorithm(&mut self, cx: &mut Context<Self>) {
+        if self.security.editor_busy() {
+            return;
+        }
         self.security.cycle_otp_algorithm();
         cx.notify();
     }
@@ -197,7 +286,9 @@ impl NyaTermApp {
         // it, which the boxes leave unconsumed.
         match keystroke.key.as_str() {
             "escape" => {
-                self.close_security_otp_editor(cx);
+                if !self.security.editor_busy() {
+                    self.close_security_otp_editor(cx);
+                }
             }
             "enter" => {
                 self.save_security_otp_editor(window, cx);
@@ -208,7 +299,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn save_security_otp_editor(
         &mut self,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(editor) = self.security.otp_editor().cloned() else {
@@ -224,20 +315,6 @@ impl NyaTermApp {
         let digits = editor.digits.trim().parse::<u8>().unwrap_or(6).clamp(4, 10);
         let period = editor.period.trim().parse::<u64>().unwrap_or(30).max(1);
         let counter = editor.counter.trim().parse::<u64>().unwrap_or(0);
-
-        let store = match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        ) {
-            Ok(store) => store,
-            Err(error) => {
-                if let Some(editor) = self.security.otp_editor_mut() {
-                    editor.error = Some(error.to_string());
-                }
-                cx.notify();
-                return;
-            }
-        };
 
         let entry = OtpEntry {
             id: editor.id.clone().unwrap_or_default(),
@@ -259,20 +336,50 @@ impl NyaTermApp {
             counter,
             has_secret: false,
         };
-
-        match store.save_otp_entry(entry) {
-            Ok(id) => {
-                self.refresh_security_catalog();
-                self.security
-                    .finish_otp_editor(format!("OTP entry saved ({})", compact_id(&id)));
-                self.shell.set_status("OTP entry saved".to_string());
-            }
-            Err(error) => {
-                if let Some(editor) = self.security.otp_editor_mut() {
-                    editor.error = Some(error.to_string());
+        let Some(request_id) = self.security.begin_editor_request() else {
+            return;
+        };
+        let location = SecurityStoreLocation::new(
+            self.runtime.config_dir(),
+            self.runtime.portable_key_path().map(ToOwned::to_owned),
+        );
+        cx.spawn_in(window, async move |this, cx| {
+            let result = cx
+                .background_spawn(async move {
+                    let store = location.open()?;
+                    let id = store
+                        .save_otp_entry(entry)
+                        .map_err(|error| error.to_string())?;
+                    let catalog = load_security_catalog(&store)?;
+                    Ok::<_, String>((id, catalog))
+                })
+                .await;
+            let mut close = false;
+            let _ = this.update(cx, |this, cx| {
+                if !this.security.finish_editor_request(request_id) {
+                    return;
                 }
+                match result {
+                    Ok((id, catalog)) => {
+                        this.security.replace_catalog_state(catalog);
+                        this.security
+                            .finish_otp_editor(format!("OTP entry saved ({})", compact_id(&id)));
+                        this.shell.set_status("OTP entry saved".to_string());
+                        close = true;
+                    }
+                    Err(error) => {
+                        if let Some(editor) = this.security.otp_editor_mut() {
+                            editor.error = Some(error);
+                        }
+                    }
+                }
+                cx.notify();
+            });
+            if close {
+                let _ = cx.update(|window, cx| window.close_nya_dialog(cx));
             }
-        }
+        })
+        .detach();
         cx.notify();
     }
 
@@ -312,54 +419,186 @@ impl NyaTermApp {
     pub(in crate::features) fn generate_security_otp_code(
         &mut self,
         otp_id: String,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.security.clear_revealed_otp_code(&otp_id);
-        match self.session.prompt_otp_provider().preview_otp_code(&otp_id) {
-            Ok(Some(preview)) => {
-                let code = preview.code;
-                self.security.reveal_otp_code(otp_id.clone(), code);
-                self.security
-                    .set_status(format!("OTP code ready for {}", compact_id(&otp_id)));
-                self.shell.set_status("OTP code ready".to_string());
-            }
-            Ok(None) => {
-                self.security.set_status("OTP entry not found");
-            }
-            Err(error) => {
-                self.security.set_status(error);
-            }
+        self.request_security_otp_code(otp_id, SecurityOtpCodeAction::Display, window, cx);
+        cx.notify();
+    }
+
+    pub(in crate::features) fn toggle_security_otp_code_visibility(
+        &mut self,
+        otp_id: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let visible = self.security.toggle_otp_code_visible(otp_id.clone());
+        if visible
+            && self
+                .security
+                .otp_entries()
+                .iter()
+                .find(|entry| entry.id == otp_id)
+                .is_some_and(|entry| entry.otp_type.eq_ignore_ascii_case("totp"))
+        {
+            self.request_security_otp_code(
+                otp_id.clone(),
+                SecurityOtpCodeAction::Display,
+                window,
+                cx,
+            );
+            self.arm_security_otp_refresh(cx);
         }
         cx.notify();
     }
 
-    pub(in crate::features) fn refresh_visible_security_otp_codes(
+    fn arm_security_otp_refresh(&mut self, cx: &mut Context<Self>) {
+        if self.security.visible_totp_ids().is_empty() || !self.security.arm_otp_refresh() {
+            return;
+        }
+        cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor().timer(Duration::from_secs(1)).await;
+                let work = this
+                    .update(cx, |this, _| {
+                        let ids = this.security.visible_totp_ids();
+                        if ids.is_empty() {
+                            this.security.disarm_otp_refresh();
+                            return None;
+                        }
+                        Some((ids, this.session.prompt_otp_provider()))
+                    })
+                    .ok()
+                    .flatten();
+                let Some((ids, provider)) = work else {
+                    break;
+                };
+                let codes = cx
+                    .background_spawn(async move {
+                        ids.into_iter()
+                            .filter_map(|otp_id| {
+                                provider
+                                    .preview_otp_code(&otp_id)
+                                    .ok()
+                                    .flatten()
+                                    .map(|preview| (otp_id, preview.code))
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .await;
+                let _ = this.update(cx, |this, cx| {
+                    for (otp_id, code) in codes {
+                        if this.security.otp_code_visible(&otp_id) {
+                            this.security.reveal_otp_code(otp_id, code);
+                        }
+                    }
+                    cx.notify();
+                });
+            }
+        })
+        .detach();
+    }
+
+    fn request_security_otp_code(
         &mut self,
+        otp_id: String,
+        action: SecurityOtpCodeAction,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let ids = self
-            .security
-            .otp_entries()
-            .iter()
-            .filter(|entry| entry.otp_type.eq_ignore_ascii_case("totp"))
-            .map(|entry| entry.id.clone())
-            .collect::<Vec<_>>();
-        let mut refreshed = 0usize;
-        for otp_id in ids {
-            if let Ok(Some(preview)) = self.session.prompt_otp_provider().preview_otp_code(&otp_id)
-            {
-                self.security.reveal_otp_code(otp_id, preview.code);
-                refreshed += 1;
+        self.security.clear_revealed_otp_code(&otp_id);
+        let request_otp_id = otp_id.clone();
+        let request_id = self.security.begin_otp_request(otp_id.clone());
+        let provider = self.session.prompt_otp_provider();
+        cx.spawn_in(window, async move |this, cx| {
+            let result = cx
+                .background_spawn(async move { provider.preview_otp_code(&otp_id) })
+                .await;
+            let mut send_code = None;
+            let mut refresh_catalog = false;
+            let _ = this.update(cx, |this, cx| {
+                if !this
+                    .security
+                    .finish_otp_request(request_id, &request_otp_id)
+                {
+                    return;
+                }
+                match result {
+                    Ok(Some(preview)) => {
+                        let code = preview.code;
+                        refresh_catalog = preview.otp_type.eq_ignore_ascii_case("hotp");
+                        this.security
+                            .reveal_otp_code(request_otp_id.clone(), code.clone());
+                        match action {
+                            SecurityOtpCodeAction::Display => {
+                                this.security.set_status(format!(
+                                    "OTP code ready for {}",
+                                    compact_id(&request_otp_id)
+                                ));
+                                this.shell.set_status("OTP code ready".to_string());
+                            }
+                            SecurityOtpCodeAction::Copy => {
+                                cx.write_to_clipboard(ClipboardItem::new_string(code));
+                                this.security.set_status(format!(
+                                    "OTP code copied ({})",
+                                    compact_id(&request_otp_id)
+                                ));
+                                this.shell.set_status("OTP code copied".to_string());
+                            }
+                            SecurityOtpCodeAction::Send => send_code = Some(code),
+                        }
+                    }
+                    Ok(None) => this.security.set_status("OTP entry not found"),
+                    Err(error) => this.security.set_status(error),
+                }
+                if refresh_catalog {
+                    this.refresh_security_catalog(cx);
+                }
+                cx.notify();
+            });
+            if let Some(code) = send_code {
+                let _ = cx.update(|window, cx| {
+                    let _ = this.update(cx, |this, cx| {
+                        if this.send_sensitive_input_to_active_session(code.into_bytes(), cx) {
+                            this.security
+                                .set_status("OTP code sent to terminal".to_string());
+                            this.focus_terminal_input(window, cx);
+                        } else {
+                            this.security
+                                .set_status(this.tr("otpManager.sendToTerminalFailed").to_string());
+                            cx.notify();
+                        }
+                    });
+                });
             }
-        }
-        if refreshed > 0 {
+        })
+        .detach();
+    }
+
+    pub(in crate::features) fn security_otp_can_send_to_terminal(&self) -> bool {
+        let Some(session_id) = self.session.active_id() else {
+            return false;
+        };
+        !self.session.is_disconnected(session_id)
+            && self
+                .session
+                .session_info(session_id)
+                .is_some_and(|session| session.kind != SessionKind::Rdp)
+    }
+
+    pub(in crate::features) fn send_security_otp_to_terminal(
+        &mut self,
+        otp_id: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.security_otp_can_send_to_terminal() {
             self.security
-                .set_status(format!("refreshed {refreshed} OTP code(s)"));
+                .set_status(self.tr("otpManager.noActiveTerminal").to_string());
+            cx.notify();
+            return;
         }
-        let _ = window;
-        cx.notify();
+        self.request_security_otp_code(otp_id, SecurityOtpCodeAction::Send, window, cx);
     }
 
     pub(in crate::features) fn copy_security_otp_code(
@@ -379,16 +618,41 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        self.generate_security_otp_code(otp_id.clone(), window, cx);
-        if let Some(code) = self.security.revealed_otp_code(&otp_id).map(str::to_string)
-            && code != "------"
-            && !code.trim().is_empty()
-        {
-            cx.write_to_clipboard(ClipboardItem::new_string(code));
-            self.security
-                .set_status(format!("OTP code copied ({})", compact_id(&otp_id)));
-            self.shell.set_status("OTP code copied".to_string());
-            cx.notify();
-        }
+        self.request_security_otp_code(otp_id, SecurityOtpCodeAction::Copy, window, cx);
+    }
+
+    fn load_security_otp_editor_secret(&mut self, otp_id: String, cx: &mut Context<Self>) {
+        let Some(request_id) = self.security.begin_editor_request() else {
+            return;
+        };
+        let location = SecurityStoreLocation::new(
+            self.runtime.config_dir(),
+            self.runtime.portable_key_path().map(ToOwned::to_owned),
+        );
+        cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_spawn(async move {
+                    let store = location.open()?;
+                    store
+                        .load_decrypted_otp_entry_by_id(&otp_id)
+                        .map_err(|error| error.to_string())
+                })
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                if !this.security.finish_editor_request(request_id) {
+                    return;
+                }
+                let Some(editor) = this.security.otp_editor_mut() else {
+                    return;
+                };
+                match result {
+                    Ok(Some(entry)) => editor.secret = entry.secret.unwrap_or_default(),
+                    Ok(None) => editor.error = Some("OTP entry not found".to_string()),
+                    Err(error) => editor.error = Some(error),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
     }
 }

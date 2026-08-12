@@ -1,8 +1,7 @@
-use gpui::{Context, FontWeight, IntoElement, KeyDownEvent, div, prelude::*, px, rgb};
+use gpui::{Context, IntoElement, KeyDownEvent, div, prelude::*, px, rgb};
 
 use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::SecurityPasswordEditorState;
-use crate::widgets::small_button;
 
 use super::super::view_helpers::security_editor_field;
 
@@ -13,11 +12,6 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let title = if editor.id.is_some() {
-            self.tr("passwordManager.editTitle")
-        } else {
-            self.tr("passwordManager.newTitle")
-        };
         // A stored secret is never shown, so the box says so in its
         // placeholder rather than standing a row of bullets in for it. The
         // reveal toggle now unmasks the box itself.
@@ -28,11 +22,6 @@ impl NyaTermApp {
         };
         let password_masked = !editor.show_password;
         div()
-            .rounded_md()
-            .border_1()
-            .border_color(rgb(palette.border))
-            .bg(rgb(palette.bg))
-            .p_3()
             .flex()
             .flex_col()
             .gap_2()
@@ -40,13 +29,6 @@ impl NyaTermApp {
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 this.handle_security_password_editor_key_down(event, window, cx);
             }))
-            .child(
-                div()
-                    .text_xs()
-                    .font_weight(FontWeight(800.))
-                    .text_color(rgb(palette.text))
-                    .child(title),
-            )
             .child(security_editor_field(
                 self,
                 "pw-name",
@@ -72,18 +54,25 @@ impl NyaTermApp {
                         },
                         cx,
                     )))
-                    .child(small_button(
-                        palette,
-                        "security-pw-toggle-vis",
-                        self.tr(if editor.show_password {
+                    .child(
+                        nyaterm_ui::NyaIconButton::new(
+                            "security-pw-toggle-vis",
+                            if editor.show_password {
+                                "icons/eye-off.svg"
+                            } else {
+                                "icons/eye.svg"
+                            },
+                        )
+                        .tooltip(self.tr(if editor.show_password {
                             "passwordManager.hidePassword"
                         } else {
                             "passwordManager.showPassword"
-                        }),
-                        cx.listener(|this, _, _, cx| {
+                        }))
+                        .disabled(self.security.editor_busy())
+                        .on_click(cx.listener(|this, _, _, cx| {
                             this.toggle_security_password_editor_visibility(cx);
-                        }),
-                    )),
+                        })),
+                    ),
             )
             .when_some(editor.error.clone(), |this, error| {
                 this.child(
@@ -93,26 +82,5 @@ impl NyaTermApp {
                         .child(error),
                 )
             })
-            .child(
-                div()
-                    .flex()
-                    .gap_2()
-                    .child(small_button(
-                        palette,
-                        "security-pw-save",
-                        self.tr("common.save"),
-                        cx.listener(|this, _, window, cx| {
-                            this.save_security_password_editor(window, cx);
-                        }),
-                    ))
-                    .child(small_button(
-                        palette,
-                        "security-pw-cancel",
-                        self.tr("common.cancel"),
-                        cx.listener(|this, _, _, cx| {
-                            this.close_security_password_editor(cx);
-                        }),
-                    )),
-            )
     }
 }

@@ -1,8 +1,8 @@
-use gpui::{Context, FontWeight, IntoElement, KeyDownEvent, div, prelude::*, px, rgb};
+use gpui::{Context, IntoElement, KeyDownEvent, div, prelude::*, px, rgb};
+use nyaterm_core::validate_prompt_regex;
 
 use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::SecurityCredentialEditorState;
-use crate::widgets::small_button;
 
 use super::super::view_helpers::security_editor_field;
 
@@ -13,11 +13,6 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let title = if editor.id.is_some() {
-            self.tr("credentialManager.editTitle")
-        } else {
-            self.tr("credentialManager.newTitle")
-        };
         // A stored secret is never shown, so the box says so in its
         // placeholder rather than standing a row of bullets in for it.
         let password_placeholder = if editor.has_password {
@@ -25,12 +20,11 @@ impl NyaTermApp {
         } else {
             ""
         };
+        let username_regex_valid = editor.username_prompt_regex.trim().is_empty()
+            || validate_prompt_regex(&editor.username_prompt_regex);
+        let password_regex_valid = editor.password_prompt_regex.trim().is_empty()
+            || validate_prompt_regex(&editor.password_prompt_regex);
         div()
-            .rounded_md()
-            .border_1()
-            .border_color(rgb(palette.border))
-            .bg(rgb(palette.bg))
-            .p_3()
             .flex()
             .flex_col()
             .gap_2()
@@ -44,25 +38,16 @@ impl NyaTermApp {
                     .items_center()
                     .justify_between()
                     .gap_2()
+                    .child(div().flex_1().child(self.tr("credentialManager.enabled")))
                     .child(
-                        div()
-                            .text_xs()
-                            .font_weight(FontWeight(800.))
-                            .text_color(rgb(palette.text))
-                            .child(title),
-                    )
-                    .child(small_button(
-                        palette,
-                        "security-cred-enabled",
-                        if editor.enabled {
-                            self.tr("credentialManager.enabled")
-                        } else {
-                            self.tr("credentialManager.disabled")
-                        },
-                        cx.listener(|this, _, _, cx| {
-                            this.toggle_security_credential_enabled(cx);
-                        }),
-                    )),
+                        nyaterm_ui::NyaSwitch::new("security-cred-enabled")
+                            .checked(editor.enabled)
+                            .disabled(self.security.editor_busy())
+                            .tooltip(self.tr("credentialManager.enabled"))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.toggle_security_credential_enabled(cx);
+                            })),
+                    ),
             )
             .child(security_editor_field(
                 self,
@@ -80,18 +65,43 @@ impl NyaTermApp {
                 TextInputSetup::default(),
                 cx,
             ))
-            .child(security_editor_field(
-                self,
-                "cred-pass",
-                self.tr("credentialManager.passwordLabel"),
-                editor.password.clone(),
-                TextInputSetup {
-                    placeholder: password_placeholder.into(),
-                    masked: true,
-                    multi_line: false,
-                },
-                cx,
-            ))
+            .child(
+                div()
+                    .flex()
+                    .items_end()
+                    .gap_1()
+                    .child(div().min_w_0().flex_1().child(security_editor_field(
+                        self,
+                        "cred-pass",
+                        self.tr("credentialManager.passwordLabel"),
+                        editor.password.clone(),
+                        TextInputSetup {
+                            placeholder: password_placeholder.into(),
+                            masked: !editor.show_password,
+                            multi_line: false,
+                        },
+                        cx,
+                    )))
+                    .child(
+                        nyaterm_ui::NyaIconButton::new(
+                            "security-cred-toggle-vis",
+                            if editor.show_password {
+                                "icons/eye-off.svg"
+                            } else {
+                                "icons/eye.svg"
+                            },
+                        )
+                        .tooltip(self.tr(if editor.show_password {
+                            "passwordManager.hidePassword"
+                        } else {
+                            "passwordManager.showPassword"
+                        }))
+                        .disabled(self.security.editor_busy())
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.toggle_security_credential_editor_visibility(cx);
+                        })),
+                    ),
+            )
             .child(security_editor_field(
                 self,
                 "cred-user-re",
@@ -100,6 +110,14 @@ impl NyaTermApp {
                 TextInputSetup::default(),
                 cx,
             ))
+            .when(!username_regex_valid, |this| {
+                this.child(
+                    div()
+                        .text_size(px(10.))
+                        .text_color(rgb(palette.danger))
+                        .child(self.tr("credentialManager.invalidRegex")),
+                )
+            })
             .child(security_editor_field(
                 self,
                 "cred-pass-re",
@@ -108,6 +126,14 @@ impl NyaTermApp {
                 TextInputSetup::default(),
                 cx,
             ))
+            .when(!password_regex_valid, |this| {
+                this.child(
+                    div()
+                        .text_size(px(10.))
+                        .text_color(rgb(palette.danger))
+                        .child(self.tr("credentialManager.invalidRegex")),
+                )
+            })
             .when_some(editor.error.clone(), |this, error| {
                 this.child(
                     div()
@@ -116,26 +142,5 @@ impl NyaTermApp {
                         .child(error),
                 )
             })
-            .child(
-                div()
-                    .flex()
-                    .gap_2()
-                    .child(small_button(
-                        palette,
-                        "security-cred-save",
-                        self.tr("common.save"),
-                        cx.listener(|this, _, window, cx| {
-                            this.save_security_credential_editor(window, cx);
-                        }),
-                    ))
-                    .child(small_button(
-                        palette,
-                        "security-cred-cancel",
-                        self.tr("common.cancel"),
-                        cx.listener(|this, _, _, cx| {
-                            this.close_security_credential_editor(cx);
-                        }),
-                    )),
-            )
     }
 }

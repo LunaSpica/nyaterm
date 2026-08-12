@@ -5,7 +5,6 @@ use nyaterm_ui::NyaNumberInputOptions;
 
 use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::SecurityOtpEditorState;
-use crate::widgets::small_button;
 
 use super::super::view_helpers::{
     security_editor_field, security_number_editor_field, security_type_chip,
@@ -18,11 +17,6 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let title = if editor.id.is_some() {
-            self.tr("otpManager.editTitle")
-        } else {
-            self.tr("otpManager.newTitle")
-        };
         // A stored secret is never shown, so the box says so in its
         // placeholder rather than standing a row of bullets in for it.
         let secret_placeholder = if editor.has_secret {
@@ -32,11 +26,6 @@ impl NyaTermApp {
         };
 
         div()
-            .rounded_md()
-            .border_1()
-            .border_color(rgb(palette.border))
-            .bg(rgb(palette.bg))
-            .p_3()
             .flex()
             .flex_col()
             .gap_2()
@@ -46,13 +35,6 @@ impl NyaTermApp {
             }))
             .child(
                 div()
-                    .text_xs()
-                    .font_weight(FontWeight(800.))
-                    .text_color(rgb(palette.text))
-                    .child(title),
-            )
-            .child(
-                div()
                     .flex()
                     .items_center()
                     .gap_1()
@@ -60,6 +42,7 @@ impl NyaTermApp {
                         palette,
                         "TOTP",
                         editor.otp_type != "hotp",
+                        self.security.editor_busy(),
                         cx.listener(|this, _, _, cx| {
                             this.set_security_otp_type("totp", cx);
                         }),
@@ -68,6 +51,7 @@ impl NyaTermApp {
                         palette,
                         "HOTP",
                         editor.otp_type == "hotp",
+                        self.security.editor_busy(),
                         cx.listener(|this, _, _, cx| {
                             this.set_security_otp_type("hotp", cx);
                         }),
@@ -83,10 +67,13 @@ impl NyaTermApp {
                             .rounded_sm()
                             .text_size(px(10.))
                             .font_weight(FontWeight(700.))
-                            .cursor_pointer()
+                            .when(!self.security.editor_busy(), |this| this.cursor_pointer())
                             .text_color(rgb(palette.text))
                             .bg(rgb(palette.surface_elevated))
-                            .hover(|this| this.bg(rgb(palette.border)))
+                            .when(!self.security.editor_busy(), |this| {
+                                this.hover(|this| this.bg(rgb(palette.border)))
+                            })
+                            .when(self.security.editor_busy(), |this| this.opacity(0.5))
                             .child(editor.algorithm.clone())
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.cycle_security_otp_algorithm(cx);
@@ -163,26 +150,5 @@ impl NyaTermApp {
                         .child(error),
                 )
             })
-            .child(
-                div()
-                    .flex()
-                    .gap_2()
-                    .child(small_button(
-                        palette,
-                        "security-otp-save",
-                        self.tr("common.save"),
-                        cx.listener(|this, _, window, cx| {
-                            this.save_security_otp_editor(window, cx);
-                        }),
-                    ))
-                    .child(small_button(
-                        palette,
-                        "security-otp-cancel",
-                        self.tr("common.cancel"),
-                        cx.listener(|this, _, _, cx| {
-                            this.close_security_otp_editor(cx);
-                        }),
-                    )),
-            )
     }
 }

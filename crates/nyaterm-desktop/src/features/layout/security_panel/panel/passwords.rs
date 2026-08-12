@@ -3,7 +3,7 @@ use nyaterm_core::truncate_preview;
 
 use crate::features::NyaTermApp;
 use crate::theme::ThemePalette;
-use crate::widgets::{empty_panel, small_button};
+use crate::widgets::empty_panel;
 
 use super::{security_auth_body_base, security_tab_toolbar};
 
@@ -13,6 +13,7 @@ impl NyaTermApp {
         palette: ThemePalette,
         cx: &mut Context<Self>,
     ) -> gpui::Stateful<gpui::Div> {
+        let compact = self.security_list_compact();
         let mut body = security_auth_body_base("security-passwords-body");
         body = body.child(security_tab_toolbar(
             palette,
@@ -24,9 +25,7 @@ impl NyaTermApp {
                 this.open_security_password_editor(None, window, cx);
             }),
         ));
-        if let Some(editor) = self.security.password_editor().cloned() {
-            body = body.child(self.security_password_editor_view(editor, cx));
-        } else if self.security.passwords().is_empty() {
+        if self.security.passwords().is_empty() {
             body = body.child(empty_panel(
                 self.tr("passwordManager.noPasswords"),
                 self.theme_palette(),
@@ -70,7 +69,8 @@ impl NyaTermApp {
                         .px_3()
                         .py_2()
                         .flex()
-                        .items_center()
+                        .when(compact, |this| this.flex_col().items_stretch())
+                        .when(!compact, |this| this.items_center())
                         .gap_2()
                         .hover(|this| this.bg(rgb(palette.hover)))
                         .child(
@@ -110,18 +110,22 @@ impl NyaTermApp {
                                                     .as_ref()
                                                     .is_some_and(|v| !v.is_empty()),
                                                 |this| {
-                                                    this.child(small_button(
-                                                        palette,
-                                                        format!("security-pw-copy-{id}"),
-                                                        self.tr("common.copyToClipboard"),
-                                                        cx.listener(move |this, _, window, cx| {
-                                                            this.copy_security_password(
-                                                                copy_id.clone(),
-                                                                window,
-                                                                cx,
-                                                            );
-                                                        }),
-                                                    ))
+                                                    this.child(
+                                                        nyaterm_ui::NyaIconButton::new(
+                                                            format!("security-pw-copy-{id}"),
+                                                            "icons/copy.svg",
+                                                        )
+                                                        .tooltip(self.tr("common.copyToClipboard"))
+                                                        .on_click(cx.listener(
+                                                            move |this, _, window, cx| {
+                                                                this.copy_security_password(
+                                                                    copy_id.clone(),
+                                                                    window,
+                                                                    cx,
+                                                                );
+                                                            },
+                                                        )),
+                                                    )
                                                 },
                                             ),
                                     )
@@ -130,49 +134,66 @@ impl NyaTermApp {
                         .child(
                             div()
                                 .flex_none()
+                                .when(compact, |this| this.w_full().justify_end().pt_1())
                                 .flex()
                                 .items_center()
                                 .gap_1()
-                                .child(small_button(
-                                    palette,
-                                    format!("security-pw-show-{id}"),
-                                    self.tr(if is_revealed {
+                                .child(
+                                    nyaterm_ui::NyaIconButton::new(
+                                        format!("security-pw-show-{id}"),
+                                        if is_revealed {
+                                            "icons/eye-off.svg"
+                                        } else {
+                                            "icons/eye.svg"
+                                        },
+                                    )
+                                    .tooltip(self.tr(if is_revealed {
                                         "passwordManager.hidePassword"
                                     } else {
                                         "passwordManager.showPassword"
-                                    }),
-                                    cx.listener(move |this, _, window, cx| {
-                                        this.reveal_security_password(
-                                            reveal_id.clone(),
-                                            window,
-                                            cx,
-                                        );
-                                    }),
-                                ))
-                                .child(small_button(
-                                    palette,
-                                    format!("security-pw-edit-{id}"),
-                                    self.tr("common.edit"),
-                                    cx.listener(move |this, _, window, cx| {
-                                        this.open_security_password_editor(
-                                            Some(edit_id.clone()),
-                                            window,
-                                            cx,
-                                        );
-                                    }),
-                                ))
-                                .child(small_button(
-                                    palette,
-                                    format!("security-pw-del-{id}"),
-                                    self.tr("common.delete"),
-                                    cx.listener(move |this, _, window, cx| {
-                                        this.request_delete_security_password(
-                                            delete_id.clone(),
-                                            window,
-                                            cx,
-                                        );
-                                    }),
-                                )),
+                                    }))
+                                    .on_click(cx.listener(
+                                        move |this, _, window, cx| {
+                                            this.reveal_security_password(
+                                                reveal_id.clone(),
+                                                window,
+                                                cx,
+                                            );
+                                        },
+                                    )),
+                                )
+                                .child(
+                                    nyaterm_ui::NyaIconButton::new(
+                                        format!("security-pw-edit-{id}"),
+                                        "icons/edit.svg",
+                                    )
+                                    .tooltip(self.tr("common.edit"))
+                                    .on_click(cx.listener(
+                                        move |this, _, window, cx| {
+                                            this.open_security_password_editor(
+                                                Some(edit_id.clone()),
+                                                window,
+                                                cx,
+                                            );
+                                        },
+                                    )),
+                                )
+                                .child(
+                                    nyaterm_ui::NyaIconButton::new(
+                                        format!("security-pw-del-{id}"),
+                                        "icons/delete.svg",
+                                    )
+                                    .tooltip(self.tr("common.delete"))
+                                    .on_click(cx.listener(
+                                        move |this, _, window, cx| {
+                                            this.request_delete_security_password(
+                                                delete_id.clone(),
+                                                window,
+                                                cx,
+                                            );
+                                        },
+                                    )),
+                                ),
                         ),
                 );
             }

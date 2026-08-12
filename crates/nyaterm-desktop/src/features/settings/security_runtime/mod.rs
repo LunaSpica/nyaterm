@@ -4,6 +4,7 @@ use crate::features::NyaTermApp;
 
 mod credentials;
 mod delete;
+mod jobs;
 mod keys;
 mod otp;
 mod passwords;
@@ -20,7 +21,17 @@ impl NyaTermApp {
         text: String,
         cx: &mut Context<Self>,
     ) {
+        if self.security.editor_busy() {
+            return;
+        }
         if self.security.apply_editor_input(id, text) {
+            match id {
+                "key-data" => self.reset_text_input("security.editor.key-path", "", cx),
+                "key-path" => self.reset_text_input("security.editor.key-data", "", cx),
+                "key-cert-data" => self.reset_text_input("security.editor.key-cert-path", "", cx),
+                "key-cert-path" => self.reset_text_input("security.editor.key-cert-data", "", cx),
+                _ => {}
+            }
             cx.notify();
         }
     }

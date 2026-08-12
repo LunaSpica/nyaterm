@@ -1,17 +1,17 @@
-use gpui::{
-    App, ClickEvent, Context, FontWeight, IntoElement, SharedString, Window, div, prelude::*, px,
-    rgb,
-};
+use gpui::{App, ClickEvent, Context, FontWeight, IntoElement, Window, div, prelude::*, px, rgb};
 use nyaterm_ui::{NyaTabItem, NyaTabs};
 
 use crate::features::NyaTermApp;
-use crate::models::SecurityAuthTab;
+use crate::models::{NavItem, PanelSide, SecurityAuthTab};
 use crate::theme::ThemePalette;
 
 mod credentials;
 mod keys;
 mod otp;
 mod passwords;
+
+const SECURITY_LIST_HORIZONTAL_PADDING: f32 = 24.;
+const SECURITY_LIST_COMPACT_BREAKPOINT: f32 = 224.;
 
 impl NyaTermApp {
     pub(in crate::features) fn security_auth_panel(
@@ -49,14 +49,14 @@ impl NyaTermApp {
                             SecurityAuthTab::Otp => 2,
                             SecurityAuthTab::Credentials => 3,
                         })
-                        .on_select(cx.listener(|this, index, _, cx| {
+                        .on_select(cx.listener(|this, index, window, cx| {
                             let tab = match *index {
                                 0 => SecurityAuthTab::Keys,
                                 1 => SecurityAuthTab::Passwords,
                                 2 => SecurityAuthTab::Otp,
                                 _ => SecurityAuthTab::Credentials,
                             };
-                            this.set_security_auth_tab(tab, cx);
+                            this.set_security_auth_tab(tab, window, cx);
                         })),
                 ),
             )
@@ -64,7 +64,9 @@ impl NyaTermApp {
             .when(
                 matches!(
                     active_tab,
-                    SecurityAuthTab::Passwords | SecurityAuthTab::Credentials
+                    SecurityAuthTab::Keys
+                        | SecurityAuthTab::Passwords
+                        | SecurityAuthTab::Credentials
                 ),
                 |this| this.child(self.security_secret_footer(cx)),
             )
@@ -75,6 +77,36 @@ impl NyaTermApp {
                 this.child(self.security_master_required_prompt(cx))
             })
     }
+
+    fn security_list_compact(&self) -> bool {
+        let side = self
+            .panel_side_for_item(NavItem::SecurityAuth)
+            .unwrap_or(PanelSide::Left);
+        let viewport_width = self.shell.viewport_size().0;
+        let panel_width = match side {
+            PanelSide::Left => {
+                let width = self.shell.left_panel_width().clamp(160., 720.);
+                if !cfg!(target_os = "macos") && viewport_width < 1024. {
+                    width.min((viewport_width - 80.).max(120.))
+                } else {
+                    width
+                }
+            }
+            PanelSide::Right => {
+                let width = self.shell.right_panel_width().clamp(200., 720.);
+                if !cfg!(target_os = "macos") && viewport_width < 768. {
+                    width.min((viewport_width - 80.).max(120.))
+                } else {
+                    width
+                }
+            }
+        };
+        security_list_compact_for_panel_width(panel_width)
+    }
+}
+
+fn security_list_compact_for_panel_width(panel_width: f32) -> bool {
+    (panel_width - SECURITY_LIST_HORIZONTAL_PADDING).max(0.) < SECURITY_LIST_COMPACT_BREAKPOINT
 }
 
 fn security_auth_body_base(id: &'static str) -> gpui::Stateful<gpui::Div> {
@@ -113,43 +145,22 @@ fn security_tab_toolbar(
                 .text_color(rgb(palette.text))
                 .child(title),
         )
-        .child(security_toolbar_action_button(
-            palette, add_id, add_label, enabled, on_add,
-        ))
+        .child(
+            nyaterm_ui::NyaIconButton::new(add_id.into(), "icons/plus.svg")
+                .tooltip(add_label)
+                .disabled(!enabled)
+                .on_click(on_add),
+        )
 }
 
-fn security_toolbar_action_button(
-    palette: ThemePalette,
-    id: impl Into<String>,
-    label: &'static str,
-    enabled: bool,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    div()
-        .id(SharedString::from(id.into()))
-        .h(px(26.))
-        .px_2()
-        .rounded_md()
-        .flex()
-        .items_center()
-        .text_size(px(11.))
-        .font_weight(FontWeight(600.))
-        .text_color(rgb(if enabled {
-            palette.link
-        } else {
-            palette.text_dimmed
-        }))
-        .when(enabled, |this| {
-            this.cursor_pointer().hover(|this| {
-                this.bg(rgb(palette.surface_elevated))
-                    .text_color(rgb(palette.text))
-            })
-        })
-        .when(!enabled, |this| this.opacity(0.45))
-        .child(label)
-        .on_click(move |event, window, cx| {
-            if enabled {
-                on_click(event, window, cx);
-            }
-        })
+#[cfg(test)]
+mod tests {
+    use super::security_list_compact_for_panel_width;
+
+    #[test]
+    fn security_list_layout_wraps_actions_only_below_available_width_breakpoint() {
+        assert!(security_list_compact_for_panel_width(160.));
+        assert!(security_list_compact_for_panel_width(240.));
+        assert!(!security_list_compact_for_panel_width(320.));
+    }
 }

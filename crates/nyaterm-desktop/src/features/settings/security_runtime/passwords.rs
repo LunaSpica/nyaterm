@@ -1,8 +1,11 @@
-use gpui::{ClipboardItem, Context, KeyDownEvent, Window};
-use nyaterm_core::{ConnectionStore, SavedPassword};
+use gpui::{AppContext, ClipboardItem, Context, IntoElement as _, KeyDownEvent, Window};
+use nyaterm_core::SavedPassword;
+use nyaterm_ui::NyaDialogWindowExt as _;
 
 use crate::features::{NyaTermApp, compact_id};
 use crate::models::{SecurityAuthTab, SecurityPasswordEditorState, SecurityUnlockAction};
+
+use super::jobs::{SecurityStoreLocation, load_security_catalog};
 
 impl NyaTermApp {
     pub(in crate::features) fn open_security_password_editor(
@@ -12,13 +15,15 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         self.forget_text_inputs("security.editor.pw-");
-        if !self.require_security_secrets_unlocked(
-            window,
-            cx,
-            Some(SecurityUnlockAction::OpenPasswordEditor(
-                password_id.clone(),
-            )),
-        ) {
+        if password_id.is_some()
+            && !self.require_security_secrets_unlocked(
+                window,
+                cx,
+                Some(SecurityUnlockAction::OpenPasswordEditor(
+                    password_id.clone(),
+                )),
+            )
+        {
             return;
         }
         let editor = if let Some(password_id) = password_id {
@@ -54,10 +59,55 @@ impl NyaTermApp {
         self.security
             .open_password_editor(editor, "password editor opened".to_string());
         window.focus(self.security.password_editor_focus(), cx);
+        let title = if self
+            .security
+            .password_editor()
+            .is_some_and(|editor| editor.id.is_some())
+        {
+            self.tr("passwordManager.editTitle")
+        } else {
+            self.tr("passwordManager.newTitle")
+        }
+        .to_string();
+        self.open_guarded_form_dialog(
+            (
+                title,
+                320.,
+                self.tr("common.save").to_string(),
+                |app, _, cx| {
+                    app.security
+                        .password_editor()
+                        .cloned()
+                        .map(|editor| {
+                            app.security_password_editor_view(editor, cx)
+                                .into_any_element()
+                        })
+                        .unwrap_or_else(|| gpui::div().into_any_element())
+                },
+                |app, window, cx| {
+                    app.save_security_password_editor(window, cx);
+                    app.security.password_editor().is_none()
+                },
+                |app, cx| app.close_security_password_editor(cx),
+                |app| app.security.editor_busy(),
+            ),
+            window,
+            cx,
+        );
+        if let Some(password_id) = self
+            .security
+            .password_editor()
+            .and_then(|editor| editor.id.clone())
+        {
+            self.load_security_password_editor_secret(password_id, cx);
+        }
         cx.notify();
     }
 
     pub(in crate::features) fn close_security_password_editor(&mut self, cx: &mut Context<Self>) {
+        if self.security.editor_busy() {
+            return;
+        }
         self.forget_text_inputs("security.editor.pw-");
         self.security.close_password_editor();
         cx.notify();
@@ -78,7 +128,9 @@ impl NyaTermApp {
         // it, which the boxes leave unconsumed.
         match keystroke.key.as_str() {
             "escape" => {
-                self.close_security_password_editor(cx);
+                if !self.security.editor_busy() {
+                    self.close_security_password_editor(cx);
+                }
             }
             "enter" => {
                 self.save_security_password_editor(window, cx);
@@ -89,7 +141,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn save_security_password_editor(
         &mut self,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(editor) = self.security.password_editor().cloned() else {
@@ -110,19 +162,6 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        let store = match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        ) {
-            Ok(store) => store,
-            Err(error) => {
-                if let Some(editor) = self.security.password_editor_mut() {
-                    editor.error = Some(error.to_string());
-                }
-                cx.notify();
-                return;
-            }
-        };
         let entry = SavedPassword {
             id: editor.id.clone().unwrap_or_default(),
             name,
@@ -133,19 +172,52 @@ impl NyaTermApp {
             },
             has_password: false,
         };
-        match store.save_password(entry) {
-            Ok(id) => {
-                self.refresh_security_catalog();
-                self.security
-                    .finish_password_editor(format!("password saved ({})", compact_id(&id)));
-                self.shell.set_status("password saved".to_string());
-            }
-            Err(error) => {
-                if let Some(editor) = self.security.password_editor_mut() {
-                    editor.error = Some(error.to_string());
+        let Some(request_id) = self.security.begin_editor_request() else {
+            return;
+        };
+        let location = SecurityStoreLocation::new(
+            self.runtime.config_dir(),
+            self.runtime.portable_key_path().map(ToOwned::to_owned),
+        );
+        cx.spawn_in(window, async move |this, cx| {
+            let result = cx
+                .background_spawn(async move {
+                    let store = location.open()?;
+                    let id = store
+                        .save_password(entry)
+                        .map_err(|error| error.to_string())?;
+                    let catalog = load_security_catalog(&store)?;
+                    Ok::<_, String>((id, catalog))
+                })
+                .await;
+            let mut close = false;
+            let _ = this.update(cx, |this, cx| {
+                if !this.security.finish_editor_request(request_id) {
+                    return;
                 }
+                match result {
+                    Ok((id, catalog)) => {
+                        this.security.replace_catalog_state(catalog);
+                        this.security.finish_password_editor(format!(
+                            "password saved ({})",
+                            compact_id(&id)
+                        ));
+                        this.shell.set_status("password saved".to_string());
+                        close = true;
+                    }
+                    Err(error) => {
+                        if let Some(editor) = this.security.password_editor_mut() {
+                            editor.error = Some(error);
+                        }
+                    }
+                }
+                cx.notify();
+            });
+            if close {
+                let _ = cx.update(|window, cx| window.close_nya_dialog(cx));
             }
-        }
+        })
+        .detach();
         cx.notify();
     }
 
@@ -198,30 +270,7 @@ impl NyaTermApp {
         ) {
             return;
         }
-        let store = match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        ) {
-            Ok(store) => store,
-            Err(error) => {
-                self.security.set_status(error.to_string());
-                cx.notify();
-                return;
-            }
-        };
-        match store.load_decrypted_password_by_id(&password_id) {
-            Ok(Some(entry)) => {
-                let value = entry.password.unwrap_or_default();
-                if value.is_empty() {
-                    self.security.set_status("password has no secret");
-                } else {
-                    self.security.reveal_password(password_id.clone(), value);
-                    self.security.set_status("password revealed");
-                }
-            }
-            Ok(None) => self.security.set_status("password not found"),
-            Err(error) => self.security.set_status(error.to_string()),
-        }
+        self.load_security_password(password_id, false, cx);
         cx.notify();
     }
 
@@ -252,32 +301,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        let store = match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        ) {
-            Ok(store) => store,
-            Err(error) => {
-                self.security.set_status(error.to_string());
-                cx.notify();
-                return;
-            }
-        };
-        match store.load_decrypted_password_by_id(&password_id) {
-            Ok(Some(entry)) => {
-                let value = entry.password.unwrap_or_default();
-                if value.is_empty() {
-                    self.security.set_status("password has no secret");
-                } else {
-                    self.security
-                        .reveal_password(password_id.clone(), value.clone());
-                    cx.write_to_clipboard(ClipboardItem::new_string(value));
-                    self.security.set_status("password revealed and copied");
-                }
-            }
-            Ok(None) => self.security.set_status("password not found"),
-            Err(error) => self.security.set_status(error.to_string()),
-        }
+        self.load_security_password(password_id, true, cx);
         cx.notify();
     }
 
@@ -285,9 +309,99 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
+        if self.security.editor_busy() {
+            return;
+        }
         if let Some(editor) = self.security.password_editor_mut() {
             editor.show_password = !editor.show_password;
             cx.notify();
         }
+    }
+
+    fn load_security_password(&mut self, password_id: String, copy: bool, cx: &mut Context<Self>) {
+        let request_password_id = password_id.clone();
+        let request_id = self.security.begin_password_request(password_id.clone());
+        let location = SecurityStoreLocation::new(
+            self.runtime.config_dir(),
+            self.runtime.portable_key_path().map(ToOwned::to_owned),
+        );
+        cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_spawn(async move {
+                    let store = location.open()?;
+                    store
+                        .load_decrypted_password_by_id(&password_id)
+                        .map_err(|error| error.to_string())
+                })
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                if !this
+                    .security
+                    .finish_password_request(request_id, &request_password_id)
+                {
+                    return;
+                }
+                match result {
+                    Ok(Some(entry)) => {
+                        let value = entry.password.unwrap_or_default();
+                        if value.is_empty() {
+                            this.security.set_status("password has no secret");
+                        } else {
+                            this.security
+                                .reveal_password(request_password_id.clone(), value.clone());
+                            if copy {
+                                cx.write_to_clipboard(ClipboardItem::new_string(value));
+                                this.security.set_status("password revealed and copied");
+                            } else {
+                                this.security.set_status("password revealed");
+                            }
+                        }
+                    }
+                    Ok(None) => this.security.set_status("password not found"),
+                    Err(error) => this.security.set_status(error),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    fn load_security_password_editor_secret(
+        &mut self,
+        password_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(request_id) = self.security.begin_editor_request() else {
+            return;
+        };
+        let location = SecurityStoreLocation::new(
+            self.runtime.config_dir(),
+            self.runtime.portable_key_path().map(ToOwned::to_owned),
+        );
+        cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_spawn(async move {
+                    let store = location.open()?;
+                    store
+                        .load_decrypted_password_by_id(&password_id)
+                        .map_err(|error| error.to_string())
+                })
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                if !this.security.finish_editor_request(request_id) {
+                    return;
+                }
+                let Some(editor) = this.security.password_editor_mut() else {
+                    return;
+                };
+                match result {
+                    Ok(Some(entry)) => editor.password = entry.password.unwrap_or_default(),
+                    Ok(None) => editor.error = Some("password not found".to_string()),
+                    Err(error) => editor.error = Some(error),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
     }
 }

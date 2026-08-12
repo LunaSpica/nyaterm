@@ -4,10 +4,10 @@ use nyaterm_core::truncate_preview;
 use crate::features::NyaTermApp;
 use crate::features::formatting::compact_id;
 use crate::theme::ThemePalette;
-use crate::widgets::{empty_panel, small_button};
+use crate::widgets::empty_panel;
 
 use super::super::super::view_helpers::format_otp_code_display;
-use super::{security_auth_body_base, security_toolbar_action_button};
+use super::security_auth_body_base;
 
 impl NyaTermApp {
     pub(super) fn security_otp_body(
@@ -16,9 +16,8 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> gpui::Stateful<gpui::Div> {
         let mut body = security_auth_body_base("security-otp-body");
-        let actions_enabled =
-            self.security.otp_editor().is_none() && !self.security.otp_qr_importing();
-        let has_entries = !self.security.otp_entries().is_empty();
+        let actions_disabled =
+            self.security.otp_editor().is_some() || self.security.otp_qr_importing();
         body = body.child(
             div()
                 .flex_none()
@@ -39,235 +38,296 @@ impl NyaTermApp {
                         .flex()
                         .items_center()
                         .gap_1()
-                        .child(security_toolbar_action_button(
-                            palette,
-                            "security-otp-scan-qr",
-                            if self.security.otp_qr_importing() {
-                                self.tr("otpManager.scanningQr")
-                            } else {
-                                self.tr("otpManager.scanQr")
-                            },
-                            actions_enabled,
-                            cx.listener(|this, _, _, cx| {
-                                this.import_security_otp_from_qr(cx);
-                            }),
-                        ))
-                        .child(security_toolbar_action_button(
-                            palette,
-                            "security-otp-refresh-visible",
-                            self.tr("common.refresh"),
-                            actions_enabled && has_entries,
-                            cx.listener(|this, _, window, cx| {
-                                this.refresh_visible_security_otp_codes(window, cx);
-                            }),
-                        ))
-                        .child(security_toolbar_action_button(
-                            palette,
-                            "security-add-otp",
-                            self.tr("otpManager.add"),
-                            actions_enabled,
-                            cx.listener(|this, _, window, cx| {
-                                this.open_security_otp_editor(None, window, cx);
-                            }),
-                        )),
+                        .child(
+                            nyaterm_ui::NyaIconButton::new("security-otp-scan-qr", "icons/qr.svg")
+                                .tooltip(if self.security.otp_qr_importing() {
+                                    self.tr("otpManager.scanningQr")
+                                } else {
+                                    self.tr("otpManager.scanQr")
+                                })
+                                .disabled(actions_disabled)
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.import_security_otp_from_qr(window, cx);
+                                })),
+                        )
+                        .child(
+                            nyaterm_ui::NyaIconButton::new("security-add-otp", "icons/plus.svg")
+                                .tooltip(self.tr("otpManager.add"))
+                                .disabled(actions_disabled)
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.open_security_otp_editor(None, window, cx);
+                                })),
+                        ),
                 ),
         );
-        if let Some(editor) = self.security.otp_editor().cloned() {
-            body = body.child(self.security_otp_editor_view(editor, cx));
-        } else if self.security.otp_entries().is_empty() {
-            body = body.child(empty_panel(
+
+        if self.security.otp_entries().is_empty() {
+            return body.child(empty_panel(
                 self.tr("otpManager.noEntries"),
                 self.theme_palette(),
             ));
-        } else {
-            let entries = self.security.otp_entries().to_vec();
-            let entry_count = entries.len();
-            let mut rows = div()
-                .rounded_md()
-                .border_1()
-                .border_color(rgb(palette.border))
-                .overflow_hidden();
-            for (index, entry) in entries.into_iter().enumerate() {
-                let otp_id = entry.id.clone();
-                let edit_id = entry.id.clone();
-                let delete_id = entry.id.clone();
-                let code_id = entry.id.clone();
-                let title = if !entry.issuer.trim().is_empty() || !entry.username.trim().is_empty()
-                {
-                    format!(
-                        "{}{}",
-                        entry.issuer,
-                        if entry.username.trim().is_empty() {
-                            String::new()
-                        } else if entry.issuer.trim().is_empty() {
-                            entry.username.clone()
-                        } else {
-                            format!(" ({})", entry.username)
-                        }
+        }
+
+        let entries = self.security.otp_entries().to_vec();
+        let entry_count = entries.len();
+        let mut rows = div()
+            .rounded_md()
+            .border_1()
+            .border_color(rgb(palette.border))
+            .overflow_hidden();
+        for (index, entry) in entries.into_iter().enumerate() {
+            let id = entry.id.clone();
+            let visible = self.security.otp_code_visible(&entry.id);
+            let is_totp = entry.otp_type.eq_ignore_ascii_case("totp");
+            let code = self
+                .security
+                .revealed_otp_code(&entry.id)
+                .map(str::to_string)
+                .unwrap_or_default();
+            let code_display = if code.is_empty() {
+                "--- ---".to_string()
+            } else {
+                format_otp_code_display(&code)
+            };
+            let period = entry.period.max(1);
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|duration| duration.as_secs())
+                .unwrap_or(0);
+            let remaining = period - now % period;
+            let progress = (remaining as f32 / period as f32).clamp(0., 1.);
+            let issuer = if entry.issuer.trim().is_empty() {
+                compact_id(&entry.id)
+            } else {
+                entry.issuer.clone()
+            };
+            let toggle_id = entry.id.clone();
+            let edit_id = entry.id.clone();
+            let send_id = entry.id.clone();
+            let delete_id = entry.id.clone();
+            let copy_id = entry.id.clone();
+            let generate_id = entry.id.clone();
+            let can_send = self.security_otp_can_send_to_terminal();
+            rows = rows.child(
+                div()
+                    .when(index + 1 < entry_count, |this| {
+                        this.border_b_1().border_color(rgb(palette.border))
+                    })
+                    .px_3()
+                    .py_3()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .hover(|this| this.bg(rgb(palette.hover)))
+                    .child(
+                        div()
+                            .min_w_0()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap_2()
+                            .child(
+                                div()
+                                    .min_w_0()
+                                    .flex_1()
+                                    .text_xs()
+                                    .font_weight(FontWeight(600.))
+                                    .text_color(rgb(palette.text))
+                                    .overflow_hidden()
+                                    .child(truncate_preview(&issuer, 28)),
+                            )
+                            .child(
+                                div()
+                                    .flex_none()
+                                    .font_family(crate::features::gpui_code_font_family())
+                                    .text_size(px(10.))
+                                    .font_weight(FontWeight(700.))
+                                    .text_color(rgb(if is_totp {
+                                        palette.link
+                                    } else {
+                                        palette.warning
+                                    }))
+                                    .child(format!("[{}]", entry.otp_type.to_uppercase())),
+                            ),
                     )
-                } else {
-                    compact_id(&entry.id)
-                };
-                let code_raw = self
-                    .security
-                    .revealed_otp_code(&entry.id)
-                    .map(str::to_string)
-                    .unwrap_or_else(|| "------".to_string());
-                let code_display = format_otp_code_display(&code_raw);
-                let is_totp = entry.otp_type.eq_ignore_ascii_case("totp");
-                let period = entry.period.max(1);
-                let remaining = if is_totp {
-                    let now = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .map(|d| d.as_secs())
-                        .unwrap_or(0);
-                    period - (now % period)
-                } else {
-                    0
-                };
-                let meta = if is_totp {
-                    format!(
-                        "{} · {} · {}d · {remaining}s left",
-                        entry.otp_type.to_uppercase(),
-                        entry.algorithm,
-                        entry.digits,
+                    .child(
+                        div()
+                            .text_size(px(11.))
+                            .text_color(rgb(palette.text_muted))
+                            .overflow_hidden()
+                            .child(truncate_preview(&entry.username, 34)),
                     )
-                } else {
-                    format!(
-                        "{} · {} · {}d · ctr {}",
-                        entry.otp_type.to_uppercase(),
-                        entry.algorithm,
-                        entry.digits,
-                        entry.counter,
-                    )
-                };
-                let copy_id = entry.id.clone();
-                rows = rows.child(
-                    div()
-                        .h(px(52.))
-                        .when(index + 1 < entry_count, |this| {
-                            this.border_b_1().border_color(rgb(palette.border))
-                        })
-                        .px_3()
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .hover(|this| this.bg(rgb(palette.hover)))
-                        .child(
-                            div()
-                                .min_w_0()
-                                .flex_1()
-                                .flex()
-                                .flex_col()
-                                .gap(px(1.))
-                                .child(
-                                    div()
-                                        .flex()
-                                        .items_center()
-                                        .gap_2()
-                                        .child(
-                                            div()
-                                                .min_w_0()
-                                                .flex_1()
-                                                .text_xs()
-                                                .font_weight(FontWeight(600.))
-                                                .text_color(rgb(palette.text))
-                                                .overflow_hidden()
-                                                .child(truncate_preview(&title, 24)),
-                                        )
-                                        .child(
-                                            div()
-                                                .font_family(
-                                                    crate::features::gpui_code_font_family(),
-                                                )
-                                                .text_sm()
-                                                .font_weight(FontWeight(700.))
-                                                .text_color(rgb(if code_raw == "------" {
-                                                    palette.text_muted
-                                                } else {
-                                                    palette.link
-                                                }))
-                                                .child(code_display),
-                                        )
-                                        .when(is_totp && code_raw != "------", |this| {
-                                            this.child(
-                                                div()
-                                                    .text_size(px(10.))
-                                                    .font_family(
-                                                        crate::features::gpui_code_font_family(),
-                                                    )
-                                                    .text_color(rgb(if remaining <= 5 {
-                                                        palette.warning
-                                                    } else {
-                                                        palette.text_dimmed
-                                                    }))
-                                                    .child(format!("{remaining}s")),
-                                            )
-                                        }),
+                    .child(
+                        div()
+                            .grid()
+                            .grid_cols(4)
+                            .gap_1()
+                            .child(
+                                nyaterm_ui::NyaIconButton::new(
+                                    format!("security-otp-view-{id}"),
+                                    if visible {
+                                        "icons/eye-off.svg"
+                                    } else {
+                                        "icons/eye.svg"
+                                    },
                                 )
-                                .child(
-                                    div()
-                                        .text_size(px(10.))
-                                        .text_color(rgb(palette.text_dimmed))
-                                        .overflow_hidden()
-                                        .child(meta),
-                                ),
-                        )
-                        .child(
-                            div()
-                                .flex_none()
-                                .flex()
-                                .items_center()
-                                .gap_1()
-                                .child(small_button(
-                                    palette,
-                                    format!("security-otp-code-{otp_id}"),
-                                    self.tr("otp.generateCode"),
-                                    cx.listener(move |this, _, window, cx| {
-                                        this.generate_security_otp_code(
-                                            code_id.clone(),
+                                .tooltip(self.tr(if visible {
+                                    "otpManager.hideCodes"
+                                } else {
+                                    "otpManager.showCodes"
+                                }))
+                                .on_click(cx.listener(
+                                    move |this, _, window, cx| {
+                                        this.toggle_security_otp_code_visibility(
+                                            toggle_id.clone(),
                                             window,
                                             cx,
                                         );
-                                    }),
-                                ))
-                                .child(small_button(
-                                    palette,
-                                    format!("security-otp-copy-{otp_id}"),
-                                    self.tr("otp.copyCode"),
-                                    cx.listener(move |this, _, window, cx| {
-                                        this.copy_security_otp_code(copy_id.clone(), window, cx);
-                                    }),
-                                ))
-                                .child(small_button(
-                                    palette,
-                                    format!("security-otp-edit-{otp_id}"),
-                                    self.tr("common.edit"),
-                                    cx.listener(move |this, _, window, cx| {
+                                    },
+                                )),
+                            )
+                            .child(
+                                nyaterm_ui::NyaIconButton::new(
+                                    format!("security-otp-edit-{id}"),
+                                    "icons/edit.svg",
+                                )
+                                .tooltip(self.tr("common.edit"))
+                                .on_click(cx.listener(
+                                    move |this, _, window, cx| {
                                         this.open_security_otp_editor(
                                             Some(edit_id.clone()),
                                             window,
                                             cx,
                                         );
-                                    }),
-                                ))
-                                .child(small_button(
-                                    palette,
-                                    format!("security-otp-del-{otp_id}"),
-                                    self.tr("common.delete"),
-                                    cx.listener(move |this, _, window, cx| {
+                                    },
+                                )),
+                            )
+                            .child(
+                                nyaterm_ui::NyaIconButton::new(
+                                    format!("security-otp-send-{id}"),
+                                    "icons/send.svg",
+                                )
+                                .tooltip(if can_send {
+                                    self.tr("otp.sendToTerminal")
+                                } else {
+                                    self.tr("otpManager.noActiveTerminal")
+                                })
+                                .disabled(!can_send)
+                                .on_click(cx.listener(
+                                    move |this, _, window, cx| {
+                                        this.send_security_otp_to_terminal(
+                                            send_id.clone(),
+                                            window,
+                                            cx,
+                                        );
+                                    },
+                                )),
+                            )
+                            .child(
+                                nyaterm_ui::NyaIconButton::new(
+                                    format!("security-otp-del-{id}"),
+                                    "icons/delete.svg",
+                                )
+                                .tooltip(self.tr("common.delete"))
+                                .on_click(cx.listener(
+                                    move |this, _, window, cx| {
                                         this.request_delete_security_otp(
                                             delete_id.clone(),
                                             window,
                                             cx,
                                         );
-                                    }),
+                                    },
                                 )),
-                        ),
-                );
-            }
-            body = body.child(rows);
+                            ),
+                    )
+                    .when(visible, |this| {
+                        this.child(
+                            div()
+                                .mt_1()
+                                .rounded_md()
+                                .border_1()
+                                .border_color(rgb(palette.border))
+                                .bg(rgb(palette.input))
+                                .p_3()
+                                .flex()
+                                .flex_col()
+                                .gap_2()
+                                .child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .justify_between()
+                                        .child(
+                                            div()
+                                                .font_family(
+                                                    crate::features::gpui_code_font_family(),
+                                                )
+                                                .text_lg()
+                                                .font_weight(FontWeight(700.))
+                                                .text_color(rgb(palette.text))
+                                                .child(code_display),
+                                        )
+                                        .child(
+                                            nyaterm_ui::NyaIconButton::new(
+                                                format!("security-otp-copy-{id}"),
+                                                "icons/copy.svg",
+                                            )
+                                            .tooltip(self.tr("otp.copyCode"))
+                                            .disabled(code.is_empty())
+                                            .on_click(
+                                                cx.listener(move |this, _, window, cx| {
+                                                    this.copy_security_otp_code(
+                                                        copy_id.clone(),
+                                                        window,
+                                                        cx,
+                                                    );
+                                                }),
+                                            ),
+                                        ),
+                                )
+                                .when(is_totp, |this| {
+                                    this.child(
+                                        div()
+                                            .text_size(px(10.))
+                                            .text_color(rgb(palette.text_muted))
+                                            .child(format!("{remaining}s")),
+                                    )
+                                    .child(
+                                        div()
+                                            .h(px(4.))
+                                            .rounded_full()
+                                            .bg(rgb(palette.border))
+                                            .child(
+                                                div()
+                                                    .h_full()
+                                                    .w(gpui::relative(progress))
+                                                    .rounded_full()
+                                                    .bg(rgb(palette.link)),
+                                            ),
+                                    )
+                                })
+                                .when(!is_totp, |this| {
+                                    this.child(
+                                        nyaterm_ui::NyaButton::new(
+                                            format!("security-otp-generate-{id}"),
+                                            self.tr("otp.generateCode"),
+                                        )
+                                        .small()
+                                        .on_click(
+                                            cx.listener(move |this, _, window, cx| {
+                                                this.generate_security_otp_code(
+                                                    generate_id.clone(),
+                                                    window,
+                                                    cx,
+                                                );
+                                            }),
+                                        ),
+                                    )
+                                }),
+                        )
+                    }),
+            );
         }
-        body
+        body.child(rows)
     }
 }

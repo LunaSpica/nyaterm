@@ -3,7 +3,7 @@ use nyaterm_core::truncate_preview;
 
 use crate::features::NyaTermApp;
 use crate::theme::ThemePalette;
-use crate::widgets::{empty_panel, small_button};
+use crate::widgets::empty_panel;
 
 use super::{security_auth_body_base, security_tab_toolbar};
 
@@ -13,6 +13,7 @@ impl NyaTermApp {
         palette: ThemePalette,
         cx: &mut Context<Self>,
     ) -> gpui::Stateful<gpui::Div> {
+        let compact = self.security_list_compact();
         let mut body = security_auth_body_base("security-keys-body");
         body = body.child(security_tab_toolbar(
             palette,
@@ -24,9 +25,7 @@ impl NyaTermApp {
                 this.open_security_key_editor(None, window, cx);
             }),
         ));
-        if let Some(editor) = self.security.key_editor().cloned() {
-            body = body.child(self.security_key_editor_view(editor, cx));
-        } else if self.security.ssh_keys().is_empty() {
+        if self.security.ssh_keys().is_empty() {
             body = body.child(empty_panel(
                 self.tr("securityAuth.noKeys"),
                 self.theme_palette(),
@@ -41,18 +40,20 @@ impl NyaTermApp {
                 .overflow_hidden();
             for (index, key) in entries.into_iter().enumerate() {
                 let key_id = key.id.clone();
+                let view_id = key.id.clone();
                 let edit_id = key.id.clone();
                 let delete_id = key.id.clone();
                 rows = rows.child(
-                    // Tauri security-auth: dense single-row list items + trailing actions.
                     div()
-                        .h(px(42.))
+                        .min_h(px(42.))
                         .when(index + 1 < entry_count, |this| {
                             this.border_b_1().border_color(rgb(palette.border))
                         })
                         .px_3()
+                        .py_2()
                         .flex()
-                        .items_center()
+                        .when(compact, |this| this.flex_col().items_stretch())
+                        .when(!compact, |this| this.items_center())
                         .gap_2()
                         .hover(|this| this.bg(rgb(palette.hover)))
                         .child(
@@ -67,33 +68,58 @@ impl NyaTermApp {
                         .child(
                             div()
                                 .flex_none()
+                                .when(compact, |this| this.w_full().justify_end().pt_1())
                                 .flex()
                                 .items_center()
                                 .gap_1()
-                                .child(small_button(
-                                    palette,
-                                    format!("security-key-edit-{key_id}"),
-                                    self.tr("common.edit"),
-                                    cx.listener(move |this, _, window, cx| {
-                                        this.open_security_key_editor(
-                                            Some(edit_id.clone()),
-                                            window,
-                                            cx,
-                                        );
-                                    }),
-                                ))
-                                .child(small_button(
-                                    palette,
-                                    format!("security-key-del-{key_id}"),
-                                    self.tr("common.delete"),
-                                    cx.listener(move |this, _, window, cx| {
-                                        this.request_delete_security_key(
-                                            delete_id.clone(),
-                                            window,
-                                            cx,
-                                        );
-                                    }),
-                                )),
+                                .child(
+                                    nyaterm_ui::NyaIconButton::new(
+                                        format!("security-key-view-{key_id}"),
+                                        "icons/private-key.svg",
+                                    )
+                                    .tooltip(self.tr("settings.viewPrivateKey"))
+                                    .on_click(cx.listener(
+                                        move |this, _, window, cx| {
+                                            this.view_security_private_key(
+                                                view_id.clone(),
+                                                window,
+                                                cx,
+                                            );
+                                        },
+                                    )),
+                                )
+                                .child(
+                                    nyaterm_ui::NyaIconButton::new(
+                                        format!("security-key-edit-{key_id}"),
+                                        "icons/edit.svg",
+                                    )
+                                    .tooltip(self.tr("common.edit"))
+                                    .on_click(cx.listener(
+                                        move |this, _, window, cx| {
+                                            this.open_security_key_editor(
+                                                Some(edit_id.clone()),
+                                                window,
+                                                cx,
+                                            );
+                                        },
+                                    )),
+                                )
+                                .child(
+                                    nyaterm_ui::NyaIconButton::new(
+                                        format!("security-key-del-{key_id}"),
+                                        "icons/delete.svg",
+                                    )
+                                    .tooltip(self.tr("common.delete"))
+                                    .on_click(cx.listener(
+                                        move |this, _, window, cx| {
+                                            this.request_delete_security_key(
+                                                delete_id.clone(),
+                                                window,
+                                                cx,
+                                            );
+                                        },
+                                    )),
+                                ),
                         ),
                 );
             }
