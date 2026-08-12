@@ -719,8 +719,10 @@ fn decode_base64_std(input: &[u8]) -> Vec<u8> {
 pub struct GraphicsPlacement {
     pub id: u64,
     pub protocol: GraphicsProtocol,
-    /// Absolute Alacritty line index at the top of the image.
-    pub line: i32,
+    /// Stable logical line at the top of the image.
+    pub line: i64,
+    /// Screen buffer this placement belongs to.
+    pub screen: GraphicsScreenKind,
     pub col: usize,
     pub width_cells: usize,
     pub height_cells: usize,
@@ -735,6 +737,14 @@ pub struct GraphicsPlacement {
     pub z_index: i32,
     /// When true, paint above terminal text (Kitty `z>0`).
     pub above_text: bool,
+}
+
+/// Stable terminal screen identity for graphics placements.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub enum GraphicsScreenKind {
+    #[default]
+    Primary,
+    Alternate,
 }
 
 /// Snapshot form of a placement, mapped into the current viewport.
@@ -838,6 +848,10 @@ pub struct TerminalGraphicsState {
 }
 
 impl TerminalGraphicsState {
+    /// Handle an event on the primary screen using unshifted coordinates.
+    ///
+    /// Kept for protocol-focused users and tests; terminal integrations should
+    /// use [`Self::handle_on_screen`] so placements survive ring-buffer rotation.
     pub fn handle(
         &mut self,
         event: GraphicsEvent,
@@ -847,6 +861,31 @@ impl TerminalGraphicsState {
         cell_width_px: u16,
         cell_height_px: u16,
     ) -> GraphicsHandleResult {
+        self.handle_on_screen(
+            event,
+            GraphicsScreenKind::Primary,
+            0,
+            cursor_line,
+            cursor_col,
+            screen_cols,
+            cell_width_px,
+            cell_height_px,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn handle_on_screen(
+        &mut self,
+        event: GraphicsEvent,
+        screen: GraphicsScreenKind,
+        logical_origin: i64,
+        cursor_line: i32,
+        cursor_col: usize,
+        screen_cols: usize,
+        cell_width_px: u16,
+        cell_height_px: u16,
+    ) -> GraphicsHandleResult {
+        let cursor_line = i64::from(cursor_line).saturating_add(logical_origin);
         let mut result = GraphicsHandleResult::default();
         match event {
             GraphicsEvent::ClearScrollback => {}
@@ -854,7 +893,7 @@ impl TerminalGraphicsState {
                 image_id,
                 placement_id,
             } => {
-                let ok = self.kitty_query_ok(image_id, placement_id);
+                let ok = self.kitty_query_ok(screen, image_id, placement_id);
                 result
                     .pty_writes
                     .push(kitty_graphics_reply(image_id, placement_id, ok));
@@ -876,8 +915,10 @@ impl TerminalGraphicsState {
                     col,
                     row,
                     z,
+                    logical_origin,
                     cursor_line,
                     cursor_col,
+                    screen,
                 );
             }
             GraphicsEvent::Image {
@@ -919,6 +960,7 @@ impl TerminalGraphicsState {
                         quiet,
                         cursor_line,
                         cursor_col,
+                        screen,
                         screen_cols,
                         cell_width_px,
                         cell_height_px,
@@ -946,6 +988,7 @@ impl TerminalGraphicsState {
                         name,
                         cursor_line,
                         cursor_col,
+                        screen,
                         screen_cols,
                         cell_width_px,
                         cell_height_px,
@@ -971,25 +1014,29 @@ impl TerminalGraphicsState {
         col: Option<u32>,
         row: Option<u32>,
         z: Option<i32>,
-        cursor_line: i32,
+        logical_origin: i64,
+        cursor_line: i64,
         cursor_col: usize,
+        screen: GraphicsScreenKind,
     ) {
         let cell_col = col
             .map(|v| v.saturating_sub(1) as usize)
             .unwrap_or(cursor_col);
         let cell_line = row
-            .map(|v| v.saturating_sub(1) as i32)
+            .map(|v| i64::from(v.saturating_sub(1)).saturating_add(logical_origin))
             .unwrap_or(cursor_line);
 
         let mut freed_ids: Vec<u32> = Vec::new();
         match mode {
             KittyDeleteMode::All => {
                 if free_data {
-                    self.placements.clear();
+                    self.placements
+                        .retain(|placement| placement.screen != screen);
                     self.kitty_store.clear();
                     self.pending_kitty.clear();
                 } else {
-                    self.placements.clear();
+                    self.placements
+                        .retain(|placement| placement.screen != screen);
                 }
                 return;
             }
@@ -998,7 +1045,7 @@ impl TerminalGraphicsState {
                     return;
                 };
                 self.placements.retain(|p| {
-                    if p.kitty_id == Some(id) {
+                    if p.screen == screen && p.kitty_id == Some(id) {
                         freed_ids.push(id);
                         false
                     } else {
@@ -1017,7 +1064,9 @@ impl TerminalGraphicsState {
                     .iter()
                     .enumerate()
                     .rev()
-                    .find(|(_, p)| image_id.is_none_or(|id| p.kitty_id == Some(id)))
+                    .find(|(_, p)| {
+                        p.screen == screen && image_id.is_none_or(|id| p.kitty_id == Some(id))
+                    })
                     .map(|(i, _)| i);
                 if let Some(idx) = idx {
                     let removed = self.placements.remove(idx);
@@ -1040,7 +1089,7 @@ impl TerminalGraphicsState {
                 };
                 self.placements.retain(|p| {
                     let image_ok = image_id.is_none_or(|id| p.kitty_id == Some(id));
-                    if image_ok && p.placement_id == Some(pid) {
+                    if p.screen == screen && image_ok && p.placement_id == Some(pid) {
                         if let Some(id) = p.kitty_id {
                             freed_ids.push(id);
                         }
@@ -1052,7 +1101,7 @@ impl TerminalGraphicsState {
             }
             KittyDeleteMode::Cell => {
                 self.placements.retain(|p| {
-                    if placement_intersects_cell(p, cell_line, cell_col) {
+                    if p.screen == screen && placement_intersects_cell(p, cell_line, cell_col) {
                         if let Some(id) = p.kitty_id {
                             freed_ids.push(id);
                         }
@@ -1076,7 +1125,7 @@ impl TerminalGraphicsState {
             }
             KittyDeleteMode::Row => {
                 self.placements.retain(|p| {
-                    if placement_intersects_line(p, cell_line) {
+                    if p.screen == screen && placement_intersects_line(p, cell_line) {
                         if let Some(id) = p.kitty_id {
                             freed_ids.push(id);
                         }
@@ -1091,7 +1140,7 @@ impl TerminalGraphicsState {
                     return;
                 };
                 self.placements.retain(|p| {
-                    if p.z_index == z {
+                    if p.screen == screen && p.z_index == z {
                         if let Some(id) = p.kitty_id {
                             freed_ids.push(id);
                         }
@@ -1132,8 +1181,9 @@ impl TerminalGraphicsState {
         pixel_width: Option<u32>,
         pixel_height: Option<u32>,
         quiet: u8,
-        cursor_line: i32,
+        cursor_line: i64,
         cursor_col: usize,
+        screen: GraphicsScreenKind,
         screen_cols: usize,
         cell_width_px: u16,
         cell_height_px: u16,
@@ -1158,6 +1208,7 @@ impl TerminalGraphicsState {
                 name.or(stored.name),
                 cursor_line,
                 cursor_col,
+                screen,
                 screen_cols,
                 cell_width_px,
                 cell_height_px,
@@ -1277,6 +1328,7 @@ impl TerminalGraphicsState {
                 name,
                 cursor_line,
                 cursor_col,
+                screen,
                 screen_cols,
                 cell_width_px,
                 cell_height_px,
@@ -1296,18 +1348,30 @@ impl TerminalGraphicsState {
         )
     }
 
-    fn kitty_query_ok(&self, image_id: Option<u32>, placement_id: Option<u32>) -> bool {
+    fn kitty_query_ok(
+        &self,
+        screen: GraphicsScreenKind,
+        image_id: Option<u32>,
+        placement_id: Option<u32>,
+    ) -> bool {
         match (image_id, placement_id) {
-            (Some(id), Some(pid)) => self
-                .placements
-                .iter()
-                .any(|p| p.kitty_id == Some(id) && p.placement_id == Some(pid)),
+            (Some(id), Some(pid)) => self.placements.iter().any(|p| {
+                p.screen == screen && p.kitty_id == Some(id) && p.placement_id == Some(pid)
+            }),
             (Some(id), None) => {
                 self.kitty_store.contains_key(&id)
-                    || self.placements.iter().any(|p| p.kitty_id == Some(id))
+                    || self
+                        .placements
+                        .iter()
+                        .any(|p| p.screen == screen && p.kitty_id == Some(id))
             }
-            (None, Some(pid)) => self.placements.iter().any(|p| p.placement_id == Some(pid)),
-            (None, None) => !self.placements.is_empty() || !self.kitty_store.is_empty(),
+            (None, Some(pid)) => self
+                .placements
+                .iter()
+                .any(|p| p.screen == screen && p.placement_id == Some(pid)),
+            (None, None) => {
+                self.placements.iter().any(|p| p.screen == screen) || !self.kitty_store.is_empty()
+            }
         }
     }
 
@@ -1369,8 +1433,9 @@ impl TerminalGraphicsState {
         height_cells: Option<u16>,
         data: Vec<u8>,
         name: Option<String>,
-        cursor_line: i32,
+        cursor_line: i64,
         cursor_col: usize,
+        screen: GraphicsScreenKind,
         screen_cols: usize,
         cell_width_px: u16,
         cell_height_px: u16,
@@ -1394,6 +1459,7 @@ impl TerminalGraphicsState {
             id: internal,
             protocol,
             line: cursor_line,
+            screen,
             col,
             width_cells: width,
             height_cells: height,
@@ -1421,15 +1487,35 @@ impl TerminalGraphicsState {
         if delta == 0 {
             return;
         }
-        let delta = i32::try_from(delta).unwrap_or(i32::MAX);
+        let delta = i64::try_from(delta).unwrap_or(i64::MAX);
         for placement in &mut self.placements {
             placement.line = placement.line.saturating_sub(delta);
         }
     }
 
     pub fn retain_line_range(&mut self, topmost: i32, bottommost: i32) {
+        self.retain_logical_line_range(
+            GraphicsScreenKind::Primary,
+            i64::from(topmost),
+            i64::from(bottommost),
+        );
+    }
+
+    pub fn retain_logical_line_range(
+        &mut self,
+        screen: GraphicsScreenKind,
+        topmost: i64,
+        bottommost: i64,
+    ) {
+        self.placements.retain(|p| {
+            p.screen != screen
+                || (p.line.saturating_add(p.height_cells as i64) > topmost && p.line <= bottommost)
+        });
+    }
+
+    pub fn clear_screen(&mut self, screen: GraphicsScreenKind) {
         self.placements
-            .retain(|p| p.line + p.height_cells as i32 > topmost && p.line <= bottommost);
+            .retain(|placement| placement.screen != screen);
     }
 
     pub fn clear(&mut self) {
@@ -1444,17 +1530,32 @@ impl TerminalGraphicsState {
         rows: usize,
         cols: usize,
     ) -> Vec<GraphicsImageSnapshot> {
+        self.viewport_images_for_screen(GraphicsScreenKind::Primary, 0, display_offset, rows, cols)
+    }
+
+    pub fn viewport_images_for_screen(
+        &self,
+        screen: GraphicsScreenKind,
+        logical_origin: i64,
+        display_offset: usize,
+        rows: usize,
+        cols: usize,
+    ) -> Vec<GraphicsImageSnapshot> {
         // Viewport row 0 shows absolute line = -(display_offset) in Alacritty
         // coordinates when display_offset is history lines scrolled up.
         // Our placements store line as the cursor line at insert time (0-based
         // from top of primary screen, negative into scrollback).
         let mut images = Vec::new();
         for placement in &self.placements {
+            if placement.screen != screen {
+                continue;
+            }
             // Map absolute line → viewport row:
             // viewport_row = placement.line + display_offset
             // (when display_offset=0, line 0 is top row; scrolled line -3 at offset 3 is row 0)
-            let row_i = placement.line + display_offset as i32;
-            if row_i >= rows as i32 || row_i + placement.height_cells as i32 <= 0 {
+            let physical_line = placement.line.saturating_sub(logical_origin);
+            let row_i = physical_line.saturating_add(display_offset as i64);
+            if row_i >= rows as i64 || row_i + placement.height_cells as i64 <= 0 {
                 continue;
             }
             if placement.col >= cols {
@@ -1555,7 +1656,7 @@ fn image_content_id(data: &[u8]) -> u64 {
     hasher.finish()
 }
 
-fn placement_intersects_cell(p: &GraphicsPlacement, line: i32, col: usize) -> bool {
+fn placement_intersects_cell(p: &GraphicsPlacement, line: i64, col: usize) -> bool {
     placement_intersects_line(p, line) && placement_intersects_col(p, col)
 }
 
@@ -1563,8 +1664,8 @@ fn placement_intersects_col(p: &GraphicsPlacement, col: usize) -> bool {
     col >= p.col && col < p.col.saturating_add(p.width_cells)
 }
 
-fn placement_intersects_line(p: &GraphicsPlacement, line: i32) -> bool {
-    line >= p.line && line < p.line.saturating_add(p.height_cells as i32)
+fn placement_intersects_line(p: &GraphicsPlacement, line: i64) -> bool {
+    line >= p.line && line < p.line.saturating_add(p.height_cells as i64)
 }
 
 fn estimate_width_cells(data: &[u8], screen_cols: usize, cell_width_px: u16) -> usize {

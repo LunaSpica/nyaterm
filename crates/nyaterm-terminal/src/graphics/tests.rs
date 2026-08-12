@@ -1,14 +1,15 @@
 use super::{
     GRAPHICS_PENDING_LIMIT, GraphicsCursorMotion, GraphicsEvent, GraphicsIngress,
-    GraphicsPlacement, GraphicsProtocol, GraphicsSegment, KittyDeleteMode, MAX_IMAGE_BYTES,
-    MAX_KITTY_PENDING_BYTES, MAX_KITTY_STORED_IMAGES, TerminalGraphicsState,
+    GraphicsPlacement, GraphicsProtocol, GraphicsScreenKind, GraphicsSegment, KittyDeleteMode,
+    MAX_IMAGE_BYTES, MAX_KITTY_PENDING_BYTES, MAX_KITTY_STORED_IMAGES, TerminalGraphicsState,
 };
 
 fn placement(line: i32, col: usize, width_cells: usize, height_cells: usize) -> GraphicsPlacement {
     GraphicsPlacement {
         id: 1,
         protocol: GraphicsProtocol::Kitty,
-        line,
+        line: i64::from(line),
+        screen: GraphicsScreenKind::Primary,
         col,
         width_cells,
         height_cells,
@@ -513,11 +514,15 @@ fn kitty_store_prunes_old_unplaced_images() {
 
     assert_eq!(state.kitty_store.len(), MAX_KITTY_STORED_IMAGES);
     assert!(
-        !state.kitty_query_ok(Some(1), None),
+        !state.kitty_query_ok(GraphicsScreenKind::Primary, Some(1), None),
         "old unplaced image should be evicted"
     );
     assert!(
-        state.kitty_query_ok(Some(MAX_KITTY_STORED_IMAGES as u32 + 4), None),
+        state.kitty_query_ok(
+            GraphicsScreenKind::Primary,
+            Some(MAX_KITTY_STORED_IMAGES as u32 + 4),
+            None,
+        ),
         "newest image should remain queryable"
     );
 }
@@ -546,7 +551,7 @@ fn kitty_store_prune_prefers_unreferenced_images() {
 
     assert_eq!(state.kitty_store.len(), MAX_KITTY_STORED_IMAGES);
     assert!(
-        state.kitty_query_ok(Some(1), None),
+        state.kitty_query_ok(GraphicsScreenKind::Primary, Some(1), None),
         "store for a live placement should be retained before unplaced images"
     );
     assert_eq!(state.viewport_images(0, 24, 80).len(), 1);
@@ -642,7 +647,7 @@ fn oversized_kitty_multi_chunk_transfer_fails_without_partial_image() {
     );
 
     assert!(state.viewport_images(0, 24, 80).is_empty());
-    assert!(!state.kitty_query_ok(Some(42), None));
+    assert!(!state.kitty_query_ok(GraphicsScreenKind::Primary, Some(42), None));
     assert_eq!(result.pty_writes.len(), 1);
     assert!(
         String::from_utf8_lossy(&result.pty_writes[0]).contains("ENOENT"),

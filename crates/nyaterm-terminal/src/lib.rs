@@ -1,4 +1,4 @@
-use std::collections::{HashMap, hash_map::DefaultHasher};
+use std::collections::{BTreeMap, HashMap, hash_map::DefaultHasher};
 use std::hash::{Hash, Hasher};
 use std::ops::Range;
 use std::sync::{Arc, Mutex, OnceLock, Weak};
@@ -41,7 +41,8 @@ pub enum ShellCommandMark {
 
 pub use graphics::{
     GraphicsEvent, GraphicsImageSnapshot, GraphicsIngress, GraphicsPlacement, GraphicsProtocol,
-    GraphicsSegment, GraphicsSegmentRef, KittyDeleteMode, TerminalGraphicsState,
+    GraphicsScreenKind, GraphicsSegment, GraphicsSegmentRef, KittyDeleteMode,
+    TerminalGraphicsState,
 };
 
 const DEFAULT_COLS: u16 = 80;
@@ -424,6 +425,42 @@ impl Dimensions for TermSize {
     }
 }
 
+#[derive(Debug, Clone, Default)]
+struct LineMetadata {
+    timestamp_ms: Option<u64>,
+    signature: Option<u64>,
+    revision: Option<u64>,
+    command_mark: Option<ShellCommandMark>,
+}
+
+#[derive(Debug, Default)]
+struct ScreenLineState {
+    logical_origin: i64,
+    metadata: BTreeMap<i64, LineMetadata>,
+    consumed_scroll_epoch: u64,
+    consumed_generation: u64,
+    pending_scroll_rows: u64,
+}
+
+impl ScreenLineState {
+    #[inline]
+    fn logical_line(&self, line: Line) -> i64 {
+        i64::from(line.0).saturating_add(self.logical_origin)
+    }
+
+    fn retain_physical_range(&mut self, topmost: Line, bottommost: Line) -> usize {
+        let first = self.logical_line(topmost);
+        let last = self.logical_line(bottommost);
+        let before = self.metadata.len();
+        let mut retained = self.metadata.split_off(&first);
+        if let Some(after_last) = last.checked_add(1) {
+            let _ = retained.split_off(&after_last);
+        }
+        self.metadata = retained;
+        before.saturating_sub(self.metadata.len())
+    }
+}
+
 pub struct TerminalCore {
     parser: ansi::Processor,
     term: Term<NyaTermEventProxy>,
@@ -431,15 +468,13 @@ pub struct TerminalCore {
     proxy: NyaTermEventProxy,
     sidecar: NyaTermSidecar,
     pending_effects: TerminalEffects,
-    line_timestamps_ms: HashMap<i32, u64>,
-    line_signatures: HashMap<i32, u64>,
-    line_revisions: HashMap<i32, u64>,
+    primary_lines: ScreenLineState,
+    alternate_lines: ScreenLineState,
+    consumed_reset_generation: u64,
     next_line_revision: u64,
     snapshot_row_cache: Mutex<TerminalSnapshotRowCache>,
     search_cache: Mutex<TerminalSearchCache>,
     last_damage_summary: TerminalDamageSummary,
-    /// Absolute Alacritty line → OSC 133 shell mark.
-    command_marks: HashMap<i32, ShellCommandMark>,
     rows: usize,
     cols: usize,
     scrollback_limit: usize,
@@ -452,6 +487,8 @@ pub struct TerminalCore {
     session_encoding: SessionEncoding,
     #[cfg(test)]
     last_signature_scan_count: usize,
+    #[cfg(test)]
+    last_metadata_prune_count: usize,
 }
 
 pub type TerminalScreen = TerminalCore;
@@ -586,21 +623,32 @@ impl TerminalCore {
         let proxy = NyaTermEventProxy::default();
         let size = TermSize { cols, rows };
         let scrollback_limit = config.scrolling_history;
+        let term = Term::new(config.clone(), &size, proxy.clone());
+        let primary_lines = ScreenLineState {
+            consumed_scroll_epoch: term.primary_grid_scroll_epoch(),
+            consumed_generation: term.primary_screen_generation(),
+            ..ScreenLineState::default()
+        };
+        let alternate_lines = ScreenLineState {
+            consumed_scroll_epoch: term.alternate_grid_scroll_epoch(),
+            consumed_generation: term.alternate_screen_generation(),
+            ..ScreenLineState::default()
+        };
+        let consumed_reset_generation = term.reset_generation();
         Self {
             parser: ansi::Processor::new(),
-            term: Term::new(config.clone(), &size, proxy.clone()),
+            term,
             term_config: config,
             proxy,
             sidecar: NyaTermSidecar::default(),
             pending_effects: TerminalEffects::default(),
-            line_timestamps_ms: HashMap::new(),
-            line_signatures: HashMap::new(),
-            line_revisions: HashMap::new(),
+            primary_lines,
+            alternate_lines,
+            consumed_reset_generation,
             next_line_revision: 1,
             snapshot_row_cache: Mutex::new(TerminalSnapshotRowCache::default()),
             search_cache: Mutex::new(TerminalSearchCache::default()),
             last_damage_summary: TerminalDamageSummary::default(),
-            command_marks: HashMap::new(),
             rows,
             cols,
             scrollback_limit,
@@ -611,6 +659,8 @@ impl TerminalCore {
             session_encoding: SessionEncoding::default(),
             #[cfg(test)]
             last_signature_scan_count: 0,
+            #[cfg(test)]
+            last_metadata_prune_count: 0,
         }
     }
 
@@ -637,6 +687,7 @@ impl TerminalCore {
     }
 
     pub fn resize(&mut self, cols: u16, rows: u16) {
+        let old_cols = self.cols;
         self.cols = usize::from(cols).max(1);
         self.rows = usize::from(rows).max(1);
         let size = TermSize {
@@ -644,7 +695,15 @@ impl TerminalCore {
             rows: self.rows,
         };
         self.term.resize(size);
-        self.refresh_line_signatures();
+        self.sync_presentation_state();
+        if self.cols != old_cols {
+            self.primary_lines.metadata.clear();
+            self.alternate_lines.metadata.clear();
+            self.graphics.clear_screen(GraphicsScreenKind::Primary);
+            self.graphics.clear_screen(GraphicsScreenKind::Alternate);
+            self.clear_snapshot_row_cache();
+        }
+        self.stamp_changed_lines();
     }
 
     pub fn set_scrollback_limit(&mut self, limit: usize) {
@@ -658,7 +717,8 @@ impl TerminalCore {
         // `set_options` re-emits the current title/reset-title as a config update
         // side effect; do not surface that as terminal output state.
         let _ = self.proxy.drain();
-        self.retain_line_metadata_range(self.term.topmost_line(), self.term.bottommost_line());
+        self.sync_presentation_state();
+        self.retain_active_presentation_range();
     }
 
     pub fn cols(&self) -> usize {
@@ -878,8 +938,6 @@ impl TerminalCore {
     }
 
     pub fn advance(&mut self, bytes: &[u8]) {
-        let mut line_history_marker = self.term.grid().history_size();
-        let mut graphics_history_marker = line_history_marker;
         let mut graphics_ingress = std::mem::take(&mut self.graphics_ingress);
         graphics_ingress.advance_segments(bytes, |segment| {
             match segment {
@@ -897,20 +955,21 @@ impl TerminalCore {
                     self.sidecar.advance(&data);
                     self.parser.advance(&mut self.term, &data);
                     self.drain_alacritty_events();
+                    self.sync_presentation_state();
                     self.record_shell_command_marks();
-                    self.shift_graphics_for_history_delta(&mut graphics_history_marker);
                 }
                 GraphicsSegmentRef::Event(event) => {
                     if event == GraphicsEvent::ClearScrollback {
                         self.clear_scrollback();
-                        let history_size = self.term.grid().history_size();
-                        line_history_marker = history_size;
-                        graphics_history_marker = history_size;
                         return;
                     }
                     let point = self.term.renderable_content().cursor.point;
-                    let result = self.graphics.handle(
+                    let screen = self.active_graphics_screen();
+                    let logical_origin = self.active_line_state().logical_origin;
+                    let result = self.graphics.handle_on_screen(
                         event,
+                        screen,
+                        logical_origin,
                         point.line.0,
                         point.column.0,
                         self.cols,
@@ -923,7 +982,7 @@ impl TerminalCore {
                         self.sidecar.advance(&ansi);
                         self.parser.advance(&mut self.term, &ansi);
                         self.drain_alacritty_events();
-                        self.shift_graphics_for_history_delta(&mut graphics_history_marker);
+                        self.sync_presentation_state();
                     }
                     for reply in result.pty_writes {
                         self.pending_effects.pty_write.push(reply);
@@ -932,7 +991,7 @@ impl TerminalCore {
             }
         });
         self.graphics_ingress = graphics_ingress;
-        self.stamp_changed_lines(line_history_marker);
+        self.stamp_changed_lines();
     }
 
     /// Advance already-decoded UTF-8 terminal text.
@@ -944,15 +1003,13 @@ impl TerminalCore {
         if text.is_empty() {
             return;
         }
-        let line_history_marker = self.term.grid().history_size();
-        let mut graphics_history_marker = line_history_marker;
         let data = text.as_bytes();
         self.sidecar.advance(data);
         self.parser.advance(&mut self.term, data);
         self.drain_alacritty_events();
+        self.sync_presentation_state();
         self.record_shell_command_marks();
-        self.shift_graphics_for_history_delta(&mut graphics_history_marker);
-        self.stamp_changed_lines(line_history_marker);
+        self.stamp_changed_lines();
     }
 
     fn clear_scrollback(&mut self) {
@@ -960,16 +1017,8 @@ impl TerminalCore {
         self.sidecar.advance(CLEAR_SAVED_LINES);
         self.parser.advance(&mut self.term, CLEAR_SAVED_LINES);
         self.drain_alacritty_events();
-        self.retain_line_metadata_range(self.term.topmost_line(), self.term.bottommost_line());
-    }
-
-    fn shift_graphics_for_history_delta(&mut self, history_marker: &mut usize) {
-        let current_history = self.term.grid().history_size();
-        if current_history > *history_marker {
-            self.graphics
-                .shift_lines(current_history.saturating_sub(*history_marker));
-        }
-        *history_marker = current_history;
+        self.sync_presentation_state();
+        self.retain_active_presentation_range();
     }
 
     pub fn snapshot(&self) -> TerminalSnapshot {
@@ -989,15 +1038,16 @@ impl TerminalCore {
         let (mut snapshot, stats) = snapshot_from_term(
             &self.term,
             offset,
-            &self.line_signatures,
-            &self.line_revisions,
-            &self.line_timestamps_ms,
-            &self.command_marks,
+            self.active_line_state(),
             &self.snapshot_row_cache,
         );
-        snapshot.images =
-            self.graphics
-                .viewport_images(offset, snapshot.row_count(), snapshot.cols);
+        snapshot.images = self.graphics.viewport_images_for_screen(
+            self.active_graphics_screen(),
+            self.active_line_state().logical_origin,
+            offset,
+            snapshot.row_count(),
+            snapshot.cols,
+        );
         (snapshot, stats)
     }
 
@@ -1028,15 +1078,18 @@ impl TerminalCore {
                 older_rows,
                 newer_rows,
             },
-            &self.line_signatures,
-            &self.line_revisions,
-            &self.line_timestamps_ms,
-            &self.command_marks,
+            self.active_line_state(),
             &self.snapshot_row_cache,
         );
         snapshot.images = self
             .graphics
-            .viewport_images(offset, self.rows, snapshot.cols)
+            .viewport_images_for_screen(
+                self.active_graphics_screen(),
+                self.active_line_state().logical_origin,
+                offset,
+                self.rows,
+                snapshot.cols,
+            )
             .into_iter()
             .map(|mut image| {
                 image.row = image.row.saturating_add(older_rows);
@@ -1237,18 +1290,17 @@ impl TerminalCore {
         }
     }
 
-    fn stamp_changed_lines(&mut self, before_history: usize) {
-        let after_history = self.term.grid().history_size();
-        if after_history > before_history {
-            let delta = after_history - before_history;
-            self.shift_line_metadata(delta);
-        }
-
+    fn stamp_changed_lines(&mut self) {
+        self.sync_presentation_state();
+        let scrolled_rows = {
+            let state = self.active_line_state_mut();
+            std::mem::take(&mut state.pending_scroll_rows)
+        };
         let now_ms = unix_time_ms();
         let cols = self.term.columns();
         let topmost = self.term.topmost_line();
         let bottommost = self.term.bottommost_line();
-        let history_changed = after_history != before_history;
+        let history_changed = scrolled_rows != 0;
         let mut damaged_lines = Vec::new();
         let full_damage = match self.term.damage() {
             TermDamage::Full => true,
@@ -1258,8 +1310,8 @@ impl TerminalCore {
             }
         };
         self.term.reset_damage();
-        let scan_start = if after_history > before_history {
-            let scrolled = i32::try_from(after_history - before_history).unwrap_or(i32::MAX);
+        let scan_start = if history_changed {
+            let scrolled = i32::try_from(scrolled_rows).unwrap_or(i32::MAX);
             topmost.0.max(scrolled.saturating_neg())
         } else {
             0
@@ -1299,7 +1351,9 @@ impl TerminalCore {
             history_changed,
             lines: damaged_lines.into_boxed_slice(),
         };
-        self.retain_line_metadata_range(topmost, bottommost);
+        if history_changed {
+            self.retain_active_presentation_range();
+        }
     }
 
     fn stamp_line_signature(
@@ -1315,40 +1369,25 @@ impl TerminalCore {
             return;
         }
         let signature = line_signature(&self.term, line, cols);
-        if self.line_signatures.get(&line_index).copied() != Some(signature)
-            || !self.line_timestamps_ms.contains_key(&line_index)
-        {
-            self.line_timestamps_ms.insert(line_index, now_ms);
-            let revision = self.allocate_line_revision();
-            self.line_revisions.insert(line_index, revision);
+        let logical_line = self.active_line_state().logical_line(line);
+        let should_revise = self
+            .active_line_state()
+            .metadata
+            .get(&logical_line)
+            .is_none_or(|metadata| {
+                metadata.signature != Some(signature) || metadata.timestamp_ms.is_none()
+            });
+        let revision = should_revise.then(|| self.allocate_line_revision());
+        let metadata = self
+            .active_line_state_mut()
+            .metadata
+            .entry(logical_line)
+            .or_default();
+        if let Some(revision) = revision {
+            metadata.timestamp_ms = Some(now_ms);
+            metadata.revision = Some(revision);
         }
-        self.line_signatures.insert(line_index, signature);
-    }
-
-    fn refresh_line_signatures(&mut self) {
-        let cols = self.term.columns();
-        let topmost = self.term.topmost_line();
-        let bottommost = self.term.bottommost_line();
-        for row in 0..self.term.screen_lines() {
-            let line = Line(row as i32);
-            if line < topmost || line > bottommost {
-                continue;
-            }
-            let signature = line_signature(&self.term, line, cols);
-            if self.line_signatures.get(&line.0).copied() != Some(signature)
-                || !self.line_revisions.contains_key(&line.0)
-            {
-                let revision = self.allocate_line_revision();
-                self.line_revisions.insert(line.0, revision);
-            }
-            self.line_signatures.insert(line.0, signature);
-        }
-        self.last_damage_summary = TerminalDamageSummary {
-            full: true,
-            history_changed: false,
-            lines: Box::new([]),
-        };
-        self.retain_line_metadata_range(topmost, bottommost);
+        metadata.signature = Some(signature);
     }
 
     fn allocate_line_revision(&mut self) -> u64 {
@@ -1357,43 +1396,113 @@ impl TerminalCore {
         revision
     }
 
-    fn shift_line_metadata(&mut self, delta: usize) {
-        if delta == 0 {
-            return;
+    fn active_line_state(&self) -> &ScreenLineState {
+        if self.alternate_screen() {
+            &self.alternate_lines
+        } else {
+            &self.primary_lines
         }
-        let delta = i32::try_from(delta).unwrap_or(i32::MAX);
-        self.line_timestamps_ms = self
-            .line_timestamps_ms
-            .drain()
-            .map(|(line, timestamp)| (line.saturating_sub(delta), timestamp))
-            .collect();
-        self.line_signatures = self
-            .line_signatures
-            .drain()
-            .map(|(line, signature)| (line.saturating_sub(delta), signature))
-            .collect();
-        self.line_revisions = self
-            .line_revisions
-            .drain()
-            .map(|(line, revision)| (line.saturating_sub(delta), revision))
-            .collect();
-        self.command_marks = self
-            .command_marks
-            .drain()
-            .map(|(line, mark)| (line.saturating_sub(delta), mark))
-            .collect();
     }
 
-    fn retain_line_metadata_range(&mut self, topmost: Line, bottommost: Line) {
-        self.line_timestamps_ms
-            .retain(|line, _| *line >= topmost.0 && *line <= bottommost.0);
-        self.line_signatures
-            .retain(|line, _| *line >= topmost.0 && *line <= bottommost.0);
-        self.line_revisions
-            .retain(|line, _| *line >= topmost.0 && *line <= bottommost.0);
-        self.command_marks
-            .retain(|line, _| *line >= topmost.0 && *line <= bottommost.0);
-        self.graphics.retain_line_range(topmost.0, bottommost.0);
+    fn active_line_state_mut(&mut self) -> &mut ScreenLineState {
+        if self.alternate_screen() {
+            &mut self.alternate_lines
+        } else {
+            &mut self.primary_lines
+        }
+    }
+
+    fn active_graphics_screen(&self) -> GraphicsScreenKind {
+        if self.alternate_screen() {
+            GraphicsScreenKind::Alternate
+        } else {
+            GraphicsScreenKind::Primary
+        }
+    }
+
+    fn sync_presentation_state(&mut self) {
+        let reset_generation = self.term.reset_generation();
+        if reset_generation != self.consumed_reset_generation {
+            self.primary_lines.metadata.clear();
+            self.alternate_lines.metadata.clear();
+            self.primary_lines.logical_origin = 0;
+            self.alternate_lines.logical_origin = 0;
+            self.primary_lines.pending_scroll_rows = 0;
+            self.alternate_lines.pending_scroll_rows = 0;
+            self.graphics.clear();
+            self.clear_snapshot_row_cache();
+            self.consumed_reset_generation = reset_generation;
+        }
+
+        let primary_epoch = self.term.primary_grid_scroll_epoch();
+        let alternate_epoch = self.term.alternate_grid_scroll_epoch();
+        let primary_generation = self.term.primary_screen_generation();
+        let alternate_generation = self.term.alternate_screen_generation();
+        Self::sync_screen_line_state(
+            &mut self.primary_lines,
+            primary_epoch,
+            primary_generation,
+            GraphicsScreenKind::Primary,
+            &mut self.graphics,
+        );
+        Self::sync_screen_line_state(
+            &mut self.alternate_lines,
+            alternate_epoch,
+            alternate_generation,
+            GraphicsScreenKind::Alternate,
+            &mut self.graphics,
+        );
+    }
+
+    fn sync_screen_line_state(
+        state: &mut ScreenLineState,
+        scroll_epoch: u64,
+        generation: u64,
+        screen: GraphicsScreenKind,
+        graphics: &mut TerminalGraphicsState,
+    ) {
+        if generation != state.consumed_generation {
+            state.metadata.clear();
+            state.logical_origin = 0;
+            state.pending_scroll_rows = 0;
+            state.consumed_generation = generation;
+            state.consumed_scroll_epoch = scroll_epoch;
+            graphics.clear_screen(screen);
+            return;
+        }
+        let delta = scroll_epoch.wrapping_sub(state.consumed_scroll_epoch);
+        state.logical_origin = state
+            .logical_origin
+            .saturating_add(i64::try_from(delta).unwrap_or(i64::MAX));
+        state.pending_scroll_rows = state.pending_scroll_rows.wrapping_add(delta);
+        state.consumed_scroll_epoch = scroll_epoch;
+    }
+
+    fn retain_active_presentation_range(&mut self) {
+        let topmost = self.term.topmost_line();
+        let bottommost = self.term.bottommost_line();
+        let screen = self.active_graphics_screen();
+        let (logical_topmost, logical_bottommost, _pruned) = {
+            let state = self.active_line_state_mut();
+            let logical_topmost = state.logical_line(topmost);
+            let logical_bottommost = state.logical_line(bottommost);
+            let pruned = state.retain_physical_range(topmost, bottommost);
+            (logical_topmost, logical_bottommost, pruned)
+        };
+        self.graphics
+            .retain_logical_line_range(screen, logical_topmost, logical_bottommost);
+        #[cfg(test)]
+        {
+            self.last_metadata_prune_count = _pruned;
+        }
+    }
+
+    fn clear_snapshot_row_cache(&self) {
+        self.snapshot_row_cache
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .entries
+            .clear();
     }
 
     fn record_shell_command_marks(&mut self) {
@@ -1401,9 +1510,15 @@ impl TerminalCore {
         if marks.is_empty() {
             return;
         }
-        let line = self.term.renderable_content().cursor.point.line.0;
+        let line = self.term.renderable_content().cursor.point.line;
+        let logical_line = self.active_line_state().logical_line(line);
+        let metadata = self
+            .active_line_state_mut()
+            .metadata
+            .entry(logical_line)
+            .or_default();
         for mark in marks {
-            self.command_marks.insert(line, mark);
+            metadata.command_mark = Some(mark);
         }
     }
 }
@@ -1411,10 +1526,7 @@ impl TerminalCore {
 fn snapshot_from_term(
     term: &Term<NyaTermEventProxy>,
     requested_offset: usize,
-    line_signatures_by_line: &HashMap<i32, u64>,
-    line_revisions_by_line: &HashMap<i32, u64>,
-    line_timestamps_by_line: &HashMap<i32, u64>,
-    command_marks_by_line: &HashMap<i32, ShellCommandMark>,
+    line_state: &ScreenLineState,
     row_cache: &Mutex<TerminalSnapshotRowCache>,
 ) -> (TerminalSnapshot, TerminalSnapshotBuildStats) {
     snapshot_window_from_term(
@@ -1424,10 +1536,7 @@ fn snapshot_from_term(
             older_rows: 0,
             newer_rows: 0,
         },
-        line_signatures_by_line,
-        line_revisions_by_line,
-        line_timestamps_by_line,
-        command_marks_by_line,
+        line_state,
         row_cache,
     )
 }
@@ -1442,10 +1551,7 @@ struct TerminalSnapshotWindow {
 fn snapshot_window_from_term(
     term: &Term<NyaTermEventProxy>,
     window: TerminalSnapshotWindow,
-    line_signatures_by_line: &HashMap<i32, u64>,
-    line_revisions_by_line: &HashMap<i32, u64>,
-    line_timestamps_by_line: &HashMap<i32, u64>,
-    command_marks_by_line: &HashMap<i32, ShellCommandMark>,
+    line_state: &ScreenLineState,
     row_cache: &Mutex<TerminalSnapshotRowCache>,
 ) -> (TerminalSnapshot, TerminalSnapshotBuildStats) {
     let content = term.renderable_content();
@@ -1467,20 +1573,19 @@ fn snapshot_window_from_term(
     for row in 0..rows {
         let line = Line(row as i32 - window.display_offset as i32 - window.older_rows as i32);
         let line_in_grid = (line >= topmost && line <= bottommost).then_some(line);
+        let metadata =
+            line_in_grid.and_then(|line| line_state.metadata.get(&line_state.logical_line(line)));
         let signature = line_in_grid
             .map(|line| {
-                line_signatures_by_line
-                    .get(&line.0)
-                    .copied()
+                metadata
+                    .and_then(|metadata| metadata.signature)
                     .unwrap_or_else(|| line_signature(term, line, cols))
             })
             .unwrap_or(0);
-        let timestamp_ms =
-            line_in_grid.and_then(|line| line_timestamps_by_line.get(&line.0).copied());
-        let command_mark =
-            line_in_grid.and_then(|line| command_marks_by_line.get(&line.0).copied());
-        let revision = line_in_grid
-            .and_then(|line| line_revisions_by_line.get(&line.0).copied())
+        let timestamp_ms = metadata.and_then(|metadata| metadata.timestamp_ms);
+        let command_mark = metadata.and_then(|metadata| metadata.command_mark);
+        let revision = metadata
+            .and_then(|metadata| metadata.revision)
             .unwrap_or(signature);
         let wrapped = line_in_grid.is_some_and(|line| {
             let previous_line = Line(line.0 - 1);

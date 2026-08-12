@@ -577,6 +577,112 @@ fn scrolled_lines_keep_timestamps_in_history_viewport() {
 }
 
 #[test]
+fn full_scrollback_rotation_keeps_metadata_and_cache_attached_to_original_line() {
+    let mut screen = TerminalScreen::new(20, 2);
+    screen.set_scrollback_limit(1);
+    screen.advance(b"one\r\ntwo\x1b]133;C\x07");
+    let before = screen.snapshot();
+    let two_before = before
+        .rows()
+        .iter()
+        .find(|row| row.text == "two")
+        .expect("two before scrolling");
+    let revision = two_before.revision;
+    let timestamp = two_before.timestamp_ms;
+    assert_eq!(two_before.command_mark, Some(ShellCommandMark::Output));
+
+    screen.advance(b"\r\nthree");
+    screen.advance(b"\r\nfour");
+    assert_eq!(screen.scrollback_len(), 1);
+    let history = screen.viewport_snapshot(1);
+    let two_after = history
+        .rows()
+        .iter()
+        .find(|row| row.text == "two")
+        .expect("two retained at full scrollback limit");
+
+    assert_eq!(two_after.revision, revision);
+    assert_eq!(two_after.timestamp_ms, timestamp);
+    assert_eq!(two_after.command_mark, Some(ShellCommandMark::Output));
+    assert!(screen.last_metadata_prune_count <= 1);
+}
+
+#[test]
+fn repeated_lines_receive_distinct_revisions_after_full_scrollback_rotation() {
+    let mut screen = TerminalScreen::new(20, 2);
+    screen.set_scrollback_limit(1);
+    screen.advance(b"same\r\nsame");
+    let second_revision = screen.snapshot().row(1).unwrap().revision;
+
+    screen.advance(b"\r\nsame");
+    screen.advance(b"\r\nsame");
+    let history = screen.viewport_snapshot(1);
+
+    assert_eq!(history.row(0).unwrap().revision, second_revision);
+    assert_ne!(
+        history.row(0).unwrap().revision,
+        history.row(1).unwrap().revision
+    );
+}
+
+#[test]
+fn full_scrollback_rotation_keeps_image_on_original_line() {
+    let mut screen = TerminalScreen::new(20, 2);
+    screen.set_scrollback_limit(1);
+    screen.advance(b"one\r\ntwo\x1b_Ga=T,i=9,c=1,r=1;QUI=\x1b\\");
+    assert_eq!(screen.snapshot().images.len(), 1);
+
+    screen.advance(b"\r\nthree");
+    screen.advance(b"\r\nfour");
+    let history = screen.viewport_snapshot(1);
+
+    assert_eq!(history.line(0), Some("two"));
+    assert_eq!(history.images.len(), 1);
+    assert_eq!(history.images[0].row, 0);
+}
+
+#[test]
+fn alternate_screen_presentation_state_does_not_overwrite_primary() {
+    let mut screen = TerminalScreen::new(20, 2);
+    screen.advance(b"primary\x1b]133;A\x07");
+    let primary = screen.snapshot();
+    let primary_row = primary.row(0).unwrap();
+    let revision = primary_row.revision;
+    let timestamp = primary_row.timestamp_ms;
+
+    screen.advance(b"\x1b[?1049halt\r\nactivity\x1b[?1049l");
+    let restored = screen.snapshot();
+    let restored_row = restored.row(0).unwrap();
+
+    assert_eq!(restored_row.text, "primary");
+    assert_eq!(restored_row.revision, revision);
+    assert_eq!(restored_row.timestamp_ms, timestamp);
+    assert_eq!(restored_row.command_mark, Some(ShellCommandMark::Prompt));
+}
+
+#[test]
+fn width_reflow_discards_uncertain_line_metadata() {
+    let mut screen = TerminalScreen::new(10, 2);
+    screen.advance(b"abcdefghij123");
+    let old_revisions = screen
+        .snapshot()
+        .rows()
+        .iter()
+        .map(|row| row.revision)
+        .collect::<Vec<_>>();
+
+    screen.resize(6, 3);
+    let reflowed = screen.snapshot();
+
+    assert!(
+        reflowed
+            .rows()
+            .iter()
+            .all(|row| !old_revisions.contains(&row.revision))
+    );
+}
+
+#[test]
 fn window_snapshot_matches_adjacent_viewports() {
     let mut screen = TerminalScreen::new(20, 3);
     for line in 0..12 {
