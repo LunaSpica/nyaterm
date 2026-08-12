@@ -22,17 +22,22 @@ pub(in crate::features) fn vertical_resize_handle_visual(
 ) -> gpui::Div {
     div()
         .relative()
-        .w(px(1.))
+        .w(px(3.))
         .h_full()
         .flex_none()
-        .bg(rgb(palette.border))
         .child(
             div()
                 .absolute()
-                .left(px(-1.))
+                .left(px(1.))
                 .top_0()
                 .bottom_0()
-                .w(px(3.))
+                .w(px(1.))
+                .bg(rgb(palette.border)),
+        )
+        .child(
+            div()
+                .absolute()
+                .inset_0()
                 .bg(if dragging {
                     rgb(palette.primary)
                 } else {
@@ -48,17 +53,22 @@ pub(in crate::features) fn horizontal_resize_handle_visual(
 ) -> gpui::Div {
     div()
         .relative()
-        .h(px(1.))
+        .h(px(3.))
         .w_full()
         .flex_none()
-        .bg(rgb(palette.border))
         .child(
             div()
                 .absolute()
                 .left_0()
                 .right_0()
-                .top(px(-1.))
-                .h(px(3.))
+                .top(px(1.))
+                .h(px(1.))
+                .bg(rgb(palette.border)),
+        )
+        .child(
+            div()
+                .absolute()
+                .inset_0()
                 .bg(if dragging {
                     rgb(palette.primary)
                 } else {
