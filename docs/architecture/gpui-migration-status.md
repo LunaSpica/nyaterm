@@ -6,9 +6,42 @@ remaining entries here describe targeted parity, compatibility, ownership, and
 cleanup work rather than a broad half-migrated application state. Keep dynamic
 counts here instead of in `AGENTS.md`.
 
-Last updated from the working tree on 2026-08-12.
+Last updated from the working tree on 2026-08-13.
 
 ## Tauri Main Parity Refreshes
+
+- 2026-08-13 fast-forwarded the clean Tauri reference from the previously
+  audited `266db741` baseline to `b6b8ab71` and audited its maintenance delta.
+  GPUI now carries the applicable native behavior without restoring WebView
+  layers: IronRDP rebuilds its FastPath decompressor after
+  deactivation/reactivation, fixed display mode no longer emits dynamic resize,
+  resize storms are filtered, and immediate post-resize failures disable that
+  capability for reconnect. Transcript recording has a configurable native
+  shortcut and terminal context submenu for start/stop, save, open, reveal and
+  settings navigation.
+- The same refresh completed quick-command hierarchy and custom-order parity.
+  Categories persist `parent_id` and sibling `sort_order`, commands persist an
+  optional custom order, imports and exports preserve both, and the GPUI panel
+  supports command/category drag-and-drop. Reordering is owned by
+  `CommandFeatureState`, rejects descendant cycles, normalizes sibling or
+  pinned partitions, switches to Custom sort and persists outside render.
+- SSH Agent is now a compatibility-safe connection mode. Core stores tagged
+  Auto, environment, Unix socket, Pageant and Windows OpenSSH endpoints plus an
+  opt-in forwarding flag; legacy documents remain sparse. Transport performs
+  timed identity/signing authentication against the local Agent and accepts
+  forwarded Agent channels only for an interactive terminal that explicitly
+  requested forwarding. SFTP, tunnels and jump connections do not request it.
+  Sync snapshots strip device-local endpoint/forwarding values and preserve the
+  local values when applying remote sessions. The GPUI connection editor uses
+  native tabs/toggles for Agent mode, endpoint and forwarding. Agent connect,
+  identity and signing failures enter a typed GPUI prompt with bounded Retry or
+  Cancel handling, including hardware-key, PIN and approval-wait guidance.
+- macOS now exposes a standard native Edit menu with OS Undo/Redo/Cut selectors
+  and terminal-aware Copy/Paste/Select All actions. Windows releases have a
+  GPUI-native two-architecture workflow that builds the Rust executable, WiX
+  MSI and portable ZIP, validates manifests and SHA-256 files, and optionally
+  signs the executable before recreating the portable ZIP and then signs the
+  MSI. It does not invoke Tauri bundling.
 
 - 2026-08-12 aligned the native remote-file backend with the former Tauri
   selection contract. `nyaterm-transport::RemoteFileService` now performs
