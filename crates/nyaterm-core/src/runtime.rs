@@ -110,8 +110,8 @@ impl AppRuntime {
         })
     }
 
-    #[cfg(test)]
-    pub(crate) fn from_parts_for_test(
+    #[doc(hidden)]
+    pub fn from_parts_for_test(
         mode: RuntimeMode,
         data_dir: PathBuf,
         config_dir: PathBuf,

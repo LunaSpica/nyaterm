@@ -3,7 +3,7 @@ use nyaterm_ui::{NyaAppMenuBar, NyaDialogWindowExt as _, NyaMenuItem};
 
 use crate::app_shell::NativeMenuCommand;
 use crate::features::NyaTermApp;
-use crate::models::{NavItem, SmartSplitMode, TitleMenu};
+use crate::models::{HeaderStatusMode, NavItem, SmartSplitMode, TitleMenu};
 
 impl NyaTermApp {
     pub(crate) fn set_title_menu_bar(&mut self, menu_bar: gpui::Entity<NyaAppMenuBar>) {
@@ -37,9 +37,6 @@ impl NyaTermApp {
         match command {
             NativeMenuCommand::NewSession => {
                 self.open_connection_editor(None, None, false, window, cx);
-            }
-            NativeMenuCommand::NewLocalTerminal => {
-                self.start_local_session(window, cx);
             }
             NativeMenuCommand::QuickSwitch => {
                 self.open_quick_switch(window, cx);
@@ -85,6 +82,56 @@ impl NyaTermApp {
         }
     }
 
+    pub(crate) fn open_connection_import_dialog_for_menu(
+        &mut self,
+        window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.open_connection_import_dialog(window, cx);
+    }
+
+    pub(crate) fn prompt_encrypted_portable_snapshot_export_for_menu(
+        &mut self,
+        window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.prompt_encrypted_portable_snapshot_export(window, cx);
+    }
+
+    pub(crate) fn open_documentation_for_menu(&mut self, cx: &mut Context<Self>) {
+        self.open_documentation(cx);
+    }
+
+    pub(crate) fn open_update_dialog_for_menu(
+        &mut self,
+        window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.open_update_dialog(window, cx);
+    }
+
+    pub(crate) fn reveal_log_dir_for_menu(&mut self, cx: &mut Context<Self>) {
+        self.reveal_log_dir(cx);
+    }
+
+    pub(crate) fn open_about_for_menu(
+        &mut self,
+        window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.open_about(window, cx);
+    }
+
+    pub(crate) fn resize_all_known_terminal_surfaces_for_menu(&mut self, cx: &mut Context<Self>) {
+        let changed = self.resize_all_known_terminal_surfaces();
+        self.shell.set_status(if changed {
+            "terminal sizes reset".to_string()
+        } else {
+            "terminal sizes already current".to_string()
+        });
+        cx.notify();
+    }
+
     pub(in crate::features) fn title_menu_items(
         &self,
         menu: TitleMenu,
@@ -125,11 +172,40 @@ impl NyaTermApp {
     }
 
     fn title_view_menu_items(&self, cx: &mut Context<Self>) -> Vec<NyaMenuItem> {
+        let current_theme = self
+            .settings
+            .summary()
+            .terminal_theme
+            .as_deref()
+            .unwrap_or("");
+        let current_header_status =
+            HeaderStatusMode::from_setting(&self.settings.summary().ui_header_status_mode);
+        let header_status_visible = self.settings.summary().ui_header_status_visible;
+        let panel_multi_open = self.settings.summary().ui_panel_multi_open;
         vec![
             NyaMenuItem::submenu(self.tr("menu.theme"), self.title_theme_menu_items(cx))
                 .icon("icons/menu/palette.svg"),
+            NyaMenuItem::submenu(
+                self.tr("menu.terminalTheme"),
+                self.title_terminal_theme_menu_items(current_theme, cx),
+            )
+            .icon("icons/terminal.svg"),
             NyaMenuItem::submenu(self.tr("menu.language"), self.title_language_menu_items(cx))
                 .icon("icons/translation.svg"),
+            NyaMenuItem::submenu(
+                self.tr("menu.headerStatus"),
+                self.title_header_status_menu_items(
+                    current_header_status,
+                    header_status_visible,
+                    cx,
+                ),
+            )
+            .icon("icons/menu/info.svg"),
+            NyaMenuItem::submenu(
+                self.tr("menu.panels"),
+                self.title_panels_menu_items(panel_multi_open, cx),
+            )
+            .icon("icons/menu/sidebar.svg"),
             NyaMenuItem::separator(),
             NyaMenuItem::action(self.tr("menu.zoomIn"))
                 .icon("icons/menu/zoom-in.svg")
@@ -162,6 +238,23 @@ impl NyaTermApp {
                 })),
             NyaMenuItem::separator(),
             NyaMenuItem::submenu(
+                self.tr("menu.terminalDisplay"),
+                self.title_terminal_display_menu_items(cx),
+            )
+            .icon("icons/eye.svg"),
+            NyaMenuItem::action(self.tr("settings.actionLinks"))
+                .icon("icons/fe/search.svg")
+                .checked(self.settings.summary().terminal_action_links_enabled)
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.toggle_terminal_action_links(cx);
+                })),
+            NyaMenuItem::action(self.tr("settings.terminalZoomEnabled"))
+                .icon("icons/menu/reset.svg")
+                .checked(self.settings.summary().interaction_terminal_zoom_enabled)
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.toggle_terminal_zoom_enabled(cx);
+                })),
+            NyaMenuItem::submenu(
                 self.tr("menu.smartSplit"),
                 self.title_smart_split_menu_items(cx),
             )
@@ -186,16 +279,16 @@ impl NyaTermApp {
                 .on_click(cx.listener(|this, _, _, cx| {
                     this.clear_terminal(cx);
                 })),
-            NyaMenuItem::action(self.tr("menu.resetTerminalSize"))
+            NyaMenuItem::action(self.tr("menu.refitTerminals"))
                 .icon("icons/menu/fit.svg")
                 .on_click(cx.listener(|this, _, _, cx| {
-                    let changed = this.resize_all_known_terminal_surfaces();
-                    this.shell.set_status(if changed {
-                        "terminal sizes reset".to_string()
-                    } else {
-                        "terminal sizes already current".to_string()
-                    });
-                    cx.notify();
+                    this.resize_all_known_terminal_surfaces_for_menu(cx);
+                })),
+            NyaMenuItem::action(self.tr("menu.unsplit"))
+                .icon("icons/menu/fit.svg")
+                .disabled(self.shell.workspace_split().is_none())
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.unsplit_workspace(cx);
                 })),
         ]
     }
@@ -250,6 +343,31 @@ impl NyaTermApp {
             .collect()
     }
 
+    fn title_terminal_theme_menu_items(
+        &self,
+        current_theme: &str,
+        cx: &mut Context<Self>,
+    ) -> Vec<NyaMenuItem> {
+        let mut items = vec![
+            NyaMenuItem::action(self.tr("settings.followUiTheme"))
+                .checked(current_theme.trim().is_empty())
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.set_terminal_theme(None, cx);
+                })),
+        ];
+        items.extend(crate::theme::APPEARANCE_THEME_IDS.iter().map(|&theme| {
+            NyaMenuItem::action(crate::theme::appearance_theme_label(theme))
+                .checked(
+                    current_theme == theme
+                        || (current_theme == "catppuccin" && theme == "catppuccin-mocha"),
+                )
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.set_terminal_theme(Some(theme), cx);
+                }))
+        }));
+        items
+    }
+
     fn title_language_menu_items(&self, cx: &mut Context<Self>) -> Vec<NyaMenuItem> {
         let language = self.settings.summary().language.as_str();
         vec![
@@ -262,6 +380,89 @@ impl NyaTermApp {
                 .checked(matches!(language, "zh" | "zh-CN"))
                 .on_click(cx.listener(|this, _, _, cx| {
                     this.update_ui_language("zh-CN", cx);
+                })),
+        ]
+    }
+
+    fn title_header_status_menu_items(
+        &self,
+        current: HeaderStatusMode,
+        visible: bool,
+        cx: &mut Context<Self>,
+    ) -> Vec<NyaMenuItem> {
+        let mut items = vec![
+            NyaMenuItem::action(self.tr("headerStatus.hidden"))
+                .checked(!visible)
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.set_header_status_visible(false, cx);
+                })),
+        ];
+        items.extend(HeaderStatusMode::ALL.into_iter().map(|mode| {
+            NyaMenuItem::action(self.tr(mode.i18n_key()))
+                .checked(visible && current == mode)
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.set_header_status_mode(mode, cx);
+                }))
+        }));
+        items
+    }
+
+    fn title_panels_menu_items(
+        &self,
+        panel_multi_open: bool,
+        cx: &mut Context<Self>,
+    ) -> Vec<NyaMenuItem> {
+        vec![
+            NyaMenuItem::action(self.tr("settings.panelMultiOpen"))
+                .checked(panel_multi_open)
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.toggle_panel_multi_open(cx);
+                })),
+            NyaMenuItem::separator(),
+            NyaMenuItem::action(self.tr("settings.showRemoteStats"))
+                .checked(self.settings.summary().ui_show_remote_stats)
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.toggle_remote_stats_panel(cx);
+                })),
+            NyaMenuItem::action(self.tr("settings.showGpuMonitor"))
+                .checked(self.settings.summary().ui_show_gpu_monitor)
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.toggle_gpu_monitor_panel(cx);
+                })),
+            NyaMenuItem::action(self.tr("settings.showAscendNpuMonitor"))
+                .checked(self.settings.summary().ui_show_ascend_npu_monitor)
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.toggle_ascend_npu_monitor_panel(cx);
+                })),
+            NyaMenuItem::action(self.tr("settings.showProcessManager"))
+                .checked(self.settings.summary().ui_show_process_manager)
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.toggle_process_manager_panel(cx);
+                })),
+            NyaMenuItem::action(self.tr("settings.showDockerManager"))
+                .checked(self.settings.summary().ui_show_docker_manager)
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.toggle_docker_manager_panel(cx);
+                })),
+        ]
+    }
+
+    fn title_terminal_display_menu_items(&self, cx: &mut Context<Self>) -> Vec<NyaMenuItem> {
+        vec![
+            NyaMenuItem::action(self.tr("settings.showWorkspacePadding"))
+                .checked(self.settings.summary().terminal_show_workspace_padding)
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.toggle_terminal_workspace_padding(cx);
+                })),
+            NyaMenuItem::action(self.tr("settings.showLineNumbers"))
+                .checked(self.settings.summary().terminal_show_line_numbers)
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.toggle_terminal_line_numbers(cx);
+                })),
+            NyaMenuItem::action(self.tr("settings.showTimestamps"))
+                .checked(self.settings.summary().terminal_show_timestamps)
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.toggle_terminal_timestamps(cx);
                 })),
         ]
     }
@@ -295,5 +496,152 @@ impl NyaTermApp {
                     this.open_sync_groups(window, cx);
                 })),
         ]
+    }
+
+    #[cfg(test)]
+    pub(crate) fn title_menu_items_for_test(
+        &self,
+        menu: crate::models::TitleMenu,
+        cx: &mut Context<Self>,
+    ) -> Vec<NyaMenuItem> {
+        self.title_menu_items(menu, cx)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use gpui::{AppContext as _, TestAppContext};
+    use nyaterm_core::{AppRuntime, RuntimeMode};
+    use nyaterm_ui::NyaMenuItem;
+
+    use crate::entities::{OverlayStore, StartupRestoreStore, UiStoreHandles};
+    use crate::features::NyaTermApp;
+    use crate::models::TitleMenu;
+
+    fn unique_test_dir() -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time before unix epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!("nyaterm-title-menu-{}-{nanos}", std::process::id()))
+    }
+
+    fn menu_app(cx: &mut TestAppContext) -> gpui::Entity<NyaTermApp> {
+        let root = unique_test_dir();
+        let runtime = AppRuntime::from_parts_for_test(
+            RuntimeMode::Portable,
+            root.clone(),
+            root.join("config"),
+            root.join("logs"),
+            root.join("cache"),
+            None,
+        );
+        let stores = UiStoreHandles {
+            startup_restore: cx.new(|_| StartupRestoreStore::default()),
+            overlays: cx.new(|_| OverlayStore::default()),
+        };
+        cx.new(|cx| NyaTermApp::new(runtime, stores, cx))
+    }
+
+    #[test]
+    fn custom_title_bar_keeps_tauri_visible_top_level_menus_without_edit() {
+        let labels = [
+            TitleMenu::File,
+            TitleMenu::View,
+            TitleMenu::Terminal,
+            TitleMenu::Help,
+        ]
+        .map(TitleMenu::label);
+
+        assert_eq!(labels, ["File", "View", "Terminal", "Help"]);
+        assert!(!labels.contains(&"Edit"));
+    }
+
+    #[test]
+    fn title_view_menu_matches_tauri_structure() {
+        let mut cx = TestAppContext::single();
+        let app = menu_app(&mut cx);
+        let items = cx.update_entity(&app, |app, cx| {
+            app.title_menu_items_for_test(TitleMenu::View, cx)
+        });
+        let labels = items
+            .iter()
+            .map(NyaMenuItem::test_label)
+            .collect::<Vec<_>>();
+
+        assert!(labels.contains(&"Theme"));
+        assert!(labels.contains(&"Terminal Theme"));
+        assert!(labels.contains(&"Language"));
+        assert!(labels.contains(&"Header Status"));
+        assert!(labels.contains(&"Panels"));
+        assert!(labels.contains(&"Zoom In"));
+        assert!(labels.contains(&"Zoom Out"));
+        assert!(labels.contains(&"Reset Zoom"));
+    }
+
+    #[test]
+    fn title_terminal_menu_matches_tauri_structure_and_default_state() {
+        let mut cx = TestAppContext::single();
+        let app = menu_app(&mut cx);
+        let items = cx.update_entity(&app, |app, cx| {
+            app.title_menu_items_for_test(TitleMenu::Terminal, cx)
+        });
+        let labels = items
+            .iter()
+            .map(NyaMenuItem::test_label)
+            .collect::<Vec<_>>();
+
+        assert!(labels.contains(&"Command Palette"));
+        assert!(labels.contains(&"Display"));
+        assert!(labels.contains(&"Action Links"));
+        assert!(labels.contains(&"Enable terminal zoom"));
+        assert!(labels.contains(&"Smart Split"));
+        assert!(labels.contains(&"Unsplit"));
+        assert!(labels.contains(&"Sync Input"));
+        assert!(labels.contains(&"Broadcast All"));
+        assert!(labels.contains(&"Clear Terminal"));
+        assert!(labels.contains(&"Refit Terminal Size"));
+
+        let action_links = items
+            .iter()
+            .find(|item| item.test_label() == "Action Links")
+            .expect("action links item");
+        let zoom_enabled = items
+            .iter()
+            .find(|item| item.test_label() == "Enable terminal zoom")
+            .expect("terminal zoom item");
+        let unsplit = items
+            .iter()
+            .find(|item| item.test_label() == "Unsplit")
+            .expect("unsplit item");
+
+        assert!(!action_links.test_presentation().4);
+        assert!(zoom_enabled.test_presentation().4);
+        assert!(unsplit.test_presentation().3);
+    }
+
+    #[test]
+    fn terminal_display_submenu_has_expected_checks() {
+        let mut cx = TestAppContext::single();
+        let app = menu_app(&mut cx);
+        let items = cx.update_entity(&app, |app, cx| {
+            app.title_menu_items_for_test(TitleMenu::Terminal, cx)
+        });
+        let display = items
+            .iter()
+            .find(|item| item.test_label() == "Display")
+            .expect("terminal display");
+        let submenu = display.children().expect("terminal display submenu");
+        assert_eq!(
+            submenu
+                .iter()
+                .map(NyaMenuItem::test_label)
+                .collect::<Vec<_>>(),
+            vec!["Show Padding", "Line Numbers", "Show Timestamps"]
+        );
+        assert!(submenu.iter().all(|item| !item.test_presentation().4));
     }
 }

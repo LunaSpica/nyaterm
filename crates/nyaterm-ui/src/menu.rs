@@ -119,15 +119,13 @@ impl NyaMenuItem {
         self
     }
 
-    #[cfg(test)]
-    pub(crate) fn test_label(&self) -> &str {
+    #[doc(hidden)]
+    pub fn test_label(&self) -> &str {
         self.label.as_ref()
     }
 
-    #[cfg(test)]
-    pub(crate) fn test_presentation(
-        &self,
-    ) -> (String, Option<String>, Option<String>, bool, bool, bool) {
+    #[doc(hidden)]
+    pub fn test_presentation(&self) -> (String, Option<String>, Option<String>, bool, bool, bool) {
         (
             self.label.to_string(),
             self.icon_path.as_ref().map(ToString::to_string),
@@ -136,6 +134,14 @@ impl NyaMenuItem {
             self.checked,
             self.danger,
         )
+    }
+
+    #[doc(hidden)]
+    pub fn children(&self) -> Option<&[NyaMenuItem]> {
+        match &self.kind {
+            NyaMenuItemKind::Submenu(items) => Some(items.as_slice()),
+            _ => None,
+        }
     }
 
     pub(crate) fn append_to(

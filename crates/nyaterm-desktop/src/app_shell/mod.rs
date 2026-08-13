@@ -6,7 +6,9 @@ use gpui::{
     px,
 };
 use nyaterm_core::AppRuntime;
-use nyaterm_ui::{NyaAppMenu, NyaAppMenuBar, NyaCut, NyaRedo, NyaUndo};
+use nyaterm_ui::{
+    NyaAppMenu, NyaAppMenuBar, NyaCopy, NyaCut, NyaPaste, NyaRedo, NyaSelectAll, NyaUndo,
+};
 
 use crate::{
     entities::{OverlayStore, StartupRestoreStore, UiStoreHandles, WindowRuntimeStore},
@@ -16,15 +18,24 @@ use crate::{
 actions!(
     nyaterm_native_menu,
     [
+        NativeAbout,
+        NativeHide,
+        NativeHideOthers,
+        NativeShowAll,
         NativeNewSession,
-        NativeNewLocalTerminal,
         NativeQuickSwitch,
+        NativeImportConfig,
+        NativeExportConfig,
+        NativeOpenDocumentation,
+        NativeCheckUpdates,
+        NativeViewLogs,
         NativeOpenSettings,
         NativeToggleLeftSidebar,
         NativeToggleRightSidebar,
         NativeZoomIn,
         NativeZoomOut,
         NativeResetZoom,
+        NativeRefitTerminals,
         NativeTerminalCopy,
         NativeTerminalPaste,
         NativeTerminalFind,
@@ -38,7 +49,6 @@ actions!(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum NativeMenuCommand {
     NewSession,
-    NewLocalTerminal,
     QuickSwitch,
     OpenSettings,
     ToggleLeftSidebar,
@@ -128,26 +138,35 @@ fn install_native_app_menus(cx: &mut Context<AppShell>) {
     if !cfg!(target_os = "macos") {
         return;
     }
-    cx.set_menus([
+    cx.set_menus(native_app_menus());
+}
+
+fn native_app_menus() -> Vec<Menu> {
+    vec![
         Menu::new("NyaTerm").items([
+            MenuItem::action("About NyaTerm", NativeAbout),
             MenuItem::os_submenu("Services", SystemMenuType::Services),
+            MenuItem::separator(),
+            MenuItem::action("Hide NyaTerm", NativeHide),
+            MenuItem::action("Hide Others", NativeHideOthers),
+            MenuItem::action("Show All", NativeShowAll),
             MenuItem::separator(),
             MenuItem::action("Quit NyaTerm", NativeQuit),
         ]),
         Menu::new("File").items([
             MenuItem::action("New Session", NativeNewSession),
-            MenuItem::action("New Local Terminal", NativeNewLocalTerminal),
+            MenuItem::separator(),
+            MenuItem::action("Import Config", NativeImportConfig),
+            MenuItem::action("Export Config", NativeExportConfig),
         ]),
         Menu::new("Edit").items([
             MenuItem::os_action("Undo", NyaUndo, OsAction::Undo),
             MenuItem::os_action("Redo", NyaRedo, OsAction::Redo),
             MenuItem::separator(),
             MenuItem::os_action("Cut", NyaCut, OsAction::Cut),
-            // Copy/Paste/Select All retain terminal-aware handlers while also
-            // advertising their standard macOS selectors to focused controls.
-            MenuItem::os_action("Copy", NativeTerminalCopy, OsAction::Copy),
-            MenuItem::os_action("Paste", NativeTerminalPaste, OsAction::Paste),
-            MenuItem::os_action("Select All", NativeTerminalSelectAll, OsAction::SelectAll),
+            MenuItem::os_action("Copy", NyaCopy, OsAction::Copy),
+            MenuItem::os_action("Paste", NyaPaste, OsAction::Paste),
+            MenuItem::os_action("Select All", NyaSelectAll, OsAction::SelectAll),
         ]),
         Menu::new("View").items([
             MenuItem::action("Settings", NativeOpenSettings),
@@ -169,8 +188,14 @@ fn install_native_app_menus(cx: &mut Context<AppShell>) {
             MenuItem::action("Select All", NativeTerminalSelectAll),
             MenuItem::separator(),
             MenuItem::action("Manage Sync Groups", NativeManageSyncGroups),
+            MenuItem::action("Refit Terminals", NativeRefitTerminals),
         ]),
-    ]);
+        Menu::new("Help").items([
+            MenuItem::action("Docs", NativeOpenDocumentation),
+            MenuItem::action("Check Updates", NativeCheckUpdates),
+            MenuItem::action("View Logs", NativeViewLogs),
+        ]),
+    ]
 }
 
 fn build_title_menu_bar(
@@ -219,8 +244,46 @@ impl Render for AppShell {
             .on_action(cx.listener(|this, _: &NativeNewSession, window, cx| {
                 this.perform_native_menu_command(NativeMenuCommand::NewSession, window, cx);
             }))
-            .on_action(cx.listener(|this, _: &NativeNewLocalTerminal, window, cx| {
-                this.perform_native_menu_command(NativeMenuCommand::NewLocalTerminal, window, cx);
+            .on_action(|_: &NativeHide, _window, cx| {
+                cx.hide();
+            })
+            .on_action(|_: &NativeHideOthers, _window, cx| {
+                cx.hide_other_apps();
+            })
+            .on_action(|_: &NativeShowAll, _window, cx| {
+                cx.unhide_other_apps();
+            })
+            .on_action(cx.listener(|this, _: &NativeImportConfig, window, cx| {
+                this.app.update(cx, |app, cx| {
+                    app.open_connection_import_dialog_for_menu(window, cx);
+                });
+            }))
+            .on_action(cx.listener(|this, _: &NativeExportConfig, window, cx| {
+                this.app.update(cx, |app, cx| {
+                    app.prompt_encrypted_portable_snapshot_export_for_menu(window, cx);
+                });
+            }))
+            .on_action(
+                cx.listener(|this, _: &NativeOpenDocumentation, _window, cx| {
+                    this.app.update(cx, |app, cx| {
+                        app.open_documentation_for_menu(cx);
+                    });
+                }),
+            )
+            .on_action(cx.listener(|this, _: &NativeCheckUpdates, window, cx| {
+                this.app.update(cx, |app, cx| {
+                    app.open_update_dialog_for_menu(window, cx);
+                });
+            }))
+            .on_action(cx.listener(|this, _: &NativeViewLogs, _window, cx| {
+                this.app.update(cx, |app, cx| {
+                    app.reveal_log_dir_for_menu(cx);
+                });
+            }))
+            .on_action(cx.listener(|this, _: &NativeAbout, window, cx| {
+                this.app.update(cx, |app, cx| {
+                    app.open_about_for_menu(window, cx);
+                });
             }))
             .on_action(cx.listener(|this, _: &NativeQuickSwitch, window, cx| {
                 this.perform_native_menu_command(NativeMenuCommand::QuickSwitch, window, cx);
@@ -255,6 +318,20 @@ impl Render for AppShell {
             .on_action(cx.listener(|this, _: &NativeResetZoom, window, cx| {
                 this.perform_native_menu_command(NativeMenuCommand::ResetZoom, window, cx);
             }))
+            .on_action(cx.listener(|this, _: &NyaCopy, window, cx| {
+                this.perform_native_menu_command(NativeMenuCommand::TerminalCopy, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &NyaPaste, window, cx| {
+                this.perform_native_menu_command(NativeMenuCommand::TerminalPaste, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &NyaSelectAll, window, cx| {
+                this.perform_native_menu_command(NativeMenuCommand::TerminalSelectAll, window, cx);
+            }))
+            .on_action(cx.listener(|this, _: &NativeRefitTerminals, _window, cx| {
+                this.app.update(cx, |app, cx| {
+                    app.resize_all_known_terminal_surfaces_for_menu(cx);
+                });
+            }))
             .on_action(cx.listener(|this, _: &NativeTerminalCopy, window, cx| {
                 this.perform_native_menu_command(NativeMenuCommand::TerminalCopy, window, cx);
             }))
@@ -283,5 +360,69 @@ impl Render for AppShell {
                 cx.quit();
             })
             .child(self.app.clone())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use gpui::{Menu, MenuItem};
+
+    use crate::app_shell::native_app_menus;
+
+    fn menu_names(menus: &[Menu]) -> Vec<&str> {
+        menus.iter().map(|menu| menu.name.as_ref()).collect()
+    }
+
+    fn item_name(item: &MenuItem) -> Option<&str> {
+        match item {
+            MenuItem::Action { name, .. } => Some(name.as_ref()),
+            MenuItem::Submenu(menu) => Some(menu.name.as_ref()),
+            MenuItem::SystemMenu(menu) => Some(menu.name.as_ref()),
+            MenuItem::Separator => None,
+        }
+    }
+
+    fn item_names(menu: &Menu) -> Vec<&str> {
+        menu.items.iter().filter_map(item_name).collect()
+    }
+
+    #[test]
+    fn native_menu_keeps_tauri_macos_top_level_order() {
+        let menus = native_app_menus();
+
+        assert_eq!(
+            menu_names(&menus),
+            ["NyaTerm", "File", "Edit", "View", "Terminal", "Help"]
+        );
+    }
+
+    #[test]
+    fn native_edit_menu_is_standard_macos_edit_layer() {
+        let menus = native_app_menus();
+        let edit = menus
+            .iter()
+            .find(|menu| menu.name.as_ref() == "Edit")
+            .expect("edit menu");
+
+        assert_eq!(
+            item_names(edit),
+            ["Undo", "Redo", "Cut", "Copy", "Paste", "Select All"]
+        );
+    }
+
+    #[test]
+    fn native_about_lives_in_app_menu_not_help_menu() {
+        let menus = native_app_menus();
+        let app = menus
+            .iter()
+            .find(|menu| menu.name.as_ref() == "NyaTerm")
+            .expect("app menu");
+        let help = menus
+            .iter()
+            .find(|menu| menu.name.as_ref() == "Help")
+            .expect("help menu");
+
+        assert!(item_names(app).contains(&"About NyaTerm"));
+        assert!(!item_names(help).contains(&"About NyaTerm"));
     }
 }
