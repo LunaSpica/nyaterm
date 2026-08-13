@@ -62,6 +62,10 @@ impl NyaTermApp {
             self.select_all_terminal(cx);
             return true;
         }
+        if shortcut_matches(event, "terminal.recording.toggle", &keybindings) {
+            self.toggle_active_session_recording(cx);
+            return true;
+        }
         if shortcut_matches(event, "tab.newSession", &keybindings) {
             self.open_connection_editor(None, None, false, window, cx);
             return true;

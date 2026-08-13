@@ -105,6 +105,19 @@ pub(super) fn set_connection_editor_select_value(
                 editor.key_id = None;
             }
         }
+        ConnectionEditorSelect::SshAgentEndpoint => {
+            editor.agent_endpoint = match value.as_deref() {
+                Some("environment") => nyaterm_core::SshAgentEndpoint::Environment {
+                    variable: "SSH_AUTH_SOCK".to_string(),
+                },
+                Some("pageant") => nyaterm_core::SshAgentEndpoint::Pageant,
+                Some("windows_openssh") => nyaterm_core::SshAgentEndpoint::WindowsOpenSsh,
+                Some("unix_socket") => nyaterm_core::SshAgentEndpoint::UnixSocket {
+                    path: String::new(),
+                },
+                _ => nyaterm_core::SshAgentEndpoint::Auto,
+            };
+        }
         ConnectionEditorSelect::Group => {
             editor.group_id = value;
             editor.new_group_name.clear();
@@ -464,6 +477,9 @@ pub(super) fn toggle_connection_editor_flag(
             editor.auto_fill_otp = editor.otp_id.is_some() && !editor.auto_fill_otp;
         }
         ConnectionEditorToggle::X11 => editor.x11_forwarding = !editor.x11_forwarding,
+        ConnectionEditorToggle::AgentForwarding => {
+            editor.agent_forwarding = !editor.agent_forwarding;
+        }
         ConnectionEditorToggle::SftpEnabled => editor.sftp_enabled = !editor.sftp_enabled,
         ConnectionEditorToggle::RawTcp => {
             editor.raw_tcp_cli = !editor.raw_tcp_cli;
@@ -675,6 +691,24 @@ pub(super) fn editor_field_seeds(
             Empty,
         ),
         (
+            ConnectionEditorField::AgentEnvironmentVariable,
+            match &draft.agent_endpoint {
+                nyaterm_core::SshAgentEndpoint::Environment { variable } => variable.clone(),
+                _ => "SSH_AUTH_SOCK".to_string(),
+            },
+            false,
+            Literal("SSH_AUTH_SOCK"),
+        ),
+        (
+            ConnectionEditorField::AgentUnixSocket,
+            match &draft.agent_endpoint {
+                nyaterm_core::SshAgentEndpoint::UnixSocket { path } => path.clone(),
+                _ => String::new(),
+            },
+            false,
+            Literal("/path/to/agent.sock"),
+        ),
+        (
             ConnectionEditorField::Domain,
             draft.domain.clone(),
             false,
@@ -808,6 +842,12 @@ pub(super) fn set_connection_editor_field_text(
         ConnectionEditorField::Host => draft.host = text,
         ConnectionEditorField::Port => draft.port = text,
         ConnectionEditorField::Username => draft.username = text,
+        ConnectionEditorField::AgentEnvironmentVariable => {
+            draft.agent_endpoint = nyaterm_core::SshAgentEndpoint::Environment { variable: text };
+        }
+        ConnectionEditorField::AgentUnixSocket => {
+            draft.agent_endpoint = nyaterm_core::SshAgentEndpoint::UnixSocket { path: text };
+        }
         ConnectionEditorField::Domain => draft.domain = text,
         ConnectionEditorField::Password => draft.password = text,
         ConnectionEditorField::ShellPath => draft.shell_path = text,

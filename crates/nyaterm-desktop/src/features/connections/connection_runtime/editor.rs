@@ -144,6 +144,8 @@ impl NyaTermApp {
                 proxy_id: None,
                 proxy_jump_id: None,
                 x11_forwarding: false,
+                agent_endpoint: Default::default(),
+                agent_forwarding: false,
                 backspace_mode: "del".to_string(),
                 encoding: "global".to_string(),
                 ssh_profile: Default::default(),

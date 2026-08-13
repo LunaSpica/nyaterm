@@ -1,8 +1,10 @@
-use gpui::{Context, FontWeight, SharedString, div, prelude::*, px, rgb, rgba};
+use gpui::{AppContext as _, Context, FontWeight, SharedString, div, prelude::*, px, rgb, rgba};
 use nyaterm_ui::{NyaContextMenu, NyaMenuItem};
 
 use super::super::super::QuickCommandCategoryOption;
-use crate::features::NyaTermApp;
+use crate::features::{NyaTermApp, QuickCommandDropPosition, QuickCommandDropTarget};
+
+use super::{QuickCommandDragKind, QuickCommandDragPayload, QuickCommandDragPreview};
 
 impl NyaTermApp {
     pub(super) fn quick_command_category_sidebar(
@@ -26,8 +28,11 @@ impl NyaTermApp {
             .gap_1();
         for option in categories {
             let id = option.id.clone();
+            let drag_option_id = option.id.clone();
+            let drag_option_label = option.label.clone();
             let selected = self.commands.quick_selected_category() == option.id;
             let manageable = option.manageable;
+            let depth = option.depth;
             let menu_items =
                 manageable.then(|| self.quick_command_category_menu_items(option.id.clone(), cx));
             let row = div()
@@ -41,6 +46,7 @@ impl NyaTermApp {
                 .flex()
                 .items_center()
                 .gap_2()
+                .pl(px(8. + depth as f32 * 12.))
                 .rounded_md()
                 .bg(if selected {
                     rgb(palette.hover)
@@ -89,7 +95,90 @@ impl NyaTermApp {
                 .on_click(cx.listener(move |this, _, _, cx| {
                     this.commands.select_quick_category(id.clone());
                     cx.notify();
-                }));
+                }))
+                .when(manageable, |this| {
+                    let drag_id = drag_option_id.clone();
+                    let drag_label = drag_option_label.clone();
+                    let move_target = drag_option_id.clone();
+                    let drop_target = drag_option_id.clone();
+                    this.cursor_move()
+                        .on_drag(
+                            QuickCommandDragPayload {
+                                kind: QuickCommandDragKind::Category,
+                                id: drag_id,
+                                label: drag_label,
+                            },
+                            |payload, position, _, cx| {
+                                cx.new(|_| QuickCommandDragPreview {
+                                    payload: payload.clone(),
+                                    position,
+                                })
+                            },
+                        )
+                        .on_drag_move(cx.listener(
+                            move |this,
+                                  event: &gpui::DragMoveEvent<QuickCommandDragPayload>,
+                                  _,
+                                  cx| {
+                                let _ = event.drag(cx);
+                                let relative = if event.bounds.size.height > px(0.) {
+                                    ((event.event.position.y - event.bounds.origin.y)
+                                        / event.bounds.size.height)
+                                        .clamp(0., 1.)
+                                } else {
+                                    0.5
+                                };
+                                let position = if relative < 0.25 {
+                                    QuickCommandDropPosition::Before
+                                } else if relative > 0.75 {
+                                    QuickCommandDropPosition::After
+                                } else {
+                                    QuickCommandDropPosition::Inside
+                                };
+                                if this.commands.set_quick_drop_target(QuickCommandDropTarget {
+                                    id: move_target.clone(),
+                                    position,
+                                }) {
+                                    cx.notify();
+                                }
+                            },
+                        ))
+                        .on_drop(cx.listener(
+                            move |this, payload: &QuickCommandDragPayload, _, cx| {
+                                let position = this
+                                    .commands
+                                    .quick_drop_target()
+                                    .filter(|target| target.id == drop_target)
+                                    .map(|target| target.position)
+                                    .unwrap_or(QuickCommandDropPosition::Inside);
+                                let config = match payload.kind {
+                                    QuickCommandDragKind::Command => {
+                                        this.commands.move_quick_command_to_category(
+                                            &payload.id,
+                                            Some(drop_target.clone()),
+                                        )
+                                    }
+                                    QuickCommandDragKind::Category => this
+                                        .commands
+                                        .move_quick_category(&payload.id, &drop_target, position),
+                                };
+                                this.finish_quick_command_reorder(config, cx);
+                            },
+                        ))
+                })
+                .when(option.id == "uncategorized", |this| {
+                    this.on_drop(cx.listener(
+                        move |this, payload: &QuickCommandDragPayload, _, cx| {
+                            let config = (payload.kind == QuickCommandDragKind::Command)
+                                .then(|| {
+                                    this.commands
+                                        .move_quick_command_to_category(&payload.id, None)
+                                })
+                                .flatten();
+                            this.finish_quick_command_reorder(config, cx);
+                        },
+                    ))
+                });
             category_sidebar = category_sidebar.child(if let Some(menu_items) = menu_items {
                 NyaContextMenu::new(row, menu_items).into_any_element()
             } else {

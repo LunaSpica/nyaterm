@@ -101,6 +101,7 @@ pub(crate) enum QuickCommandSortMode {
     Usage,
     Name,
     Created,
+    Custom,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

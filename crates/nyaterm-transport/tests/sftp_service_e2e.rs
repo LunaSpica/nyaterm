@@ -30,6 +30,9 @@ fn test_config() -> SshSessionConfig {
         username: required_env("NYATERM_TEST_SFTP_USERNAME"),
         password: Some(required_env("NYATERM_TEST_SFTP_PASSWORD")),
         key_auth: None,
+        agent_auth: false,
+        agent_endpoint: Default::default(),
+        agent_forwarding: false,
         otp_id: None,
         auto_fill_otp: false,
         proxy_jump: None,
@@ -51,6 +54,7 @@ fn test_config() -> SshSessionConfig {
         pixel_height: 0,
         host_key_verifier: Some(Arc::new(AcceptEphemeralHostKey)),
         credential_provider: None::<Arc<dyn SshCredentialProvider>>,
+        agent_prompt_provider: None,
         otp_provider: None::<Arc<dyn SshOtpProvider>>,
     }
 }

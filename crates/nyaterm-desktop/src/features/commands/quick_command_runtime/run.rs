@@ -71,6 +71,15 @@ impl NyaTermApp {
                         Some(QuickCommandCategory {
                             id,
                             name: category_name,
+                            parent_id: None,
+                            sort_order: config
+                                .categories
+                                .iter()
+                                .filter(|category| category.parent_id.is_none())
+                                .map(|category| category.sort_order)
+                                .max()
+                                .unwrap_or(-1)
+                                .saturating_add(1),
                         }),
                     )
                 }
@@ -101,6 +110,7 @@ impl NyaTermApp {
                     updated_at: None,
                     created_at: None,
                     use_count: None,
+                    sort_order: None,
                 },
                 new_category,
             )?;

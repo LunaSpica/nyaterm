@@ -19,8 +19,9 @@ use crate::temporary_ssh_link::TemporaryLinkProtocol;
 
 use super::SessionProtocolRuntimeState;
 use super::auth_runtime::{
-    CredentialPromptBroker, CredentialPromptRequest, CredentialPromptState, HostKeyPromptBroker,
-    HostKeyPromptRequest, KeyboardInteractivePromptState, NativeOtpCodePreview, NativeOtpProvider,
+    AgentPromptBroker, AgentPromptRequest, CredentialPromptBroker, CredentialPromptRequest,
+    CredentialPromptState, HostKeyPromptBroker, HostKeyPromptRequest,
+    KeyboardInteractivePromptState, NativeOtpCodePreview, NativeOtpProvider,
     SftpDuplicatePromptBroker, SftpDuplicatePromptState,
 };
 use super::trzsz_runtime::TrzszSessionState;
@@ -93,6 +94,8 @@ pub(super) struct SessionPromptState {
     credential_prompts: Arc<CredentialPromptBroker>,
     active_credential_prompt: Option<CredentialPromptState>,
     active_keyboard_interactive_prompt: Option<KeyboardInteractivePromptState>,
+    agent_prompts: Arc<AgentPromptBroker>,
+    active_agent_prompt: Option<AgentPromptRequest>,
     credential_prompt_focus_pending: bool,
     credential_focus: FocusHandle,
     otp_provider: Arc<NativeOtpProvider>,
@@ -168,6 +171,8 @@ impl SessionFeatureState {
                 credential_prompts: Arc::new(CredentialPromptBroker::default()),
                 active_credential_prompt: None,
                 active_keyboard_interactive_prompt: None,
+                agent_prompts: Arc::new(AgentPromptBroker::default()),
+                active_agent_prompt: None,
                 credential_prompt_focus_pending: false,
                 credential_focus: focus.credential,
                 otp_provider,
@@ -372,6 +377,10 @@ impl SessionFeatureState {
         &self,
     ) -> Option<&KeyboardInteractivePromptState> {
         self.prompts.active_keyboard_interactive()
+    }
+
+    pub(in crate::features) fn prompt_active_agent(&self) -> Option<&AgentPromptRequest> {
+        self.prompts.active_agent()
     }
 
     pub(in crate::features) fn prompt_has_active_credential(&self) -> bool {
@@ -1486,6 +1495,10 @@ impl SessionPromptState {
         Arc::clone(&self.credential_prompts)
     }
 
+    pub(in crate::features) fn agent_broker(&self) -> Arc<AgentPromptBroker> {
+        Arc::clone(&self.agent_prompts)
+    }
+
     pub(in crate::features) fn otp_provider(&self) -> Arc<NativeOtpProvider> {
         Arc::clone(&self.otp_provider)
     }
@@ -1520,6 +1533,10 @@ impl SessionPromptState {
         self.active_keyboard_interactive_prompt.as_ref()
     }
 
+    pub(in crate::features) fn active_agent(&self) -> Option<&AgentPromptRequest> {
+        self.active_agent_prompt.as_ref()
+    }
+
     pub(in crate::features) fn has_active_credential(&self) -> bool {
         self.active_credential_prompt.is_some()
     }
@@ -1532,6 +1549,7 @@ impl SessionPromptState {
         self.active_host_key_prompt.is_some()
             || self.active_credential_prompt.is_some()
             || self.active_keyboard_interactive_prompt.is_some()
+            || self.active_agent_prompt.is_some()
     }
 
     pub(in crate::features) fn has_pending_or_active_prompt(&self) -> bool {
@@ -1539,6 +1557,7 @@ impl SessionPromptState {
             || self.active_duplicate_prompt.is_some()
             || self.host_key_prompts.has_pending()
             || self.credential_prompts.has_pending()
+            || self.agent_prompts.has_pending()
             || self.duplicate_prompts.has_pending()
     }
 
@@ -1582,6 +1601,10 @@ impl SessionPromptState {
         let state = self.active_keyboard_interactive_prompt.take()?;
         self.credential_prompt_focus_pending = false;
         Some(state)
+    }
+
+    pub(in crate::features) fn take_agent(&mut self) -> Option<AgentPromptRequest> {
+        self.active_agent_prompt.take()
     }
 
     pub(in crate::features) fn keyboard_interactive_otp_id(&self) -> Option<String> {
@@ -1742,6 +1765,19 @@ impl SessionPromptState {
         let host = request.host_key.host_identifier.clone();
         self.active_host_key_prompt = Some(request);
         Some(host)
+    }
+
+    pub(in crate::features) fn activate_next_agent(&mut self) -> Option<String> {
+        if self.active_agent_prompt.is_some() || !self.agent_prompts.has_pending() {
+            return None;
+        }
+        let request = self.agent_prompts.pop_pending()?;
+        let target = format!(
+            "{}@{}:{}",
+            request.prompt.username, request.prompt.host, request.prompt.port
+        );
+        self.active_agent_prompt = Some(request);
+        Some(target)
     }
 
     pub(in crate::features) fn take_next_credential_request(

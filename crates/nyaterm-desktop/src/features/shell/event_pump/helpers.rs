@@ -112,6 +112,7 @@ pub(super) struct SessionEventDrainBudget {
 pub(super) enum PendingSessionAuthWait {
     Credential { target: String },
     HostKey { host: String },
+    Agent { target: String },
 }
 
 pub(super) fn diagnostic_log_due(
@@ -139,6 +140,9 @@ pub(super) fn pending_session_status_message(
         }
         Some(PendingSessionAuthWait::HostKey { host }) => {
             format!("waiting for SSH host key decision for {host}")
+        }
+        Some(PendingSessionAuthWait::Agent { target }) => {
+            format!("waiting for SSH Agent approval for {target}")
         }
         None => format!("still connecting to {name}"),
     }
@@ -506,6 +510,15 @@ mod tests {
                 }),
             ),
             "waiting for SSH host key decision for example:22"
+        );
+        assert_eq!(
+            pending_session_status_message(
+                "server",
+                Some(&PendingSessionAuthWait::Agent {
+                    target: "user@example:22".to_string(),
+                }),
+            ),
+            "waiting for SSH Agent approval for user@example:22"
         );
     }
 

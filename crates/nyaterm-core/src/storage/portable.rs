@@ -21,8 +21,8 @@ use super::{
     write_portable_snapshot_file,
 };
 use crate::{
-    CommandHistoryEntry, ConfigBackupInfo, PortableSnapshotKind, RawPortableSnapshot,
-    SessionsConfig, TunnelGroup,
+    CommandHistoryEntry, ConfigBackupInfo, ConnectionType, PortableSnapshotKind,
+    RawPortableSnapshot, SessionsConfig, SshAgentEndpoint, TunnelGroup,
 };
 
 impl ConnectionStore {
@@ -309,10 +309,13 @@ impl ConnectionStore {
         snapshot
             .entities
             .insert("settings".to_string(), serde_json::to_string(&settings)?);
-        snapshot.entities.insert(
-            "sessions".to_string(),
-            serde_json::to_string(&self.load_sessions()?)?,
-        );
+        let mut sessions = self.load_sessions()?;
+        if snapshot_kind == PortableSnapshotKind::Sync {
+            strip_device_local_ssh_agent_settings(&mut sessions);
+        }
+        snapshot
+            .entities
+            .insert("sessions".to_string(), serde_json::to_string(&sessions)?);
         snapshot.entities.insert(
             "keys".to_string(),
             wrapped_raw_array_json(
@@ -389,12 +392,13 @@ impl ConnectionStore {
         &self,
         snapshot: &RawPortableSnapshot,
     ) -> Result<(), StorageError> {
-        let sessions: SessionsConfig = read_snapshot_entity(snapshot, "sessions")?;
+        let mut sessions: SessionsConfig = read_snapshot_entity(snapshot, "sessions")?;
         let settings: serde_json::Value = read_snapshot_entity(snapshot, "settings")?;
         let known_hosts: String = read_snapshot_entity(snapshot, "known_hosts")?;
         let master_key_token: Option<String> = read_snapshot_entity(snapshot, "master_key_token")?;
         let tunnel_groups: Vec<TunnelGroup> = read_snapshot_entity(snapshot, "tunnel_groups")?;
         let current_settings = self.load_settings_value()?;
+        preserve_device_local_ssh_agent_settings(&mut sessions, &self.load_sessions()?);
 
         let txn = self.db.begin_write()?;
         replace_sessions_in_txn(&txn, &sessions)?;
@@ -469,6 +473,48 @@ impl ConnectionStore {
         replace_known_hosts_text_in_txn(&txn, &known_hosts)?;
         txn.commit()?;
         Ok(())
+    }
+}
+
+fn strip_device_local_ssh_agent_settings(sessions: &mut SessionsConfig) {
+    for connection in &mut sessions.connections {
+        if let ConnectionType::Ssh {
+            agent_endpoint,
+            agent_forwarding,
+            ..
+        } = &mut connection.config
+        {
+            *agent_endpoint = SshAgentEndpoint::Auto;
+            *agent_forwarding = false;
+        }
+    }
+}
+
+fn preserve_device_local_ssh_agent_settings(incoming: &mut SessionsConfig, local: &SessionsConfig) {
+    for connection in &mut incoming.connections {
+        let Some(local_connection) = local
+            .connections
+            .iter()
+            .find(|item| item.id == connection.id)
+        else {
+            continue;
+        };
+        if let (
+            ConnectionType::Ssh {
+                agent_endpoint,
+                agent_forwarding,
+                ..
+            },
+            ConnectionType::Ssh {
+                agent_endpoint: local_endpoint,
+                agent_forwarding: local_forwarding,
+                ..
+            },
+        ) = (&mut connection.config, &local_connection.config)
+        {
+            *agent_endpoint = local_endpoint.clone();
+            *agent_forwarding = *local_forwarding;
+        }
     }
 }
 

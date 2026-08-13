@@ -44,7 +44,8 @@ pub(in crate::features) use ai::{
 pub use app_state::NyaTermApp;
 pub(in crate::features) use commands::{
     CommandFeatureInit, CommandFeatureState, CommandPersistencePoll, QUICK_COMMAND_COLOR_OPTIONS,
-    QuickCommandFeatureFocus, quick_command_category_label, quick_command_sort_mode_from_setting,
+    QuickCommandDropPosition, QuickCommandDropTarget, QuickCommandFeatureFocus,
+    quick_command_category_label, quick_command_sort_mode_from_setting,
     quick_command_view_mode_from_setting,
 };
 pub(in crate::features) use connections::{
@@ -78,8 +79,8 @@ pub(in crate::features) use runtime_jobs::{
 };
 pub(in crate::features) use selects::{FOLLOW_UI_THEME_VALUE, NO_SELECTION_VALUE, SelectRegistry};
 pub(in crate::features) use session::{
-    CredentialPromptBroker, HostKeyPromptBroker, NativeOtpProvider, PendingSessionStart,
-    SavedConnectionStartOptions, SessionFeatureFocus, SessionFeatureState,
+    AgentPromptBroker, CredentialPromptBroker, HostKeyPromptBroker, NativeOtpProvider,
+    PendingSessionStart, SavedConnectionStartOptions, SessionFeatureFocus, SessionFeatureState,
     SessionStartEventRequest, credential_prompt_target, keyboard_interactive_prompt_target,
 };
 pub(in crate::features) use settings::{

@@ -10,15 +10,19 @@ use russh::keys::PrivateKeyWithHashAlg;
 use russh::{MethodKind, client};
 
 use super::{
-    SshClientHandler, SshCredentialPrompt, SshCredentialPromptKind, SshCredentialPromptReason,
-    SshKeyAuthConfig, SshKeyboardInteractivePrompt, SshKeyboardInteractiveRequest,
-    SshSessionConfig,
+    SshAgentPrompt, SshAgentPromptAction, SshAgentPromptPhase, SshClientHandler,
+    SshCredentialPrompt, SshCredentialPromptKind, SshCredentialPromptReason, SshKeyAuthConfig,
+    SshKeyboardInteractivePrompt, SshKeyboardInteractiveRequest, SshSessionConfig,
 };
+use crate::ssh_agent::connect_agent_client;
 
 pub(super) async fn authenticate_ssh(
     handle: &mut client::Handle<SshClientHandler>,
     config: &SshSessionConfig,
 ) -> anyhow::Result<()> {
+    if config.agent_auth {
+        return authenticate_ssh_agent(handle, config).await;
+    }
     if let Some(key_auth) = config.key_auth.as_ref() {
         return authenticate_ssh_key(handle, config, key_auth).await;
     }
@@ -63,6 +67,116 @@ pub(super) async fn authenticate_ssh(
         )
         .await
     }
+}
+
+async fn authenticate_ssh_agent(
+    handle: &mut client::Handle<SshClientHandler>,
+    config: &SshSessionConfig,
+) -> anyhow::Result<()> {
+    const MAX_AGENT_ATTEMPTS: u32 = 3;
+    for attempt in 1..=MAX_AGENT_ATTEMPTS {
+        match authenticate_ssh_agent_once(handle, config).await {
+            Ok(()) => return Ok(()),
+            Err(failure) => {
+                let Some(provider) = config.agent_prompt_provider.as_ref() else {
+                    return Err(failure.error);
+                };
+                let action = provider
+                    .request_action(&SshAgentPrompt {
+                        host: config.host.clone(),
+                        port: config.port,
+                        username: config.username.clone(),
+                        connection_name: config.name.clone(),
+                        phase: failure.phase,
+                        attempt,
+                        message: failure.error.to_string(),
+                    })
+                    .map_err(|error| anyhow::anyhow!("SSH Agent prompt failed: {error}"))?;
+                match action {
+                    SshAgentPromptAction::Retry if attempt < MAX_AGENT_ATTEMPTS => continue,
+                    SshAgentPromptAction::Retry => {
+                        anyhow::bail!("SSH Agent authentication failed after {attempt} attempts")
+                    }
+                    SshAgentPromptAction::Cancel => {
+                        anyhow::bail!("SSH Agent authentication was cancelled")
+                    }
+                }
+            }
+        }
+    }
+    unreachable!("the bounded SSH Agent authentication loop always returns")
+}
+
+struct SshAgentFailure {
+    phase: SshAgentPromptPhase,
+    error: anyhow::Error,
+}
+
+async fn authenticate_ssh_agent_once(
+    handle: &mut client::Handle<SshClientHandler>,
+    config: &SshSessionConfig,
+) -> Result<(), SshAgentFailure> {
+    let mut agent = tokio::time::timeout(
+        Duration::from_secs(5),
+        connect_agent_client(&config.agent_endpoint),
+    )
+    .await
+    .map_err(|_| SshAgentFailure {
+        phase: SshAgentPromptPhase::Connect,
+        error: anyhow::anyhow!("SSH Agent connection timed out"),
+    })?
+    .map_err(|error| SshAgentFailure {
+        phase: SshAgentPromptPhase::Connect,
+        error,
+    })?;
+    let identities = tokio::time::timeout(Duration::from_secs(5), agent.request_identities())
+        .await
+        .map_err(|_| SshAgentFailure {
+            phase: SshAgentPromptPhase::ListIdentities,
+            error: anyhow::anyhow!("SSH Agent identity request timed out"),
+        })?
+        .map_err(|error| SshAgentFailure {
+            phase: SshAgentPromptPhase::ListIdentities,
+            error: error.into(),
+        })?;
+    if identities.is_empty() {
+        return Err(SshAgentFailure {
+            phase: SshAgentPromptPhase::ListIdentities,
+            error: anyhow::anyhow!("SSH Agent has no identities"),
+        });
+    }
+    for identity in identities {
+        let key = identity.public_key().into_owned();
+        let hash_alg =
+            tokio::time::timeout(Duration::from_secs(30), handle.best_supported_rsa_hash())
+                .await
+                .ok()
+                .and_then(Result::ok)
+                .flatten()
+                .flatten();
+        let result = tokio::time::timeout(
+            Duration::from_secs(60),
+            handle.authenticate_publickey_with(config.username.clone(), key, hash_alg, &mut agent),
+        )
+        .await
+        .map_err(|_| SshAgentFailure {
+            phase: SshAgentPromptPhase::Sign,
+            error: anyhow::anyhow!(
+                "SSH Agent signing timed out; approve the hardware key, PIN, or agent request"
+            ),
+        })?
+        .map_err(|error| SshAgentFailure {
+            phase: SshAgentPromptPhase::Sign,
+            error: anyhow::anyhow!("SSH Agent signing failed: {error}"),
+        })?;
+        if result.success() {
+            return Ok(());
+        }
+    }
+    Err(SshAgentFailure {
+        phase: SshAgentPromptPhase::Sign,
+        error: anyhow::anyhow!("SSH Agent identities were rejected by the server"),
+    })
 }
 
 async fn authenticate_ssh_key(

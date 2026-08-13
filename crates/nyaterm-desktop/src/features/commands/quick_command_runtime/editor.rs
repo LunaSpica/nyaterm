@@ -142,6 +142,14 @@ impl NyaTermApp {
             let category = QuickCommandCategory {
                 id: format!("quick-category-{}", uuid()),
                 name: category_draft,
+                parent_id: None,
+                sort_order: categories
+                    .iter()
+                    .filter(|category| category.parent_id.is_none())
+                    .map(|category| category.sort_order)
+                    .max()
+                    .unwrap_or(-1)
+                    .saturating_add(1),
             };
             (Some(category.id.clone()), Some(category))
         };
@@ -168,6 +176,7 @@ impl NyaTermApp {
                 .and_then(|command| command.created_at)
                 .or(Some(now)),
             use_count: original.as_ref().and_then(|command| command.use_count),
+            sort_order: original.as_ref().and_then(|command| command.sort_order),
         };
 
         match ConnectionStore::open_with_portable_key_path(

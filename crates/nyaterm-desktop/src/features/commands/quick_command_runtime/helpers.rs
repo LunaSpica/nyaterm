@@ -27,6 +27,7 @@ pub(in crate::features) fn quick_command_sort_mode_from_setting(
     match value.trim() {
         "name" => QuickCommandSortMode::Name,
         "useCount" => QuickCommandSortMode::Usage,
+        "custom" => QuickCommandSortMode::Custom,
         _ => QuickCommandSortMode::Created,
     }
 }
@@ -44,6 +45,7 @@ pub(super) fn quick_command_sort_mode_setting(mode: QuickCommandSortMode) -> &'s
         QuickCommandSortMode::Created => "created",
         QuickCommandSortMode::Name => "name",
         QuickCommandSortMode::Usage => "useCount",
+        QuickCommandSortMode::Custom => "custom",
     }
 }
 

@@ -18,11 +18,12 @@ use crate::models::{
 use crate::temporary_ssh_link::TemporaryLinkProtocol;
 
 use super::{
-    CredentialPromptBroker, CredentialPromptState, FailedSessionStart, HostKeyPromptBroker,
-    HostKeyPromptRequest, KeyboardInteractivePromptState, NativeOtpCodePreview, NativeOtpProvider,
-    PendingSessionStart, PromptResolution, RenameSessionSubmission, SavedConnectionStartOptions,
-    SessionFeatureFocus, SessionFeatureState, SessionPromptState, SessionStartEventRequest,
-    SessionStartFeatureState, SftpDuplicatePromptBroker,
+    AgentPromptBroker, CredentialPromptBroker, CredentialPromptState, FailedSessionStart,
+    HostKeyPromptBroker, HostKeyPromptRequest, KeyboardInteractivePromptState,
+    NativeOtpCodePreview, NativeOtpProvider, PendingSessionStart, PromptResolution,
+    RenameSessionSubmission, SavedConnectionStartOptions, SessionFeatureFocus, SessionFeatureState,
+    SessionPromptState, SessionStartEventRequest, SessionStartFeatureState,
+    SftpDuplicatePromptBroker,
 };
 
 fn pending(name: &str) -> PendingSessionStart {
@@ -84,6 +85,8 @@ fn prompt_state(cx: &TestAppContext) -> SessionPromptState {
         credential_prompts: Arc::new(CredentialPromptBroker::default()),
         active_credential_prompt: None,
         active_keyboard_interactive_prompt: None,
+        agent_prompts: Arc::new(AgentPromptBroker::default()),
+        active_agent_prompt: None,
         credential_prompt_focus_pending: false,
         credential_focus: cx.update(|cx| cx.focus_handle()),
         otp_provider: Arc::new(NativeOtpProvider::new(std::path::PathBuf::new(), None)),

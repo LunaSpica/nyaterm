@@ -45,6 +45,8 @@ fn round_trips_sessions_in_redb_compatible_tables() {
                 backspace_mode: "del".to_string(),
                 ai_execution_profile: AiExecutionProfile::Auto,
                 x11_forwarding: false,
+                agent_endpoint: Default::default(),
+                agent_forwarding: false,
                 encoding: String::new(),
             },
             group_id: Some("group-1".to_string()),
@@ -198,6 +200,8 @@ fn exports_and_imports_portable_snapshot() {
                     backspace_mode: "del".to_string(),
                     ai_execution_profile: AiExecutionProfile::Auto,
                     x11_forwarding: true,
+                    agent_endpoint: Default::default(),
+                    agent_forwarding: false,
                     encoding: String::new(),
                 },
                 group_id: Some("group-1".to_string()),
@@ -764,6 +768,8 @@ fn load_sessions_decrypts_legacy_connection_password_record() {
             backspace_mode: "del".to_string(),
             ai_execution_profile: AiExecutionProfile::Auto,
             x11_forwarding: false,
+            agent_endpoint: Default::default(),
+            agent_forwarding: false,
             encoding: String::new(),
         },
         group_id: None,
@@ -2881,10 +2887,13 @@ fn quick_commands_round_trip_and_upsert_preserves_created_use_count() {
                 updated_at: None,
                 created_at: Some(111),
                 use_count: Some(7),
+                sort_order: Some(3),
             },
             Some(QuickCommandCategory {
                 id: "cat-shell".to_string(),
                 name: "Shell".to_string(),
+                parent_id: None,
+                sort_order: 0,
             }),
         )
         .expect("insert quick command");
@@ -2910,10 +2919,13 @@ fn quick_commands_round_trip_and_upsert_preserves_created_use_count() {
                 updated_at: None,
                 created_at: Some(999),
                 use_count: Some(99),
+                sort_order: Some(3),
             },
             Some(QuickCommandCategory {
                 id: "cat-shell".to_string(),
                 name: "Duplicate Shell".to_string(),
+                parent_id: None,
+                sort_order: 0,
             }),
         )
         .expect("update quick command");
@@ -2950,6 +2962,8 @@ fn quick_commands_export_matches_tauri_json_shape() {
         categories: vec![QuickCommandCategory {
             id: "cat-shell".to_string(),
             name: "Shell".to_string(),
+            parent_id: None,
+            sort_order: 0,
         }],
         commands: vec![QuickCommand {
             id: "cmd-1".to_string(),
@@ -2966,6 +2980,7 @@ fn quick_commands_export_matches_tauri_json_shape() {
             updated_at: Some(222),
             created_at: Some(111),
             use_count: Some(7),
+            sort_order: Some(3),
         }],
     })
     .expect("export serializes");
@@ -2978,8 +2993,83 @@ fn quick_commands_export_matches_tauri_json_shape() {
     assert_eq!(value["commands"][0]["pinned"], true);
     assert_eq!(value["commands"][0]["execution_mode"], "append");
     assert_eq!(value["commands"][0]["risk_level"], "low");
+    assert_eq!(value["commands"][0]["sort_order"], 3);
     assert!(value["commands"][0].get("created_at").is_none());
     assert!(value["commands"][0].get("use_count").is_none());
+}
+
+#[test]
+fn sync_snapshot_strips_device_local_ssh_agent_settings() {
+    let dir = unique_temp_dir("sync-agent-settings");
+    let store = ConnectionStore::open(&dir).expect("store");
+    let mut sessions = SessionsConfig {
+        groups: Vec::new(),
+        connections: vec![SavedConnection {
+            id: "agent-sync".to_string(),
+            name: "Agent Sync".to_string(),
+            config: ConnectionType::Ssh {
+                host: "example.com".to_string(),
+                port: 22,
+                username: "root".to_string(),
+                backspace_mode: "del".to_string(),
+                ai_execution_profile: AiExecutionProfile::Auto,
+                x11_forwarding: false,
+                agent_endpoint: Default::default(),
+                agent_forwarding: false,
+                encoding: String::new(),
+            },
+            group_id: None,
+            description: None,
+            sort_order: 0,
+            icon: None,
+            icon_auto_detect: None,
+            auth: Some(ConnectionAuth {
+                mode: "agent".to_string(),
+                ..Default::default()
+            }),
+            network: None,
+            post_login: None,
+            recording: None,
+            ssh_algorithms: None,
+            ssh_profile: Default::default(),
+            terminal_type: None,
+            sftp: Default::default(),
+            created_at_ms: None,
+            updated_at_ms: None,
+            last_used_at_ms: None,
+        }],
+    };
+    let ConnectionType::Ssh {
+        agent_endpoint,
+        agent_forwarding,
+        ..
+    } = &mut sessions.connections[0].config
+    else {
+        panic!("SSH expected");
+    };
+    *agent_endpoint = crate::SshAgentEndpoint::UnixSocket {
+        path: "/run/user/1000/agent.sock".to_string(),
+    };
+    *agent_forwarding = true;
+    store.replace_sessions(&sessions).expect("save sessions");
+
+    let snapshot = store
+        .build_raw_portable_snapshot(crate::PortableSnapshotKind::Sync, "device", "test")
+        .expect("build sync snapshot");
+    let portable: SessionsConfig =
+        serde_json::from_str(snapshot.entities.get("sessions").expect("sessions entity"))
+            .expect("decode sessions");
+    let ConnectionType::Ssh {
+        agent_endpoint,
+        agent_forwarding,
+        ..
+    } = &portable.connections[0].config
+    else {
+        panic!("SSH expected");
+    };
+    assert_eq!(agent_endpoint, &crate::SshAgentEndpoint::Auto);
+    assert!(!agent_forwarding);
+    std::fs::remove_dir_all(dir).ok();
 }
 
 #[test]

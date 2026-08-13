@@ -442,6 +442,7 @@ impl NyaTermApp {
 
         let stage_started_at = Instant::now();
         dirty |= self.drain_host_key_prompts()
+            | self.drain_agent_prompts()
             | self.drain_credential_prompts()
             | self.drain_duplicate_prompts()
             | self.refresh_keyboard_interactive_totp();

@@ -2,14 +2,16 @@ use gpui::{
     Context, FontWeight, IntoElement, KeyDownEvent, SharedString, div, prelude::*, px, rgb, rgba,
 };
 use nyaterm_transport::{
-    SftpDuplicateDecision, SshCredentialPromptKind, SshCredentialPromptReason,
+    SftpDuplicateDecision, SshAgentPromptAction, SshAgentPromptPhase, SshCredentialPromptKind,
+    SshCredentialPromptReason,
 };
 
 use crate::features::formatting::download_file_name_from_remote_path;
 use crate::features::session::{
-    CredentialPromptState, HostKeyPromptChoice, HostKeyPromptIssue, HostKeyPromptRequest,
-    KeyboardInteractivePromptState, SftpDuplicatePromptState, credential_prompt_target,
-    credential_text_input_id, keyboard_interactive_text_input_id, unix_seconds_now,
+    AgentPromptRequest, CredentialPromptState, HostKeyPromptChoice, HostKeyPromptIssue,
+    HostKeyPromptRequest, KeyboardInteractivePromptState, SftpDuplicatePromptState,
+    credential_prompt_target, credential_text_input_id, keyboard_interactive_text_input_id,
+    unix_seconds_now,
 };
 use crate::features::view_widgets::{dialog_action_button, full_window_input_layer};
 use crate::features::{NyaTermApp, TextInputSetup, bounded_dialog_width};
@@ -17,6 +19,84 @@ use crate::models::{SnapshotPasswordPromptKind, SnapshotPasswordPromptState};
 use crate::widgets::small_button;
 
 impl NyaTermApp {
+    pub(in crate::features) fn agent_prompt_banner(
+        &mut self,
+        request: AgentPromptRequest,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let palette = self.theme_palette();
+        let phase = match request.prompt.phase {
+            SshAgentPromptPhase::Connect => self.tr("sshAuth.agentConnectFailed"),
+            SshAgentPromptPhase::ListIdentities => self.tr("sshAuth.agentIdentitiesFailed"),
+            SshAgentPromptPhase::Sign => self.tr("sshAuth.agentApprovalRequired"),
+        };
+        let target = format!(
+            "{}@{}:{}",
+            request.prompt.username, request.prompt.host, request.prompt.port
+        );
+        div()
+            .id(SharedString::from(format!("agent-dialog-{}", request.id)))
+            .w_full()
+            .rounded_md()
+            .border_1()
+            .border_color(rgb(palette.border))
+            .bg(self.shell_surface_color(palette.bg))
+            .shadow_lg()
+            .p_6()
+            .flex()
+            .flex_col()
+            .gap_4()
+            .on_click(|_, _, cx| cx.stop_propagation())
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_weight(FontWeight(700.))
+                            .child(self.tr("sshAuth.agentPromptTitle")),
+                    )
+                    .child(div().text_xs().text_color(rgb(palette.text)).child(target))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(palette.text_muted))
+                            .child(phase),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(palette.text_muted))
+                            .child(request.prompt.message.clone()),
+                    ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .justify_end()
+                    .gap_2()
+                    .child(small_button(
+                        palette,
+                        format!("agent-cancel-{}", request.id),
+                        self.tr("common.cancel"),
+                        cx.listener(|this, _, _, cx| {
+                            this.resolve_agent_prompt(SshAgentPromptAction::Cancel, cx);
+                        }),
+                    ))
+                    .child(dialog_action_button(
+                        palette,
+                        format!("agent-retry-{}", request.id),
+                        self.tr("common.retry"),
+                        false,
+                        cx.listener(|this, _, _, cx| {
+                            this.resolve_agent_prompt(SshAgentPromptAction::Retry, cx);
+                        }),
+                    )),
+            )
+    }
+
     pub(in crate::features) fn duplicate_prompt_banner(
         &mut self,
         prompt: SftpDuplicatePromptState,

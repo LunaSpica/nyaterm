@@ -3,6 +3,20 @@ use std::sync::Arc;
 
 use crate::ssh_auth::format_keyboard_interactive_prompt;
 
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum SshAgentEndpoint {
+    #[default]
+    Auto,
+    Environment {
+        variable: String,
+    },
+    UnixSocket {
+        path: String,
+    },
+    Pageant,
+    WindowsOpenSsh,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LocalSessionConfig {
     pub name: String,
@@ -145,6 +159,11 @@ pub struct SshSessionConfig {
     pub username: String,
     pub password: Option<String>,
     pub key_auth: Option<SshKeyAuthConfig>,
+    pub agent_auth: bool,
+    pub agent_endpoint: SshAgentEndpoint,
+    /// Only interactive terminal sessions request forwarding. Shared configs
+    /// used by SFTP, tunnels and jump hosts never request it themselves.
+    pub agent_forwarding: bool,
     pub otp_id: Option<String>,
     pub auto_fill_otp: bool,
     pub proxy_jump: Option<Box<SshSessionConfig>>,
@@ -169,6 +188,7 @@ pub struct SshSessionConfig {
     pub pixel_height: u16,
     pub host_key_verifier: Option<Arc<dyn SshHostKeyVerifier>>,
     pub credential_provider: Option<Arc<dyn SshCredentialProvider>>,
+    pub agent_prompt_provider: Option<Arc<dyn SshAgentPromptProvider>>,
     pub otp_provider: Option<Arc<dyn SshOtpProvider>>,
 }
 
@@ -246,6 +266,9 @@ impl std::fmt::Debug for SshSessionConfig {
             .field("username", &self.username)
             .field("password", &self.password.as_ref().map(|_| "<redacted>"))
             .field("key_auth", &self.key_auth.as_ref().map(|_| "<redacted>"))
+            .field("agent_auth", &self.agent_auth)
+            .field("agent_endpoint", &self.agent_endpoint)
+            .field("agent_forwarding", &self.agent_forwarding)
             .field("otp_id", &self.otp_id)
             .field("auto_fill_otp", &self.auto_fill_otp)
             .field("proxy_jump", &self.proxy_jump.is_some())
@@ -267,6 +290,10 @@ impl std::fmt::Debug for SshSessionConfig {
             .field("pixel_height", &self.pixel_height)
             .field("host_key_verifier", &self.host_key_verifier.is_some())
             .field("credential_provider", &self.credential_provider.is_some())
+            .field(
+                "agent_prompt_provider",
+                &self.agent_prompt_provider.is_some(),
+            )
             .field("otp_provider", &self.otp_provider.is_some())
             .finish()
     }
@@ -375,6 +402,34 @@ pub trait SshCredentialProvider: Send + Sync {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SshAgentPromptPhase {
+    Connect,
+    ListIdentities,
+    Sign,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SshAgentPrompt {
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub connection_name: String,
+    pub phase: SshAgentPromptPhase,
+    pub attempt: u32,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SshAgentPromptAction {
+    Retry,
+    Cancel,
+}
+
+pub trait SshAgentPromptProvider: Send + Sync {
+    fn request_action(&self, prompt: &SshAgentPrompt) -> Result<SshAgentPromptAction, String>;
+}
+
 pub trait SshOtpProvider: Send + Sync {
     fn request_otp_code(&self, otp_id: &str) -> Result<Option<String>, String>;
 }
@@ -403,6 +458,9 @@ impl Default for SshSessionConfig {
             username: "root".to_string(),
             password: None,
             key_auth: None,
+            agent_auth: false,
+            agent_endpoint: SshAgentEndpoint::Auto,
+            agent_forwarding: false,
             otp_id: None,
             auto_fill_otp: false,
             proxy_jump: None,
@@ -424,6 +482,7 @@ impl Default for SshSessionConfig {
             pixel_height: 0,
             host_key_verifier: None,
             credential_provider: None,
+            agent_prompt_provider: None,
             otp_provider: None,
         }
     }

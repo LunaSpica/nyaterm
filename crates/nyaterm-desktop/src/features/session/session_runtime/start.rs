@@ -19,7 +19,7 @@ use super::super::NativeHostKeyVerifier;
 use super::PendingSessionStartRegistration;
 use crate::features::formatting::{non_empty_string, parse_telnet_enter_mode, split_shell_args};
 use crate::features::{
-    CredentialPromptBroker, HostKeyPromptBroker, NativeOtpProvider, NyaTermApp,
+    AgentPromptBroker, CredentialPromptBroker, HostKeyPromptBroker, NativeOtpProvider, NyaTermApp,
     SavedConnectionStartOptions, SessionStartResult, SessionStartSuccess,
 };
 use crate::models::SessionLaunchConfig;
@@ -34,6 +34,7 @@ pub(in crate::features) struct SshSessionConfigBuildContext {
     pub(in crate::features) keep_alive_interval_secs: u32,
     pub(in crate::features) host_key_prompts: Arc<HostKeyPromptBroker>,
     pub(in crate::features) credential_prompts: Arc<CredentialPromptBroker>,
+    pub(in crate::features) agent_prompts: Arc<AgentPromptBroker>,
     pub(in crate::features) otp_provider: Arc<NativeOtpProvider>,
 }
 
@@ -429,6 +430,7 @@ impl NyaTermApp {
             keep_alive_interval_secs,
             host_key_prompts: self.session.prompts.host_key_broker(),
             credential_prompts: self.session.prompts.credential_broker(),
+            agent_prompts: self.session.prompts.agent_broker(),
             otp_provider: self.session.prompts.otp_provider(),
         }
     }
@@ -470,6 +472,8 @@ pub(in crate::features) fn build_ssh_session_config_with_context(
         backspace_mode,
         ai_execution_profile: _,
         x11_forwarding,
+        agent_endpoint,
+        agent_forwarding,
         encoding,
     } = connection.config.clone()
     else {
@@ -494,6 +498,21 @@ pub(in crate::features) fn build_ssh_session_config_with_context(
         username,
         password,
         key_auth,
+        agent_auth: auth.mode == "agent",
+        agent_endpoint: match agent_endpoint {
+            nyaterm_core::SshAgentEndpoint::Auto => nyaterm_transport::SshAgentEndpoint::Auto,
+            nyaterm_core::SshAgentEndpoint::Environment { variable } => {
+                nyaterm_transport::SshAgentEndpoint::Environment { variable }
+            }
+            nyaterm_core::SshAgentEndpoint::UnixSocket { path } => {
+                nyaterm_transport::SshAgentEndpoint::UnixSocket { path }
+            }
+            nyaterm_core::SshAgentEndpoint::Pageant => nyaterm_transport::SshAgentEndpoint::Pageant,
+            nyaterm_core::SshAgentEndpoint::WindowsOpenSsh => {
+                nyaterm_transport::SshAgentEndpoint::WindowsOpenSsh
+            }
+        },
+        agent_forwarding,
         otp_id: auth.otp_id.filter(|value| !value.trim().is_empty()),
         auto_fill_otp: auth.auto_fill_otp,
         proxy_jump,
@@ -528,6 +547,7 @@ pub(in crate::features) fn build_ssh_session_config_with_context(
             prompt_broker: context.host_key_prompts.clone(),
         })),
         credential_provider: Some(context.credential_prompts.clone()),
+        agent_prompt_provider: Some(context.agent_prompts.clone()),
         otp_provider: Some(context.otp_provider.clone()),
     })
 }
@@ -780,7 +800,9 @@ mod tests {
         SshSessionConfigBuildContext, build_ssh_session_config_with_context,
         load_ssh_connection_password_with_context,
     };
-    use crate::features::{CredentialPromptBroker, HostKeyPromptBroker, NativeOtpProvider};
+    use crate::features::{
+        AgentPromptBroker, CredentialPromptBroker, HostKeyPromptBroker, NativeOtpProvider,
+    };
 
     fn unique_temp_dir(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
@@ -803,6 +825,7 @@ mod tests {
             keep_alive_interval_secs: 30,
             host_key_prompts: Arc::new(HostKeyPromptBroker::default()),
             credential_prompts: Arc::new(CredentialPromptBroker::default()),
+            agent_prompts: Arc::new(AgentPromptBroker::default()),
             otp_provider: Arc::new(NativeOtpProvider::new(config_dir, None)),
         }
     }
@@ -882,6 +905,8 @@ mod tests {
                 backspace_mode: "del".to_string(),
                 ai_execution_profile: AiExecutionProfile::Posix,
                 x11_forwarding: false,
+                agent_endpoint: Default::default(),
+                agent_forwarding: false,
                 encoding: String::new(),
             },
             group_id: None,
@@ -927,6 +952,8 @@ mod tests {
                 backspace_mode: "del".to_string(),
                 ai_execution_profile: AiExecutionProfile::Posix,
                 x11_forwarding: false,
+                agent_endpoint: Default::default(),
+                agent_forwarding: false,
                 encoding: String::new(),
             },
             group_id: None,

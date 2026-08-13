@@ -1,6 +1,6 @@
 use gpui::{
     AnyElement, App, ClickEvent, Context, FontWeight, IntoElement, KeyDownEvent, MouseButton,
-    SharedString, Window, div, prelude::*, px, rgb, svg, uniform_list,
+    Point, Render, SharedString, Window, div, prelude::*, px, rgb, rgba, svg, uniform_list,
 };
 
 use super::super::{filtered_quick_commands, quick_command_category_options};
@@ -16,6 +16,59 @@ mod rows;
 use rows::quick_command_tile_column_count;
 mod sidebar;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum QuickCommandDragKind {
+    Command,
+    Category,
+}
+
+#[derive(Clone, Debug)]
+struct QuickCommandDragPayload {
+    kind: QuickCommandDragKind,
+    id: String,
+    label: String,
+}
+
+struct QuickCommandDragPreview {
+    payload: QuickCommandDragPayload,
+    position: Point<gpui::Pixels>,
+}
+
+impl Render for QuickCommandDragPreview {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        let icon = match self.payload.kind {
+            QuickCommandDragKind::Command => "icons/conn/terminal.svg",
+            QuickCommandDragKind::Category => "icons/conn/folder.svg",
+        };
+        div()
+            .absolute()
+            .left(self.position.x - px(88.))
+            .top(self.position.y - px(16.))
+            .w(px(196.))
+            .h(px(34.))
+            .px_3()
+            .flex()
+            .items_center()
+            .gap_2()
+            .rounded_md()
+            .border_1()
+            .border_color(rgb(0x388bfd))
+            .bg(rgba(0x0d1117ee))
+            .shadow_lg()
+            .child(svg().size(px(13.)).path(icon).text_color(rgb(0x58a6ff)))
+            .child(
+                div()
+                    .min_w_0()
+                    .flex_1()
+                    .text_xs()
+                    .font_weight(FontWeight(600.))
+                    .text_color(rgb(0xe5edf7))
+                    .overflow_hidden()
+                    .child(nyaterm_core::truncate_preview(&self.payload.label, 24)),
+            )
+    }
+}
+
 #[derive(Clone, Copy)]
 struct QuickCommandToolbarContext {
     palette: crate::theme::ThemePalette,
@@ -28,6 +81,7 @@ struct QuickCommandSortMenuConfig {
     created_label: &'static str,
     name_label: &'static str,
     usage_label: &'static str,
+    custom_label: &'static str,
 }
 
 struct QuickCommandViewMenuConfig {
@@ -320,6 +374,7 @@ impl NyaTermApp {
                             created_label: self.tr("quickCommands.sortByCreated"),
                             name_label: self.tr("quickCommands.sortByName"),
                             usage_label: self.tr("quickCommands.sortByUseCount"),
+                            custom_label: self.tr("quickCommands.sortCustom"),
                         },
                         cx,
                     ))
@@ -421,6 +476,7 @@ fn quick_command_sort_menu_button(
         created_label,
         name_label,
         usage_label,
+        custom_label,
     } = config;
     NyaDropdownMenu::new("quick-command-sort")
         .icon("icons/conn/sort.svg")
@@ -429,7 +485,13 @@ fn quick_command_sort_menu_button(
         .tooltip(format!(
             "{} · {}",
             sort_label,
-            quick_command_sort_mode_label(current, created_label, name_label, usage_label)
+            quick_command_sort_mode_label(
+                current,
+                created_label,
+                name_label,
+                usage_label,
+                custom_label,
+            )
         ))
         .min_width(px(154.))
         .items([
@@ -447,6 +509,11 @@ fn quick_command_sort_menu_button(
                 .checked(current == QuickCommandSortMode::Usage)
                 .on_click(cx.listener(|this, _, _, cx| {
                     this.set_quick_command_sort_mode(QuickCommandSortMode::Usage, cx);
+                })),
+            NyaMenuItem::action(custom_label)
+                .checked(current == QuickCommandSortMode::Custom)
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.set_quick_command_sort_mode(QuickCommandSortMode::Custom, cx);
                 })),
         ])
 }
@@ -674,10 +741,12 @@ fn quick_command_sort_mode_label(
     created_label: &'static str,
     name_label: &'static str,
     usage_label: &'static str,
+    custom_label: &'static str,
 ) -> &'static str {
     match mode {
         QuickCommandSortMode::Created => created_label,
         QuickCommandSortMode::Name => name_label,
         QuickCommandSortMode::Usage => usage_label,
+        QuickCommandSortMode::Custom => custom_label,
     }
 }

@@ -11,5 +11,6 @@ pub(in crate::features) use quick_command_runtime::{
 };
 pub(in crate::features) use runtime_state::CommandPersistencePoll;
 pub(in crate::features) use state::{
-    CommandFeatureInit, CommandFeatureState, QuickCommandFeatureFocus,
+    CommandFeatureInit, CommandFeatureState, QuickCommandDropPosition, QuickCommandDropTarget,
+    QuickCommandFeatureFocus,
 };

@@ -483,6 +483,99 @@ pub(super) fn connection_editor_ssh_section(
                     ),
             )
         })
+        .when(editor.auth_mode == "agent", |this| {
+            let endpoint_values = [
+                "auto",
+                "environment",
+                "unix_socket",
+                "windows_openssh",
+                "pageant",
+            ];
+            let selected_endpoint = match &editor.agent_endpoint {
+                nyaterm_core::SshAgentEndpoint::Environment { .. } => 1,
+                nyaterm_core::SshAgentEndpoint::UnixSocket { .. } => 2,
+                nyaterm_core::SshAgentEndpoint::WindowsOpenSsh => 3,
+                nyaterm_core::SshAgentEndpoint::Pageant => 4,
+                nyaterm_core::SshAgentEndpoint::Auto => 0,
+            };
+            let endpoint_tabs = NyaTabs::new("connection-ssh-agent-endpoint-tabs")
+                .items([
+                    NyaTabItem::new(tr("dialog.sshAgentAuto")),
+                    NyaTabItem::new("SSH_AUTH_SOCK"),
+                    NyaTabItem::new(tr("dialog.sshAgentUnixSocket")),
+                    NyaTabItem::new("Windows OpenSSH"),
+                    NyaTabItem::new("Pageant"),
+                ])
+                .selected_index(selected_endpoint)
+                .on_select(cx.listener(move |this, index: &usize, _, cx| {
+                    if let Some(value) = endpoint_values.get(*index) {
+                        this.set_connection_editor_select_value(
+                            ConnectionEditorSelect::SshAgentEndpoint,
+                            Some(value),
+                            cx,
+                        );
+                    }
+                }));
+            this.child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .px_3()
+                    .py_2()
+                    .rounded_md()
+                    .border_1()
+                    .border_color(rgb(palette.border))
+                    .child(
+                        div()
+                            .text_size(px(10.))
+                            .text_color(rgb(palette.text_muted))
+                            .child(tr("dialog.sshAgentDescription")),
+                    )
+                    .child(endpoint_tabs)
+                    .when(
+                        matches!(
+                            editor.agent_endpoint,
+                            nyaterm_core::SshAgentEndpoint::Environment { .. }
+                        ),
+                        |this| {
+                            this.child(editor_field(
+                                palette,
+                                tr("dialog.sshAgentEnvironmentVariable"),
+                                ConnectionEditorField::AgentEnvironmentVariable,
+                                fields,
+                                cx,
+                            ))
+                        },
+                    )
+                    .when(
+                        matches!(
+                            editor.agent_endpoint,
+                            nyaterm_core::SshAgentEndpoint::UnixSocket { .. }
+                        ),
+                        |this| {
+                            this.child(editor_field(
+                                palette,
+                                tr("dialog.sshAgentSocketPath"),
+                                ConnectionEditorField::AgentUnixSocket,
+                                fields,
+                                cx,
+                            ))
+                        },
+                    )
+                    .child(toggle_chip(
+                        palette,
+                        tr("dialog.sshAgentForwarding"),
+                        editor.agent_forwarding,
+                        cx.listener(|this, _, _, cx| {
+                            this.toggle_connection_editor_flag(
+                                ConnectionEditorToggle::AgentForwarding,
+                                cx,
+                            );
+                        }),
+                    )),
+            )
+        })
         .when(
             editor.auth_mode == "key" || editor.auth_mode == "certificate",
             |this| {

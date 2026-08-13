@@ -47,7 +47,7 @@ pub(crate) const SHORTCUT_CATEGORIES: [ShortcutCategory; 6] = [
     ShortcutCategory::Special,
 ];
 
-pub(crate) const SHORTCUT_REGISTRY: [ShortcutDefinition; 31] = [
+pub(crate) const SHORTCUT_REGISTRY: [ShortcutDefinition; 32] = [
     ShortcutDefinition {
         id: "terminal.copy",
         category: ShortcutCategory::Terminal,
@@ -111,6 +111,14 @@ pub(crate) const SHORTCUT_REGISTRY: [ShortcutDefinition; 31] = [
         default_keys: "Alt+R",
         native_status: ShortcutNativeStatus::Supported,
         note: "Shows recent history and pinned quick commands when the command line is empty.",
+    },
+    ShortcutDefinition {
+        id: "terminal.recording.toggle",
+        category: ShortcutCategory::Terminal,
+        label: "Toggle Session Recording",
+        default_keys: "Ctrl+Shift+R / Cmd+Shift+R",
+        native_status: ShortcutNativeStatus::Supported,
+        note: "Starts or stops transcript recording for the active terminal session.",
     },
     ShortcutDefinition {
         id: "tab.newSession",
@@ -382,6 +390,7 @@ fn default_chords_for(id: &str) -> Option<&'static str> {
         "terminal.clear" => Some("ctrl+l,meta+l"),
         "terminal.selectAll" => Some("ctrl+shift+a,meta+shift+a"),
         "terminal.manageSyncGroups" => Some("ctrl+shift+g,meta+shift+g"),
+        "terminal.recording.toggle" => Some("ctrl+shift+r,meta+shift+r"),
         "tab.newSession" => Some("ctrl+shift+n,meta+shift+n"),
         "tab.temporarySshLink" => Some("ctrl+alt+n,meta+alt+n"),
         "tab.quickSwitch" => Some("ctrl+shift+s,meta+shift+s"),

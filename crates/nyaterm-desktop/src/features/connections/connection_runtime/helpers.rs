@@ -92,6 +92,8 @@ pub(super) fn connection_editor_from_saved(
         proxy_id: network.proxy_id,
         proxy_jump_id: network.proxy_jump_id,
         x11_forwarding: false,
+        agent_endpoint: Default::default(),
+        agent_forwarding: false,
         backspace_mode: "del".to_string(),
         encoding: "global".to_string(),
         ssh_profile: connection.ssh_profile,
@@ -161,6 +163,8 @@ pub(super) fn connection_editor_from_saved(
             username,
             backspace_mode,
             x11_forwarding,
+            agent_endpoint,
+            agent_forwarding,
             encoding,
             ..
         } => {
@@ -169,6 +173,8 @@ pub(super) fn connection_editor_from_saved(
             editor.username = username;
             editor.backspace_mode = backspace_mode;
             editor.x11_forwarding = x11_forwarding;
+            editor.agent_endpoint = agent_endpoint;
+            editor.agent_forwarding = agent_forwarding;
             editor.encoding = encoding_to_editor_value(&encoding);
         }
         ConnectionType::LocalTerminal {
@@ -322,6 +328,8 @@ pub(super) fn build_saved_connection_from_editor(
                 backspace_mode: non_empty_or(editor.backspace_mode.clone(), "del"),
                 ai_execution_profile: AiExecutionProfile::Auto,
                 x11_forwarding: editor.x11_forwarding,
+                agent_endpoint: editor.agent_endpoint.clone(),
+                agent_forwarding: editor.agent_forwarding,
                 encoding: editor_encoding_to_saved(&editor.encoding),
             }
         }
@@ -753,6 +761,8 @@ mod tests {
                 backspace_mode: "del".to_string(),
                 ai_execution_profile: AiExecutionProfile::Auto,
                 x11_forwarding: false,
+                agent_endpoint: Default::default(),
+                agent_forwarding: false,
                 encoding: String::new(),
             },
             group_id: None,
@@ -803,6 +813,8 @@ mod tests {
                 backspace_mode: "del".to_string(),
                 ai_execution_profile: AiExecutionProfile::Auto,
                 x11_forwarding: false,
+                agent_endpoint: Default::default(),
+                agent_forwarding: false,
                 encoding: "GBK".to_string(),
             },
             group_id: None,
@@ -1201,6 +1213,7 @@ impl NyaTermApp {
 pub(in crate::features) enum ConnectionEditorToggle {
     AutoFillOtp,
     X11,
+    AgentForwarding,
     SftpEnabled,
     RawTcp,
     LocalEcho,

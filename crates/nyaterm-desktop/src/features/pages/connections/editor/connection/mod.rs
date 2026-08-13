@@ -247,6 +247,7 @@ impl NyaTermApp {
             ("none", self.tr("dialog.noAuthentication")),
             ("password", self.tr("dialog.password")),
             ("key", self.tr("dialog.privateKey")),
+            ("agent", self.tr("dialog.sshAgent")),
         ]
         .into_iter()
         .map(|(value, label)| {
@@ -1279,6 +1280,9 @@ fn connection_editor_select_id(select: ConnectionEditorSelect) -> &'static str {
         ConnectionEditorSelect::Authentication => {
             unreachable!("authentication uses connection-specific segmented tabs")
         }
+        ConnectionEditorSelect::SshAgentEndpoint => {
+            unreachable!("SSH Agent endpoint uses connection-specific segmented tabs")
+        }
         ConnectionEditorSelect::Group => "connection-editor-group-select",
         ConnectionEditorSelect::SavedPassword => "connection-editor-saved-password",
         ConnectionEditorSelect::SshKey => "connection-editor-ssh-key",
@@ -1964,6 +1968,8 @@ mod tests {
             proxy_id: None,
             proxy_jump_id: None,
             x11_forwarding: false,
+            agent_endpoint: Default::default(),
+            agent_forwarding: false,
             backspace_mode: "del".to_string(),
             encoding: "global".to_string(),
             ssh_profile: Default::default(),

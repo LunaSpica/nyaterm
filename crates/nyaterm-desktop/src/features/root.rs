@@ -695,6 +695,7 @@ impl NyaTermApp {
 
     fn ssh_auth_prompt_overlay(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let host_key_prompt = self.session.prompt_active_host_key().cloned();
+        let agent_prompt = self.session.prompt_active_agent().cloned();
         let credential_prompt = self.session.prompt_active_credential().cloned();
         let keyboard_interactive_prompt =
             self.session.prompt_active_keyboard_interactive().cloned();
@@ -733,6 +734,9 @@ impl NyaTermApp {
                     .max_w(px(dialog_width))
                     .when_some(host_key_prompt, |this, prompt| {
                         this.child(self.host_key_prompt_banner(prompt, cx))
+                    })
+                    .when_some(agent_prompt, |this, prompt| {
+                        this.child(self.agent_prompt_banner(prompt, cx))
                     })
                     .when_some(credential_prompt, |this, prompt| {
                         this.child(self.credential_prompt_banner(prompt, cx))

@@ -4,7 +4,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use gpui::FocusHandle;
-use nyaterm_core::{CommandHistoryEntry, QuickCommand, QuickCommandCategory};
+use nyaterm_core::{
+    CommandHistoryEntry, QuickCommand, QuickCommandCategory, QuickCommandCategoryPosition,
+    QuickCommandRelativePosition, QuickCommandsConfig,
+};
 use nyaterm_ui::NyaWindowHandle;
 
 use crate::features::{CommandPersistenceRequest, CommandPersistenceResult};
@@ -100,6 +103,70 @@ impl CommandFeatureState {
         self.catalog.replace(commands, categories);
     }
 
+    pub(in crate::features) fn quick_command_config(&self) -> QuickCommandsConfig {
+        QuickCommandsConfig {
+            commands: self.catalog.commands.to_vec(),
+            categories: self.catalog.categories.clone(),
+        }
+    }
+
+    pub(in crate::features) fn reorder_quick_command(
+        &mut self,
+        source_id: &str,
+        target_id: &str,
+        after: bool,
+    ) -> Option<QuickCommandsConfig> {
+        let mut config = self.quick_command_config();
+        if !config.reorder_command_relative(
+            source_id,
+            target_id,
+            if after {
+                QuickCommandRelativePosition::After
+            } else {
+                QuickCommandRelativePosition::Before
+            },
+        ) {
+            return None;
+        }
+        self.catalog
+            .replace(config.commands.clone(), config.categories.clone());
+        Some(config)
+    }
+
+    pub(in crate::features) fn move_quick_command_to_category(
+        &mut self,
+        source_id: &str,
+        category_id: Option<String>,
+    ) -> Option<QuickCommandsConfig> {
+        let mut config = self.quick_command_config();
+        if !config.move_command_to_category(source_id, category_id) {
+            return None;
+        }
+        self.catalog
+            .replace(config.commands.clone(), config.categories.clone());
+        Some(config)
+    }
+
+    pub(in crate::features) fn move_quick_category(
+        &mut self,
+        source_id: &str,
+        target_id: &str,
+        position: QuickCommandDropPosition,
+    ) -> Option<QuickCommandsConfig> {
+        let mut config = self.quick_command_config();
+        let position = match position {
+            QuickCommandDropPosition::Before => QuickCommandCategoryPosition::Before,
+            QuickCommandDropPosition::After => QuickCommandCategoryPosition::After,
+            QuickCommandDropPosition::Inside => QuickCommandCategoryPosition::Inside,
+        };
+        if !config.move_category(source_id, target_id, position) {
+            return None;
+        }
+        self.catalog
+            .replace(config.commands.clone(), config.categories.clone());
+        Some(config)
+    }
+
     pub(in crate::features) fn replace_command_history(
         &mut self,
         history: Vec<CommandHistoryEntry>,
@@ -193,6 +260,25 @@ impl CommandFeatureState {
     pub(in crate::features) fn set_quick_sort_mode(&mut self, mode: QuickCommandSortMode) {
         self.close_quick_toolbar_popovers();
         self.quick.list.sort_mode = mode;
+    }
+
+    pub(in crate::features) fn quick_drop_target(&self) -> Option<&QuickCommandDropTarget> {
+        self.quick.list.drop_target.as_ref()
+    }
+
+    pub(in crate::features) fn set_quick_drop_target(
+        &mut self,
+        target: QuickCommandDropTarget,
+    ) -> bool {
+        if self.quick.list.drop_target.as_ref() == Some(&target) {
+            return false;
+        }
+        self.quick.list.drop_target = Some(target);
+        true
+    }
+
+    pub(in crate::features) fn clear_quick_drop_target(&mut self) {
+        self.quick.list.drop_target = None;
     }
 
     pub(in crate::features) fn close_quick_toolbar_popovers(&mut self) -> bool {
@@ -664,6 +750,20 @@ struct QuickCommandListState {
     selected_category: String,
     sort_mode: QuickCommandSortMode,
     view_mode: QuickCommandViewMode,
+    drop_target: Option<QuickCommandDropTarget>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::features) enum QuickCommandDropPosition {
+    Before,
+    After,
+    Inside,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(in crate::features) struct QuickCommandDropTarget {
+    pub id: String,
+    pub position: QuickCommandDropPosition,
 }
 
 /// Quick command editor draft and its optional detached window.
@@ -707,6 +807,7 @@ impl QuickCommandFeatureState {
                 selected_category: "all".to_string(),
                 sort_mode,
                 view_mode,
+                drop_target: None,
             },
             editor: QuickCommandEditorFeatureState {
                 draft: None,
@@ -770,6 +871,7 @@ mod tests {
             updated_at: None,
             created_at: None,
             use_count: None,
+            sort_order: None,
         }
     }
 
@@ -884,6 +986,8 @@ mod tests {
             vec![QuickCommandCategory {
                 id: "category-1".to_string(),
                 name: "Common".to_string(),
+                parent_id: None,
+                sort_order: 0,
             }],
         );
 

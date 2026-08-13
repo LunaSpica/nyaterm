@@ -46,6 +46,8 @@ pub(super) fn parse_import_category(value: Value) -> Result<ImportCategory, Stri
     Ok(ImportCategory {
         id: optional_string_field(&object, "id")?,
         name,
+        parent_id: optional_string_field(&object, "parent_id")?,
+        sort_order: optional_i32_field(&object, "sort_order")?.unwrap_or_default(),
     })
 }
 
@@ -66,7 +68,23 @@ pub(super) fn parse_import_command(value: Value) -> Result<ImportCommand, String
         execution_mode: optional_string_field(&object, "execution_mode")?,
         source: optional_string_field(&object, "source")?,
         risk_level: optional_risk_field(&object, "risk_level")?,
+        sort_order: optional_i32_field(&object, "sort_order")?,
     })
+}
+
+pub(super) fn optional_i32_field(
+    object: &serde_json::Map<String, Value>,
+    field: &str,
+) -> Result<Option<i32>, String> {
+    match object.get(field) {
+        Some(Value::Number(value)) => value
+            .as_i64()
+            .and_then(|value| i32::try_from(value).ok())
+            .map(Some)
+            .ok_or_else(|| format!("{field} must be a 32-bit integer")),
+        Some(Value::Null) | None => Ok(None),
+        Some(_) => Err(format!("{field} must be an integer")),
+    }
 }
 
 pub(super) fn required_string_field(

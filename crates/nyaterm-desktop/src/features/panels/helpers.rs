@@ -12,6 +12,7 @@ pub(in crate::features::panels) struct QuickCommandCategoryOption {
     pub label: String,
     pub count: usize,
     pub manageable: bool,
+    pub depth: usize,
 }
 
 pub(in crate::features::panels) fn quick_command_category_options(
@@ -25,9 +26,10 @@ pub(in crate::features::panels) fn quick_command_category_options(
         label: all_label.to_string(),
         count: commands.len(),
         manageable: false,
+        depth: 0,
     }];
 
-    for category in categories {
+    for (category, depth) in ordered_quick_command_categories(categories) {
         let count = commands
             .iter()
             .filter(|command| command.category_id.as_deref() == Some(category.id.as_str()))
@@ -37,6 +39,7 @@ pub(in crate::features::panels) fn quick_command_category_options(
             label: category.name.clone(),
             count,
             manageable: true,
+            depth,
         });
     }
 
@@ -55,8 +58,86 @@ pub(in crate::features::panels) fn quick_command_category_options(
         label: uncategorized_label.to_string(),
         count: uncategorized,
         manageable: false,
+        depth: 0,
     });
     options
+}
+
+fn ordered_quick_command_categories(
+    categories: &[QuickCommandCategory],
+) -> Vec<(&QuickCommandCategory, usize)> {
+    fn visit<'a>(
+        parent_id: Option<&str>,
+        depth: usize,
+        categories: &'a [QuickCommandCategory],
+        visited: &mut std::collections::BTreeSet<String>,
+        output: &mut Vec<(&'a QuickCommandCategory, usize)>,
+    ) {
+        let mut children = categories
+            .iter()
+            .filter(|category| category.parent_id.as_deref() == parent_id)
+            .collect::<Vec<_>>();
+        children.sort_by(|left, right| {
+            left.sort_order
+                .cmp(&right.sort_order)
+                .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
+                .then_with(|| left.id.cmp(&right.id))
+        });
+        for category in children {
+            if visited.insert(category.id.clone()) {
+                output.push((category, depth));
+                visit(
+                    Some(&category.id),
+                    depth.saturating_add(1),
+                    categories,
+                    visited,
+                    output,
+                );
+            }
+        }
+    }
+
+    let ids = categories
+        .iter()
+        .map(|item| item.id.as_str())
+        .collect::<std::collections::BTreeSet<_>>();
+    let mut roots = categories
+        .iter()
+        .filter(|item| {
+            item.parent_id
+                .as_deref()
+                .is_none_or(|parent| !ids.contains(parent))
+        })
+        .collect::<Vec<_>>();
+    roots.sort_by(|left, right| {
+        left.sort_order
+            .cmp(&right.sort_order)
+            .then_with(|| left.id.cmp(&right.id))
+    });
+    let mut visited = std::collections::BTreeSet::new();
+    let mut output = Vec::with_capacity(categories.len());
+    for root in roots {
+        if visited.insert(root.id.clone()) {
+            output.push((root, 0));
+            visit(Some(&root.id), 1, categories, &mut visited, &mut output);
+        }
+    }
+    let mut remaining = categories
+        .iter()
+        .filter(|item| !visited.contains(&item.id))
+        .collect::<Vec<_>>();
+    remaining.sort_by(|left, right| {
+        left.sort_order
+            .cmp(&right.sort_order)
+            .then_with(|| left.id.cmp(&right.id))
+    });
+    for category in remaining {
+        if visited.insert(category.id.clone()) {
+            output.push((category, 0));
+            visit(Some(&category.id), 1, categories, &mut visited, &mut output);
+        }
+    }
+    output
 }
 
 pub(in crate::features::panels) fn filtered_quick_commands(
@@ -121,6 +202,16 @@ pub(in crate::features::panels) fn filtered_quick_commands(
                     .or(left.updated_at)
                     .unwrap_or(u64::MAX)
                     .cmp(&right.created_at.or(right.updated_at).unwrap_or(u64::MAX)),
+                QuickCommandSortMode::Custom => left
+                    .sort_order
+                    .unwrap_or(i32::MAX)
+                    .cmp(&right.sort_order.unwrap_or(i32::MAX))
+                    .then_with(|| {
+                        left.created_at
+                            .or(left.updated_at)
+                            .unwrap_or(u64::MAX)
+                            .cmp(&right.created_at.or(right.updated_at).unwrap_or(u64::MAX))
+                    }),
             })
             .then_with(|| left.label.to_lowercase().cmp(&right.label.to_lowercase()))
     });

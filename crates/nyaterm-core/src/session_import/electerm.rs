@@ -177,6 +177,8 @@ fn prepare_electerm_bookmark(
             backspace_mode: "del".to_string(),
             ai_execution_profile: Default::default(),
             x11_forwarding: false,
+            agent_endpoint: Default::default(),
+            agent_forwarding: false,
             encoding: String::new(),
         },
         group_path,

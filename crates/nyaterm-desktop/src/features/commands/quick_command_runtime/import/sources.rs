@@ -113,6 +113,7 @@ pub(super) fn parse_windterm_quickbar(raw: &str) -> Result<ImportConfig, String>
             execution_mode: Some(execution_mode.to_string()),
             source: Some("manual".to_string()),
             risk_level: None,
+            sort_order: None,
         });
     }
 
@@ -238,6 +239,7 @@ pub(super) fn parse_xshell_quick_buttons_content(raw: &str) -> ImportConfig {
                 execution_mode: Some("append".to_string()),
                 source: Some("manual".to_string()),
                 risk_level: None,
+                sort_order: None,
             })
         })
         .collect();

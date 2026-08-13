@@ -1,5 +1,6 @@
 use gpui::{
-    AnyElement, ClickEvent, Context, FontWeight, SharedString, div, prelude::*, px, rgb, rgba,
+    AnyElement, AppContext as _, ClickEvent, Context, FontWeight, SharedString, div, prelude::*,
+    px, rgb, rgba,
 };
 use nyaterm_core::{QuickCommand, truncate_preview};
 use nyaterm_ui::{NyaContextMenu, NyaMenuItem};
@@ -11,6 +12,9 @@ use super::super::helpers::{
 use crate::features::NyaTermApp;
 use crate::models::QuickCommandViewMode;
 use nyaterm_ui::NyaTooltip;
+
+use super::{QuickCommandDragKind, QuickCommandDragPayload, QuickCommandDragPreview};
+use crate::features::{QuickCommandDropPosition, QuickCommandDropTarget};
 
 impl NyaTermApp {
     pub(super) fn quick_command_items(
@@ -304,7 +308,72 @@ impl NyaTermApp {
                 }
             };
 
-            items.push(command_item);
+            let drag_command_id = command.id.clone();
+            let drag_command_label = command.label.clone();
+            let move_target_id = command.id.clone();
+            let drop_target_id = command.id.clone();
+            items.push(
+                div()
+                    .id(SharedString::from(format!(
+                        "quick-command-drag-{command_id}"
+                    )))
+                    .w_full()
+                    .relative()
+                    .cursor_move()
+                    .on_drag(
+                        QuickCommandDragPayload {
+                            kind: QuickCommandDragKind::Command,
+                            id: drag_command_id,
+                            label: drag_command_label,
+                        },
+                        |payload, position, _, cx| {
+                            cx.new(|_| QuickCommandDragPreview {
+                                payload: payload.clone(),
+                                position,
+                            })
+                        },
+                    )
+                    .on_drag_move(cx.listener(
+                        move |this, event: &gpui::DragMoveEvent<QuickCommandDragPayload>, _, cx| {
+                            let _ = event.drag(cx);
+                            let after = event.event.position.y
+                                >= event.bounds.origin.y + event.bounds.size.height / 2.;
+                            if this.commands.set_quick_drop_target(QuickCommandDropTarget {
+                                id: move_target_id.clone(),
+                                position: if after {
+                                    QuickCommandDropPosition::After
+                                } else {
+                                    QuickCommandDropPosition::Before
+                                },
+                            }) {
+                                cx.notify();
+                            }
+                        },
+                    ))
+                    .on_drop(
+                        cx.listener(move |this, payload: &QuickCommandDragPayload, _, cx| {
+                            let after = this
+                                .commands
+                                .quick_drop_target()
+                                .filter(|target| target.id == drop_target_id)
+                                .is_some_and(|target| {
+                                    target.position == QuickCommandDropPosition::After
+                                });
+                            let config = (payload.kind == QuickCommandDragKind::Command)
+                                .then(|| {
+                                    this.commands.reorder_quick_command(
+                                        &payload.id,
+                                        &drop_target_id,
+                                        after,
+                                    )
+                                })
+                                .flatten();
+                            this.finish_quick_command_reorder(config, cx);
+                        }),
+                    )
+                    .child(command_item)
+                    .into_any_element(),
+            );
         }
         items
     }

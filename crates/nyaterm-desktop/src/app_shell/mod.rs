@@ -1,11 +1,12 @@
 //! Root GPUI shell boundary.
 
 use gpui::{
-    AppContext, Context, Entity, InteractiveElement, IntoElement, Menu, MenuItem, ParentElement,
-    Render, Styled, Subscription, SystemMenuType, WeakEntity, Window, actions, div, px,
+    AppContext, Context, Entity, InteractiveElement, IntoElement, Menu, MenuItem, OsAction,
+    ParentElement, Render, Styled, Subscription, SystemMenuType, WeakEntity, Window, actions, div,
+    px,
 };
 use nyaterm_core::AppRuntime;
-use nyaterm_ui::{NyaAppMenu, NyaAppMenuBar};
+use nyaterm_ui::{NyaAppMenu, NyaAppMenuBar, NyaCut, NyaRedo, NyaUndo};
 
 use crate::{
     entities::{OverlayStore, StartupRestoreStore, UiStoreHandles, WindowRuntimeStore},
@@ -136,6 +137,17 @@ fn install_native_app_menus(cx: &mut Context<AppShell>) {
         Menu::new("File").items([
             MenuItem::action("New Session", NativeNewSession),
             MenuItem::action("New Local Terminal", NativeNewLocalTerminal),
+        ]),
+        Menu::new("Edit").items([
+            MenuItem::os_action("Undo", NyaUndo, OsAction::Undo),
+            MenuItem::os_action("Redo", NyaRedo, OsAction::Redo),
+            MenuItem::separator(),
+            MenuItem::os_action("Cut", NyaCut, OsAction::Cut),
+            // Copy/Paste/Select All retain terminal-aware handlers while also
+            // advertising their standard macOS selectors to focused controls.
+            MenuItem::os_action("Copy", NativeTerminalCopy, OsAction::Copy),
+            MenuItem::os_action("Paste", NativeTerminalPaste, OsAction::Paste),
+            MenuItem::os_action("Select All", NativeTerminalSelectAll, OsAction::SelectAll),
         ]),
         Menu::new("View").items([
             MenuItem::action("Settings", NativeOpenSettings),

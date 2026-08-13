@@ -36,6 +36,8 @@ pub(super) fn merge_import(
             QuickCommandCategory {
                 id: id.clone(),
                 name: name.clone(),
+                parent_id: category.parent_id,
+                sort_order: category.sort_order,
             },
         ) {
             summary.imported_categories += 1;
@@ -110,6 +112,7 @@ pub(super) fn merge_import(
             updated_at: Some(now),
             created_at: Some(now),
             use_count: None,
+            sort_order: command.sort_order,
         };
         if upsert_command(config, imported) {
             summary.imported_commands += 1;
@@ -134,6 +137,8 @@ pub(super) fn ensure_category(
     config.categories.push(QuickCommandCategory {
         id: id.to_string(),
         name: name.to_string(),
+        parent_id: None,
+        sort_order: 0,
     });
     category_names.insert(name.to_string(), id.to_string());
     summary.imported_categories += 1;

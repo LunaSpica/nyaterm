@@ -1,13 +1,15 @@
 use std::collections::{HashMap, VecDeque};
+use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use nyaterm_core::{ConnectionStore, DecryptedOtpEntry, KnownHostCheck};
 use nyaterm_transport::{
-    SftpDuplicateDecision, SftpDuplicateRequest, SftpDuplicateResolver, SshCredentialPrompt,
-    SshCredentialProvider, SshHostKey, SshHostKeyDecision, SshHostKeyVerifier,
-    SshKeyboardInteractiveRequest, SshOtpProvider,
+    SftpDuplicateDecision, SftpDuplicateRequest, SftpDuplicateResolver, SshAgentPrompt,
+    SshAgentPromptAction, SshAgentPromptProvider, SshCredentialPrompt, SshCredentialProvider,
+    SshHostKey, SshHostKeyDecision, SshHostKeyVerifier, SshKeyboardInteractiveRequest,
+    SshOtpProvider,
 };
 
 use super::{
@@ -572,14 +574,135 @@ impl SshCredentialProvider for CredentialPromptBroker {
     }
 }
 
+#[derive(Debug, Clone)]
+pub(in crate::features) struct AgentPromptRequest {
+    pub(in crate::features) id: String,
+    pub(in crate::features) prompt: SshAgentPrompt,
+    pub(in crate::features) response_tx: mpsc::Sender<SshAgentPromptAction>,
+}
+
+#[derive(Debug, Default)]
+pub(in crate::features) struct AgentPromptBroker {
+    pending: Mutex<VecDeque<AgentPromptRequest>>,
+}
+
+impl AgentPromptBroker {
+    fn request_action(&self, prompt: SshAgentPrompt) -> Result<SshAgentPromptAction, String> {
+        self.request_action_with_timeout(prompt, Duration::from_secs(300))
+    }
+
+    fn request_action_with_timeout(
+        &self,
+        prompt: SshAgentPrompt,
+        timeout: Duration,
+    ) -> Result<SshAgentPromptAction, String> {
+        let (response_tx, response_rx) = mpsc::channel();
+        let id = agent_prompt_id(&prompt);
+        let request = AgentPromptRequest {
+            id: id.clone(),
+            prompt,
+            response_tx,
+        };
+        self.pending
+            .lock()
+            .map_err(|_| "SSH Agent prompt queue is poisoned".to_string())?
+            .push_back(request);
+        match response_rx.recv_timeout(timeout) {
+            Ok(action) => Ok(action),
+            Err(_) => {
+                if let Ok(mut pending) = self.pending.lock() {
+                    pending.retain(|request| request.id != id);
+                }
+                Err("SSH Agent prompt timed out".to_string())
+            }
+        }
+    }
+
+    pub(in crate::features) fn pop_pending(&self) -> Option<AgentPromptRequest> {
+        self.pending
+            .lock()
+            .ok()
+            .and_then(|mut pending| pending.pop_front())
+    }
+
+    pub(in crate::features) fn has_pending(&self) -> bool {
+        self.pending
+            .lock()
+            .ok()
+            .is_some_and(|pending| !pending.is_empty())
+    }
+}
+
+impl SshAgentPromptProvider for AgentPromptBroker {
+    fn request_action(&self, prompt: &SshAgentPrompt) -> Result<SshAgentPromptAction, String> {
+        AgentPromptBroker::request_action(self, prompt.clone())
+    }
+}
+
+fn agent_prompt_id(prompt: &SshAgentPrompt) -> String {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    prompt.connection_name.hash(&mut hasher);
+    prompt.host.hash(&mut hasher);
+    prompt.port.hash(&mut hasher);
+    prompt.username.hash(&mut hasher);
+    prompt.phase.hash(&mut hasher);
+    prompt.attempt.hash(&mut hasher);
+    format!("agent-{:016x}", hasher.finish())
+}
+
 #[cfg(test)]
 mod prompt_state_debug_tests {
-    use super::{CredentialPromptState, KeyboardInteractivePromptState};
+    use super::{AgentPromptBroker, CredentialPromptState, KeyboardInteractivePromptState};
     use nyaterm_transport::{
-        SshCredentialPrompt, SshCredentialPromptKind, SshCredentialPromptReason,
-        SshKeyboardInteractivePrompt, SshKeyboardInteractiveRequest,
+        SshAgentPrompt, SshAgentPromptAction, SshAgentPromptPhase, SshCredentialPrompt,
+        SshCredentialPromptKind, SshCredentialPromptReason, SshKeyboardInteractivePrompt,
+        SshKeyboardInteractiveRequest,
     };
-    use std::sync::mpsc;
+    use std::sync::{Arc, mpsc};
+    use std::time::Duration;
+
+    fn agent_prompt() -> SshAgentPrompt {
+        SshAgentPrompt {
+            host: "example.com".to_string(),
+            port: 22,
+            username: "alice".to_string(),
+            connection_name: "Example".to_string(),
+            phase: SshAgentPromptPhase::Sign,
+            attempt: 1,
+            message: "approve hardware key".to_string(),
+        }
+    }
+
+    #[test]
+    fn agent_prompt_broker_delivers_retry_action() {
+        let broker = Arc::new(AgentPromptBroker::default());
+        let worker = {
+            let broker = Arc::clone(&broker);
+            std::thread::spawn(move || broker.request_action(agent_prompt()))
+        };
+        let request = loop {
+            if let Some(request) = broker.pop_pending() {
+                break request;
+            }
+            std::thread::yield_now();
+        };
+        request
+            .response_tx
+            .send(SshAgentPromptAction::Retry)
+            .expect("send retry action");
+        assert_eq!(
+            worker.join().expect("join prompt worker"),
+            Ok(SshAgentPromptAction::Retry)
+        );
+    }
+
+    #[test]
+    fn agent_prompt_broker_removes_timed_out_request() {
+        let broker = AgentPromptBroker::default();
+        let result = broker.request_action_with_timeout(agent_prompt(), Duration::from_millis(1));
+        assert_eq!(result, Err("SSH Agent prompt timed out".to_string()));
+        assert!(!broker.has_pending());
+    }
 
     #[test]
     fn credential_prompt_debug_redacts_the_response() {

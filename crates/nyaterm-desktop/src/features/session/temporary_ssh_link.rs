@@ -220,6 +220,9 @@ impl NyaTermApp {
             username: parsed.username,
             password: None,
             key_auth: None,
+            agent_auth: false,
+            agent_endpoint: Default::default(),
+            agent_forwarding: false,
             otp_id: None,
             auto_fill_otp: false,
             proxy_jump: None,
@@ -246,6 +249,7 @@ impl NyaTermApp {
                 prompt_broker: self.session.prompts.host_key_broker(),
             })),
             credential_provider: Some(self.session.prompts.credential_broker()),
+            agent_prompt_provider: Some(self.session.prompts.agent_broker()),
             otp_provider: Some(self.session.prompts.otp_provider()),
         }
     }

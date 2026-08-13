@@ -3,7 +3,7 @@ use nyaterm_ui::NyaMenuItem;
 
 use crate::action_links::{ActionLinkAction, actions_for_match, find_action_links};
 use crate::features::NyaTermApp;
-use crate::models::{NavItem, TerminalSearchMode};
+use crate::models::{NavItem, RecordingPathPromptKind, SettingsTab, TerminalSearchMode};
 
 use super::helpers::{
     available_translation_providers, open_external_url, search_engine_url,
@@ -34,6 +34,7 @@ impl NyaTermApp {
         let find_sc = shortcut("terminal.find", "Ctrl+Shift+F");
         let clear_sc = shortcut("terminal.clear", "Ctrl+L");
         let select_all_sc = shortcut("terminal.selectAll", "Ctrl+Shift+A");
+        let recording_sc = shortcut("terminal.recording.toggle", "Ctrl+Shift+R");
         let mut items = Vec::new();
 
         if has_selection {
@@ -136,6 +137,7 @@ impl NyaTermApp {
             ]);
         }
 
+        let recording_items = self.terminal_recording_menu_items(recording_sc, cx);
         items.extend([
             NyaMenuItem::separator(),
             NyaMenuItem::action(self.tr("terminalCtx.clearScreen"))
@@ -150,6 +152,9 @@ impl NyaTermApp {
                     this.clear_terminal(cx);
                 })),
             NyaMenuItem::separator(),
+            NyaMenuItem::submenu(self.tr("terminalCtx.recordingLogs"), recording_items)
+                .icon("icons/session/record.svg"),
+            NyaMenuItem::separator(),
             NyaMenuItem::action(self.tr("terminalCtx.selectAll"))
                 .icon("icons/menu/select-all.svg")
                 .shortcut(select_all_sc)
@@ -161,6 +166,82 @@ impl NyaTermApp {
                 .on_click(cx.listener(|this, _, window, cx| {
                     this.open_terminal_actions(window, cx);
                 })),
+        ]);
+        items
+    }
+
+    fn terminal_recording_menu_items(
+        &self,
+        shortcut: String,
+        cx: &mut Context<Self>,
+    ) -> Vec<NyaMenuItem> {
+        let active_id = self.session.active_id_owned();
+        let is_recording = active_id
+            .as_deref()
+            .is_some_and(|session_id| self.recording.is_recording(session_id));
+        let recording_path = active_id
+            .as_deref()
+            .and_then(|session_id| self.recording.status(session_id))
+            .and_then(|status| status.file_path);
+        let toggle_label = if is_recording {
+            self.tr("recording.stop")
+        } else {
+            self.tr("recording.startTranscript")
+        };
+        let mut items = vec![
+            NyaMenuItem::action(toggle_label)
+                .shortcut(shortcut)
+                .disabled(active_id.is_none())
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.toggle_active_session_recording(cx);
+                })),
+            NyaMenuItem::action(self.tr("recording.saveTranscript"))
+                .disabled(active_id.is_none())
+                .on_click(cx.listener(|this, _, _, cx| {
+                    let Some(session_id) = this.session.active_id_owned() else {
+                        return;
+                    };
+                    let session_name = this
+                        .session
+                        .ordered_sessions()
+                        .into_iter()
+                        .find(|session| session.id == session_id)
+                        .map(|session| session.name)
+                        .unwrap_or_else(|| session_id.clone());
+                    this.prompt_recording_path_for_session(
+                        RecordingPathPromptKind::SaveTranscript,
+                        session_id,
+                        session_name,
+                        cx,
+                    );
+                })),
+        ];
+        if let Some(path) = recording_path {
+            let reveal_path = path.clone();
+            items.extend([
+                NyaMenuItem::action(self.tr("recording.openLog")).on_click(cx.listener(
+                    move |this, _, _, cx| {
+                        cx.open_with_system(&path);
+                        this.shell.set_status("recording opened".to_string());
+                    },
+                )),
+                NyaMenuItem::action(self.tr("recording.showInFolder")).on_click(cx.listener(
+                    move |this, _, _, cx| {
+                        cx.reveal_path(&reveal_path);
+                        this.shell
+                            .set_status("recording folder revealed".to_string());
+                    },
+                )),
+            ]);
+        }
+        items.extend([
+            NyaMenuItem::separator(),
+            NyaMenuItem::action(self.tr("terminalCtx.recordingSettings")).on_click(cx.listener(
+                |this, _, _, cx| {
+                    this.shell.set_settings_active_tab(SettingsTab::Transfer);
+                    this.open_page(NavItem::Settings, cx);
+                },
+            )),
         ]);
         items
     }

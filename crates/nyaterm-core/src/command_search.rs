@@ -276,6 +276,7 @@ mod tests {
             updated_at: None,
             created_at: None,
             use_count: None,
+            sort_order: None,
         }];
 
         let results = search_command_sources(&history, &quick_commands, "ps", 10, None, None);
@@ -315,6 +316,7 @@ mod tests {
                 updated_at: Some(100),
                 created_at: None,
                 use_count: Some(1),
+                sort_order: None,
             },
             QuickCommand {
                 id: "qc-pinned".to_string(),
@@ -331,6 +333,7 @@ mod tests {
                 updated_at: Some(1),
                 created_at: None,
                 use_count: Some(0),
+                sort_order: None,
             },
         ];
 

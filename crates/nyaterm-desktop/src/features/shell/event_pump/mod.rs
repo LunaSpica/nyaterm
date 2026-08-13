@@ -600,6 +600,14 @@ impl NyaTermApp {
     }
 
     fn pending_session_auth_wait(&self) -> Option<PendingSessionAuthWait> {
+        if let Some(prompt) = self.session.prompt_active_agent() {
+            return Some(PendingSessionAuthWait::Agent {
+                target: format!(
+                    "{}@{}:{}",
+                    prompt.prompt.username, prompt.prompt.host, prompt.prompt.port
+                ),
+            });
+        }
         if let Some(prompt) = self.session.prompt_active_keyboard_interactive() {
             return Some(PendingSessionAuthWait::Credential {
                 target: keyboard_interactive_prompt_target(&prompt.request),

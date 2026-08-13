@@ -1,5 +1,5 @@
-use gpui::{Context, KeyDownEvent, Window};
-use nyaterm_core::ConnectionStore;
+use gpui::{AppContext as _, Context, KeyDownEvent, Window};
+use nyaterm_core::{ConnectionStore, QuickCommandsConfig};
 
 use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::{NavItem, QuickCommandSortMode, QuickCommandViewMode};
@@ -7,6 +7,64 @@ use crate::models::{NavItem, QuickCommandSortMode, QuickCommandViewMode};
 use super::helpers::{quick_command_sort_mode_setting, quick_command_view_mode_setting};
 
 impl NyaTermApp {
+    pub(in crate::features) fn finish_quick_command_reorder(
+        &mut self,
+        config: Option<QuickCommandsConfig>,
+        cx: &mut Context<Self>,
+    ) {
+        self.commands.clear_quick_drop_target();
+        let Some(config) = config else {
+            cx.notify();
+            return;
+        };
+        self.commands
+            .set_quick_sort_mode(QuickCommandSortMode::Custom);
+        self.settings
+            .set_quick_command_sort_mode("custom".to_string());
+        let settings = self.settings.summary().clone();
+        let config_dir = self.runtime.config_dir().to_path_buf();
+        let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
+        self.shell
+            .set_status("saving custom quick command order".to_string());
+        let task = cx.background_spawn(async move {
+            let store =
+                ConnectionStore::open_with_portable_key_path(&config_dir, portable_key_path)
+                    .map_err(|error| error.to_string())?;
+            store
+                .save_quick_commands(config)
+                .map_err(|error| error.to_string())?;
+            store
+                .save_quick_command_ui_settings(&settings)
+                .map_err(|error| error.to_string())?;
+            Ok::<(), String>(())
+        });
+        cx.spawn(async move |this, cx| {
+            let result = task.await;
+            let _ = this.update(cx, |this, cx| {
+                match result {
+                    Ok(()) => {
+                        this.settings
+                            .update_store_status("custom quick command order saved", true);
+                        this.shell
+                            .set_status("custom quick command order saved".to_string());
+                    }
+                    Err(error) => {
+                        this.settings.update_store_status(
+                            format!("quick command reorder save failed: {error}"),
+                            false,
+                        );
+                        this.shell
+                            .set_status(this.settings.store_status().message.to_string());
+                        this.refresh_quick_commands();
+                    }
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
     pub(in crate::features) fn close_quick_command_toolbar_popovers(&mut self) {
         self.commands.close_quick_toolbar_popovers();
     }

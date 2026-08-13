@@ -21,6 +21,8 @@ struct ImportConfig {
 struct ImportCategory {
     id: Option<String>,
     name: String,
+    parent_id: Option<String>,
+    sort_order: i32,
 }
 
 #[derive(Debug)]
@@ -37,6 +39,7 @@ struct ImportCommand {
     execution_mode: Option<String>,
     source: Option<String>,
     risk_level: Option<RiskLevel>,
+    sort_order: Option<i32>,
 }
 
 impl QuickCommandImportPathPromptKind {

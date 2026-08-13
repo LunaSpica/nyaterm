@@ -100,6 +100,29 @@ pub enum SftpCwdFollowMode {
     RcFile,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum SshAgentEndpoint {
+    #[default]
+    Auto,
+    Environment {
+        variable: String,
+    },
+    UnixSocket {
+        path: String,
+    },
+    Pageant,
+    WindowsOpenSsh,
+}
+
+fn is_default_ssh_agent_endpoint(value: &SshAgentEndpoint) -> bool {
+    matches!(value, SshAgentEndpoint::Auto)
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SftpSettings {
     #[serde(default = "default_true")]
@@ -191,6 +214,10 @@ pub enum ConnectionType {
         ai_execution_profile: AiExecutionProfile,
         #[serde(default)]
         x11_forwarding: bool,
+        #[serde(default, skip_serializing_if = "is_default_ssh_agent_endpoint")]
+        agent_endpoint: SshAgentEndpoint,
+        #[serde(default, skip_serializing_if = "is_false")]
+        agent_forwarding: bool,
         #[serde(default)]
         encoding: String,
     },
@@ -609,6 +636,10 @@ pub struct ProxyGroupsConfig {
 pub struct QuickCommandCategory {
     pub id: String,
     pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_id: Option<String>,
+    #[serde(default)]
+    pub sort_order: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -638,6 +669,8 @@ pub struct QuickCommand {
     pub created_at: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub use_count: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sort_order: Option<i32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
@@ -646,6 +679,226 @@ pub struct QuickCommandsConfig {
     pub commands: Vec<QuickCommand>,
     #[serde(default)]
     pub categories: Vec<QuickCommandCategory>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QuickCommandRelativePosition {
+    Before,
+    After,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QuickCommandCategoryPosition {
+    Before,
+    After,
+    Inside,
+}
+
+impl QuickCommandsConfig {
+    /// Moves a command relative to another command. Pinned and unpinned commands
+    /// remain separate visual partitions; dropping across the boundary adopts the
+    /// target partition before orders are normalized.
+    pub fn reorder_command_relative(
+        &mut self,
+        source_id: &str,
+        target_id: &str,
+        position: QuickCommandRelativePosition,
+    ) -> bool {
+        if source_id == target_id {
+            return false;
+        }
+        let Some(source_index) = self.commands.iter().position(|item| item.id == source_id) else {
+            return false;
+        };
+        let Some(target) = self
+            .commands
+            .iter()
+            .find(|item| item.id == target_id)
+            .cloned()
+        else {
+            return false;
+        };
+        let mut source = self.commands.remove(source_index);
+        source.category_id = target.category_id.clone();
+        source.pinned = target.pinned;
+
+        let mut partition = self
+            .commands
+            .iter()
+            .filter(|item| {
+                item.category_id == target.category_id
+                    && item.pinned.unwrap_or_default() == target.pinned.unwrap_or_default()
+            })
+            .map(|item| item.id.clone())
+            .collect::<Vec<_>>();
+        partition.sort_by(|left, right| {
+            let left = self
+                .commands
+                .iter()
+                .find(|item| item.id == *left)
+                .expect("id");
+            let right = self
+                .commands
+                .iter()
+                .find(|item| item.id == *right)
+                .expect("id");
+            left.sort_order
+                .unwrap_or(i32::MAX)
+                .cmp(&right.sort_order.unwrap_or(i32::MAX))
+                .then_with(|| left.id.cmp(&right.id))
+        });
+        let Some(target_index) = partition.iter().position(|id| id == target_id) else {
+            self.commands.push(source);
+            return false;
+        };
+        let insert_index =
+            target_index + usize::from(position == QuickCommandRelativePosition::After);
+        partition.insert(insert_index, source.id.clone());
+        self.commands.push(source);
+        self.normalize_command_partition(
+            &target.category_id,
+            target.pinned.unwrap_or_default(),
+            &partition,
+        );
+        true
+    }
+
+    pub fn move_command_to_category(
+        &mut self,
+        source_id: &str,
+        category_id: Option<String>,
+    ) -> bool {
+        let Some(source) = self.commands.iter_mut().find(|item| item.id == source_id) else {
+            return false;
+        };
+        if source.category_id == category_id {
+            return false;
+        }
+        source.category_id = category_id.clone();
+        let pinned = source.pinned.unwrap_or_default();
+        let next = self
+            .commands
+            .iter()
+            .filter(|item| {
+                item.id != source_id
+                    && item.category_id == category_id
+                    && item.pinned.unwrap_or_default() == pinned
+            })
+            .filter_map(|item| item.sort_order)
+            .max()
+            .unwrap_or(-1)
+            .saturating_add(1);
+        if let Some(source) = self.commands.iter_mut().find(|item| item.id == source_id) {
+            source.sort_order = Some(next);
+        }
+        true
+    }
+
+    pub fn move_category(
+        &mut self,
+        source_id: &str,
+        target_id: &str,
+        position: QuickCommandCategoryPosition,
+    ) -> bool {
+        if source_id == target_id
+            || !self.categories.iter().any(|item| item.id == source_id)
+            || !self.categories.iter().any(|item| item.id == target_id)
+            || self.category_is_descendant(target_id, source_id)
+        {
+            return false;
+        }
+        let target_parent = self
+            .categories
+            .iter()
+            .find(|item| item.id == target_id)
+            .and_then(|item| item.parent_id.clone());
+        let new_parent = match position {
+            QuickCommandCategoryPosition::Inside => Some(target_id.to_string()),
+            QuickCommandCategoryPosition::Before | QuickCommandCategoryPosition::After => {
+                target_parent
+            }
+        };
+        if new_parent.as_deref() == Some(source_id) {
+            return false;
+        }
+
+        if let Some(source) = self.categories.iter_mut().find(|item| item.id == source_id) {
+            source.parent_id = new_parent.clone();
+        }
+        let mut siblings = self
+            .categories
+            .iter()
+            .filter(|item| item.id != source_id && item.parent_id == new_parent)
+            .map(|item| item.id.clone())
+            .collect::<Vec<_>>();
+        siblings.sort_by(|left, right| {
+            let left = self
+                .categories
+                .iter()
+                .find(|item| item.id == *left)
+                .expect("id");
+            let right = self
+                .categories
+                .iter()
+                .find(|item| item.id == *right)
+                .expect("id");
+            left.sort_order
+                .cmp(&right.sort_order)
+                .then_with(|| left.id.cmp(&right.id))
+        });
+        let insert_index = match position {
+            QuickCommandCategoryPosition::Inside => siblings.len(),
+            QuickCommandCategoryPosition::Before | QuickCommandCategoryPosition::After => {
+                let Some(index) = siblings.iter().position(|id| id == target_id) else {
+                    return false;
+                };
+                index + usize::from(position == QuickCommandCategoryPosition::After)
+            }
+        };
+        siblings.insert(insert_index, source_id.to_string());
+        for (order, id) in siblings.into_iter().enumerate() {
+            if let Some(category) = self.categories.iter_mut().find(|item| item.id == id) {
+                category.sort_order = i32::try_from(order).unwrap_or(i32::MAX);
+            }
+        }
+        true
+    }
+
+    fn category_is_descendant(&self, candidate_id: &str, ancestor_id: &str) -> bool {
+        let mut current = Some(candidate_id);
+        let mut visited = std::collections::BTreeSet::new();
+        while let Some(id) = current {
+            if id == ancestor_id {
+                return true;
+            }
+            if !visited.insert(id.to_string()) {
+                return false;
+            }
+            current = self
+                .categories
+                .iter()
+                .find(|item| item.id == id)
+                .and_then(|item| item.parent_id.as_deref());
+        }
+        false
+    }
+
+    fn normalize_command_partition(
+        &mut self,
+        category_id: &Option<String>,
+        pinned: bool,
+        ordered_ids: &[String],
+    ) {
+        for (order, id) in ordered_ids.iter().enumerate() {
+            if let Some(command) = self.commands.iter_mut().find(|item| {
+                item.id == *id
+                    && item.category_id == *category_id
+                    && item.pinned.unwrap_or_default() == pinned
+            }) {
+                command.sort_order = Some(i32::try_from(order).unwrap_or(i32::MAX));
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -682,6 +935,8 @@ pub struct QuickCommandExport {
     pub source: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub risk_level: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sort_order: Option<i32>,
 }
 
 impl From<QuickCommandsConfig> for QuickCommandsExportConfig {
@@ -693,8 +948,8 @@ impl From<QuickCommandsConfig> for QuickCommandsExportConfig {
                 .map(|category| QuickCommandCategoryExport {
                     id: category.id,
                     name: category.name,
-                    parent_id: None,
-                    sort_order: 0,
+                    parent_id: category.parent_id,
+                    sort_order: category.sort_order,
                 })
                 .collect(),
             commands: config
@@ -716,6 +971,7 @@ impl From<QuickCommandsConfig> for QuickCommandsExportConfig {
                     risk_level: command
                         .risk_level
                         .map(|risk| quick_command_export_risk_label(&risk).to_string()),
+                    sort_order: command.sort_order,
                 })
                 .collect(),
         }
@@ -2389,6 +2645,41 @@ mod tests {
         let serialized = serde_json::to_string(&connection).expect("serialize");
         assert!(!serialized.contains("ssh_profile"), "{serialized}");
         assert!(!serialized.contains("terminal_type"), "{serialized}");
+        assert!(!serialized.contains("agent_endpoint"), "{serialized}");
+        assert!(!serialized.contains("agent_forwarding"), "{serialized}");
+    }
+
+    #[test]
+    fn ssh_agent_endpoint_and_forwarding_round_trip_without_secrets() {
+        let json = r#"{
+            "id":"agent-ssh","name":"Agent SSH","type":"ssh","host":"example.com",
+            "auth":{"mode":"agent"},
+            "agent_endpoint":{"type":"unix_socket","path":"/run/user/1000/agent.sock"},
+            "agent_forwarding":true
+        }"#;
+        let connection: SavedConnection = serde_json::from_str(json).expect("agent SSH loads");
+        assert_eq!(
+            connection.auth.as_ref().map(|auth| auth.mode.as_str()),
+            Some("agent")
+        );
+        let ConnectionType::Ssh {
+            agent_endpoint,
+            agent_forwarding,
+            ..
+        } = &connection.config
+        else {
+            panic!("SSH expected");
+        };
+        assert_eq!(
+            agent_endpoint,
+            &SshAgentEndpoint::UnixSocket {
+                path: "/run/user/1000/agent.sock".to_string()
+            }
+        );
+        assert!(*agent_forwarding);
+        let serialized = serde_json::to_string(&connection).expect("agent SSH serializes");
+        assert!(serialized.contains("unix_socket"), "{serialized}");
+        assert!(serialized.contains("agent_forwarding"), "{serialized}");
     }
 
     #[test]
@@ -2415,5 +2706,92 @@ mod tests {
             serde_json::from_str(&serde_json::to_string(&connection).expect("serialize profile"))
                 .expect("reload profile");
         assert_eq!(reloaded, connection);
+    }
+
+    fn quick_command(id: &str, category: Option<&str>, pinned: bool, order: i32) -> QuickCommand {
+        QuickCommand {
+            id: id.to_string(),
+            label: id.to_string(),
+            command: id.to_string(),
+            category_id: category.map(ToString::to_string),
+            description: None,
+            color_tag: None,
+            icon_tag: None,
+            pinned: pinned.then_some(true),
+            execution_mode: None,
+            source: None,
+            risk_level: None,
+            updated_at: None,
+            created_at: None,
+            use_count: None,
+            sort_order: Some(order),
+        }
+    }
+
+    fn quick_category(id: &str, parent: Option<&str>, order: i32) -> QuickCommandCategory {
+        QuickCommandCategory {
+            id: id.to_string(),
+            name: id.to_string(),
+            parent_id: parent.map(ToString::to_string),
+            sort_order: order,
+        }
+    }
+
+    #[test]
+    fn quick_command_reorder_adopts_target_partition_and_normalizes_order() {
+        let mut config = QuickCommandsConfig {
+            commands: vec![
+                quick_command("a", Some("one"), false, 0),
+                quick_command("b", Some("two"), true, 0),
+                quick_command("c", Some("two"), true, 1),
+            ],
+            categories: vec![],
+        };
+        assert!(config.reorder_command_relative("a", "c", QuickCommandRelativePosition::Before));
+        let a = config
+            .commands
+            .iter()
+            .find(|item| item.id == "a")
+            .expect("a");
+        assert_eq!(a.category_id.as_deref(), Some("two"));
+        assert!(a.pinned.unwrap_or_default());
+        assert_eq!(a.sort_order, Some(1));
+        assert_eq!(
+            config
+                .commands
+                .iter()
+                .find(|item| item.id == "c")
+                .and_then(|item| item.sort_order),
+            Some(2)
+        );
+    }
+
+    #[test]
+    fn category_move_rejects_descendant_cycles_and_normalizes_siblings() {
+        let mut config = QuickCommandsConfig {
+            commands: vec![],
+            categories: vec![
+                quick_category("root", None, 0),
+                quick_category("child", Some("root"), 0),
+                quick_category("peer", None, 1),
+            ],
+        };
+        assert!(!config.move_category("root", "child", QuickCommandCategoryPosition::Inside));
+        assert!(config.move_category("child", "peer", QuickCommandCategoryPosition::Before));
+        let child = config
+            .categories
+            .iter()
+            .find(|item| item.id == "child")
+            .expect("child");
+        assert_eq!(child.parent_id, None);
+        assert_eq!(child.sort_order, 1);
+        assert_eq!(
+            config
+                .categories
+                .iter()
+                .find(|item| item.id == "peer")
+                .map(|item| item.sort_order),
+            Some(2)
+        );
     }
 }

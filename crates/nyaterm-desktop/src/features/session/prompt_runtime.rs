@@ -2,8 +2,8 @@ use std::hash::{Hash, Hasher};
 
 use gpui::{ClipboardItem, Context, KeyDownEvent, Window};
 use nyaterm_transport::{
-    SftpDuplicateDecision, SftpDuplicateRequest, SshCredentialPrompt, SshHostKey,
-    SshKeyboardInteractiveRequest,
+    SftpDuplicateDecision, SftpDuplicateRequest, SshAgentPromptAction, SshCredentialPrompt,
+    SshHostKey, SshKeyboardInteractiveRequest,
 };
 
 use super::state::PromptResolution;
@@ -14,6 +14,30 @@ use super::{
 use crate::features::{NyaTermApp, TextInputSetup, duplicate_decision_label};
 
 impl NyaTermApp {
+    pub(in crate::features) fn resolve_agent_prompt(
+        &mut self,
+        action: SshAgentPromptAction,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(request) = self.session.prompts.take_agent() else {
+            return;
+        };
+        let target = format!(
+            "{}@{}:{}",
+            request.prompt.username, request.prompt.host, request.prompt.port
+        );
+        let _ = request.response_tx.send(action);
+        self.shell.set_status(match action {
+            SshAgentPromptAction::Retry => {
+                format!("retrying SSH Agent authentication for {target}")
+            }
+            SshAgentPromptAction::Cancel => {
+                format!("cancelled SSH Agent authentication for {target}")
+            }
+        });
+        cx.notify();
+    }
+
     pub(in crate::features) fn resolve_host_key_prompt(
         &mut self,
         request_id: String,
@@ -304,6 +328,15 @@ impl NyaTermApp {
         };
         self.shell
             .set_status(format!("SSH host key decision required for {host}"));
+        true
+    }
+
+    pub(in crate::features) fn drain_agent_prompts(&mut self) -> bool {
+        let Some(target) = self.session.prompts.activate_next_agent() else {
+            return false;
+        };
+        self.shell
+            .set_status(format!("SSH Agent approval required for {target}"));
         true
     }
 

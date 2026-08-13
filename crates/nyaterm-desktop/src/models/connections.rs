@@ -43,6 +43,7 @@ impl ConnectionKindTab {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum ConnectionEditorSelect {
     Authentication,
+    SshAgentEndpoint,
     Group,
     SavedPassword,
     SshKey,
@@ -118,6 +119,8 @@ pub(crate) enum ConnectionEditorField {
     Host,
     Port,
     Username,
+    AgentEnvironmentVariable,
+    AgentUnixSocket,
     Domain,
     Password,
     ShellPath,
@@ -303,6 +306,8 @@ pub(crate) struct ConnectionEditorState {
     pub(crate) proxy_id: Option<String>,
     pub(crate) proxy_jump_id: Option<String>,
     pub(crate) x11_forwarding: bool,
+    pub(crate) agent_endpoint: nyaterm_core::SshAgentEndpoint,
+    pub(crate) agent_forwarding: bool,
     pub(crate) backspace_mode: String,
     pub(crate) encoding: String,
     pub(crate) ssh_profile: nyaterm_core::SshProfile,

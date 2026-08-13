@@ -16,6 +16,35 @@ use crate::features::formatting::recording_file_path;
 use crate::models::{RecordingPathPromptKind, RecordingPathPromptResult, SessionLaunchConfig};
 
 impl NyaTermApp {
+    pub(in crate::features) fn toggle_active_session_recording(&mut self, cx: &mut Context<Self>) {
+        let Some(session_id) = self.session.active_id_owned() else {
+            self.shell
+                .set_status("start a session before recording".to_string());
+            cx.notify();
+            return;
+        };
+        if self.recording.busy_action(&session_id).is_some() {
+            return;
+        }
+        if self.recording.is_recording(&session_id) {
+            self.stop_recording_for_session(&session_id, cx);
+            return;
+        }
+        let session_name = self
+            .session
+            .ordered_sessions()
+            .into_iter()
+            .find(|session| session.id == session_id)
+            .map(|session| session.name)
+            .unwrap_or_else(|| session_id.clone());
+        self.prompt_recording_path_for_session(
+            RecordingPathPromptKind::Start,
+            session_id,
+            session_name,
+            cx,
+        );
+    }
+
     pub(in crate::features) fn prompt_recording_path_for_session(
         &mut self,
         kind: RecordingPathPromptKind,

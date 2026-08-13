@@ -21,6 +21,10 @@ mod widgets;
 pub use app_menu_bar::{NyaAppMenu, NyaAppMenuBar};
 pub use button::{NyaButton, NyaButtonVariant, NyaIconButton};
 pub use dialog::{NyaConfirmDialog, NyaDialog, NyaDialogFooter, NyaDialogWindowExt};
+pub use gpui_component::input::{
+    Copy as NyaCopy, Cut as NyaCut, Paste as NyaPaste, Redo as NyaRedo, SelectAll as NyaSelectAll,
+    Undo as NyaUndo,
+};
 pub use input::{NyaInput, NyaInputEvent, NyaInputState, NyaTextArea};
 pub use menu::{NyaContextMenu, NyaDropdownMenu, NyaMenuAnchor, NyaMenuItem};
 pub use number_input::{
