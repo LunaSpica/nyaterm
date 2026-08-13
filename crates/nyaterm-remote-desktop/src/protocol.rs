@@ -305,6 +305,197 @@ pub struct RdpSessionDrain {
     pub waiting_for_full_frame: bool,
 }
 
+pub const MAX_VNC_CLIPBOARD_TEXT_BYTES: usize = 1024 * 1024;
+pub const MAX_VNC_INPUT_BATCH: usize = 256;
+pub const MAX_VNC_FRAMEBUFFER_WIDTH: u32 = 7680;
+pub const MAX_VNC_FRAMEBUFFER_HEIGHT: u32 = 4320;
+
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VncSessionConfig {
+    pub name: String,
+    pub host: String,
+    pub port: u16,
+    pub password: Option<String>,
+    pub security: VncSecurityConfig,
+    pub display: VncDisplayConfig,
+    pub clipboard: VncClipboardConfig,
+    pub reconnect: VncReconnectConfig,
+    pub shared: bool,
+    pub view_only: bool,
+}
+
+impl fmt::Debug for VncSessionConfig {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("VncSessionConfig")
+            .field("name", &self.name)
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .field("password", &self.password.as_ref().map(|_| "[REDACTED]"))
+            .field("security", &self.security)
+            .field("display", &self.display)
+            .field("clipboard", &self.clipboard)
+            .field("reconnect", &self.reconnect)
+            .field("shared", &self.shared)
+            .field("view_only", &self.view_only)
+            .finish()
+    }
+}
+
+impl Drop for VncSessionConfig {
+    fn drop(&mut self) {
+        if let Some(password) = self.password.as_mut() {
+            password.zeroize();
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VncSecurityConfig {
+    pub mode: VncSecurityMode,
+}
+
+impl Default for VncSecurityConfig {
+    fn default() -> Self {
+        Self {
+            mode: VncSecurityMode::Auto,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum VncSecurityMode {
+    #[default]
+    Auto,
+    None,
+    #[serde(alias = "vnc-auth")]
+    VncAuth,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VncDisplayConfig {
+    pub scale_mode: VncScaleMode,
+}
+
+impl Default for VncDisplayConfig {
+    fn default() -> Self {
+        Self {
+            scale_mode: VncScaleMode::Fit,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum VncScaleMode {
+    #[default]
+    Fit,
+    Stretch,
+    Actual,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VncClipboardConfig {
+    pub enabled: bool,
+}
+
+impl Default for VncClipboardConfig {
+    fn default() -> Self {
+        Self { enabled: true }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VncReconnectConfig {
+    pub enabled: bool,
+    pub max_attempts: u32,
+}
+
+impl Default for VncReconnectConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            max_attempts: 5,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum VncInputEvent {
+    Key { keysym: u32, pressed: bool },
+    Pointer { x: u32, y: u32, button_mask: u8 },
+    ReleaseAllKeys,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum VncSessionState {
+    Connecting,
+    Authenticating,
+    Negotiating,
+    Connected,
+    Reconnecting,
+    Disconnecting,
+    Disconnected,
+    Failed,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum VncErrorKind {
+    Transport,
+    Authentication,
+    Protocol,
+    Encoding,
+    Clipboard,
+    Internal,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, thiserror::Error)]
+#[error("{kind:?}: {message}")]
+pub struct VncError {
+    pub kind: VncErrorKind,
+    pub message: String,
+}
+
+impl VncError {
+    pub fn new(kind: VncErrorKind, message: impl Into<String>) -> Self {
+        Self {
+            kind,
+            message: message.into(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum VncRuntimeEvent {
+    State {
+        session_id: String,
+        state: VncSessionState,
+        message: Option<String>,
+    },
+    Frame {
+        session_id: String,
+        event: RdpFrameEvent,
+    },
+    Clipboard {
+        session_id: String,
+        text: String,
+    },
+    Error {
+        session_id: String,
+        error: VncError,
+        fatal: bool,
+    },
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct VncSessionDrain {
+    pub control: Vec<VncRuntimeEvent>,
+    pub frames: Vec<RdpFrameEvent>,
+    pub dropped_frames: usize,
+    pub waiting_for_full_frame: bool,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum RdpControlMessage {
     ClientHello {
@@ -386,6 +577,22 @@ pub fn parse_rdp_clipboard_mode(value: &str) -> RdpClipboardMode {
     match value.trim() {
         "disabled" | "off" => RdpClipboardMode::Disabled,
         _ => RdpClipboardMode::TextOnly,
+    }
+}
+
+pub fn parse_vnc_security_mode(value: &str) -> VncSecurityMode {
+    match value.trim() {
+        "none" => VncSecurityMode::None,
+        "vnc-auth" | "vnc_auth" | "password" => VncSecurityMode::VncAuth,
+        _ => VncSecurityMode::Auto,
+    }
+}
+
+pub fn parse_vnc_scale_mode(value: &str) -> VncScaleMode {
+    match value.trim() {
+        "stretch" => VncScaleMode::Stretch,
+        "actual" | "actual-size" => VncScaleMode::Actual,
+        _ => VncScaleMode::Fit,
     }
 }
 

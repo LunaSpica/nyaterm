@@ -5,6 +5,7 @@ mod input;
 mod ipc;
 mod protocol;
 mod session;
+mod vnc;
 
 pub use certificate::{CertificateDecision, evaluate_certificate};
 pub use clipboard::{ClipboardOrigin, ClipboardTracker, MAX_CLIPBOARD_TEXT_BYTES};
@@ -16,11 +17,16 @@ pub use ipc::{
     encode_cursor_packet, encode_frame_packet, read_packet, write_packet,
 };
 pub use protocol::{
-    PROTOCOL_VERSION, PixelFormat, RdpCapability, RdpCertificatePolicy, RdpCertificateRequest,
-    RdpCertificateResponse, RdpClipboardConfig, RdpClipboardMode, RdpControlMessage,
-    RdpCursorEvent, RdpDisplayConfig, RdpDisplayMode, RdpError, RdpErrorKind, RdpFrameEvent,
-    RdpInputEvent, RdpPointerButton, RdpReconnectConfig, RdpRuntimeEvent, RdpSessionConfig,
-    RdpSessionDrain, RdpSessionState, parse_rdp_certificate_policy, parse_rdp_clipboard_mode,
-    parse_rdp_display_mode,
+    MAX_VNC_CLIPBOARD_TEXT_BYTES, MAX_VNC_FRAMEBUFFER_HEIGHT, MAX_VNC_FRAMEBUFFER_WIDTH,
+    MAX_VNC_INPUT_BATCH, PROTOCOL_VERSION, PixelFormat, RdpCapability, RdpCertificatePolicy,
+    RdpCertificateRequest, RdpCertificateResponse, RdpClipboardConfig, RdpClipboardMode,
+    RdpControlMessage, RdpCursorEvent, RdpDisplayConfig, RdpDisplayMode, RdpError, RdpErrorKind,
+    RdpFrameEvent, RdpInputEvent, RdpPointerButton, RdpReconnectConfig, RdpRuntimeEvent,
+    RdpSessionConfig, RdpSessionDrain, RdpSessionState, VncClipboardConfig, VncDisplayConfig,
+    VncError, VncErrorKind, VncInputEvent, VncReconnectConfig, VncRuntimeEvent, VncScaleMode,
+    VncSecurityConfig, VncSecurityMode, VncSessionConfig, VncSessionDrain, VncSessionState,
+    parse_rdp_certificate_policy, parse_rdp_clipboard_mode, parse_rdp_display_mode,
+    parse_vnc_scale_mode, parse_vnc_security_mode,
 };
 pub use session::{RdpSessionManager, resolve_helper_path};
+pub use vnc::{VncSessionManager, classify_vnc_error, validate_vnc_config};

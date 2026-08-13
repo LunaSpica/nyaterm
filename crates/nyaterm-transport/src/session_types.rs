@@ -20,6 +20,7 @@ pub enum SessionKind {
     RawTcp,
     Serial,
     Rdp,
+    Vnc,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
