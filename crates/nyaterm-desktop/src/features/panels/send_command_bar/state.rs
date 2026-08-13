@@ -30,7 +30,7 @@ impl NyaTermApp {
             Some(SessionKind::RawTcp) => "Raw TCP",
             Some(SessionKind::Telnet) => "Telnet",
             Some(SessionKind::Ssh | SessionKind::LocalPty) => self.tr("serialSend.shellCommand"),
-            Some(SessionKind::Rdp) => self.tr("serialSend.unavailable"),
+            Some(SessionKind::Rdp | SessionKind::Vnc) => self.tr("serialSend.unavailable"),
             None => self.tr("serialSend.unavailable"),
         };
         let is_serial_text_line = matches!(active_kind, Some(SessionKind::Serial))

@@ -754,7 +754,7 @@ impl NyaTermApp {
             ConnectionType::Telnet { .. } => "icons/conn/telnet.svg",
             ConnectionType::Serial { .. } => "icons/conn/serial.svg",
             ConnectionType::LocalTerminal { .. } => "icons/conn/terminal.svg",
-            ConnectionType::Rdp { .. } => "icons/conn/server.svg",
+            ConnectionType::Rdp { .. } | ConnectionType::Vnc { .. } => "icons/conn/server.svg",
         };
         div()
             .id(SharedString::from(format!(
@@ -851,7 +851,7 @@ impl NyaTermApp {
             ConnectionType::Telnet { .. } => "icons/conn/telnet.svg",
             ConnectionType::Serial { .. } => "icons/conn/serial.svg",
             ConnectionType::LocalTerminal { .. } => "icons/conn/terminal.svg",
-            ConnectionType::Rdp { .. } => "icons/conn/server.svg",
+            ConnectionType::Rdp { .. } | ConnectionType::Vnc { .. } => "icons/conn/server.svg",
         };
         let endpoint = connection.endpoint();
         let label = name.clone();

@@ -131,6 +131,7 @@ pub(in crate::features) fn session_kind_label(kind: SessionKind) -> &'static str
         SessionKind::RawTcp => "raw tcp",
         SessionKind::Serial => "serial",
         SessionKind::Rdp => "rdp",
+        SessionKind::Vnc => "vnc",
     }
 }
 

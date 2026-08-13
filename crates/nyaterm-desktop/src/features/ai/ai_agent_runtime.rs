@@ -205,7 +205,11 @@ impl NyaTermApp {
                 },
                 "local",
             ),
-            SessionKind::Telnet | SessionKind::RawTcp | SessionKind::Serial | SessionKind::Rdp => {
+            SessionKind::Telnet
+            | SessionKind::RawTcp
+            | SessionKind::Serial
+            | SessionKind::Rdp
+            | SessionKind::Vnc => {
                 return Err(format!(
                     "AI Agent background execution is not supported for {:?} sessions",
                     session.kind
@@ -441,7 +445,9 @@ impl NyaTermApp {
                 | SessionKind::Ssh
                 | SessionKind::Telnet
                 | SessionKind::RawTcp => AiExecutionProfile::Posix,
-                SessionKind::Serial | SessionKind::Rdp => AiExecutionProfile::SendOnly,
+                SessionKind::Serial | SessionKind::Rdp | SessionKind::Vnc => {
+                    AiExecutionProfile::SendOnly
+                }
             })
             .unwrap_or(AiExecutionProfile::SendOnly)
     }

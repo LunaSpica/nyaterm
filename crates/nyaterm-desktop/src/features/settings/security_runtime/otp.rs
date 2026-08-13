@@ -583,7 +583,7 @@ impl NyaTermApp {
             && self
                 .session
                 .session_info(session_id)
-                .is_some_and(|session| session.kind != SessionKind::Rdp)
+                .is_some_and(|session| !matches!(session.kind, SessionKind::Rdp | SessionKind::Vnc))
     }
 
     pub(in crate::features) fn send_security_otp_to_terminal(

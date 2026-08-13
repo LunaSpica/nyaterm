@@ -1394,6 +1394,7 @@ fn terminal_canvas_session_kind_label(config: &SessionLaunchConfig) -> &'static 
         SessionLaunchConfig::Telnet(_) => "Telnet",
         SessionLaunchConfig::Serial(_) => "Serial",
         SessionLaunchConfig::Rdp(_) => "RDP",
+        SessionLaunchConfig::Vnc(_) => "VNC",
     }
 }
 

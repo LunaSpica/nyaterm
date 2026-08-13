@@ -533,5 +533,6 @@ fn multi_leaf_session_kind_icon(kind: nyaterm_transport::SessionKind) -> &'stati
         nyaterm_transport::SessionKind::Serial => "icons/conn/serial.svg",
         nyaterm_transport::SessionKind::LocalPty => "icons/conn/terminal.svg",
         nyaterm_transport::SessionKind::Rdp => "icons/conn/rdp.svg",
+        nyaterm_transport::SessionKind::Vnc => "icons/conn/server.svg",
     }
 }

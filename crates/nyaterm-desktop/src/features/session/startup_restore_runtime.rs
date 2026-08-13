@@ -5,7 +5,9 @@ use nyaterm_core::{
 };
 use nyaterm_transport::{
     LocalSessionConfig, RdpClipboardConfig, RdpDisplayConfig, RdpReconnectConfig, RdpSessionConfig,
-    SessionInfo, parse_rdp_certificate_policy, parse_rdp_clipboard_mode, parse_rdp_display_mode,
+    SessionInfo, VncClipboardConfig, VncDisplayConfig, VncReconnectConfig, VncSecurityConfig,
+    VncSessionConfig, parse_rdp_certificate_policy, parse_rdp_clipboard_mode,
+    parse_rdp_display_mode, parse_vnc_scale_mode, parse_vnc_security_mode,
 };
 
 use crate::features::{NyaTermApp, SavedConnectionStartOptions};
@@ -194,6 +196,7 @@ impl NyaTermApp {
             Some(SessionLaunchConfig::Telnet(_)) => "Telnet",
             Some(SessionLaunchConfig::Serial(_)) => "Serial",
             Some(SessionLaunchConfig::Rdp(_)) => "RDP",
+            Some(SessionLaunchConfig::Vnc(_)) => "VNC",
             Some(SessionLaunchConfig::Local(_)) | None => "Local",
         }
         .to_string();
@@ -558,6 +561,65 @@ impl NyaTermApp {
                         source_connection_id: Some(connection.id.clone()),
                         ai_execution_profile: AiExecutionProfile::Disabled,
                         launch_config: SessionLaunchConfig::Rdp(config),
+                        disconnected: true,
+                    },
+                );
+                if let Some(name) = custom_name {
+                    self.session.set_custom_name(session_id.clone(), name);
+                }
+                if let Some(color) = tab_color {
+                    self.session.set_tab_color(&session_id, Some(color));
+                }
+                if tab.locked {
+                    self.session.set_tab_locked(&session_id, true);
+                }
+                if self.session.active_id().is_none() {
+                    self.activate_session_id(&session_id);
+                }
+                return false;
+            }
+            if let nyaterm_core::ConnectionType::Vnc {
+                host,
+                port,
+                security,
+                display,
+                clipboard,
+                reconnect,
+                shared,
+                view_only,
+            } = &connection.config
+            {
+                let session_id = nyaterm_core::uuid();
+                let config = VncSessionConfig {
+                    name: connection.name.clone(),
+                    host: host.clone(),
+                    port: *port,
+                    password: None,
+                    security: VncSecurityConfig {
+                        mode: parse_vnc_security_mode(&security.mode),
+                    },
+                    display: VncDisplayConfig {
+                        scale_mode: parse_vnc_scale_mode(&display.scale_mode),
+                    },
+                    clipboard: VncClipboardConfig {
+                        enabled: clipboard.enabled,
+                    },
+                    reconnect: VncReconnectConfig {
+                        enabled: reconnect.enabled,
+                        max_attempts: reconnect.max_attempts,
+                    },
+                    shared: *shared,
+                    view_only: *view_only,
+                };
+                self.remote_desktop.insert_disconnected(session_id.clone());
+                self.register_session(
+                    &session_id,
+                    crate::models::SessionRuntimeMetadata {
+                        ssh_config: None,
+                        ssh_multiplex_key: None,
+                        source_connection_id: Some(connection.id.clone()),
+                        ai_execution_profile: AiExecutionProfile::Disabled,
+                        launch_config: SessionLaunchConfig::Vnc(config),
                         disconnected: true,
                     },
                 );

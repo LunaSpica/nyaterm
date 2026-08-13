@@ -77,8 +77,7 @@ impl NyaTermApp {
         for close_id in &close_ids {
             let disconnected = self.session.is_disconnected(close_id);
             let close_result = if self.remote_desktop.is_session(close_id) {
-                self.close_rdp_runtime(close_id)
-                    .map_err(anyhow::Error::from)
+                self.close_remote_desktop_runtime(close_id)
             } else {
                 self.session
                     .manager()
@@ -156,8 +155,7 @@ impl NyaTermApp {
         let was_active = self.session.active_id() == Some(pane_id.as_str());
         let disconnected = self.session.is_disconnected(&pane_id);
         let close_result = if self.remote_desktop.is_session(&pane_id) {
-            self.close_rdp_runtime(&pane_id)
-                .map_err(anyhow::Error::from)
+            self.close_remote_desktop_runtime(&pane_id)
         } else {
             self.session
                 .manager()
@@ -212,8 +210,7 @@ impl NyaTermApp {
         let mut failed = 0usize;
         for session_id in session_ids {
             let close_result = if self.remote_desktop.is_session(&session_id) {
-                self.close_rdp_runtime(&session_id)
-                    .map_err(anyhow::Error::from)
+                self.close_remote_desktop_runtime(&session_id)
             } else {
                 self.session
                     .manager()

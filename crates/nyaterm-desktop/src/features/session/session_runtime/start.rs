@@ -11,8 +11,10 @@ use nyaterm_core::{
 use nyaterm_transport::{
     LocalSessionConfig, RdpClipboardConfig, RdpDisplayConfig, RdpReconnectConfig, RdpSessionConfig,
     SerialSessionConfig, SessionKind, SshKeyAuthConfig, SshProxyConfig, SshSessionConfig,
-    SshSessionProfile, TelnetAutoLoginConfig, TelnetSessionConfig, parse_rdp_certificate_policy,
-    parse_rdp_clipboard_mode, parse_rdp_display_mode,
+    SshSessionProfile, TelnetAutoLoginConfig, TelnetSessionConfig, VncClipboardConfig,
+    VncDisplayConfig, VncReconnectConfig, VncSecurityConfig, VncSessionConfig,
+    parse_rdp_certificate_policy, parse_rdp_clipboard_mode, parse_rdp_display_mode,
+    parse_vnc_scale_mode, parse_vnc_security_mode,
 };
 
 use super::super::NativeHostKeyVerifier;
@@ -305,6 +307,113 @@ impl NyaTermApp {
                                 source_connection_id: Some(connection.id.clone()),
                                 ai_execution_profile: AiExecutionProfile::Disabled,
                                 launch_config: SessionLaunchConfig::Rdp(config),
+                                disconnected: false,
+                            },
+                        );
+                        if let Some(custom_name) = options.custom_name {
+                            self.session
+                                .set_custom_name(session_id.clone(), custom_name);
+                        }
+                        if let Some(color) = options.tab_color {
+                            self.session.set_tab_color(&session_id, Some(color));
+                        }
+                        if options.locked {
+                            self.session.set_tab_locked(&session_id, true);
+                        }
+                        self.activate_session_id(&session_id);
+                        self.shell.set_status(message);
+                    }
+                }
+                self.shell.show_workspace();
+                cx.notify();
+            }
+            ConnectionType::Vnc {
+                host,
+                port,
+                security,
+                display,
+                clipboard,
+                reconnect,
+                shared,
+                view_only,
+            } => {
+                let config = VncSessionConfig {
+                    name: connection.name.clone(),
+                    host,
+                    port,
+                    password: load_telnet_connection_password(self, connection.auth.as_ref()),
+                    security: VncSecurityConfig {
+                        mode: parse_vnc_security_mode(&security.mode),
+                    },
+                    display: VncDisplayConfig {
+                        scale_mode: parse_vnc_scale_mode(&display.scale_mode),
+                    },
+                    clipboard: VncClipboardConfig {
+                        enabled: clipboard.enabled,
+                    },
+                    reconnect: VncReconnectConfig {
+                        enabled: reconnect.enabled,
+                        max_attempts: reconnect.max_attempts,
+                    },
+                    shared,
+                    view_only,
+                };
+                match self.create_vnc_runtime(config.clone()) {
+                    Ok(session_id) => {
+                        self.register_session(
+                            &session_id,
+                            crate::models::SessionRuntimeMetadata {
+                                ssh_config: None,
+                                ssh_multiplex_key: None,
+                                source_connection_id: Some(connection.id.clone()),
+                                ai_execution_profile: AiExecutionProfile::Disabled,
+                                launch_config: SessionLaunchConfig::Vnc(config),
+                                disconnected: false,
+                            },
+                        );
+                        if let Some(custom_name) = options.custom_name {
+                            self.session
+                                .set_custom_name(session_id.clone(), custom_name);
+                        }
+                        if let Some(color) = options.tab_color {
+                            self.session.set_tab_color(&session_id, Some(color));
+                        }
+                        if options.locked {
+                            self.session.set_tab_locked(&session_id, true);
+                        }
+                        if let Some(after_session_id) = options.after_session_id {
+                            self.session
+                                .move_session_after(&session_id, &after_session_id);
+                        }
+                        if let Some(insert_index) = options.insert_index {
+                            self.session
+                                .move_session_to_index(&session_id, insert_index);
+                        }
+                        if let Ok(store) = ConnectionStore::open_with_portable_key_path(
+                            self.runtime.config_dir(),
+                            self.runtime.portable_key_path().map(ToOwned::to_owned),
+                        ) {
+                            let _ = store.mark_connection_used(&connection.id);
+                            if let Ok(Some(updated)) = store.get_connection(&connection.id) {
+                                self.connection_state.update_connection(updated);
+                            }
+                        }
+                        self.activate_session_id(&session_id);
+                        self.apply_pending_workspace_split_for_duplicate(&session_id);
+                        self.shell
+                            .set_status(format!("connecting VNC {}", connection.name));
+                    }
+                    Err(error) => {
+                        let message = format!("VNC connection failed: {error}");
+                        let session_id = self.create_failed_vnc_runtime(error);
+                        self.register_session(
+                            &session_id,
+                            crate::models::SessionRuntimeMetadata {
+                                ssh_config: None,
+                                ssh_multiplex_key: None,
+                                source_connection_id: Some(connection.id.clone()),
+                                ai_execution_profile: AiExecutionProfile::Disabled,
+                                launch_config: SessionLaunchConfig::Vnc(config),
                                 disconnected: false,
                             },
                         );

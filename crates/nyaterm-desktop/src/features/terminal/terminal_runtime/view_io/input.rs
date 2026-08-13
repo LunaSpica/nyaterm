@@ -870,7 +870,12 @@ impl NyaTermApp {
         let is_terminal = self
             .session
             .session_info(&session_id)
-            .is_some_and(|session| session.kind != nyaterm_transport::SessionKind::Rdp);
+            .is_some_and(|session| {
+                !matches!(
+                    session.kind,
+                    nyaterm_transport::SessionKind::Rdp | nyaterm_transport::SessionKind::Vnc
+                )
+            });
         if !is_terminal {
             return false;
         }

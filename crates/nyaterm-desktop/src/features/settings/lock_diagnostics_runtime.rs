@@ -209,6 +209,7 @@ impl NyaTermApp {
                 SessionKind::RawTcp => raw_tcp_sessions += 1,
                 SessionKind::Serial => serial_sessions += 1,
                 SessionKind::Rdp => {}
+                SessionKind::Vnc => {}
             }
         }
 

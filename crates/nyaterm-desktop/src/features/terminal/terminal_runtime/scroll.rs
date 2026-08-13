@@ -996,9 +996,10 @@ impl NyaTermApp {
                     .collect();
                 self.start_zmodem_upload(session_id, files, cx);
             }
-            Some(SessionKind::Rdp) => {
-                self.shell
-                    .set_status("file drop is not supported for RDP sessions".to_string());
+            Some(SessionKind::Rdp | SessionKind::Vnc) => {
+                self.shell.set_status(
+                    "file drop is not supported for remote desktop sessions".to_string(),
+                );
                 cx.notify();
             }
         }

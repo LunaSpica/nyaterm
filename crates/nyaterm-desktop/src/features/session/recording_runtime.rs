@@ -459,6 +459,13 @@ fn recording_launch_context(
             Some(config.port),
             Some(config.username.clone()),
         ),
+        SessionLaunchConfig::Vnc(config) => (
+            config.name.clone(),
+            "vnc".to_string(),
+            Some(config.host.clone()),
+            Some(config.port),
+            None,
+        ),
     }
 }
 

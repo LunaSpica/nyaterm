@@ -111,9 +111,9 @@ impl NyaTermApp {
                     cx,
                 );
             }
-            SessionLaunchConfig::Rdp(_) => {
+            SessionLaunchConfig::Rdp(_) | SessionLaunchConfig::Vnc(_) => {
                 self.shell
-                    .set_status("RDP duplication is not available in this phase".to_string());
+                    .set_status("remote desktop duplication is not available".to_string());
             }
         }
         self.shell.show_workspace();
@@ -228,7 +228,7 @@ impl NyaTermApp {
         self.session.begin_disconnect_action(session_id.clone());
         // Backend may already be gone (race with Exited); still mark disconnected.
         if self.remote_desktop.is_session(&session_id) {
-            let _ = self.close_rdp_runtime(&session_id);
+            let _ = self.close_remote_desktop_runtime(&session_id);
         } else {
             let _ = self.session.manager().close(&session_id);
         }
@@ -331,7 +331,7 @@ impl NyaTermApp {
 
         // Close live backend if still present.
         if self.remote_desktop.is_session(&old_id) {
-            let _ = self.close_rdp_runtime(&old_id);
+            let _ = self.close_remote_desktop_runtime(&old_id);
         } else {
             let _ = self.session.manager().close(&old_id);
         }
@@ -417,10 +417,10 @@ impl NyaTermApp {
                     cx,
                 );
             }
-            SessionLaunchConfig::Rdp(_) => {
+            SessionLaunchConfig::Rdp(_) | SessionLaunchConfig::Vnc(_) => {
                 self.session.finish_busy_action(&old_id);
                 self.shell
-                    .set_status("Use Retry in the RDP view to reconnect".to_string());
+                    .set_status("Use Retry in the remote desktop view to reconnect".to_string());
             }
         }
         // Tauri clears busy when reconnect action returns (even if SSH still connecting).

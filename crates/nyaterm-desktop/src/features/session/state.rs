@@ -1150,6 +1150,7 @@ impl SessionFeatureState {
                 config.stop_bits
             )),
             SessionLaunchConfig::Rdp(config) => Some(format!("{}:{}", config.host, config.port)),
+            SessionLaunchConfig::Vnc(config) => Some(format!("{}:{}", config.host, config.port)),
         }
     }
 
@@ -1464,6 +1465,14 @@ fn session_info_from_metadata(session_id: &str, metadata: &SessionRuntimeMetadat
             working_dir: None,
             cols: u16::try_from(config.display.width).unwrap_or(u16::MAX),
             rows: u16::try_from(config.display.height).unwrap_or(u16::MAX),
+        },
+        SessionLaunchConfig::Vnc(config) => SessionInfo {
+            id: session_id.to_string(),
+            name: config.name.clone(),
+            kind: SessionKind::Vnc,
+            working_dir: None,
+            cols: 80,
+            rows: 24,
         },
     }
 }

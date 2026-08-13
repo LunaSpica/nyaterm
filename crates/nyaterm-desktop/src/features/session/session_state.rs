@@ -121,6 +121,11 @@ impl NyaTermApp {
                 details.push((self.tr("sessionInfo.port"), config.port.to_string()));
                 details.push((self.tr("sessionInfo.username"), config.username.clone()));
             }
+            SessionLaunchConfig::Vnc(config) => {
+                details.push((self.tr("sessionInfo.launch"), "VNC".to_string()));
+                details.push((self.tr("sessionInfo.host"), config.host.clone()));
+                details.push((self.tr("sessionInfo.port"), config.port.to_string()));
+            }
         }
 
         Some(details)

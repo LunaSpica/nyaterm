@@ -3,7 +3,9 @@ use gpui::{
     MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point, ScrollDelta, ScrollWheelEvent,
     Size, canvas, div, prelude::*, px, rgb,
 };
-use nyaterm_remote_desktop::{RdpCertificateResponse, RdpPointerButton, RdpSessionState};
+use nyaterm_remote_desktop::{
+    RdpCertificateResponse, RdpPointerButton, RdpSessionState, VncScaleMode,
+};
 
 use crate::features::NyaTermApp;
 use crate::widgets::small_button;
@@ -138,6 +140,14 @@ impl NyaTermApp {
                 .into_any_element();
         };
         let remote_size = (framebuffer.width(), framebuffer.height());
+        let scale_mode = self
+            .session
+            .metadata(&session_id)
+            .and_then(|metadata| match &metadata.launch_config {
+                crate::models::SessionLaunchConfig::Vnc(config) => Some(config.display.scale_mode),
+                _ => None,
+            })
+            .unwrap_or(VncScaleMode::Fit);
         let cursor = session.cursor.clone();
         let cursor_texture = session.cursor_texture;
         let app = cx.entity();
@@ -151,7 +161,7 @@ impl NyaTermApp {
                         this.update_rdp_viewport(&session_id, bounds);
                     });
                 });
-                contain_bounds(bounds, remote_size.0, remote_size.1)
+                remote_desktop_image_bounds(bounds, remote_size.0, remote_size.1, scale_mode)
             },
             move |_, image_bounds, window, _| {
                 let _ = window.paint_dynamic_texture(image_bounds, texture);
@@ -424,14 +434,22 @@ impl NyaTermApp {
     }
 }
 
-fn contain_bounds(
+fn remote_desktop_image_bounds(
     viewport: Bounds<Pixels>,
     remote_width: u32,
     remote_height: u32,
+    scale_mode: VncScaleMode,
 ) -> Bounds<Pixels> {
+    if matches!(scale_mode, VncScaleMode::Stretch) {
+        return viewport;
+    }
     let viewport_width = f32::from(viewport.size.width);
     let viewport_height = f32::from(viewport.size.height);
-    let scale = (viewport_width / remote_width as f32).min(viewport_height / remote_height as f32);
+    let scale = if matches!(scale_mode, VncScaleMode::Actual) {
+        1.0
+    } else {
+        (viewport_width / remote_width as f32).min(viewport_height / remote_height as f32)
+    };
     let width = remote_width as f32 * scale;
     let height = remote_height as f32 * scale;
     Bounds::new(

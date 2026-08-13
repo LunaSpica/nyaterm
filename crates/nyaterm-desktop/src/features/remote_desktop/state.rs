@@ -5,11 +5,12 @@ use std::time::Instant;
 use gpui::{Bounds, DynamicTexture, FocusHandle, Pixels, Subscription};
 use nyaterm_remote_desktop::{
     ClipboardTracker, Framebuffer, KeyMapper, RdpCapability, RdpCertificateRequest, RdpCursorEvent,
-    RdpError, RdpSessionManager, RdpSessionState,
+    RdpError, RdpSessionManager, RdpSessionState, VncSessionManager,
 };
 
 pub(in crate::features) struct RemoteDesktopFeatureState {
     pub(super) manager: Arc<RdpSessionManager>,
+    pub(super) vnc_manager: Arc<VncSessionManager>,
     pub(super) sessions: HashMap<String, RemoteDesktopSessionState>,
     pub(super) focus: FocusHandle,
     pub(super) last_clipboard_poll: Option<Instant>,
@@ -34,6 +35,7 @@ pub(super) struct RemoteDesktopSessionState {
     pub(super) clipboard: ClipboardTracker,
     pub(super) keys: KeyMapper,
     pub(super) last_pointer: Option<(u32, u32)>,
+    pub(super) vnc_button_mask: u8,
     pub(super) last_pointer_sent_at: Option<Instant>,
     pub(super) pending_pointer: Option<(u32, u32)>,
     pub(super) last_resize: Option<(u32, u32)>,
@@ -59,6 +61,7 @@ impl Default for RemoteDesktopSessionState {
             clipboard: ClipboardTracker::default(),
             keys: KeyMapper::default(),
             last_pointer: None,
+            vnc_button_mask: 0,
             last_pointer_sent_at: None,
             pending_pointer: None,
             last_resize: None,
@@ -76,6 +79,7 @@ impl RemoteDesktopFeatureState {
     pub(in crate::features) fn new(focus: FocusHandle) -> Self {
         Self {
             manager: Arc::new(RdpSessionManager::new()),
+            vnc_manager: Arc::new(VncSessionManager::new()),
             sessions: HashMap::new(),
             focus,
             last_clipboard_poll: None,
