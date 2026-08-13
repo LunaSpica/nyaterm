@@ -5,13 +5,15 @@ use nyaterm_core::{ConnectionStore, KnownHostCheck, RdpCertificateMetadata};
 use nyaterm_remote_desktop::{
     CertificateDecision, ClipboardOrigin, DirtyRect, Framebuffer, RdpCapability,
     RdpCertificatePolicy, RdpCertificateRequest, RdpCertificateResponse, RdpClipboardMode,
-    RdpError, RdpErrorKind, RdpFrameEvent, RdpInputEvent, RdpRuntimeEvent, RdpSessionConfig,
-    RdpSessionState,
+    RdpDisplayMode, RdpError, RdpErrorKind, RdpFrameEvent, RdpInputEvent, RdpRuntimeEvent,
+    RdpSessionConfig, RdpSessionState,
 };
 
 use crate::features::NyaTermApp;
 
 const RESIZE_DEBOUNCE: Duration = Duration::from_millis(150);
+const RESIZE_FAILURE_WINDOW: Duration = Duration::from_secs(3);
+const RESIZE_MIN_DELTA: u32 = 32;
 const CLIPBOARD_POLL_INTERVAL: Duration = Duration::from_millis(250);
 const POINTER_MOVE_INTERVAL: Duration = Duration::from_millis(8);
 const METRICS_REPORT_INTERVAL: Duration = Duration::from_secs(5);
@@ -89,6 +91,11 @@ impl NyaTermApp {
                 .get(session_id)
                 .map_or(0, |session| session.reconnect_attempts)
         };
+        let dynamic_resize_disabled = self
+            .remote_desktop
+            .sessions
+            .get(session_id)
+            .is_some_and(|session| session.dynamic_resize_disabled);
         let _ = self.close_rdp_runtime(session_id);
         match self
             .remote_desktop
@@ -100,6 +107,7 @@ impl NyaTermApp {
                     .insert_connecting(session_id.to_string());
                 if let Some(session) = self.remote_desktop.sessions.get_mut(session_id) {
                     session.reconnect_attempts = reconnect_attempts;
+                    session.dynamic_resize_disabled = dynamic_resize_disabled;
                 }
                 if let Some(metadata) = self.session.metadata_mut(session_id) {
                     metadata.disconnected = false;
@@ -208,10 +216,21 @@ impl NyaTermApp {
         session_id: &str,
         bounds: Bounds<gpui::Pixels>,
     ) {
+        let fit_window = self.session.metadata(session_id).is_some_and(|metadata| {
+            matches!(
+                &metadata.launch_config,
+                crate::models::SessionLaunchConfig::Rdp(config)
+                    if config.display.mode == RdpDisplayMode::FitWindow
+            )
+        });
         let Some(session) = self.remote_desktop.sessions.get_mut(session_id) else {
             return;
         };
         session.viewport = Some(bounds);
+        if !fit_window || session.dynamic_resize_disabled {
+            session.pending_resize = None;
+            return;
+        }
         self.queue_rdp_resize(
             session_id,
             f32::from(bounds.size.width).round().max(1.0) as u32,
@@ -380,6 +399,14 @@ impl NyaTermApp {
         match event {
             RdpRuntimeEvent::State { state, message, .. } => {
                 if let Some(session) = self.remote_desktop.sessions.get_mut(session_id) {
+                    if should_disable_dynamic_resize_after_state(
+                        &state,
+                        session.last_resize_sent_at,
+                        Instant::now(),
+                    ) {
+                        session.dynamic_resize_disabled = true;
+                        session.pending_resize = None;
+                    }
                     if let RdpSessionState::Failed(error) = &state {
                         session.error = Some(error.clone());
                     }
@@ -750,9 +777,16 @@ impl NyaTermApp {
     ) {
         let width = width.clamp(200, 8192) & !1;
         let height = height.clamp(200, 8192) & !1;
-        if let Some(session) = self.remote_desktop.sessions.get_mut(session_id)
-            && session.last_resize != Some((width, height))
-        {
+        if let Some(session) = self.remote_desktop.sessions.get_mut(session_id) {
+            let remote_size = session
+                .framebuffer
+                .as_ref()
+                .map(|framebuffer| (framebuffer.width(), framebuffer.height()));
+            if session.dynamic_resize_disabled
+                || !rdp_resize_is_material(remote_size, session.last_resize, (width, height))
+            {
+                return;
+            }
             session.pending_resize = Some((width, height, Instant::now()));
         }
     }
@@ -775,6 +809,7 @@ impl NyaTermApp {
                 .is_ok()
             {
                 session.last_resize = Some((width, height));
+                session.last_resize_sent_at = Some(now);
                 sent = true;
             }
         }
@@ -913,6 +948,33 @@ fn clear_rdp_reconnect_after_frame(session: &mut super::state::RemoteDesktopSess
     session.error = None;
 }
 
+fn rdp_resize_is_material(
+    remote_size: Option<(u32, u32)>,
+    last_resize: Option<(u32, u32)>,
+    requested: (u32, u32),
+) -> bool {
+    if last_resize == Some(requested) {
+        return false;
+    }
+    let Some((remote_width, remote_height)) = remote_size else {
+        return true;
+    };
+    remote_width.abs_diff(requested.0) >= RESIZE_MIN_DELTA
+        || remote_height.abs_diff(requested.1) >= RESIZE_MIN_DELTA
+}
+
+fn should_disable_dynamic_resize_after_state(
+    state: &RdpSessionState,
+    last_resize_sent_at: Option<Instant>,
+    now: Instant,
+) -> bool {
+    matches!(
+        state,
+        RdpSessionState::Reconnecting | RdpSessionState::Failed(_)
+    ) && last_resize_sent_at
+        .is_some_and(|sent_at| now.saturating_duration_since(sent_at) <= RESIZE_FAILURE_WINDOW)
+}
+
 pub(super) fn format_rdp_error(error: &RdpError) -> String {
     let category = match error.kind {
         RdpErrorKind::Authentication => "Authentication failed",
@@ -970,7 +1032,10 @@ mod tests {
 
     use nyaterm_remote_desktop::{RdpError, RdpErrorKind};
 
-    use super::{clear_rdp_reconnect_after_frame, rdp_error_is_retryable, rdp_reconnect_delay};
+    use super::{
+        clear_rdp_reconnect_after_frame, rdp_error_is_retryable, rdp_reconnect_delay,
+        rdp_resize_is_material, should_disable_dynamic_resize_after_state,
+    };
     use crate::features::remote_desktop::state::RemoteDesktopSessionState;
 
     #[test]
@@ -1025,5 +1090,42 @@ mod tests {
         assert_eq!(session.reconnect_attempts, 0);
         assert_eq!(session.reconnect_at, None);
         assert_eq!(session.error, None);
+    }
+
+    #[test]
+    fn resize_filter_ignores_duplicate_and_sub_threshold_changes() {
+        assert!(!rdp_resize_is_material(
+            Some((1280, 720)),
+            None,
+            (1300, 740)
+        ));
+        assert!(rdp_resize_is_material(Some((1280, 720)), None, (1312, 720)));
+        assert!(!rdp_resize_is_material(
+            None,
+            Some((1280, 720)),
+            (1280, 720)
+        ));
+        assert!(rdp_resize_is_material(None, None, (1280, 720)));
+    }
+
+    #[test]
+    fn resize_related_failure_disables_dynamic_resize_only_inside_window() {
+        let now = Instant::now();
+        let error = RdpError::new(RdpErrorKind::Session, "resize failed");
+        assert!(should_disable_dynamic_resize_after_state(
+            &nyaterm_remote_desktop::RdpSessionState::Failed(error.clone()),
+            Some(now - Duration::from_secs(2)),
+            now,
+        ));
+        assert!(!should_disable_dynamic_resize_after_state(
+            &nyaterm_remote_desktop::RdpSessionState::Failed(error),
+            Some(now - Duration::from_secs(4)),
+            now,
+        ));
+        assert!(!should_disable_dynamic_resize_after_state(
+            &nyaterm_remote_desktop::RdpSessionState::Connected,
+            Some(now),
+            now,
+        ));
     }
 }

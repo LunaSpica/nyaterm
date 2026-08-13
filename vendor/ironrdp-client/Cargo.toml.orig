@@ -53,6 +53,7 @@ all = [
 [dependencies]
 # Protocols (core features always on)
 ironrdp-core = { path = "../ironrdp-core", version = "0.2", features = ["alloc"] }
+ironrdp-bulk = { path = "../ironrdp-bulk", version = "0.1" }
 ironrdp-pdu = { path = "../ironrdp-pdu", version = "0.9" } # public
 ironrdp-svc = { path = "../ironrdp-svc", version = "0.8" } # public
 ironrdp-dvc = { path = "../ironrdp-dvc", version = "0.8" } # public

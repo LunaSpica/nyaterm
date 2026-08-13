@@ -135,6 +135,9 @@ optional = true
 [dependencies.ironrdp-pdu]
 version = "0.9"
 
+[dependencies.ironrdp-bulk]
+version = "0.1"
+
 [dependencies.ironrdp-propertyset]
 version = "0.1"
 

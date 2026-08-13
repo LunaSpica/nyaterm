@@ -4037,6 +4037,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "futures-util",
+ "ironrdp-bulk",
  "ironrdp-cfg",
  "ironrdp-cliprdr",
  "ironrdp-cliprdr-native",

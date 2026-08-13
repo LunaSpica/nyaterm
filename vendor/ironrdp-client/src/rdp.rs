@@ -17,8 +17,11 @@ use ironrdp_pdu::input::fast_path::FastPathInputEvent;
 use ironrdp_pdu::input::mouse::PointerFlags;
 #[cfg(any(feature = "dvc-pipe-proxy", all(windows, feature = "dvc-com-plugin")))]
 use ironrdp_pdu::pdu_other_err;
+use ironrdp_pdu::rdp::client_info::CompressionType as PduCompressionType;
 use ironrdp_session::image::DecodedImage;
-use ironrdp_session::{ActiveStageBuilder, ActiveStageOutput, GracefulDisconnectReason, SessionResult, fast_path};
+use ironrdp_session::{
+    ActiveStageBuilder, ActiveStageOutput, GracefulDisconnectReason, SessionResult, fast_path,
+};
 use ironrdp_svc::SvcMessage;
 use ironrdp_tokio::reqwest::ReqwestNetworkClient;
 use ironrdp_tokio::{FramedWrite, single_sequence_step_read, split_tokio_framed};
@@ -160,7 +163,9 @@ impl RdpClient {
                     {
                         use crate::clipboard::ClientClipboardMessageProxy;
                         use ironrdp_cliprdr_native::WinClipboard;
-                        match WinClipboard::new(ClientClipboardMessageProxy::new(self.input_event_sender.clone())) {
+                        match WinClipboard::new(ClientClipboardMessageProxy::new(
+                            self.input_event_sender.clone(),
+                        )) {
                             Ok(win_cb) => {
                                 cliprdr_factory = Some(win_cb.backend_factory());
                                 _win_clipboard = Some(win_cb);
@@ -168,10 +173,12 @@ impl RdpClient {
                             Err(e) => {
                                 let _ = self
                                     .output_event_sender
-                                    .send(RdpOutputEvent::ConnectionFailure(ironrdp_connector::custom_err!(
-                                        "Windows clipboard initialization",
-                                        e
-                                    )))
+                                    .send(RdpOutputEvent::ConnectionFailure(
+                                        ironrdp_connector::custom_err!(
+                                            "Windows clipboard initialization",
+                                            e
+                                        ),
+                                    ))
                                     .await;
                                 return;
                             }
@@ -199,7 +206,9 @@ impl RdpClient {
         loop {
             let (connection_result, framed) = match &self.config.transport {
                 Transport::Direct => {
-                    match connect_direct(&self.config, &self.input_event_sender, cliprdr_factory).await {
+                    match connect_direct(&self.config, &self.input_event_sender, cliprdr_factory)
+                        .await
+                    {
                         Ok(r) => r,
                         Err(e) => {
                             let _ = self
@@ -213,7 +222,14 @@ impl RdpClient {
 
                 #[cfg(feature = "gateway")]
                 Transport::Gateway(gw) => {
-                    match connect_gateway(&self.config, gw, &self.input_event_sender, cliprdr_factory).await {
+                    match connect_gateway(
+                        &self.config,
+                        gw,
+                        &self.input_event_sender,
+                        cliprdr_factory,
+                    )
+                    .await
+                    {
                         Ok(r) => r,
                         Err(e) => {
                             let _ = self
@@ -226,8 +242,13 @@ impl RdpClient {
                 }
 
                 Transport::RDCleanPath(rdcp) => {
-                    match connect_rdcleanpath_transport(&self.config, rdcp, &self.input_event_sender, cliprdr_factory)
-                        .await
+                    match connect_rdcleanpath_transport(
+                        &self.config,
+                        rdcp,
+                        &self.input_event_sender,
+                        cliprdr_factory,
+                    )
+                    .await
                     {
                         Ok(r) => r,
                         Err(e) => {
@@ -258,7 +279,10 @@ impl RdpClient {
                     break;
                 }
                 Err(e) => {
-                    let _ = self.output_event_sender.send(RdpOutputEvent::Terminated(Err(e))).await;
+                    let _ = self
+                        .output_event_sender
+                        .send(RdpOutputEvent::Terminated(Err(e)))
+                        .await;
                     break;
                 }
             }
@@ -310,7 +334,10 @@ fn build_connector(
             &pipe_name,
             move |channel_id, messages| {
                 sender
-                    .send(RdpInputEvent::SendDvcMessages { channel_id, messages })
+                    .send(RdpInputEvent::SendDvcMessages {
+                        channel_id,
+                        messages,
+                    })
                     .map_err(|_| pdu_other_err!("send DVC messages to the event loop"))?;
                 Ok(())
             },
@@ -327,7 +354,10 @@ fn build_connector(
                 let sender = sender_clone.clone();
                 Box::new(move |channel_id, messages| {
                     sender
-                        .send(RdpInputEvent::SendDvcMessages { channel_id, messages })
+                        .send(RdpInputEvent::SendDvcMessages {
+                            channel_id,
+                            messages,
+                        })
                         .map_err(|_| pdu_other_err!("send COM DVC messages to the event loop"))?;
                     Ok(())
                 })
@@ -381,8 +411,8 @@ fn build_connector(
         });
     }
 
-    let mut connector =
-        ironrdp_connector::ClientConnector::new(connector_config, client_addr).with_static_channel(drdynvc);
+    let mut connector = ironrdp_connector::ClientConnector::new(connector_config, client_addr)
+        .with_static_channel(drdynvc);
 
     // Attach RDPSND (audio).
     #[cfg(feature = "sound")]
@@ -402,8 +432,10 @@ fn build_connector(
                 reason = "rdpdr_channel is only reassigned when the smartcard feature is enabled"
             )
         )]
-        let mut rdpdr_channel =
-            ironrdp_rdpdr::Rdpdr::new(Box::new(ironrdp_rdpdr::NoopRdpdrBackend), "IronRDP".to_owned());
+        let mut rdpdr_channel = ironrdp_rdpdr::Rdpdr::new(
+            Box::new(ironrdp_rdpdr::NoopRdpdrBackend),
+            "IronRDP".to_owned(),
+        );
         #[cfg(feature = "smartcard")]
         if config.channels.rdpdr.smartcard {
             rdpdr_channel = rdpdr_channel.with_smartcard(0);
@@ -471,9 +503,10 @@ async fn connect_gateway(
         server: config.destination.name().to_owned(),
     };
 
-    let (gw_stream, client_addr) = ironrdp_mstsgu::GwClient::connect(&gw_target, &config.connector.client_name)
-        .await
-        .map_err(|e| ironrdp_connector::custom_err!("GW connect", e))?;
+    let (gw_stream, client_addr) =
+        ironrdp_mstsgu::GwClient::connect(&gw_target, &config.connector.client_name)
+            .await
+            .map_err(|e| ironrdp_connector::custom_err!("GW connect", e))?;
 
     let framed = ironrdp_tokio::TokioFramed::new(gw_stream);
 
@@ -514,8 +547,14 @@ async fn connect_rdcleanpath_transport(
     let mut connector = build_connector(config, client_addr, input_sender, cliprdr_factory);
 
     let destination = config.destination.to_string();
-    let (upgraded, server_public_key) =
-        rdcleanpath_handshake(&mut framed, &mut connector, destination, rdcp.auth_token.clone(), None).await?;
+    let (upgraded, server_public_key) = rdcleanpath_handshake(
+        &mut framed,
+        &mut connector,
+        destination,
+        rdcp.auth_token.clone(),
+        None,
+    )
+    .await?;
 
     let connection_result = ironrdp_tokio::connect_finalize(
         upgraded,
@@ -530,7 +569,8 @@ async fn connect_rdcleanpath_transport(
 
     let (ws, leftover_bytes) = framed.into_inner();
     let erased_stream: Box<dyn AsyncReadWrite + Unpin + Send + Sync> = Box::new(ws);
-    let upgraded_framed = ironrdp_tokio::TokioFramed::new_with_leftover(erased_stream, leftover_bytes);
+    let upgraded_framed =
+        ironrdp_tokio::TokioFramed::new_with_leftover(erased_stream, leftover_bytes);
 
     Ok((connection_result, upgraded_framed))
 }
@@ -560,13 +600,16 @@ where
         .as_ref()
         .is_some_and(|verifier| !verifier(config.destination.name(), &tls_cert))
     {
-        return Err(ironrdp_connector::general_err!("server certificate rejected"));
+        return Err(ironrdp_connector::general_err!(
+            "server certificate rejected"
+        ));
     }
 
     let upgraded = ironrdp_tokio::mark_as_upgraded(should_upgrade, &mut connector);
 
     let erased_stream: Box<dyn AsyncReadWrite + Unpin + Send + Sync> = Box::new(tls_stream);
-    let mut upgraded_framed = ironrdp_tokio::TokioFramed::new_with_leftover(erased_stream, leftover_bytes);
+    let mut upgraded_framed =
+        ironrdp_tokio::TokioFramed::new_with_leftover(erased_stream, leftover_bytes);
 
     let server_public_key = ironrdp_tls::extract_tls_server_public_key(&tls_cert)
         .ok_or_else(|| ironrdp_connector::general_err!("unable to extract tls server public key"))?
@@ -608,11 +651,14 @@ where
     impl ironrdp_pdu::PduHint for RDCleanPathHint {
         fn find_size(&self, bytes: &[u8]) -> ironrdp_core::DecodeResult<Option<(bool, usize)>> {
             match ironrdp_rdcleanpath::RDCleanPathPdu::detect(bytes) {
-                ironrdp_rdcleanpath::DetectionResult::Detected { total_length, .. } => Ok(Some((true, total_length))),
-                ironrdp_rdcleanpath::DetectionResult::NotEnoughBytes => Ok(None),
-                ironrdp_rdcleanpath::DetectionResult::Failed => {
-                    Err(ironrdp_core::other_err!("RDCleanPathHint", "detection failed"))
+                ironrdp_rdcleanpath::DetectionResult::Detected { total_length, .. } => {
+                    Ok(Some((true, total_length)))
                 }
+                ironrdp_rdcleanpath::DetectionResult::NotEnoughBytes => Ok(None),
+                ironrdp_rdcleanpath::DetectionResult::Failed => Err(ironrdp_core::other_err!(
+                    "RDCleanPathHint",
+                    "detection failed"
+                )),
             }
         }
     }
@@ -622,7 +668,9 @@ where
 
     // Send X224 + RDCleanPath request.
     {
-        let ironrdp_connector::ClientConnectorState::ConnectionInitiationSendRequest = connector.state else {
+        let ironrdp_connector::ClientConnectorState::ConnectionInitiationSendRequest =
+            connector.state
+        else {
             return Err(ironrdp_connector::general_err!(
                 "invalid connector state (send request)"
             ));
@@ -633,9 +681,13 @@ where
         debug_assert_eq!(x224_pdu_len, buf.filled_len());
         let x224_pdu = buf.filled().to_vec();
 
-        let rdcleanpath_req =
-            ironrdp_rdcleanpath::RDCleanPathPdu::new_request(x224_pdu, destination, proxy_auth_token, pcb)
-                .map_err(|e| ironrdp_connector::custom_err!("new RDCleanPath request", e))?;
+        let rdcleanpath_req = ironrdp_rdcleanpath::RDCleanPathPdu::new_request(
+            x224_pdu,
+            destination,
+            proxy_auth_token,
+            pcb,
+        )
+        .map_err(|e| ironrdp_connector::custom_err!("new RDCleanPath request", e))?;
         debug!(message = ?rdcleanpath_req, "Send RDCleanPath request");
         let rdcleanpath_req = rdcleanpath_req
             .to_der()
@@ -671,7 +723,10 @@ where
                 server_addr: _,
             } => (x224_connection_response, server_cert_chain),
             ironrdp_rdcleanpath::RDCleanPath::GeneralErr(error) => {
-                return Err(ironrdp_connector::custom_err!("received RDCleanPath error", error));
+                return Err(ironrdp_connector::custom_err!(
+                    "received RDCleanPath error",
+                    error
+                ));
             }
             ironrdp_rdcleanpath::RDCleanPath::NegotiationErr {
                 x224_connection_response,
@@ -694,7 +749,9 @@ where
             }
         };
 
-        let ironrdp_connector::ClientConnectorState::ConnectionInitiationWaitConfirm { .. } = connector.state else {
+        let ironrdp_connector::ClientConnectorState::ConnectionInitiationWaitConfirm { .. } =
+            connector.state
+        else {
             return Err(ironrdp_connector::general_err!(
                 "invalid connector state (wait confirm)"
             ));
@@ -705,10 +762,9 @@ where
         let written = connector.step(x224_connection_response.as_bytes(), &mut buf)?;
         debug_assert!(written.is_nothing());
 
-        let server_cert = server_cert_chain
-            .into_iter()
-            .next()
-            .ok_or_else(|| ironrdp_connector::general_err!("server cert chain missing from rdcleanpath response"))?;
+        let server_cert = server_cert_chain.into_iter().next().ok_or_else(|| {
+            ironrdp_connector::general_err!("server cert chain missing from rdcleanpath response")
+        })?;
 
         let cert = x509_cert::Certificate::from_der(server_cert.as_bytes())
             .map_err(|e| ironrdp_connector::custom_err!("server cert decode", e))?;
@@ -718,7 +774,9 @@ where
             .subject_public_key_info
             .subject_public_key
             .as_bytes()
-            .ok_or_else(|| ironrdp_connector::general_err!("subject public key BIT STRING is not aligned"))?
+            .ok_or_else(|| {
+                ironrdp_connector::general_err!("subject public key BIT STRING is not aligned")
+            })?
             .to_owned();
 
         let should_upgrade = ironrdp_tokio::skip_connect_begin(connector);
@@ -743,6 +801,7 @@ async fn active_session(
 ) -> SessionResult<RdpControlFlow> {
     let (mut reader, mut writer) = split_tokio_framed(framed);
     let desktop_size = connection_result.desktop_size;
+    let compression_type = connection_result.compression_type;
     let mut image = DecodedImage::new(PixelFormat::RgbA32, desktop_size.width, desktop_size.height);
     output_event_sender
         .send(RdpOutputEvent::DesktopReset {
@@ -773,7 +832,7 @@ async fn active_session(
         io_channel_id: connection_result.io_channel_id,
         message_channel_id: connection_result.message_channel_id,
         share_id: connection_result.share_id,
-        compression_type: connection_result.compression_type,
+        compression_type,
         enable_server_pointer: connection_result.enable_server_pointer,
         pointer_software_rendering: connection_result.pointer_software_rendering,
     }
@@ -788,8 +847,8 @@ async fn active_session(
     // corner.
     let mut last_input = tokio::time::Instant::now();
     let mut last_mouse_pos = (desktop_size.width / 2, desktop_size.height / 2);
-    let mut fake_events_interval =
-        fake_events_interval.map(|interval| tokio::time::interval(core::cmp::max(interval, Duration::from_secs(1))));
+    let mut fake_events_interval = fake_events_interval
+        .map(|interval| tokio::time::interval(core::cmp::max(interval, Duration::from_secs(1))));
 
     let disconnect_reason = 'outer: loop {
         let outputs = tokio::select! {
@@ -997,14 +1056,24 @@ async fn active_session(
                     let mut connection_activation = activation_factory.create();
                     let mut buf = WriteBuf::new();
                     'activation_seq: loop {
-                        let written = single_sequence_step_read(&mut reader, &mut connection_activation, &mut buf)
-                            .await
-                            .map_err(|e| {
-                                ironrdp_session::custom_err!("read deactivation-reactivation sequence step", e)
-                            })?;
+                        let written = single_sequence_step_read(
+                            &mut reader,
+                            &mut connection_activation,
+                            &mut buf,
+                        )
+                        .await
+                        .map_err(|e| {
+                            ironrdp_session::custom_err!(
+                                "read deactivation-reactivation sequence step",
+                                e
+                            )
+                        })?;
                         if written.size().is_some() {
                             writer.write_all(buf.filled()).await.map_err(|e| {
-                                ironrdp_session::custom_err!("write deactivation-reactivation sequence step", e)
+                                ironrdp_session::custom_err!(
+                                    "write deactivation-reactivation sequence step",
+                                    e
+                                )
                             })?;
                         }
                         if let ConnectionActivationState::Finalized {
@@ -1014,8 +1083,15 @@ async fn active_session(
                             pointer_software_rendering,
                         } = connection_activation.connection_activation_state()
                         {
-                            debug!(?desktop_size, "Deactivation-Reactivation Sequence completed");
-                            image = DecodedImage::new(PixelFormat::RgbA32, desktop_size.width, desktop_size.height);
+                            debug!(
+                                ?desktop_size,
+                                "Deactivation-Reactivation Sequence completed"
+                            );
+                            image = DecodedImage::new(
+                                PixelFormat::RgbA32,
+                                desktop_size.width,
+                                desktop_size.height,
+                            );
                             active_stage.set_fastpath_processor(
                                 fast_path::ProcessorBuilder {
                                     io_channel_id: connection_activation.io_channel_id(),
@@ -1023,7 +1099,9 @@ async fn active_session(
                                     share_id,
                                     enable_server_pointer,
                                     pointer_software_rendering,
-                                    bulk_decompressor: None,
+                                    bulk_decompressor: new_fast_path_bulk_decompressor(
+                                        compression_type,
+                                    ),
                                 }
                                 .build(),
                             );
@@ -1035,7 +1113,9 @@ async fn active_session(
                                     height: image.height(),
                                 })
                                 .await
-                                .map_err(|e| ironrdp_session::custom_err!("output_event_sender", e))?;
+                                .map_err(|e| {
+                                    ironrdp_session::custom_err!("output_event_sender", e)
+                                })?;
                             output_event_sender
                                 .send(RdpOutputEvent::ImageRegion {
                                     buffer: image.data().to_vec(),
@@ -1047,7 +1127,9 @@ async fn active_session(
                                     full: true,
                                 })
                                 .await
-                                .map_err(|e| ironrdp_session::custom_err!("output_event_sender", e))?;
+                                .map_err(|e| {
+                                    ironrdp_session::custom_err!("output_event_sender", e)
+                                })?;
                             break 'activation_seq;
                         }
                     }
@@ -1068,4 +1150,23 @@ async fn active_session(
     };
 
     Ok(RdpControlFlow::TerminatedGracefully(disconnect_reason))
+}
+
+fn new_fast_path_bulk_decompressor(
+    compression_type: Option<PduCompressionType>,
+) -> Option<ironrdp_bulk::BulkCompressor> {
+    let compression_type = compression_type?;
+    let bulk_type = match compression_type {
+        PduCompressionType::K8 => ironrdp_bulk::CompressionType::Rdp4,
+        PduCompressionType::K64 => ironrdp_bulk::CompressionType::Rdp5,
+        PduCompressionType::Rdp6 => ironrdp_bulk::CompressionType::Rdp6,
+        PduCompressionType::Rdp61 => ironrdp_bulk::CompressionType::Rdp61,
+    };
+    match ironrdp_bulk::BulkCompressor::new(bulk_type) {
+        Ok(decompressor) => Some(decompressor),
+        Err(error) => {
+            warn!(%error, compression_type = %bulk_type, "Failed to initialize FastPath bulk decompressor");
+            None
+        }
+    }
 }
