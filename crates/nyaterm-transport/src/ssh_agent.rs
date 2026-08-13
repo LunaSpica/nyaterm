@@ -68,9 +68,10 @@ async fn connect_auto() -> anyhow::Result<DynamicAgentStream> {
 
 #[cfg(windows)]
 async fn connect_auto() -> anyhow::Result<DynamicAgentStream> {
-    connect_windows_openssh()
-        .await
-        .or_else(|_| async { connect_pageant().await }.await)
+    match connect_windows_openssh().await {
+        Ok(stream) => Ok(stream),
+        Err(_) => connect_pageant().await,
+    }
 }
 
 #[cfg(not(any(unix, windows)))]
