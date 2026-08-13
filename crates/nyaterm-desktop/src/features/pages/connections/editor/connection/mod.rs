@@ -4,6 +4,7 @@ mod recording;
 mod serial;
 mod ssh;
 mod telnet;
+mod vnc;
 
 use std::collections::{HashMap, HashSet};
 
@@ -28,6 +29,7 @@ use self::ssh::{
     SshConnectionSectionLabels, SshConnectionSectionOptions, connection_editor_ssh_section,
 };
 use self::telnet::connection_editor_telnet_section;
+use self::vnc::connection_editor_vnc_section;
 use super::super::list::{
     ConnectionEditorChoice, ConnectionEditorFields, EDITOR_CONTROL_HEIGHT_PX, editor_field,
 };
@@ -563,6 +565,34 @@ impl NyaTermApp {
             )
         })
         .collect::<Vec<_>>();
+        let vnc_security_options = [
+            ("auto", self.tr("dialog.vncSecurityAuto")),
+            ("none", self.tr("dialog.vncSecurityNone")),
+            ("vnc-auth", self.tr("dialog.vncSecurityPassword")),
+        ]
+        .into_iter()
+        .map(|(value, label)| {
+            ConnectionEditorChoice::new(
+                Some(value.to_string()),
+                label,
+                editor.vnc_security.mode == value,
+            )
+        })
+        .collect::<Vec<_>>();
+        let vnc_scale_options = [
+            ("fit", self.tr("dialog.vncScaleFit")),
+            ("stretch", self.tr("dialog.vncScaleStretch")),
+            ("actual", self.tr("dialog.vncScaleActual")),
+        ]
+        .into_iter()
+        .map(|(value, label)| {
+            ConnectionEditorChoice::new(
+                Some(value.to_string()),
+                label,
+                editor.vnc_display.scale_mode == value,
+            )
+        })
+        .collect::<Vec<_>>();
         let recording_mode = editor
             .recording
             .as_ref()
@@ -792,6 +822,16 @@ impl NyaTermApp {
             (
                 ConnectionEditorSelect::RdpClipboardMode,
                 rdp_clipboard_options.as_slice(),
+                String::new(),
+            ),
+            (
+                ConnectionEditorSelect::VncSecurityMode,
+                vnc_security_options.as_slice(),
+                String::new(),
+            ),
+            (
+                ConnectionEditorSelect::VncScaleMode,
+                vnc_scale_options.as_slice(),
                 String::new(),
             ),
             (
@@ -1042,6 +1082,7 @@ impl NyaTermApp {
                                 NyaTabItem::new("Telnet"),
                                 NyaTabItem::new(serial_label),
                                 NyaTabItem::new("RDP"),
+                                NyaTabItem::new("VNC"),
                             ])
                             .selected_index(match editor.kind {
                                 ConnectionKindTab::Ssh => 0,
@@ -1049,6 +1090,7 @@ impl NyaTermApp {
                                 ConnectionKindTab::Telnet => 2,
                                 ConnectionKindTab::Serial => 3,
                                 ConnectionKindTab::Rdp => 4,
+                                ConnectionKindTab::Vnc => 5,
                             })
                             .on_select(cx.listener(|this, index, _, cx| {
                                 let kind = match *index {
@@ -1056,7 +1098,8 @@ impl NyaTermApp {
                                     1 => ConnectionKindTab::Local,
                                     2 => ConnectionKindTab::Telnet,
                                     3 => ConnectionKindTab::Serial,
-                                    _ => ConnectionKindTab::Rdp,
+                                    4 => ConnectionKindTab::Rdp,
+                                    _ => ConnectionKindTab::Vnc,
                                 };
                                 this.set_connection_editor_kind(kind, cx);
                             })),
@@ -1141,9 +1184,13 @@ impl NyaTermApp {
                     .when(editor.kind == ConnectionKindTab::Rdp, |this| {
                         this.child(connection_editor_rdp_section(section_context, cx))
                     })
-                    .when(editor.kind != ConnectionKindTab::Rdp, |this| {
-                        this.child(connection_editor_recording_section(section_context, cx))
+                    .when(editor.kind == ConnectionKindTab::Vnc, |this| {
+                        this.child(connection_editor_vnc_section(section_context, cx))
                     })
+                    .when(
+                        !matches!(editor.kind, ConnectionKindTab::Rdp | ConnectionKindTab::Vnc),
+                        |this| this.child(connection_editor_recording_section(section_context, cx)),
+                    )
                     .child(connection_description_field(
                         palette,
                         description_label,
@@ -1246,7 +1293,7 @@ impl NyaTermApp {
     }
 }
 
-fn connection_editor_select_keys() -> [ConnectionEditorSelect; 24] {
+fn connection_editor_select_keys() -> [ConnectionEditorSelect; 26] {
     [
         ConnectionEditorSelect::Group,
         ConnectionEditorSelect::SavedPassword,
@@ -1264,6 +1311,8 @@ fn connection_editor_select_keys() -> [ConnectionEditorSelect; 24] {
         ConnectionEditorSelect::RdpCertificatePolicy,
         ConnectionEditorSelect::RdpDisplayMode,
         ConnectionEditorSelect::RdpClipboardMode,
+        ConnectionEditorSelect::VncSecurityMode,
+        ConnectionEditorSelect::VncScaleMode,
         ConnectionEditorSelect::RecordingMode,
         ConnectionEditorSelect::TelnetEnterMode,
         ConnectionEditorSelect::Shell,
@@ -1299,6 +1348,8 @@ fn connection_editor_select_id(select: ConnectionEditorSelect) -> &'static str {
         ConnectionEditorSelect::RdpCertificatePolicy => "connection-editor-rdp-certificate-policy",
         ConnectionEditorSelect::RdpDisplayMode => "connection-editor-rdp-display-mode",
         ConnectionEditorSelect::RdpClipboardMode => "connection-editor-rdp-clipboard-mode",
+        ConnectionEditorSelect::VncSecurityMode => "connection-editor-vnc-security-mode",
+        ConnectionEditorSelect::VncScaleMode => "connection-editor-vnc-scale-mode",
         ConnectionEditorSelect::RecordingMode => "connection-editor-recording-mode",
         ConnectionEditorSelect::TelnetEnterMode => "connection-editor-telnet-enter-mode",
         ConnectionEditorSelect::Shell => "connection-editor-shell",
@@ -1958,6 +2009,12 @@ mod tests {
             rdp_clipboard: Default::default(),
             rdp_reconnect: Default::default(),
             rdp_advanced_tab: crate::models::ConnectionEditorRdpTab::Security,
+            vnc_security: Default::default(),
+            vnc_display: Default::default(),
+            vnc_clipboard: Default::default(),
+            vnc_reconnect: Default::default(),
+            vnc_shared: true,
+            vnc_view_only: false,
             password_source: ConnectionEditorPasswordSource::Ask,
             password_id: None,
             password: String::new(),

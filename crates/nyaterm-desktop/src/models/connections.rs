@@ -16,6 +16,7 @@ pub(crate) enum ConnectionKindTab {
     Telnet,
     Serial,
     Rdp,
+    Vnc,
 }
 
 impl ConnectionKindTab {
@@ -26,6 +27,7 @@ impl ConnectionKindTab {
             Self::Telnet => "Telnet",
             Self::Serial => "Serial",
             Self::Rdp => "RDP",
+            Self::Vnc => "VNC",
         }
     }
 
@@ -36,6 +38,7 @@ impl ConnectionKindTab {
             nyaterm_core::ConnectionType::Telnet { .. } => Self::Telnet,
             nyaterm_core::ConnectionType::Serial { .. } => Self::Serial,
             nyaterm_core::ConnectionType::Rdp { .. } => Self::Rdp,
+            nyaterm_core::ConnectionType::Vnc { .. } => Self::Vnc,
         }
     }
 }
@@ -60,6 +63,8 @@ pub(crate) enum ConnectionEditorSelect {
     RdpCertificatePolicy,
     RdpDisplayMode,
     RdpClipboardMode,
+    VncSecurityMode,
+    VncScaleMode,
     RecordingMode,
     TelnetEnterMode,
     Shell,
@@ -140,6 +145,7 @@ pub(crate) enum ConnectionEditorField {
     RdpDisplayWidth,
     RdpDisplayHeight,
     RdpReconnectAttempts,
+    VncReconnectAttempts,
 }
 
 impl ConnectionEditorField {
@@ -201,6 +207,15 @@ impl ConnectionEditorField {
                 Self::Password => Self::Name,
                 other => other.next_fallback(kind),
             },
+            ConnectionKindTab::Vnc => match self {
+                Self::Name => Self::Description,
+                Self::Description => Self::Host,
+                Self::Host => Self::Port,
+                Self::Port if auth_mode == "password" && password_field_visible => Self::Password,
+                Self::Port => Self::Name,
+                Self::Password => Self::Name,
+                other => other.next_fallback(kind),
+            },
         }
     }
 
@@ -211,6 +226,7 @@ impl ConnectionEditorField {
             ConnectionKindTab::Telnet => Self::Name,
             ConnectionKindTab::Serial => Self::Name,
             ConnectionKindTab::Rdp => Self::Name,
+            ConnectionKindTab::Vnc => Self::Name,
         }
     }
 }
@@ -296,6 +312,12 @@ pub(crate) struct ConnectionEditorState {
     pub(crate) rdp_clipboard: nyaterm_core::RdpClipboardSettings,
     pub(crate) rdp_reconnect: nyaterm_core::RdpReconnectSettings,
     pub(crate) rdp_advanced_tab: ConnectionEditorRdpTab,
+    pub(crate) vnc_security: nyaterm_core::VncSecuritySettings,
+    pub(crate) vnc_display: nyaterm_core::VncDisplaySettings,
+    pub(crate) vnc_clipboard: nyaterm_core::VncClipboardSettings,
+    pub(crate) vnc_reconnect: nyaterm_core::VncReconnectSettings,
+    pub(crate) vnc_shared: bool,
+    pub(crate) vnc_view_only: bool,
     pub(crate) password_source: ConnectionEditorPasswordSource,
     pub(crate) password_id: Option<String>,
     pub(crate) password: String,

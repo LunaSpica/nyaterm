@@ -1140,6 +1140,29 @@ pub(super) fn connection_detail_rows(
             ));
             rows.push(("Display", format!("{}x{}", display.width, display.height)));
         }
+        nyaterm_core::ConnectionType::Vnc {
+            host,
+            port,
+            security,
+            display,
+            clipboard,
+            shared,
+            view_only,
+            ..
+        } => {
+            rows.push(("Host", host.clone()));
+            rows.push(("Port", port.to_string()));
+            rows.push(("Security", security.mode.clone()));
+            rows.push(("Scale", display.scale_mode.clone()));
+            rows.push((
+                "Clipboard",
+                if clipboard.enabled { "on" } else { "off" }.to_string(),
+            ));
+            rows.push(("Shared", if *shared { "yes" } else { "no" }.to_string()));
+            if *view_only {
+                rows.push(("Input", "view only".to_string()));
+            }
+        }
     }
     rows.push(("Last", format_last_used_ms(connection.last_used_at_ms)));
     rows.push(("Desc", description));

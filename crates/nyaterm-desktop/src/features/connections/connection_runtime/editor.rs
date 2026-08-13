@@ -1,7 +1,7 @@
 use gpui::{Context, KeyDownEvent, PathPromptOptions, SharedString, Window};
 use nyaterm_core::{
     Group, RdpClipboardSettings, RdpDisplaySettings, RdpReconnectSettings, RdpSecuritySettings,
-    uuid,
+    VncClipboardSettings, VncDisplaySettings, VncReconnectSettings, VncSecuritySettings, uuid,
 };
 
 use super::helpers::{
@@ -61,6 +61,9 @@ impl NyaTermApp {
             }
             ConnectionEditorValidationError::RdpReconnectAttemptsInvalid => {
                 self.tr("dialog.rdpReconnectAttemptsInvalid").into()
+            }
+            ConnectionEditorValidationError::VncReconnectAttemptsInvalid => {
+                "VNC reconnect attempts must be between 0 and 20".to_string()
             }
             ConnectionEditorValidationError::PostLoginCommandRequired => {
                 self.tr("dialog.postLoginCommandRequired").into()
@@ -134,6 +137,12 @@ impl NyaTermApp {
                 rdp_clipboard: RdpClipboardSettings::default(),
                 rdp_reconnect: RdpReconnectSettings::default(),
                 rdp_advanced_tab: ConnectionEditorRdpTab::Security,
+                vnc_security: VncSecuritySettings::default(),
+                vnc_display: VncDisplaySettings::default(),
+                vnc_clipboard: VncClipboardSettings::default(),
+                vnc_reconnect: VncReconnectSettings::default(),
+                vnc_shared: true,
+                vnc_view_only: false,
                 password_source: ConnectionEditorPasswordSource::Ask,
                 password_id: None,
                 password: String::new(),
@@ -419,6 +428,7 @@ impl NyaTermApp {
                 ConnectionKindTab::Telnet => "Telnet",
                 ConnectionKindTab::Serial => self.tr("dialog.serial"),
                 ConnectionKindTab::Rdp => "RDP",
+                ConnectionKindTab::Vnc => "VNC",
             };
             self.shell.set_status(
                 self.tr("dialog.connectionTypeChanged")

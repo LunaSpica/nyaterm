@@ -199,6 +199,12 @@ pub(super) fn set_connection_editor_select_value(
         ConnectionEditorSelect::RdpClipboardMode => {
             editor.rdp_clipboard.mode = value.unwrap_or_else(|| "text-only".to_string());
         }
+        ConnectionEditorSelect::VncSecurityMode => {
+            editor.vnc_security.mode = value.unwrap_or_else(|| "auto".to_string());
+        }
+        ConnectionEditorSelect::VncScaleMode => {
+            editor.vnc_display.scale_mode = value.unwrap_or_else(|| "fit".to_string());
+        }
         ConnectionEditorSelect::RecordingMode => {
             let recording = editor.recording.get_or_insert_with(Default::default);
             recording.mode = Some(if value.as_deref() == Some("raw") {
@@ -434,6 +440,17 @@ pub(super) fn set_connection_editor_kind(
                 editor.port.clone()
             }
         }
+        ConnectionKindTab::Vnc => {
+            if editor.port.trim().is_empty()
+                || editor.port == "22"
+                || editor.port == "23"
+                || editor.port == "3389"
+            {
+                "5900".to_string()
+            } else {
+                editor.port.clone()
+            }
+        }
         _ => editor.port.clone(),
     };
     editor.error = None;
@@ -518,6 +535,18 @@ pub(super) fn toggle_connection_editor_flag(
         }
         ConnectionEditorToggle::RdpReconnect => {
             editor.rdp_reconnect.enabled = !editor.rdp_reconnect.enabled;
+        }
+        ConnectionEditorToggle::VncClipboard => {
+            editor.vnc_clipboard.enabled = !editor.vnc_clipboard.enabled;
+        }
+        ConnectionEditorToggle::VncReconnect => {
+            editor.vnc_reconnect.enabled = !editor.vnc_reconnect.enabled;
+        }
+        ConnectionEditorToggle::VncShared => {
+            editor.vnc_shared = !editor.vnc_shared;
+        }
+        ConnectionEditorToggle::VncViewOnly => {
+            editor.vnc_view_only = !editor.vnc_view_only;
         }
         ConnectionEditorToggle::RecordingUseGlobal => {
             if editor.recording.is_some() {
@@ -822,6 +851,12 @@ pub(super) fn editor_field_seeds(
             false,
             Empty,
         ),
+        (
+            ConnectionEditorField::VncReconnectAttempts,
+            draft.vnc_reconnect.max_attempts.to_string(),
+            false,
+            Empty,
+        ),
     ]
 }
 
@@ -891,6 +926,11 @@ pub(super) fn set_connection_editor_field_text(
         ConnectionEditorField::RdpReconnectAttempts => {
             if let Ok(value) = text.parse() {
                 draft.rdp_reconnect.max_attempts = value;
+            }
+        }
+        ConnectionEditorField::VncReconnectAttempts => {
+            if let Ok(value) = text.parse() {
+                draft.vnc_reconnect.max_attempts = value;
             }
         }
     }

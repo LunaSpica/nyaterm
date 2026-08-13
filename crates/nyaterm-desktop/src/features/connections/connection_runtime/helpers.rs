@@ -3,7 +3,8 @@ use nyaterm_core::{
     AiExecutionProfile, ConnectionAuth, ConnectionNetwork, ConnectionPostLogin, ConnectionStore,
     ConnectionType, Group, RdpClipboardSettings, RdpDisplaySettings, RdpReconnectSettings,
     RdpSecuritySettings, SavedConnection, SftpCwdFollowMode, SftpSettings, SshAlgorithmMode,
-    SshAlgorithmPreferences, StorageError, TelnetAutoLoginConfig, uuid,
+    SshAlgorithmPreferences, StorageError, TelnetAutoLoginConfig, VncClipboardSettings,
+    VncDisplaySettings, VncReconnectSettings, VncSecuritySettings, uuid,
 };
 
 use crate::features::NyaTermApp;
@@ -24,6 +25,7 @@ pub(super) enum ConnectionEditorValidationError {
     RdpDisplayWidthInvalid,
     RdpDisplayHeightInvalid,
     RdpReconnectAttemptsInvalid,
+    VncReconnectAttemptsInvalid,
     PostLoginCommandRequired,
     PostLoginDelayInvalid,
     SftpShellDetectionTimeoutInvalid,
@@ -82,6 +84,12 @@ pub(super) fn connection_editor_from_saved(
         rdp_clipboard: RdpClipboardSettings::default(),
         rdp_reconnect: RdpReconnectSettings::default(),
         rdp_advanced_tab: ConnectionEditorRdpTab::Security,
+        vnc_security: VncSecuritySettings::default(),
+        vnc_display: VncDisplaySettings::default(),
+        vnc_clipboard: VncClipboardSettings::default(),
+        vnc_reconnect: VncReconnectSettings::default(),
+        vnc_shared: true,
+        vnc_view_only: false,
         password_source,
         password_id: auth.password_id,
         password: String::new(),
@@ -253,6 +261,25 @@ pub(super) fn connection_editor_from_saved(
             editor.rdp_display = display;
             editor.rdp_clipboard = clipboard;
             editor.rdp_reconnect = reconnect;
+        }
+        ConnectionType::Vnc {
+            host,
+            port,
+            security,
+            display,
+            clipboard,
+            reconnect,
+            shared,
+            view_only,
+        } => {
+            editor.host = host;
+            editor.port = port.to_string();
+            editor.vnc_security = security;
+            editor.vnc_display = display;
+            editor.vnc_clipboard = clipboard;
+            editor.vnc_reconnect = reconnect;
+            editor.vnc_shared = shared;
+            editor.vnc_view_only = view_only;
         }
     }
     editor
@@ -454,6 +481,26 @@ pub(super) fn build_saved_connection_from_editor(
                 reconnect: editor.rdp_reconnect.clone(),
             }
         }
+        ConnectionKindTab::Vnc => {
+            let host = editor.host.trim().to_string();
+            if host.is_empty() {
+                return Err(ConnectionEditorValidationError::HostRequired);
+            }
+            let port = parse_port(&editor.port)?;
+            if editor.vnc_reconnect.max_attempts > 20 {
+                return Err(ConnectionEditorValidationError::VncReconnectAttemptsInvalid);
+            }
+            ConnectionType::Vnc {
+                host,
+                port,
+                security: editor.vnc_security.clone(),
+                display: editor.vnc_display.clone(),
+                clipboard: editor.vnc_clipboard.clone(),
+                reconnect: editor.vnc_reconnect.clone(),
+                shared: editor.vnc_shared,
+                view_only: editor.vnc_view_only,
+            }
+        }
     };
 
     if editor.kind == ConnectionKindTab::Ssh {
@@ -482,7 +529,8 @@ pub(super) fn build_saved_connection_from_editor(
         match &config {
             ConnectionType::Ssh { host, port, .. }
             | ConnectionType::Telnet { host, port, .. }
-            | ConnectionType::Rdp { host, port, .. } => {
+            | ConnectionType::Rdp { host, port, .. }
+            | ConnectionType::Vnc { host, port, .. } => {
                 format!("{host}:{port}")
             }
             ConnectionType::LocalTerminal { .. } => "Local Terminal".to_string(),
@@ -493,7 +541,10 @@ pub(super) fn build_saved_connection_from_editor(
     };
 
     let auth = match editor.kind {
-        ConnectionKindTab::Ssh | ConnectionKindTab::Telnet | ConnectionKindTab::Rdp => {
+        ConnectionKindTab::Ssh
+        | ConnectionKindTab::Telnet
+        | ConnectionKindTab::Rdp
+        | ConnectionKindTab::Vnc => {
             let password = editor.password.trim().to_string();
             let existing = editor.existing_password.clone();
             let mode = match editor.auth_mode.as_str() {
@@ -704,6 +755,7 @@ mod tests {
         RdpClipboardSettings, RdpDisplaySettings, RdpReconnectSettings, RdpSecuritySettings,
         RecordingMode, RecordingRotationPolicy, SavedConnection, SftpCwdFollowMode, SftpSettings,
         SshAlgorithmMode, SshAlgorithmPreferences, SshProfile, SshTerminalType,
+        VncClipboardSettings, VncDisplaySettings, VncReconnectSettings, VncSecuritySettings,
     };
 
     use crate::models::{ConnectionEditorPasswordSource, ConnectionKindTab};
@@ -1060,6 +1112,98 @@ mod tests {
     }
 
     #[test]
+    fn connection_editor_round_trip_preserves_vnc_settings_and_auth_mode() {
+        let expected_security = VncSecuritySettings {
+            mode: "vnc-auth".to_string(),
+        };
+        let expected_display = VncDisplaySettings {
+            scale_mode: "actual".to_string(),
+        };
+        let expected_clipboard = VncClipboardSettings { enabled: false };
+        let expected_reconnect = VncReconnectSettings {
+            enabled: false,
+            max_attempts: 12,
+        };
+        let connection = SavedConnection {
+            id: "connection-vnc".to_string(),
+            name: "VNC".to_string(),
+            config: ConnectionType::Vnc {
+                host: "desktop.example.com".to_string(),
+                port: 5901,
+                security: expected_security.clone(),
+                display: expected_display.clone(),
+                clipboard: expected_clipboard.clone(),
+                reconnect: expected_reconnect.clone(),
+                shared: false,
+                view_only: true,
+            },
+            group_id: None,
+            description: None,
+            sort_order: 0,
+            icon: None,
+            icon_auto_detect: None,
+            auth: Some(ConnectionAuth {
+                mode: "password".to_string(),
+                has_password: true,
+                ..ConnectionAuth::default()
+            }),
+            recording: None,
+            ssh_algorithms: None,
+            ssh_profile: Default::default(),
+            terminal_type: None,
+            sftp: Default::default(),
+            network: None,
+            post_login: None,
+            created_at_ms: None,
+            updated_at_ms: None,
+            last_used_at_ms: None,
+        };
+
+        let editor = connection_editor_from_saved(connection, false);
+        assert_eq!(editor.kind, ConnectionKindTab::Vnc);
+        assert_eq!(editor.auth_mode, "password");
+        assert_eq!(
+            editor.password_source,
+            ConnectionEditorPasswordSource::Direct
+        );
+
+        let mut invalid = editor.clone();
+        invalid.vnc_reconnect.max_attempts = 21;
+        assert_eq!(
+            build_saved_connection_from_editor(&invalid).unwrap_err(),
+            ConnectionEditorValidationError::VncReconnectAttemptsInvalid
+        );
+
+        let saved = build_saved_connection_from_editor(&editor).expect("valid connection");
+        let ConnectionType::Vnc {
+            host,
+            port,
+            security,
+            display,
+            clipboard,
+            reconnect,
+            shared,
+            view_only,
+        } = saved.config
+        else {
+            panic!("expected VNC connection");
+        };
+
+        assert_eq!(host, "desktop.example.com");
+        assert_eq!(port, 5901);
+        assert_eq!(security, expected_security);
+        assert_eq!(display, expected_display);
+        assert_eq!(clipboard, expected_clipboard);
+        assert_eq!(reconnect, expected_reconnect);
+        assert!(!shared);
+        assert!(view_only);
+        let saved_auth = saved.auth.expect("auth settings");
+        assert_eq!(saved_auth.mode, "password");
+        assert!(!saved_auth.has_password);
+        assert!(saved_auth.password.is_none());
+    }
+
+    #[test]
     fn connection_editor_saves_telnet_username_password_and_encoding() {
         let connection = SavedConnection {
             id: "connection-telnet".to_string(),
@@ -1226,6 +1370,10 @@ pub(in crate::features) enum ConnectionEditorToggle {
     PostLogin,
     RdpUseNla,
     RdpReconnect,
+    VncClipboard,
+    VncReconnect,
+    VncShared,
+    VncViewOnly,
     RecordingUseGlobal,
     RecordingAutoStart,
     Advanced,
