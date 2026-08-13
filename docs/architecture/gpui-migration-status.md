@@ -10,6 +10,22 @@ Last updated from the working tree on 2026-08-13.
 
 ## Tauri Main Parity Refreshes
 
+- 2026-08-13 fast-forwarded the clean Tauri reference from `b6b8ab71` to
+  `0fe0fee` and implemented the VNC-focused delta natively. Core now stores a
+  compatibility-safe `ConnectionType::Vnc` with sparse serde defaults for host,
+  port, security, display scale, clipboard, reconnect, shared-session and
+  view-only settings. `nyaterm-remote-desktop` owns direct-TCP VNC runtime
+  plumbing on top of vendored `vnc-rs 0.5.3`, with password redaction and
+  zeroization, bounded input and clipboard handling, framebuffer limits, RGBA
+  frame updates and typed connection/auth/negotiation/reconnect/failure states.
+  `RemoteDesktopFeatureState` remains the authoritative GPUI owner for both
+  RDP and VNC sessions; VNC tabs reuse the existing texture, viewport, close,
+  retry, clipboard and remote-desktop workspace paths without introducing
+  WebView/Tauri command layers. The connection editor and new-session flow have
+  native VNC host, auth, security, scale, clipboard, reconnect, shared and
+  view-only controls with English and Simplified Chinese labels. Manual VNC
+  interoperability with no-auth/password servers, OS clipboard behavior and
+  platform-specific input capture remain release validation work.
 - 2026-08-13 fast-forwarded the clean Tauri reference from the previously
   audited `266db741` baseline to `b6b8ab71` and audited its maintenance delta.
   GPUI now carries the applicable native behavior without restoring WebView
