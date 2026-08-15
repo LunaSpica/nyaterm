@@ -401,6 +401,18 @@ impl AppShell {
         cx.notify();
     }
 
+    fn return_to_app_after_flush_failure(&mut self, cx: &mut Context<Self>) {
+        let Some(store_runtime) = &self.store_runtime else {
+            return;
+        };
+        store_runtime.resume_after_failed_shutdown();
+        self.lifecycle = AppShellLifecycle::Ready;
+        if let Some(app) = &self.app {
+            let _ = app.update(cx, NyaTermApp::report_shutdown_retry_required);
+        }
+        cx.notify();
+    }
+
     fn lifecycle_view(&self, cx: &mut Context<Self>) -> AnyElement {
         match &self.lifecycle {
             AppShellLifecycle::Loading => div()
@@ -530,6 +542,11 @@ impl AppShell {
                                             this.begin_shutdown(cx);
                                         })),
                                 )
+                                .child(NyaButton::new("shutdown-return", "Return to App").on_click(
+                                    cx.listener(|this, _, _, cx| {
+                                        this.return_to_app_after_flush_failure(cx);
+                                    }),
+                                ))
                                 .child(
                                     NyaButton::new("shutdown-force", "Force Quit")
                                         .variant(NyaButtonVariant::Danger)

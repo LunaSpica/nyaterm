@@ -209,11 +209,20 @@ Last updated from the working tree on 2026-08-16.
 - Desktop production code has zero direct database opens or redb transactions.
   Runtime reads and writes use the shared UI or blocking store client, and the
   existing window event pump applies completions to GPUI state.
+- Connection catalog CRUD, copy, reorder, authentication-catalog refresh and
+  full post-import/sync refresh no longer synchronously wait on the blocking
+  client from GPUI callbacks. They submit typed UI requests and commit the
+  authoritative owner only after storage succeeds; failed editor drafts and
+  catalog selections remain available for retry.
 - Normal shutdown freezes new persistence, submits the latest dirty settings,
   AI, translation, keyword-highlight and session-layout snapshots, then waits
   for the FIFO barrier. Failure stays in `FlushFailed` with Retry and an
-  explicit data-loss Force Quit action. GPUI's 200 ms `on_app_quit` barrier is
-  a best-effort fallback rather than the normal close path.
+  explicit data-loss Force Quit action. Failed barrier entries remain active
+  until the affected domain completes a successful request, so an empty Retry
+  cannot silently discard an earlier catalog failure. Return to App re-enables
+  submissions so the retained draft or operation can be retried before closing.
+  GPUI's 200 ms `on_app_quit` barrier is a best-effort fallback rather than the
+  normal close path.
 
 ## Current Metrics
 

@@ -463,6 +463,15 @@ impl StoreRuntime {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         self.ui_client.accepting.store(false, Ordering::Release);
     }
+
+    pub fn resume_after_failed_shutdown(&self) {
+        let _gate = self
+            .ui_client
+            .submission_gate
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        self.ui_client.accepting.store(true, Ordering::Release);
+    }
 }
 
 impl nyaterm_core::CloudLocalStore for StoreBlockingClient {
@@ -575,7 +584,6 @@ fn store_worker(config: StoreConfig, receiver: mpsc::Receiver<WorkerMessage>) {
         match message {
             WorkerMessage::Execute { domain, job } if domain == StoreDomain::Barrier => {
                 let aggregate = aggregate_barrier_failures(&barrier_failures);
-                barrier_failures.clear();
                 if let Some(error) = aggregate.as_ref() {
                     job(Err(error));
                 } else {
@@ -585,10 +593,33 @@ fn store_worker(config: StoreConfig, receiver: mpsc::Receiver<WorkerMessage>) {
             WorkerMessage::Execute { domain, job } => {
                 if let Some(error) = job(store.as_ref()) {
                     barrier_failures.push((domain, error));
+                } else {
+                    clear_resolved_barrier_failures(&mut barrier_failures, domain);
                 }
             }
         }
     }
+}
+
+fn clear_resolved_barrier_failures(
+    failures: &mut Vec<(StoreDomain, StoreOperationError)>,
+    successful_domain: StoreDomain,
+) {
+    failures.retain(|(failed_domain, _)| {
+        if *failed_domain == successful_domain {
+            return false;
+        }
+        if successful_domain == StoreDomain::Shutdown {
+            return !matches!(
+                failed_domain,
+                StoreDomain::Settings
+                    | StoreDomain::Ai
+                    | StoreDomain::Sessions
+                    | StoreDomain::Terminal
+            );
+        }
+        true
+    });
 }
 
 fn aggregate_barrier_failures(
@@ -805,7 +836,7 @@ mod tests {
     }
 
     #[test]
-    fn flush_barrier_reports_prior_failures_and_resets_the_retry_window() {
+    fn flush_barrier_retains_failures_until_the_domain_succeeds() {
         let config_dir = temp_dir("barrier-failure");
         let runtime = StoreRuntime::spawn(StoreConfig {
             config_dir: config_dir.clone(),
@@ -843,11 +874,21 @@ mod tests {
                 .contains("secret-bearing invalid payload")
         );
 
-        client
+        let retry_error = client
             .request(0, FlushBarrier)
             .expect("receive retry barrier")
             .outcome
-            .expect("retry window should start clean");
+            .expect_err("an empty retry must not discard the prior failure");
+        assert_eq!(retry_error.category(), "barrier");
+
+        client
+            .request_fn(StoreDomain::Settings, |_| Ok(()))
+            .expect("retry the failed settings domain");
+        client
+            .request(0, FlushBarrier)
+            .expect("receive resolved barrier")
+            .outcome
+            .expect("a successful domain retry should resolve its failure");
 
         drop(runtime);
         std::fs::remove_dir_all(config_dir).ok();
@@ -880,6 +921,11 @@ mod tests {
         )
         .outcome
         .expect("final barrier should run");
+
+        runtime.resume_after_failed_shutdown();
+        futures::executor::block_on(ui.try_submit(0, FlushBarrier).expect("resumed barrier"))
+            .outcome
+            .expect("normal submissions should resume after a failed shutdown");
 
         drop(runtime);
         std::fs::remove_dir_all(config_dir).ok();

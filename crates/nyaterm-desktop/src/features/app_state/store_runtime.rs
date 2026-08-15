@@ -26,6 +26,14 @@ struct ShutdownSessionSnapshot {
 }
 
 impl NyaTermApp {
+    pub(crate) fn report_shutdown_retry_required(&mut self, cx: &mut Context<Self>) {
+        let message =
+            "storage is available again; retry the failed save, then close NyaTerm".to_string();
+        self.settings.update_store_status(message.clone(), false);
+        self.shell.set_status(message);
+        cx.notify();
+    }
+
     pub(in crate::features) fn submit_store_request<R>(
         &mut self,
         generation: u64,
