@@ -644,6 +644,31 @@ fn ssh_shell_integration_script_emits_osc7_and_ready_marker() {
 }
 
 #[test]
+fn ssh_shell_scripts_emit_complete_standard_osc133_lifecycle() {
+    let ready = super::build_ssh_ready_marker("session-lifecycle");
+    for shell in [
+        super::ShellKind::Bash,
+        super::ShellKind::Zsh,
+        super::ShellKind::Fish,
+    ] {
+        let script = super::persistent_script(shell).expect("persistent integration script");
+        assert!(script.contains("133;A"), "missing A for {shell:?}");
+        assert!(script.contains("133;B"), "missing B for {shell:?}");
+        assert!(script.contains("133;C"), "missing C for {shell:?}");
+        assert!(script.contains("133;D"), "missing D for {shell:?}");
+        let inline = super::ssh_shell_injection_script(shell, &ready).expect("inline script");
+        assert!(inline.contains("NyaTermReady:session-lifecycle"));
+    }
+
+    let bash = super::persistent_script(super::ShellKind::Bash).expect("bash script");
+    assert!(bash.contains("NYATERM_BASH_HOOKS_READY:-"));
+    let zsh = super::persistent_script(super::ShellKind::Zsh).expect("zsh script");
+    assert!(zsh.matches("NYATERM_ZSH_HOOKS_READY:-").count() >= 4);
+    let fish = super::persistent_script(super::ShellKind::Fish).expect("fish script");
+    assert!(fish.matches("NYATERM_FISH_HOOKS_READY").count() >= 4);
+}
+
+#[test]
 fn ssh_activation_and_persistent_scripts_match_rc_file_mode_contract() {
     let ready = super::build_ssh_ready_marker("session-1");
     let activation =

@@ -1,11 +1,11 @@
 use std::sync::{Arc, Weak};
 
 use super::{
-    CursorShape, GraphicsProtocol, ShellCommandMark, TERMINAL_SNAPSHOT_ROW_CACHE_LIMIT,
-    TerminalOutputDecoder, TerminalScreen, TerminalSearchDirection, TerminalSearchQuery,
-    TerminalSnapshot, TerminalSnapshotRowCache, TerminalSnapshotRowCacheEntry,
-    TerminalSnapshotRowCacheKey, alternate_scroll_key_bytes, encode_mouse_report,
-    encode_mouse_report_with_modifiers, render_row_signature,
+    CursorShape, GraphicsProtocol, ShellCommandMark, ShellInputLineKind,
+    TERMINAL_SNAPSHOT_ROW_CACHE_LIMIT, TerminalOutputDecoder, TerminalScreen,
+    TerminalSearchDirection, TerminalSearchQuery, TerminalSnapshot, TerminalSnapshotRowCache,
+    TerminalSnapshotRowCacheEntry, TerminalSnapshotRowCacheKey, alternate_scroll_key_bytes,
+    encode_mouse_report, encode_mouse_report_with_modifiers, render_row_signature,
 };
 
 fn snapshot_text(snapshot: &TerminalSnapshot) -> String {
@@ -218,6 +218,102 @@ fn command_mark_finished_carries_exit_code() {
             .map(|row| row.command_mark)
             .collect::<Vec<_>>()
     );
+}
+
+#[test]
+fn shell_input_stripes_split_at_osc_boundaries_before_following_output() {
+    let mut screen = TerminalScreen::new(40, 5);
+    screen.advance(b"$ \x1b]133;B\x07echo hi\r\n\x1b]133;C\x07output line 1\r\noutput line 2");
+    let snapshot = screen.snapshot();
+    let input_rows = snapshot
+        .rows()
+        .iter()
+        .filter(|row| row.shell_input == Some(ShellInputLineKind::Submitted))
+        .collect::<Vec<_>>();
+    assert_eq!(input_rows.len(), 1, "rows={:?}", snapshot.rows());
+    assert!(input_rows[0].text.contains("echo hi"));
+    assert!(
+        snapshot
+            .rows()
+            .iter()
+            .filter(|row| row.text.contains("output"))
+            .all(|row| row.shell_input.is_none())
+    );
+}
+
+#[test]
+fn shell_input_stripes_support_cross_chunk_osc_and_active_multiline_input() {
+    let mut screen = TerminalScreen::new(12, 5);
+    screen.advance(b"prompt ]133;B");
+    screen.advance(b"\x07one two three\r\nfour");
+    let active = screen
+        .snapshot()
+        .rows()
+        .iter()
+        .filter(|row| row.shell_input == Some(ShellInputLineKind::Active))
+        .count();
+    assert!(active >= 2, "expected multiline active input");
+    screen.advance(b"\x1b]133;C\x07result");
+    let snapshot = screen.snapshot();
+    assert!(
+        snapshot
+            .rows()
+            .iter()
+            .any(|row| row.shell_input == Some(ShellInputLineKind::Submitted))
+    );
+    assert!(
+        snapshot
+            .rows()
+            .iter()
+            .filter(|row| row.text.contains("result"))
+            .all(|row| row.shell_input != Some(ShellInputLineKind::Active))
+    );
+}
+
+#[test]
+fn shell_input_c_at_next_row_zero_excludes_output_row_and_633_is_compatible() {
+    let mut screen = TerminalScreen::new(30, 4);
+    screen.advance(b"prompt ]633;B\x07command\r\n\x1b]633;C\x07output");
+    let snapshot = screen.snapshot();
+    assert!(
+        snapshot
+            .rows()
+            .iter()
+            .any(|row| row.text.contains("command")
+                && row.shell_input == Some(ShellInputLineKind::Submitted))
+    );
+    assert!(
+        snapshot
+            .rows()
+            .iter()
+            .filter(|row| row.text.contains("output"))
+            .all(|row| row.shell_input.is_none())
+    );
+}
+
+#[test]
+fn shell_input_ids_change_after_reset_and_alternate_screen_does_not_mark_rows() {
+    let mut screen = TerminalScreen::new(20, 3);
+    screen.advance(b"p ]133;B\x07input");
+    let before = screen
+        .snapshot()
+        .rows()
+        .iter()
+        .find(|row| row.text.contains("input"))
+        .and_then(|row| row.line_id);
+    assert!(before.is_some());
+    screen.advance(b"\x1b[?1049h\x1b]133;B\x07alternate\x1b[?1049l\x1b[2J");
+    assert!(
+        screen
+            .snapshot()
+            .rows()
+            .iter()
+            .filter(|row| row.text.contains("alternate"))
+            .all(|row| row.shell_input.is_none())
+    );
+    screen.clear();
+    let after = screen.snapshot().rows().iter().find_map(|row| row.line_id);
+    assert!(after.is_none() || after != before);
 }
 
 #[test]
@@ -442,6 +538,8 @@ fn snapshot_row_cache_uses_revision_as_authoritative_invalidation() {
         timestamp_ms: original.timestamp_ms,
         wrapped: original.wrapped,
         command_mark: original.command_mark,
+        line_id: original.line_id,
+        shell_input: original.shell_input,
     };
     screen.snapshot_row_cache.lock().unwrap().entries.insert(
         key,
@@ -472,6 +570,8 @@ fn snapshot_row_cache_prunes_to_limit() {
                 timestamp_ms: None,
                 wrapped: false,
                 command_mark: None,
+                line_id: None,
+                shell_input: None,
             },
             TerminalSnapshotRowCacheEntry {
                 row: Weak::new(),

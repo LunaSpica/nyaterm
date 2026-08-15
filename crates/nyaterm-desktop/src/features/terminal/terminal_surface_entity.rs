@@ -2,7 +2,7 @@ use gpui::{
     Context, Entity, FontFallbacks, IntoElement, MouseButton, Render, ScrollDelta,
     ScrollWheelEvent, SharedString, Window, div, font, prelude::*, px, rgb, rgba,
 };
-use nyaterm_terminal::{TerminalScreen, TerminalSnapshot};
+use nyaterm_terminal::{TerminalLineId, TerminalScreen, TerminalSnapshot};
 
 use crate::features::NyaTermApp;
 use crate::features::formatting::{
@@ -311,6 +311,8 @@ pub(in crate::features) struct TerminalSurface {
     transparent_background: bool,
     is_active: bool,
     protocol_state: TerminalProtocolState,
+    zebra_stripes_enabled: bool,
+    target_line: Option<TerminalLineId>,
     scroll_interaction_generation: u64,
     pending_local_scroll_sync: Option<TerminalSurfacePendingScrollSync>,
     local_scroll_sync_armed: bool,
@@ -376,6 +378,8 @@ impl TerminalSurface {
             transparent_background: false,
             is_active: false,
             protocol_state: TerminalProtocolState::default(),
+            zebra_stripes_enabled: false,
+            target_line: None,
             scroll_interaction_generation: 0,
             pending_local_scroll_sync: None,
             local_scroll_sync_armed: false,
@@ -1271,6 +1275,19 @@ impl TerminalSurface {
             return false;
         }
         self.protocol_state = protocol_state;
+        true
+    }
+
+    pub(in crate::features) fn set_zebra_stripes(
+        &mut self,
+        enabled: bool,
+        target_line: Option<TerminalLineId>,
+    ) -> bool {
+        if self.zebra_stripes_enabled == enabled && self.target_line == target_line {
+            return false;
+        }
+        self.zebra_stripes_enabled = enabled;
+        self.target_line = target_line;
         true
     }
 
@@ -2406,6 +2423,10 @@ impl Render for TerminalSurface {
         let surface = cx.entity();
         let session_id = self.session_id.clone();
         let is_active = self.is_active;
+        let zebra_stripes_visible = self.zebra_stripes_enabled
+            && !self.protocol_state.alternate_screen
+            && !self.protocol_state.mouse_reporting;
+        let target_line = self.target_line;
         let mut grid = NyaTerminalElement::new(
             snapshot.clone(),
             empty_terminal_keyword_rules(),
@@ -2434,7 +2455,8 @@ impl Render for TerminalSurface {
             .with_layout_cache(self.layout_cache.clone())
             .with_layout_rows(self.viewport_rows)
             .with_fill_height(true)
-            .with_visual_y_offset(visual_y_offset);
+            .with_visual_y_offset(visual_y_offset)
+            .with_zebra_stripes(zebra_stripes_visible, target_line);
         if let Some(highlights) = self.keyword_highlights.clone() {
             grid = grid.with_keyword_highlights(highlights);
         }
@@ -2465,6 +2487,19 @@ impl Render for TerminalSurface {
                 .flex_col();
             for line_index in visible_gutter_rows {
                 let snapshot_row = snapshot.row(line_index);
+                let zebra_color = zebra_stripes_visible
+                    .then(|| {
+                        snapshot_row.and_then(|row| {
+                            if row.line_id.is_some() && row.line_id == target_line {
+                                Some(rgba((palette.accent << 8) | 0x24))
+                            } else if row.shell_input.is_some() {
+                                Some(rgba((palette.terminal_fg << 8) | 0x0f))
+                            } else {
+                                None
+                            }
+                        })
+                    })
+                    .flatten();
                 let labels = terminal_gutter_labels(
                     snapshot_row,
                     abs_start + line_index + 1,
@@ -2483,6 +2518,7 @@ impl Render for TerminalSurface {
                         .flex_none()
                         .pr(px(8.))
                         .text_color(rgb(palette.text_dimmed))
+                        .when_some(zebra_color, |this, color| this.bg(color))
                         .font(surface_font.clone())
                         .text_size(px(self.font_size))
                         .when(self.show_timestamps, |this| {

@@ -1683,6 +1683,8 @@ fn app_settings_summary_reads_and_updates_host_key_policy() {
     assert!(!summary.terminal_show_multi_line_paste_dialog);
     assert!(!summary.terminal_paste_image_as_path);
     assert!(summary.terminal_low_latency_mode);
+    // Legacy settings omit the new field and must keep zebra stripes enabled.
+    assert!(summary.terminal_zebra_stripes_enabled);
     assert!(!summary.ui_show_remote_stats);
     assert_eq!(summary.ui_remote_stats_interval, 9);
     assert!(summary.ui_show_gpu_monitor);
@@ -1999,6 +2001,7 @@ fn app_settings_summary_reads_and_updates_host_key_policy() {
     terminal_update.terminal_timestamp_format = "[HH:mm:ss.SSS]".to_string();
     terminal_update.terminal_show_multi_line_paste_dialog = true;
     terminal_update.terminal_low_latency_mode = true;
+    terminal_update.terminal_zebra_stripes_enabled = false;
     terminal_update.ui_show_remote_stats = true;
     terminal_update.ui_remote_stats_interval = 4;
     terminal_update.ui_show_gpu_monitor = true;
@@ -2014,6 +2017,7 @@ fn app_settings_summary_reads_and_updates_host_key_policy() {
     assert_eq!(saved_terminal.terminal_timestamp_format, "[HH:mm:ss.SSS]");
     assert!(saved_terminal.terminal_show_multi_line_paste_dialog);
     assert!(saved_terminal.terminal_low_latency_mode);
+    assert!(!saved_terminal.terminal_zebra_stripes_enabled);
     assert!(saved_terminal.ui_show_remote_stats);
     assert_eq!(saved_terminal.ui_remote_stats_interval, 4);
     assert!(saved_terminal.ui_show_gpu_monitor);
@@ -2046,6 +2050,11 @@ fn app_settings_summary_reads_and_updates_host_key_policy() {
     assert_eq!(
         json_path(&stored, &["terminal", "low_latency_mode"]).and_then(|value| value.as_bool()),
         Some(true)
+    );
+    assert_eq!(
+        json_path(&stored, &["terminal", "zebra_stripes_enabled"])
+            .and_then(|value| value.as_bool()),
+        Some(false)
     );
 
     let mut quick_command_update = saved_terminal.clone();

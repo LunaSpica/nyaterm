@@ -39,6 +39,25 @@ pub enum ShellCommandMark {
     },
 }
 
+/// Stable identity for a rendered logical line within a terminal coordinate epoch.
+///
+/// The logical coordinate remains stable while scrollback rotates, while the epoch
+/// changes whenever the terminal discards/reflows presentation coordinates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TerminalLineId {
+    pub epoch: u64,
+    pub logical_line: i64,
+}
+
+/// Shell input classification for a snapshot row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ShellInputLineKind {
+    /// Input whose output boundary has already been observed.
+    Submitted,
+    /// Input region still being edited by the shell.
+    Active,
+}
+
 pub use graphics::{
     GraphicsEvent, GraphicsImageSnapshot, GraphicsIngress, GraphicsPlacement, GraphicsProtocol,
     GraphicsScreenKind, GraphicsSegment, GraphicsSegmentRef, KittyDeleteMode,
@@ -164,6 +183,7 @@ pub struct SelectionSnapshot {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TerminalSnapshotRow {
+    pub line_id: Option<TerminalLineId>,
     pub revision: u64,
     pub cells: Box<[RenderCell]>,
     pub text: String,
@@ -173,6 +193,7 @@ pub struct TerminalSnapshotRow {
     pub wrapped: bool,
     pub hyperlinks: Box<[HyperlinkSpan]>,
     pub command_mark: Option<ShellCommandMark>,
+    pub shell_input: Option<ShellInputLineKind>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -330,6 +351,8 @@ struct TerminalSnapshotRowCacheKey {
     timestamp_ms: Option<u64>,
     wrapped: bool,
     command_mark: Option<ShellCommandMark>,
+    line_id: Option<TerminalLineId>,
+    shell_input: Option<ShellInputLineKind>,
 }
 
 #[derive(Debug)]
@@ -431,12 +454,16 @@ struct LineMetadata {
     signature: Option<u64>,
     revision: Option<u64>,
     command_mark: Option<ShellCommandMark>,
+    shell_input: bool,
 }
 
 #[derive(Debug, Default)]
 struct ScreenLineState {
+    epoch: u64,
     logical_origin: i64,
     metadata: BTreeMap<i64, LineMetadata>,
+    active_input_start: Option<i64>,
+    active_input_end: Option<i64>,
     consumed_scroll_epoch: u64,
     consumed_generation: u64,
     pending_scroll_rows: u64,
@@ -458,6 +485,21 @@ impl ScreenLineState {
         }
         self.metadata = retained;
         before.saturating_sub(self.metadata.len())
+    }
+
+    fn shell_input_kind(&self, logical_line: Option<i64>) -> Option<ShellInputLineKind> {
+        let logical_line = logical_line?;
+        if self
+            .active_input_start
+            .zip(self.active_input_end.or(self.active_input_start))
+            .is_some_and(|(start, end)| logical_line >= start && logical_line <= end)
+        {
+            return Some(ShellInputLineKind::Active);
+        }
+        self.metadata
+            .get(&logical_line)
+            .is_some_and(|metadata| metadata.shell_input)
+            .then_some(ShellInputLineKind::Submitted)
     }
 }
 
@@ -625,11 +667,13 @@ impl TerminalCore {
         let scrollback_limit = config.scrolling_history;
         let term = Term::new(config.clone(), &size, proxy.clone());
         let primary_lines = ScreenLineState {
+            epoch: term.primary_screen_generation(),
             consumed_scroll_epoch: term.primary_grid_scroll_epoch(),
             consumed_generation: term.primary_screen_generation(),
             ..ScreenLineState::default()
         };
         let alternate_lines = ScreenLineState {
+            epoch: term.alternate_screen_generation(),
             consumed_scroll_epoch: term.alternate_grid_scroll_epoch(),
             consumed_generation: term.alternate_screen_generation(),
             ..ScreenLineState::default()
@@ -699,6 +743,8 @@ impl TerminalCore {
         if self.cols != old_cols {
             self.primary_lines.metadata.clear();
             self.alternate_lines.metadata.clear();
+            self.primary_lines.epoch = self.primary_lines.epoch.saturating_add(1);
+            self.alternate_lines.epoch = self.alternate_lines.epoch.saturating_add(1);
             self.graphics.clear_screen(GraphicsScreenKind::Primary);
             self.graphics.clear_screen(GraphicsScreenKind::Alternate);
             self.clear_snapshot_row_cache();
@@ -901,6 +947,11 @@ impl TerminalCore {
     }
 
     pub fn clear(&mut self) {
+        let next_epoch = self
+            .primary_lines
+            .epoch
+            .max(self.alternate_lines.epoch)
+            .saturating_add(1);
         let cols = self.cols as u16;
         let rows = self.rows as u16;
         let mut config = self.term_config.clone();
@@ -908,6 +959,8 @@ impl TerminalCore {
         let encoding_label = self.session_encoding.label().to_string();
         let cell_metrics = (self.cell_width_px, self.cell_height_px);
         *self = Self::new_with_config(cols, rows, config);
+        self.primary_lines.epoch = next_epoch;
+        self.alternate_lines.epoch = next_epoch;
         self.set_encoding(&encoding_label);
         self.set_cell_metrics(cell_metrics.0, cell_metrics.1);
     }
@@ -952,11 +1005,8 @@ impl TerminalCore {
                     if data.is_empty() {
                         return;
                     }
-                    self.sidecar.advance(&data);
-                    self.parser.advance(&mut self.term, &data);
-                    self.drain_alacritty_events();
-                    self.sync_presentation_state();
-                    self.record_shell_command_marks();
+                    let boundaries = self.sidecar.advance(&data);
+                    self.advance_terminal_data_with_boundaries(&data, &boundaries);
                 }
                 GraphicsSegmentRef::Event(event) => {
                     if event == GraphicsEvent::ClearScrollback {
@@ -1004,12 +1054,41 @@ impl TerminalCore {
             return;
         }
         let data = text.as_bytes();
-        self.sidecar.advance(data);
-        self.parser.advance(&mut self.term, data);
-        self.drain_alacritty_events();
-        self.sync_presentation_state();
-        self.record_shell_command_marks();
+        let boundaries = self.sidecar.advance(data);
+        self.advance_terminal_data_with_boundaries(data, &boundaries);
         self.stamp_changed_lines();
+    }
+
+    fn advance_terminal_data_with_boundaries(&mut self, data: &[u8], boundaries: &[ShellBoundary]) {
+        let mut start = 0usize;
+        for boundary in boundaries {
+            let end = boundary.offset.min(data.len());
+            if end > start {
+                self.parser.advance(&mut self.term, &data[start..end]);
+                self.drain_alacritty_events();
+                self.sync_presentation_state();
+                self.update_active_input_end();
+            }
+            self.apply_shell_boundary(boundary.kind);
+            start = end;
+        }
+        if start < data.len() {
+            self.parser.advance(&mut self.term, &data[start..]);
+            self.drain_alacritty_events();
+            self.sync_presentation_state();
+            self.update_active_input_end();
+        }
+    }
+
+    fn update_active_input_end(&mut self) {
+        let point = self.term.renderable_content().cursor.point;
+        let logical_line = self.active_line_state().logical_line(point.line);
+        let state = self.active_line_state_mut();
+        if let Some(end) = state.active_input_end.as_mut() {
+            // The cursor is authoritative while editing. This also shrinks the
+            // active range after backspace/up-arrow instead of leaving stale rows.
+            *end = logical_line;
+        }
     }
 
     fn clear_scrollback(&mut self) {
@@ -1425,6 +1504,12 @@ impl TerminalCore {
         if reset_generation != self.consumed_reset_generation {
             self.primary_lines.metadata.clear();
             self.alternate_lines.metadata.clear();
+            self.primary_lines.active_input_start = None;
+            self.primary_lines.active_input_end = None;
+            self.alternate_lines.active_input_start = None;
+            self.alternate_lines.active_input_end = None;
+            self.primary_lines.epoch = self.primary_lines.epoch.saturating_add(1);
+            self.alternate_lines.epoch = self.alternate_lines.epoch.saturating_add(1);
             self.primary_lines.logical_origin = 0;
             self.alternate_lines.logical_origin = 0;
             self.primary_lines.pending_scroll_rows = 0;
@@ -1464,6 +1549,9 @@ impl TerminalCore {
         if generation != state.consumed_generation {
             state.metadata.clear();
             state.logical_origin = 0;
+            state.active_input_start = None;
+            state.active_input_end = None;
+            state.epoch = state.epoch.saturating_add(1);
             state.pending_scroll_rows = 0;
             state.consumed_generation = generation;
             state.consumed_scroll_epoch = scroll_epoch;
@@ -1505,20 +1593,69 @@ impl TerminalCore {
             .clear();
     }
 
-    fn record_shell_command_marks(&mut self) {
-        let marks = self.sidecar.take_fired_shell_marks();
-        if marks.is_empty() {
+    fn apply_shell_boundary(&mut self, boundary: ShellBoundaryKind) {
+        if self.alternate_screen() {
             return;
         }
-        let line = self.term.renderable_content().cursor.point.line;
-        let logical_line = self.active_line_state().logical_line(line);
+        let point = self.term.renderable_content().cursor.point;
+        let logical_line = self.active_line_state().logical_line(point.line);
         let metadata = self
             .active_line_state_mut()
             .metadata
             .entry(logical_line)
             .or_default();
-        for mark in marks {
-            metadata.command_mark = Some(mark);
+        match boundary {
+            ShellBoundaryKind::PromptStart => {
+                metadata.command_mark = Some(ShellCommandMark::Prompt);
+                if let Some(start) = self.active_line_state().active_input_start {
+                    let end = logical_line.saturating_sub(1);
+                    self.commit_shell_input_range(start, end);
+                }
+                let state = self.active_line_state_mut();
+                state.active_input_start = None;
+                state.active_input_end = None;
+            }
+            ShellBoundaryKind::InputStart => {
+                metadata.command_mark = Some(ShellCommandMark::Prompt);
+                let state = self.active_line_state_mut();
+                state.active_input_start = Some(logical_line);
+                state.active_input_end = Some(logical_line);
+            }
+            ShellBoundaryKind::OutputStart => {
+                metadata.command_mark = Some(ShellCommandMark::Output);
+                let start = self.active_line_state().active_input_start;
+                let end = if point.column.0 == 0 {
+                    logical_line.saturating_sub(1)
+                } else {
+                    logical_line
+                };
+                if let Some(start) = start {
+                    self.commit_shell_input_range(start, end);
+                }
+                let state = self.active_line_state_mut();
+                state.active_input_start = None;
+                state.active_input_end = None;
+            }
+            ShellBoundaryKind::Finished { exit_code } => {
+                metadata.command_mark = Some(ShellCommandMark::Finished { exit_code });
+                if let Some(start) = self.active_line_state().active_input_start {
+                    let end = logical_line.saturating_sub(1);
+                    self.commit_shell_input_range(start, end);
+                    let state = self.active_line_state_mut();
+                    state.active_input_start = None;
+                    state.active_input_end = None;
+                }
+            }
+        }
+    }
+
+    fn commit_shell_input_range(&mut self, start: i64, end: i64) {
+        if end < start {
+            return;
+        }
+        let state = self.active_line_state_mut();
+        for logical_line in start..=end {
+            state.metadata.entry(logical_line).or_default().shell_input = true;
         }
     }
 }
@@ -1584,6 +1721,11 @@ fn snapshot_window_from_term(
             .unwrap_or(0);
         let timestamp_ms = metadata.and_then(|metadata| metadata.timestamp_ms);
         let command_mark = metadata.and_then(|metadata| metadata.command_mark);
+        let line_id = line_in_grid.map(|line| TerminalLineId {
+            epoch: line_state.epoch,
+            logical_line: line_state.logical_line(line),
+        });
+        let shell_input = line_state.shell_input_kind(line_id.map(|id| id.logical_line));
         let revision = metadata
             .and_then(|metadata| metadata.revision)
             .unwrap_or(signature);
@@ -1602,6 +1744,8 @@ fn snapshot_window_from_term(
             timestamp_ms,
             wrapped,
             command_mark,
+            line_id,
+            shell_input,
         };
         let generation = row_cache.next_generation();
         let cached = row_cache.entries.get_mut(&key).and_then(|entry| {
@@ -1624,6 +1768,8 @@ fn snapshot_window_from_term(
                 timestamp_ms,
                 wrapped,
                 command_mark,
+                line_id,
+                shell_input,
             ));
             row_cache.entries.insert(
                 key,
@@ -1695,6 +1841,8 @@ fn snapshot_row_from_term(
     timestamp_ms: Option<u64>,
     wrapped: bool,
     command_mark: Option<ShellCommandMark>,
+    line_id: Option<TerminalLineId>,
+    shell_input: Option<ShellInputLineKind>,
 ) -> TerminalSnapshotRow {
     let mut hyperlink_intern = HashMap::new();
     let cells = if let Some(line) = line {
@@ -1727,6 +1875,7 @@ fn snapshot_row_from_term(
     }
     text.truncate(text.trim_end().len());
     TerminalSnapshotRow {
+        line_id,
         revision,
         styled_spans: compress_render_row(&cells).into_boxed_slice(),
         hyperlinks: compress_render_hyperlinks(&cells).into_boxed_slice(),
@@ -1736,6 +1885,7 @@ fn snapshot_row_from_term(
         timestamp_ms,
         wrapped,
         command_mark,
+        shell_input,
     }
 }
 
@@ -2159,6 +2309,20 @@ fn dedup_overlapping_viewports(lines: Vec<String>, rows: usize) -> Vec<String> {
     out
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ShellBoundaryKind {
+    PromptStart,
+    InputStart,
+    OutputStart,
+    Finished { exit_code: Option<i32> },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ShellBoundary {
+    offset: usize,
+    kind: ShellBoundaryKind,
+}
+
 #[derive(Default)]
 struct NyaTermSidecar {
     osc: Option<Vec<u8>>,
@@ -2169,12 +2333,11 @@ struct NyaTermSidecar {
     command_running: bool,
     pending_command_started: bool,
     pending_command_finished: bool,
-    /// OSC 133 marks observed in the current advance chunk (in order).
-    fired_shell_marks: Vec<ShellCommandMark>,
 }
 
 impl NyaTermSidecar {
-    fn advance(&mut self, bytes: &[u8]) {
+    fn advance(&mut self, bytes: &[u8]) -> Vec<ShellBoundary> {
+        let mut boundaries = Vec::new();
         let mut i = 0;
         while i < bytes.len() {
             let byte = bytes[i];
@@ -2182,11 +2345,21 @@ impl NyaTermSidecar {
                 if byte == 0x07 {
                     let payload = std::mem::take(buffer);
                     self.osc = None;
-                    self.handle_osc(&payload);
+                    if let Some(kind) = self.handle_osc(&payload) {
+                        boundaries.push(ShellBoundary {
+                            offset: i.saturating_add(1),
+                            kind,
+                        });
+                    }
                 } else if byte == 0x1b && bytes.get(i + 1) == Some(&b'\\') {
                     let payload = std::mem::take(buffer);
                     self.osc = None;
-                    self.handle_osc(&payload);
+                    if let Some(kind) = self.handle_osc(&payload) {
+                        boundaries.push(ShellBoundary {
+                            offset: i.saturating_add(2),
+                            kind,
+                        });
+                    }
                     i += 1;
                 } else {
                     buffer.push(byte);
@@ -2200,9 +2373,10 @@ impl NyaTermSidecar {
             }
             i += 1;
         }
+        boundaries
     }
 
-    fn handle_osc(&mut self, payload: &[u8]) {
+    fn handle_osc(&mut self, payload: &[u8]) -> Option<ShellBoundaryKind> {
         let text = String::from_utf8_lossy(payload);
         let mut parts = text.split(';');
         let code = parts.next().unwrap_or("").trim();
@@ -2227,45 +2401,56 @@ impl NyaTermSidecar {
                     .and_then(|part| part.chars().next())
                     .unwrap_or('\0');
                 let status = parts.next().and_then(|s| s.trim().parse::<i32>().ok());
-                self.handle_osc133_mark(mark, status);
+                return self.handle_osc133_mark(mark, status);
             }
             _ if code.starts_with("133") => {
                 let mark = code.chars().nth(3).unwrap_or('\0');
                 let status = parts.next().and_then(|s| s.trim().parse::<i32>().ok());
-                self.handle_osc133_mark(mark, status);
+                return self.handle_osc133_mark(mark, status);
+            }
+            "633" => {
+                let mark = parts
+                    .next()
+                    .and_then(|part| part.chars().next())
+                    .unwrap_or('\0');
+                let status = parts.next().and_then(|s| s.trim().parse::<i32>().ok());
+                return self.handle_osc133_mark(mark, status);
             }
             _ => {}
         }
+        None
     }
 
-    fn handle_osc133_mark(&mut self, mark: char, exit_code: Option<i32>) {
-        match mark {
+    fn handle_osc133_mark(
+        &mut self,
+        mark: char,
+        exit_code: Option<i32>,
+    ) -> Option<ShellBoundaryKind> {
+        let boundary = match mark {
             'A' | 'B' => {
                 self.shell_integration_enabled = true;
                 if mark == 'B' {
                     self.command_running = false;
+                    Some(ShellBoundaryKind::InputStart)
+                } else {
+                    Some(ShellBoundaryKind::PromptStart)
                 }
-                self.fired_shell_marks.push(ShellCommandMark::Prompt);
             }
             'C' => {
                 self.shell_integration_enabled = true;
                 self.command_running = true;
                 self.pending_command_started = true;
-                self.fired_shell_marks.push(ShellCommandMark::Output);
+                Some(ShellBoundaryKind::OutputStart)
             }
             'D' => {
                 self.shell_integration_enabled = true;
                 self.command_running = false;
                 self.pending_command_finished = true;
-                self.fired_shell_marks
-                    .push(ShellCommandMark::Finished { exit_code });
+                Some(ShellBoundaryKind::Finished { exit_code })
             }
-            _ => {}
-        }
-    }
-
-    fn take_fired_shell_marks(&mut self) -> Vec<ShellCommandMark> {
-        std::mem::take(&mut self.fired_shell_marks)
+            _ => None,
+        };
+        boundary
     }
 }
 

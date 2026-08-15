@@ -3,8 +3,8 @@ use nyaterm_core::{
     ActionLinksMatcherSettings, TerminalBackendResize, terminal_backend_resize_changed,
 };
 use nyaterm_terminal::{
-    TerminalEffects, TerminalOutputDecoder, TerminalScreen, TerminalSearchDirection,
-    TerminalSearchQuery, TerminalSnapshot, TerminalSnapshotBuildStats,
+    TerminalEffects, TerminalLineId, TerminalOutputDecoder, TerminalScreen,
+    TerminalSearchDirection, TerminalSearchQuery, TerminalSnapshot, TerminalSnapshotBuildStats,
     terminal_cell_col_for_byte_index, terminal_cell_count,
 };
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -624,6 +624,8 @@ pub(crate) struct TerminalViewState {
     pub(crate) render_degraded_calm_ticks: u8,
     /// Last size sent to the PTY/backend for this session.
     pub(crate) last_backend_resize: Option<TerminalBackendResize>,
+    /// Stable logical row selected by an ordinary left click.
+    pub(crate) target_line: Option<TerminalLineId>,
 }
 
 pub(crate) struct TerminalFrameParts<'a> {
@@ -670,6 +672,7 @@ impl TerminalViewState {
             render_degraded: true,
             render_degraded_calm_ticks: 0,
             last_backend_resize: None,
+            target_line: None,
         }
     }
 
@@ -708,6 +711,7 @@ impl TerminalViewState {
             render_degraded: true,
             render_degraded_calm_ticks: 0,
             last_backend_resize: None,
+            target_line: None,
         }
     }
 

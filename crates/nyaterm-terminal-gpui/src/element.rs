@@ -10,7 +10,8 @@ use gpui::{
 };
 use nyaterm_core::ResolvedKeywordHighlightRule;
 use nyaterm_terminal::{
-    TerminalSnapshot, terminal_cell_count, terminal_char_cell_width, terminal_is_zero_width_mark,
+    ShellInputLineKind, TerminalLineId, TerminalSnapshot, terminal_cell_count,
+    terminal_char_cell_width, terminal_is_zero_width_mark,
 };
 
 use crate::keywords::{
@@ -354,6 +355,8 @@ pub struct NyaTerminalElement {
     visual_y_offset: f32,
     layout_rows: Option<usize>,
     fill_height: bool,
+    zebra_stripes_enabled: bool,
+    target_line: Option<TerminalLineId>,
 }
 
 struct TerminalPaintRow {
@@ -373,6 +376,8 @@ pub struct TerminalCursorGlyphPaint {
 
 #[derive(Default)]
 pub struct NyaTerminalPaintPlan {
+    /// Shell-input and click-target row washes, below all terminal content.
+    zebra_stripes: Vec<PaintQuad>,
     /// Explicit terminal cell backgrounds (under protocol images).
     backgrounds: Vec<PaintQuad>,
     /// Decoded graphics protocol images painted under terminal text.
@@ -434,6 +439,8 @@ impl NyaTerminalElement {
             visual_y_offset: 0.0,
             layout_rows: None,
             fill_height: false,
+            zebra_stripes_enabled: false,
+            target_line: None,
         }
     }
 
@@ -462,6 +469,16 @@ impl NyaTerminalElement {
 
     pub fn with_visual_y_offset(mut self, offset: f32) -> Self {
         self.visual_y_offset = offset;
+        self
+    }
+
+    pub fn with_zebra_stripes(
+        mut self,
+        enabled: bool,
+        target_line: Option<TerminalLineId>,
+    ) -> Self {
+        self.zebra_stripes_enabled = enabled;
+        self.target_line = target_line;
         self
     }
 
@@ -910,6 +927,70 @@ fn push_terminal_background_ranges(
     }
 }
 
+fn push_terminal_zebra_stripes(
+    snapshot: &TerminalSnapshot,
+    visible_rows: std::ops::Range<usize>,
+    target_line: Option<TerminalLineId>,
+    palette: nyaterm_ui::ThemePalette,
+    geometry: TerminalPaintGeometry,
+    out: &mut Vec<PaintQuad>,
+) {
+    let mut pending: Option<(u32, usize, usize)> = None;
+    let flush = |color: u32, start: usize, end: usize, out: &mut Vec<PaintQuad>| {
+        let top = (f32::from(geometry.bounds.top())
+            + geometry.visual_y_offset
+            + start as f32 * geometry.cell_height)
+            .floor();
+        let bottom = (f32::from(geometry.bounds.top())
+            + geometry.visual_y_offset
+            + end as f32 * geometry.cell_height)
+            .ceil();
+        out.push(fill(
+            Bounds::new(
+                point(geometry.bounds.left(), px(top)),
+                size(geometry.bounds.size.width, px((bottom - top).max(0.0))),
+            ),
+            rgba(color),
+        ));
+    };
+
+    for row_index in visible_rows {
+        let color = snapshot.row(row_index).and_then(|row| {
+            if row.line_id.is_some() && row.line_id == target_line {
+                Some((palette.accent << 8) | 0x24)
+            } else if matches!(
+                row.shell_input,
+                Some(ShellInputLineKind::Submitted | ShellInputLineKind::Active)
+            ) {
+                Some((palette.terminal_fg << 8) | 0x0f)
+            } else {
+                None
+            }
+        });
+        match (pending.as_mut(), color) {
+            (Some((pending_color, _, end)), Some(color))
+                if *pending_color == color && *end == row_index =>
+            {
+                *end = row_index + 1;
+            }
+            (Some(_), color) => {
+                let (pending_color, start, end) = pending.take().expect("pending stripe");
+                flush(pending_color, start, end, out);
+                if let Some(color) = color {
+                    pending = Some((color, row_index, row_index + 1));
+                }
+            }
+            (None, Some(color)) => {
+                pending = Some((color, row_index, row_index + 1));
+            }
+            (None, None) => {}
+        }
+    }
+    if let Some((color, start, end)) = pending {
+        flush(color, start, end, out);
+    }
+}
+
 fn terminal_underline_bounds(
     row: usize,
     start: usize,
@@ -1189,6 +1270,16 @@ impl Element for NyaTerminalElement {
         let visible_row_start = visible_rows.start;
         let visible_row_end = visible_rows.end;
         let visible_row_count = visible_rows.len();
+        if self.zebra_stripes_enabled {
+            push_terminal_zebra_stripes(
+                self.snapshot.as_ref(),
+                visible_rows.clone(),
+                self.target_line,
+                self.palette,
+                paint_geometry,
+                &mut plan.zebra_stripes,
+            );
+        }
         // Follow the editor model: once the visible viewport is entirely hot,
         // spend at most one subsequent frame shaping the nearest retained row.
         // Any changed visible row suppresses this work, keeping input/output
@@ -1718,6 +1809,7 @@ impl Element for NyaTerminalElement {
         let started_at = Instant::now();
         let cell_height =
             nyaterm_core::terminal_snapped_cell_height(self.cell_height, window.scale_factor());
+        let zebra_stripes = prepaint.zebra_stripes.len();
         let backgrounds = prepaint.backgrounds.len();
         let images_under = prepaint.images_under.len();
         let placeholders_under = prepaint.placeholders_under.len();
@@ -1736,7 +1828,10 @@ impl Element for NyaTerminalElement {
             bounds: window.content_mask().bounds.intersect(&bounds),
         };
         window.with_content_mask(Some(viewport_mask), |window| {
-            // cell/keyword bg → under images → search/selection → marks → text → underlines → above images → cursor
+            // zebra → cell bg → under images → search/selection → marks → text → images → cursor
+            for quad in prepaint.zebra_stripes.drain(..) {
+                window.paint_quad(quad);
+            }
             for quad in prepaint.backgrounds.drain(..) {
                 window.paint_quad(quad);
             }
@@ -1806,6 +1901,7 @@ impl Element for NyaTerminalElement {
                 total_ms = elapsed.as_millis(),
                 snapshot_rows = self.snapshot.row_count(),
                 snapshot_cols = self.snapshot.cols,
+                zebra_stripes,
                 backgrounds,
                 decoration_backgrounds,
                 active_markers,

@@ -1716,6 +1716,8 @@
     "groupWorkspace": "工作区",
     "hardwareAcceleration": "硬件加速",
     "hardwareAccelerationDesc": "使用 GPU 进行终端渲染 (WebGL/Canvas)。需要重启。",
+    "zebraStripes": "终端行斑马纹",
+    "zebraStripesDesc": "高亮 Shell 输入区域和鼠标点击的目标行。",
     "historyAll": "全部",
     "historyClearFilters": "清除筛选",
     "historyCopyError": "复制错误",

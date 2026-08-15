@@ -1716,6 +1716,8 @@
     "groupWorkspace": "Workspace",
     "hardwareAcceleration": "Hardware Accel.",
     "hardwareAccelerationDesc": "Use GPU for terminal rendering (WebGL/Canvas). Requires restart.",
+    "zebraStripes": "Terminal row stripes",
+    "zebraStripesDesc": "Highlight shell input rows and the row selected with the mouse.",
     "historyAll": "All",
     "historyClearFilters": "Clear Filters",
     "historyCopyError": "Copy error",

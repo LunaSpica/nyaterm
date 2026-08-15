@@ -160,6 +160,11 @@ impl ConnectionStore {
                 true,
             ),
             terminal_low_latency_mode: json_bool(&value, &["terminal", "low_latency_mode"], false),
+            terminal_zebra_stripes_enabled: json_bool(
+                &value,
+                &["terminal", "zebra_stripes_enabled"],
+                true,
+            ),
             terminal_action_links_enabled: json_bool(
                 &value,
                 &["terminal", "action_links_enabled"],
@@ -1054,6 +1059,11 @@ impl ConnectionStore {
             &mut value,
             &["terminal", "low_latency_mode"],
             serde_json::Value::Bool(settings.terminal_low_latency_mode),
+        );
+        set_nested_json_value(
+            &mut value,
+            &["terminal", "zebra_stripes_enabled"],
+            serde_json::Value::Bool(settings.terminal_zebra_stripes_enabled),
         );
         set_nested_json_value(
             &mut value,

@@ -47,6 +47,7 @@ fn test_config() -> SshSessionConfig {
         ssh_algorithms: None,
         sftp: SftpSettings::default(),
         deferred_pty: true,
+        terminal_shell_integration: true,
         keep_alive_interval_secs: 0,
         cols: 80,
         rows: 24,

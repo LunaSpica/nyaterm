@@ -209,6 +209,22 @@ impl NyaTermApp {
             self.clear_terminal_selection(cx);
             return;
         }
+        if !event.modifiers.modified()
+            && let Some(session_id) = selection_session_id.as_deref()
+        {
+            let snapshot_row = terminal_snapshot_row_for_visual_geometry(event.position, &geometry);
+            let target_line = geometry
+                .snapshot
+                .row(snapshot_row)
+                .and_then(|row| row.line_id);
+            if let Some(target_line) = target_line
+                && let Some(view) = self.terminal.view.views.get_mut(session_id)
+                && view.target_line != Some(target_line)
+            {
+                view.target_line = Some(target_line);
+                self.notify_terminal_surface_only(Some(session_id), cx);
+            }
+        }
         let cols = geometry.cols;
         // Shift+click extends the existing selection from its anchor (xterm-style).
         if event.modifiers.shift

@@ -40,6 +40,19 @@ impl NyaTermApp {
         }
     }
 
+    pub(in crate::features) fn toggle_terminal_zebra_stripes(&mut self, cx: &mut Context<Self>) {
+        self.settings.toggle_terminal_zebra_stripes();
+        self.save_terminal_settings(cx);
+        let session_ids = self
+            .visible_terminal_session_ids()
+            .into_iter()
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+        for session_id in session_ids {
+            self.notify_terminal_surface_only(Some(session_id.as_str()), cx);
+        }
+    }
+
     pub(in crate::features) fn set_terminal_scrollback_lines(
         &mut self,
         value: u32,

@@ -1954,11 +1954,12 @@ async fn open_ssh_shell_from_pending(
         "SSH shell accepted"
     );
     let cwd_follow_mode = config.effective_cwd_follow_mode();
-    let shell_kind = match cwd_follow_mode {
-        SftpCwdFollowMode::ShellIntegration | SftpCwdFollowMode::RcFile => {
-            detect_ssh_shell_type(&handle, config.sftp.shell_detection_timeout_ms).await
-        }
-        SftpCwdFollowMode::Off => None,
+    let shell_kind = if config.terminal_shell_integration
+        || !matches!(cwd_follow_mode, SftpCwdFollowMode::Off)
+    {
+        detect_ssh_shell_type(&handle, config.sftp.shell_detection_timeout_ms).await
+    } else {
+        None
     };
     let injection_script = match shell_kind {
         Some(kind) => {
@@ -1966,6 +1967,7 @@ async fn open_ssh_shell_from_pending(
                 &handle,
                 kind,
                 &ready_marker,
+                config.terminal_shell_integration,
                 cwd_follow_mode,
                 config.sftp.shell_detection_timeout_ms,
             )

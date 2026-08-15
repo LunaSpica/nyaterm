@@ -177,6 +177,8 @@ pub struct SshSessionConfig {
     pub encoding: String,
     pub ssh_algorithms: Option<SshAlgorithmPreferences>,
     pub sftp: SftpSettings,
+    /// Install shell semantic markers for terminal row highlighting.
+    pub terminal_shell_integration: bool,
     pub deferred_pty: bool,
     /// Seconds between SSH keepalive packets. Zero disables keepalive.
     pub keep_alive_interval_secs: u32,
@@ -474,6 +476,7 @@ impl Default for SshSessionConfig {
             encoding: "UTF-8".to_string(),
             ssh_algorithms: None,
             sftp: SftpSettings::default(),
+            terminal_shell_integration: true,
             deferred_pty: false,
             keep_alive_interval_secs: 30,
             cols: 80,

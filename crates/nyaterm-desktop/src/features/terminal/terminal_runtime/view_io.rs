@@ -906,6 +906,8 @@ impl NyaTermApp {
         let performance_overlay = view.and_then(|v| v.performance_overlay);
         let skipped = view.map(|v| v.skipped_output_chars).unwrap_or(0);
         let protocol_state = view.map(|v| v.protocol_state).unwrap_or_default();
+        let target_line = view.and_then(|v| v.target_line);
+        let zebra_stripes_enabled = self.settings.summary().terminal_zebra_stripes_enabled;
         let layout_cache = view
             .map(|v| v.render_cache.layout_cache.clone())
             .unwrap_or_else(|| {
@@ -1087,6 +1089,7 @@ impl NyaTermApp {
                     is_active,
                 });
                 changed |= surface.set_protocol_state(protocol_state);
+                changed |= surface.set_zebra_stripes(zebra_stripes_enabled, target_line);
                 changed |= surface.update_scroll_chrome_without_snapshot(&scroll_state);
                 if changed {
                     cx.notify();
@@ -1363,6 +1366,7 @@ impl NyaTermApp {
                 is_active,
             });
             changed |= surface.set_protocol_state(protocol_state);
+            changed |= surface.set_zebra_stripes(zebra_stripes_enabled, target_line);
             let had_pending_local_scroll_sync = surface.has_pending_local_scroll_sync();
             let frame_applied = surface.apply_frame_snapshot(
                 TerminalSurfaceFrameSnapshot::new(

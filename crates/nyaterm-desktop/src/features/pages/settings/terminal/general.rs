@@ -150,6 +150,19 @@ impl NyaTermApp {
                     ))
                     .child(settings_form_row(
                         palette,
+                        self.tr("settings.zebraStripes"),
+                        Some(SharedString::from(self.tr("settings.zebraStripesDesc"))),
+                        settings_switch(
+                            palette,
+                            "terminal-zebra-stripes",
+                            self.settings.summary().terminal_zebra_stripes_enabled,
+                            cx.listener(|this, _, _, cx| {
+                                this.toggle_terminal_zebra_stripes(cx);
+                            }),
+                        ),
+                    ))
+                    .child(settings_form_row(
+                        palette,
                         self.tr("settings.showWorkspacePadding"),
                         Some(SharedString::from(
                             self.tr("settings.showWorkspacePaddingDesc"),

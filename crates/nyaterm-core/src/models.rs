@@ -1695,6 +1695,8 @@ pub struct AppSettingsSummary {
     pub terminal_paste_image_as_path: bool,
     #[serde(default)]
     pub terminal_low_latency_mode: bool,
+    #[serde(default = "default_terminal_zebra_stripes_enabled")]
+    pub terminal_zebra_stripes_enabled: bool,
     /// Detect clickable entities (IP/host:port/archive) in terminal output (Tauri action_links_enabled).
     #[serde(default)]
     pub terminal_action_links_enabled: bool,
@@ -1922,6 +1924,7 @@ impl Default for AppSettingsSummary {
             terminal_show_multi_line_paste_dialog: true,
             terminal_paste_image_as_path: true,
             terminal_low_latency_mode: false,
+            terminal_zebra_stripes_enabled: default_terminal_zebra_stripes_enabled(),
             terminal_action_links_enabled: false,
             terminal_action_links_matchers: ActionLinksMatcherSettings::default(),
             search_custom_engines: default_search_engines(),
@@ -2090,6 +2093,10 @@ fn default_terminal_keep_alive_mode() -> String {
 
 fn default_terminal_timestamp_format() -> String {
     DEFAULT_TERMINAL_TIMESTAMP_FORMAT.to_string()
+}
+
+fn default_terminal_zebra_stripes_enabled() -> bool {
+    true
 }
 
 fn default_hardware_monitor_interval() -> u32 {
