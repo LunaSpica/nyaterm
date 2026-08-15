@@ -1,5 +1,5 @@
 use gpui::{Context, ParentElement as _, Window, div};
-use nyaterm_store::ConnectionStore;
+use nyaterm_store::{StoreDomain, store_request};
 use nyaterm_ui::{NyaConfirmDialog, NyaDialogFooter, NyaDialogWindowExt};
 
 use crate::features::NyaTermApp;
@@ -172,40 +172,41 @@ impl NyaTermApp {
         command_label: String,
         cx: &mut Context<Self>,
     ) {
-        match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .and_then(|store| {
-            let mut config = store.load_quick_commands()?;
-            let before = config.commands.len();
-            config.commands.retain(|command| command.id != command_id);
-            let deleted = config.commands.len() != before;
-            store.save_quick_commands(config.clone())?;
-            Ok((config, deleted))
-        }) {
-            Ok((config, deleted)) => {
-                self.commands
-                    .replace_quick_command_catalog(config.commands, config.categories);
-                self.settings.update_store_status(
-                    if deleted {
-                        format!("quick command '{command_label}' deleted")
-                    } else {
-                        format!("quick command '{command_label}' was already deleted")
-                    },
-                    deleted,
-                );
-                self.shell
-                    .set_status(self.settings.store_status().message.to_string());
-            }
-            Err(error) => {
-                self.settings
-                    .update_store_status(format!("quick command delete failed: {error}"), false);
-                self.shell
-                    .set_status(self.settings.store_status().message.to_string());
-            }
-        }
-        cx.notify();
+        self.submit_store_request(
+            0,
+            store_request(StoreDomain::Commands, move |store| {
+                let mut config = store.load_quick_commands()?;
+                let before = config.commands.len();
+                config.commands.retain(|command| command.id != command_id);
+                let deleted = config.commands.len() != before;
+                store.save_quick_commands(config.clone())?;
+                Ok((config, deleted))
+            }),
+            move |this, event, cx| {
+                match event.outcome {
+                    Ok((config, deleted)) => {
+                        this.commands
+                            .replace_quick_command_catalog(config.commands, config.categories);
+                        this.settings.update_store_status(
+                            if deleted {
+                                format!("quick command '{command_label}' deleted")
+                            } else {
+                                format!("quick command '{command_label}' was already deleted")
+                            },
+                            deleted,
+                        );
+                    }
+                    Err(error) => this.settings.update_store_status(
+                        format!("quick command delete failed: {error}"),
+                        false,
+                    ),
+                }
+                this.shell
+                    .set_status(this.settings.store_status().message.to_string());
+                cx.notify();
+            },
+            cx,
+        );
     }
 
     pub(in crate::features) fn open_delete_quick_command_category_confirm(
@@ -277,59 +278,57 @@ impl NyaTermApp {
         let Some(delete) = self.commands.quick_category_delete().cloned() else {
             return true;
         };
-        let succeeded = match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .and_then(|store| {
-            let mut config = store.load_quick_commands()?;
-            let before_categories = config.categories.len();
-            let before_commands = config.commands.len();
-            config
-                .categories
-                .retain(|category| category.id != delete.id);
-            config
-                .commands
-                .retain(|command| command.category_id.as_deref() != Some(delete.id.as_str()));
-            let deleted_category = config.categories.len() != before_categories;
-            let deleted_commands = before_commands.saturating_sub(config.commands.len());
-            store.save_quick_commands(config.clone())?;
-            Ok((config, deleted_category, deleted_commands))
-        }) {
-            Ok((config, deleted_category, deleted_commands)) => {
-                self.commands
-                    .replace_quick_command_catalog(config.commands, config.categories);
-                self.commands.finish_quick_category_delete(&delete.id);
-                self.settings.update_store_status(
-                    if deleted_category {
-                        format!(
-                            "quick command category '{}' deleted with {} command(s)",
-                            delete.name, deleted_commands
-                        )
-                    } else {
-                        format!(
-                            "quick command category '{}' was already deleted",
-                            delete.name
-                        )
-                    },
-                    deleted_category,
-                );
-                self.shell
-                    .set_status(self.settings.store_status().message.to_string());
-                true
-            }
-            Err(error) => {
-                self.settings.update_store_status(
-                    format!("quick command category delete failed: {error}"),
-                    false,
-                );
-                self.shell
-                    .set_status(self.settings.store_status().message.to_string());
-                false
-            }
-        };
-        cx.notify();
-        succeeded
+        let request_delete = delete.clone();
+        self.submit_store_request(
+            0,
+            store_request(StoreDomain::Commands, move |store| {
+                let mut config = store.load_quick_commands()?;
+                let before_categories = config.categories.len();
+                let before_commands = config.commands.len();
+                config
+                    .categories
+                    .retain(|category| category.id != request_delete.id);
+                config.commands.retain(|command| {
+                    command.category_id.as_deref() != Some(request_delete.id.as_str())
+                });
+                let deleted_category = config.categories.len() != before_categories;
+                let deleted_commands = before_commands.saturating_sub(config.commands.len());
+                store.save_quick_commands(config.clone())?;
+                Ok((config, deleted_category, deleted_commands))
+            }),
+            move |this, event, cx| {
+                match event.outcome {
+                    Ok((config, deleted_category, deleted_commands)) => {
+                        this.commands
+                            .replace_quick_command_catalog(config.commands, config.categories);
+                        this.commands.finish_quick_category_delete(&delete.id);
+                        this.settings.update_store_status(
+                            if deleted_category {
+                                format!(
+                                    "quick command category '{}' deleted with {} command(s)",
+                                    delete.name, deleted_commands
+                                )
+                            } else {
+                                format!(
+                                    "quick command category '{}' was already deleted",
+                                    delete.name
+                                )
+                            },
+                            deleted_category,
+                        );
+                    }
+                    Err(error) => this.settings.update_store_status(
+                        format!("quick command category delete failed: {error}"),
+                        false,
+                    ),
+                }
+                this.shell
+                    .set_status(this.settings.store_status().message.to_string());
+                cx.notify();
+            },
+            cx,
+        );
+        true
     }
 
     pub(in crate::features) fn open_rename_quick_command_category(
@@ -412,70 +411,75 @@ impl NyaTermApp {
             return false;
         }
 
-        let renamed = match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .and_then(|store| {
-            let mut config = store.load_quick_commands()?;
-            if config.categories.iter().any(|category| {
-                category.id != rename.id && category.name.trim().eq_ignore_ascii_case(name.as_str())
-            }) {
-                let message = self.tr("quickCommands.categoryNameDuplicated").to_string();
-                self.commands.set_quick_category_rename_error(message);
-                return Ok((config, false));
-            }
-            let mut renamed = false;
-            if let Some(category) = config
-                .categories
-                .iter_mut()
-                .find(|category| category.id == rename.id)
-            {
-                category.name = name.clone();
-                renamed = true;
-            }
-            store.save_quick_commands(config.clone())?;
-            Ok((config, renamed))
-        }) {
-            Ok((config, renamed)) => {
-                self.commands
-                    .replace_quick_command_catalog(config.commands, config.categories);
-                if renamed {
-                    self.commands.clear_quick_category_rename();
-                    self.settings.update_store_status(
-                        format!(
-                            "quick command category '{}' renamed to '{}'",
-                            rename.original_name, name
-                        ),
-                        true,
-                    );
-                } else {
-                    self.commands.set_quick_category_rename_error(
-                        "Category is no longer available".to_string(),
-                    );
-                    self.settings.update_store_status(
-                        "quick command category rename failed: category missing",
-                        false,
-                    );
+        let request_rename = rename.clone();
+        let request_name = name.clone();
+        self.submit_store_request(
+            0,
+            store_request(StoreDomain::Commands, move |store| {
+                let mut config = store.load_quick_commands()?;
+                let duplicated = config.categories.iter().any(|category| {
+                    category.id != request_rename.id
+                        && category
+                            .name
+                            .trim()
+                            .eq_ignore_ascii_case(request_name.as_str())
+                });
+                if duplicated {
+                    return Ok((config, false, true));
                 }
-                self.shell
-                    .set_status(self.settings.store_status().message.to_string());
-                renamed
-            }
-            Err(error) => {
-                self.commands
-                    .set_quick_category_rename_error(error.to_string());
-                self.settings.update_store_status(
-                    format!("quick command category rename failed: {error}"),
-                    false,
-                );
-                self.shell
-                    .set_status(self.settings.store_status().message.to_string());
-                false
-            }
-        };
-        cx.notify();
-        renamed
+                let mut renamed = false;
+                if let Some(category) = config
+                    .categories
+                    .iter_mut()
+                    .find(|category| category.id == request_rename.id)
+                {
+                    category.name = request_name;
+                    renamed = true;
+                }
+                store.save_quick_commands(config.clone())?;
+                Ok((config, renamed, false))
+            }),
+            move |this, event, cx| {
+                match event.outcome {
+                    Ok((config, renamed, duplicated)) => {
+                        this.commands
+                            .replace_quick_command_catalog(config.commands, config.categories);
+                        if renamed {
+                            this.commands.clear_quick_category_rename();
+                            this.settings.update_store_status(
+                                format!(
+                                    "quick command category '{}' renamed to '{}'",
+                                    rename.original_name, name
+                                ),
+                                true,
+                            );
+                        } else {
+                            let message = if duplicated {
+                                this.tr("quickCommands.categoryNameDuplicated").to_string()
+                            } else {
+                                "Category is no longer available".to_string()
+                            };
+                            this.commands
+                                .set_quick_category_rename_error(message.clone());
+                            this.settings.update_store_status(message, false);
+                        }
+                    }
+                    Err(error) => {
+                        this.commands
+                            .set_quick_category_rename_error(error.to_string());
+                        this.settings.update_store_status(
+                            format!("quick command category rename failed: {error}"),
+                            false,
+                        );
+                    }
+                }
+                this.shell
+                    .set_status(this.settings.store_status().message.to_string());
+                cx.notify();
+            },
+            cx,
+        );
+        true
     }
 
     /// Apply an edit from the category rename box.

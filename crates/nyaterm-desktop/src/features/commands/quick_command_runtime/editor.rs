@@ -1,6 +1,6 @@
 use gpui::{Context, KeyDownEvent, Window};
 use nyaterm_core::{QuickCommand, QuickCommandCategory, uuid};
-use nyaterm_store::ConnectionStore;
+use nyaterm_store::{StoreDomain, store_request};
 
 use crate::features::{NyaTermApp, non_empty_string};
 use crate::models::QuickCommandEditorField;
@@ -180,31 +180,36 @@ impl NyaTermApp {
             sort_order: original.as_ref().and_then(|command| command.sort_order),
         };
 
-        match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .and_then(|store| store.upsert_quick_command(command.clone(), new_category))
-        {
-            Ok(config) => {
-                self.commands
-                    .replace_quick_command_catalog(config.commands, config.categories);
-                self.commands.close_quick_editor();
-                self.settings
-                    .update_store_status(format!("quick command '{}' saved", command.label), true);
-                self.shell
-                    .set_status(self.settings.store_status().message.to_string());
-            }
-            Err(error) => {
-                self.commands
-                    .set_quick_editor_error(error.to_string(), None);
-                self.settings
-                    .update_store_status(format!("quick command save failed: {error}"), false);
-                self.shell
-                    .set_status(self.settings.store_status().message.to_string());
-            }
-        }
-        cx.notify();
+        let label = command.label.clone();
+        self.submit_store_request(
+            0,
+            store_request(StoreDomain::Commands, move |store| {
+                store.upsert_quick_command(command, new_category)
+            }),
+            move |this, event, cx| {
+                match event.outcome {
+                    Ok(config) => {
+                        this.commands
+                            .replace_quick_command_catalog(config.commands, config.categories);
+                        this.commands.close_quick_editor();
+                        this.settings
+                            .update_store_status(format!("quick command '{label}' saved"), true);
+                    }
+                    Err(error) => {
+                        this.commands
+                            .set_quick_editor_error(error.to_string(), None);
+                        this.settings.update_store_status(
+                            format!("quick command save failed: {error}"),
+                            false,
+                        );
+                    }
+                }
+                this.shell
+                    .set_status(this.settings.store_status().message.to_string());
+                cx.notify();
+            },
+            cx,
+        );
     }
 
     pub(in crate::features) fn handle_quick_command_editor_key_down(
