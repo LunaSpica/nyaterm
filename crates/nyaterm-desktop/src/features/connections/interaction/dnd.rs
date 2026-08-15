@@ -1,5 +1,6 @@
 use gpui::Context;
 use nyaterm_core::{Group, SavedConnection};
+use nyaterm_store::{StoreDomain, store_request};
 
 use crate::features::NyaTermApp;
 
@@ -62,18 +63,12 @@ impl NyaTermApp {
         moved.group_id = parent;
         siblings.insert(target_idx, moved);
 
-        match self.persist_connection_order(&siblings) {
-            Ok(()) => {
-                self.refresh_store_from_runtime_and_sync_theme(cx);
-                self.shell.set_status("connection reordered".to_string());
-            }
-            Err(error) => {
-                self.shell
-                    .set_status(format!("reorder connection failed: {error}"));
-                self.settings
-                    .update_store_status(self.shell.status().to_string(), false);
-            }
-        }
+        self.submit_connection_order_persistence(
+            siblings,
+            "reorder connection",
+            |this, _| this.shell.set_status("connection reordered".to_string()),
+            cx,
+        );
         self.connection_state.clear_list_drop_target();
         cx.notify();
     }
@@ -137,18 +132,12 @@ impl NyaTermApp {
         moved.group_id = parent;
         siblings.insert(target_idx.min(siblings.len()), moved);
 
-        match self.persist_connection_order(&siblings) {
-            Ok(()) => {
-                self.refresh_store_from_runtime_and_sync_theme(cx);
-                self.shell.set_status("connection reordered".to_string());
-            }
-            Err(error) => {
-                self.shell
-                    .set_status(format!("reorder connection failed: {error}"));
-                self.settings
-                    .update_store_status(self.shell.status().to_string(), false);
-            }
-        }
+        self.submit_connection_order_persistence(
+            siblings,
+            "reorder connection",
+            |this, _| this.shell.set_status("connection reordered".to_string()),
+            cx,
+        );
         self.connection_state.clear_list_drop_target();
         cx.notify();
     }
@@ -187,21 +176,17 @@ impl NyaTermApp {
         moved.group_id = group_id.clone();
         siblings.push(moved);
 
-        match self.persist_connection_order(&siblings) {
-            Ok(()) => {
+        self.submit_connection_order_persistence(
+            siblings,
+            "move connection",
+            move |this, _| {
                 if let Some(gid) = group_id {
-                    self.connection_state.expand_list_group(gid);
+                    this.connection_state.expand_list_group(gid);
                 }
-                self.refresh_store_from_runtime_and_sync_theme(cx);
-                self.shell.set_status("connection moved".to_string());
-            }
-            Err(error) => {
-                self.shell
-                    .set_status(format!("move connection failed: {error}"));
-                self.settings
-                    .update_store_status(self.shell.status().to_string(), false);
-            }
-        }
+                this.shell.set_status("connection moved".to_string());
+            },
+            cx,
+        );
         cx.notify();
     }
 
@@ -236,22 +221,18 @@ impl NyaTermApp {
             .connection_state
             .connections_reordered_into_group(&source_ids, &group_id);
 
-        match self.persist_connection_order(&ordered) {
-            Ok(()) => {
+        self.submit_connection_order_persistence(
+            ordered,
+            "move connections",
+            move |this, _| {
                 if let Some(group_id) = group_id {
-                    self.connection_state.expand_list_group(group_id);
+                    this.connection_state.expand_list_group(group_id);
                 }
-                self.refresh_store_from_runtime_and_sync_theme(cx);
-                self.shell
+                this.shell
                     .set_status(format!("moved {moved_count} connection(s)"));
-            }
-            Err(error) => {
-                self.shell
-                    .set_status(format!("move connections failed: {error}"));
-                self.settings
-                    .update_store_status(self.shell.status().to_string(), false);
-            }
-        }
+            },
+            cx,
+        );
         cx.notify();
     }
 
@@ -300,16 +281,12 @@ impl NyaTermApp {
         let mut moved = source;
         moved.parent_id = parent;
         siblings.insert(target_idx, moved);
-        match self.persist_group_order(&siblings) {
-            Ok(()) => {
-                self.refresh_store_from_runtime_and_sync_theme(cx);
-                self.shell.set_status("group reordered".to_string());
-            }
-            Err(error) => {
-                self.shell
-                    .set_status(format!("reorder group failed: {error}"));
-            }
-        }
+        self.submit_group_order_persistence(
+            siblings,
+            "reorder group",
+            |this, _| this.shell.set_status("group reordered".to_string()),
+            cx,
+        );
         cx.notify();
     }
 
@@ -355,46 +332,83 @@ impl NyaTermApp {
         let mut moved = source;
         moved.parent_id = parent_id;
         siblings.push(moved);
-        match self.persist_group_order(&siblings) {
-            Ok(()) => {
-                self.refresh_store_from_runtime_and_sync_theme(cx);
-                self.shell.set_status("group moved".to_string());
-            }
-            Err(error) => {
-                self.shell.set_status(format!("move group failed: {error}"));
-            }
-        }
+        self.submit_group_order_persistence(
+            siblings,
+            "move group",
+            |this, _| this.shell.set_status("group moved".to_string()),
+            cx,
+        );
         cx.notify();
     }
 
-    pub(in crate::features) fn persist_connection_order(
+    fn submit_connection_order_persistence(
         &mut self,
-        ordered: &[SavedConnection],
-    ) -> Result<(), String> {
-        let ordered = ordered.to_vec();
-        self.with_connection_store(move |store| {
-            for (index, connection) in ordered.iter().enumerate() {
-                let mut updated = connection.clone();
-                updated.sort_order = index as i32;
-                store.save_connection(&updated)?;
-            }
-            Ok(())
-        })
+        ordered: Vec<SavedConnection>,
+        error_action: &'static str,
+        on_success: impl FnOnce(&mut Self, &mut Context<Self>) + 'static,
+        cx: &mut Context<Self>,
+    ) {
+        self.submit_store_request(
+            0,
+            store_request(StoreDomain::Connections, move |store| {
+                for (index, connection) in ordered.iter().enumerate() {
+                    let mut updated = connection.clone();
+                    updated.sort_order = index as i32;
+                    store.save_connection(&updated)?;
+                }
+                store.load_sessions()
+            }),
+            move |this, event, cx| match event.outcome {
+                Ok(sessions) => {
+                    this.connection_state
+                        .replace_loaded(sessions.connections, sessions.groups);
+                    on_success(this, cx);
+                    cx.notify();
+                }
+                Err(error) => {
+                    let message = format!("{error_action} failed: {error}");
+                    this.shell.set_status(message.clone());
+                    this.settings.update_store_status(message, false);
+                    cx.notify();
+                }
+            },
+            cx,
+        );
     }
 
-    pub(in crate::features) fn persist_group_order(
+    fn submit_group_order_persistence(
         &mut self,
-        ordered: &[Group],
-    ) -> Result<(), String> {
-        let ordered = ordered.to_vec();
-        self.with_connection_store(move |store| {
-            for (index, group) in ordered.iter().enumerate() {
-                let mut updated = group.clone();
-                updated.sort_order = index as i32;
-                store.save_group(&updated)?;
-            }
-            Ok(())
-        })
+        ordered: Vec<Group>,
+        error_action: &'static str,
+        on_success: impl FnOnce(&mut Self, &mut Context<Self>) + 'static,
+        cx: &mut Context<Self>,
+    ) {
+        self.submit_store_request(
+            0,
+            store_request(StoreDomain::Connections, move |store| {
+                for (index, group) in ordered.iter().enumerate() {
+                    let mut updated = group.clone();
+                    updated.sort_order = index as i32;
+                    store.save_group(&updated)?;
+                }
+                store.load_sessions()
+            }),
+            move |this, event, cx| match event.outcome {
+                Ok(sessions) => {
+                    this.connection_state
+                        .replace_loaded(sessions.connections, sessions.groups);
+                    on_success(this, cx);
+                    cx.notify();
+                }
+                Err(error) => {
+                    let message = format!("{error_action} failed: {error}");
+                    this.shell.set_status(message.clone());
+                    this.settings.update_store_status(message, false);
+                    cx.notify();
+                }
+            },
+            cx,
+        );
     }
 }
 

@@ -4,7 +4,9 @@
 //! extra round trip is made. Only ever fills in a blank or refreshes a previous
 //! auto-detection — a hand-picked icon clears the flag and is never touched.
 
+use gpui::Context;
 use nyaterm_core::ConnectionType;
+use nyaterm_store::{StoreDomain, store_request};
 use nyaterm_transport::SystemInfo;
 
 use crate::features::{NyaTermApp, icons::infer_connection_icon_key_from_remote_system};
@@ -14,6 +16,7 @@ impl NyaTermApp {
         &mut self,
         session_id: &str,
         system: &SystemInfo,
+        cx: &mut Context<Self>,
     ) {
         let Some(connection_id) = self
             .session
@@ -55,21 +58,31 @@ impl NyaTermApp {
         updated.icon = Some(icon_key.to_string());
         updated.icon_auto_detect = Some(true);
 
-        match self.persist_saved_connection_with_group(updated, None) {
-            Ok(connection) => {
-                self.shell
-                    .set_status(format!("detected {icon_key} icon for {}", connection.name));
-            }
-            Err(error) => {
-                // A failed icon refresh must not disturb the session, so this is
-                // reported as a log line rather than surfaced to the user.
-                tracing::warn!(
-                    target: "nyaterm::connections",
-                    connection_id = %connection_id,
-                    %error,
-                    "failed to persist auto-detected connection icon"
-                );
-            }
-        }
+        let persisted = updated.clone();
+        let icon_key = icon_key.to_string();
+        self.submit_store_request(
+            0,
+            store_request(StoreDomain::Connections, move |store| {
+                store.save_connection(&persisted)?;
+                Ok(persisted)
+            }),
+            move |this, event, cx| match event.outcome {
+                Ok(connection) => {
+                    this.connection_state.update_connection(connection.clone());
+                    this.shell
+                        .set_status(format!("detected {icon_key} icon for {}", connection.name));
+                    cx.notify();
+                }
+                Err(error) => {
+                    tracing::warn!(
+                        target: "nyaterm::connections",
+                        connection_id = %connection_id,
+                        category = error.category(),
+                        "failed to persist auto-detected connection icon"
+                    );
+                }
+            },
+            cx,
+        );
     }
 }

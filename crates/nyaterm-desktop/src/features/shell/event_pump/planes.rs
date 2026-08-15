@@ -119,7 +119,7 @@ impl NyaTermApp {
             remote,
             self.drain_tunnel_events()
                 | self.drain_process_events()
-                | self.drain_stats_events()
+                | self.drain_stats_events(cx)
                 | self.drain_gpu_events()
                 | self.drain_npu_events()
                 | self.drain_docker_events()

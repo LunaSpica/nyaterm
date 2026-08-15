@@ -1,12 +1,12 @@
 use gpui::Context;
 use nyaterm_core::{
     AiExecutionProfile, ConnectionAuth, ConnectionNetwork, ConnectionPostLogin, ConnectionType,
-    Group, RdpClipboardSettings, RdpDisplaySettings, RdpReconnectSettings, RdpSecuritySettings,
+    RdpClipboardSettings, RdpDisplaySettings, RdpReconnectSettings, RdpSecuritySettings,
     SavedConnection, SftpCwdFollowMode, SftpSettings, SshAlgorithmMode, SshAlgorithmPreferences,
     TelnetAutoLoginConfig, VncClipboardSettings, VncDisplaySettings, VncReconnectSettings,
     VncSecuritySettings, uuid,
 };
-use nyaterm_store::{StorageError, StoreDomain, store_request};
+use nyaterm_store::{StoreDomain, store_request};
 
 use crate::features::NyaTermApp;
 use crate::models::{
@@ -1295,57 +1295,33 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn persist_saved_connection_with_group(
-        &mut self,
-        connection: SavedConnection,
-        group: Option<&Group>,
-    ) -> Result<SavedConnection, String> {
-        let persisted_connection = connection.clone();
-        let group = group.cloned();
-        self.with_connection_store(move |store| {
-            if let Some(group) = &group {
-                store.save_group_and_connection(group, &persisted_connection)?;
-            } else {
-                store.save_connection(&persisted_connection)?;
-            }
-            Ok(())
-        })?;
-        self.refresh_store_from_runtime();
-        self.connection_state
-            .connections()
-            .iter()
-            .find(|item| item.id == connection.id)
-            .cloned()
-            .ok_or_else(|| "saved connection was not reloaded".to_string())
-    }
-
-    pub(in crate::features) fn with_connection_store<T>(
-        &self,
-        f: impl FnOnce(&nyaterm_store::ConnectionStore) -> Result<T, StorageError> + Send + 'static,
-    ) -> Result<T, String>
-    where
-        T: Send + 'static,
-    {
-        self.store_blocking
-            .request(0, store_request(StoreDomain::Connections, f))
-            .map_err(|error| error.to_string())?
-            .outcome
-            .map_err(|error| error.to_string())
-    }
-
-    pub(in crate::features) fn refresh_connection_auth_catalog(&mut self) {
-        if let Ok(catalog) = self.with_connection_store(|store| {
-            Ok((
-                store.list_ssh_keys()?,
-                store.list_otp_entries()?,
-                store.list_passwords()?,
-                store.list_credentials()?,
-            ))
-        }) {
-            self.security
-                .replace_catalog(catalog.0, catalog.1, catalog.2, catalog.3);
-        }
+    pub(in crate::features) fn refresh_connection_auth_catalog(&mut self, cx: &mut Context<Self>) {
         self.refresh_connection_serial_ports();
+        self.submit_store_request(
+            0,
+            store_request(StoreDomain::Security, |store| {
+                Ok((
+                    store.list_ssh_keys()?,
+                    store.list_otp_entries()?,
+                    store.list_passwords()?,
+                    store.list_credentials()?,
+                ))
+            }),
+            |this, event, cx| match event.outcome {
+                Ok(catalog) => {
+                    this.security
+                        .replace_catalog(catalog.0, catalog.1, catalog.2, catalog.3);
+                    cx.notify();
+                }
+                Err(error) => {
+                    let message = format!("failed to refresh authentication catalog: {error}");
+                    this.shell.set_status(message.clone());
+                    this.settings.update_store_status(message, false);
+                    cx.notify();
+                }
+            },
+            cx,
+        );
     }
 
     pub(in crate::features) fn refresh_connection_serial_ports(&mut self) {

@@ -83,7 +83,7 @@ impl NyaTermApp {
         self.continue_saved_connection_start(connection, options, cx);
     }
 
-    fn continue_saved_connection_start(
+    pub(in crate::features) fn continue_saved_connection_start(
         &mut self,
         connection: SavedConnection,
         options: SavedConnectionStartOptions,

@@ -63,7 +63,7 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    pub(in crate::features) fn drain_stats_events(&mut self) -> bool {
+    pub(in crate::features) fn drain_stats_events(&mut self, cx: &mut Context<Self>) -> bool {
         let mut dirty = false;
         for _ in 0..STATS_EVENT_DRAIN_LIMIT {
             let Some(event) = self.remote_ops.next_stats_event() else {
@@ -97,7 +97,7 @@ impl NyaTermApp {
                         .set_status(self.remote_ops.stats_status().to_string());
                     // The snapshot is the only place the remote OS is reported,
                     // so this is where a connection's icon can be filled in.
-                    self.apply_auto_detected_connection_icon(&event.session_id, &stats.system);
+                    self.apply_auto_detected_connection_icon(&event.session_id, &stats.system, cx);
                     self.remote_ops.apply_stats(stats);
                 }
                 Err(error) => {

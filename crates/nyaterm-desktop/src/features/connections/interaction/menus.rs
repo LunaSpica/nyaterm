@@ -30,19 +30,7 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        match self.copy_connections_to_store(&[connection]) {
-            Ok(count) => {
-                self.shell
-                    .set_status(format!("copied {count} saved connection(s)"));
-            }
-            Err(error) => {
-                self.shell
-                    .set_status(format!("copy connection failed: {error}"));
-                self.settings
-                    .update_store_status(self.shell.status().to_string(), false);
-            }
-        }
-        cx.notify();
+        self.submit_connection_copies(vec![connection], cx);
     }
 
     pub(in crate::features) fn start_selected_saved_connections(

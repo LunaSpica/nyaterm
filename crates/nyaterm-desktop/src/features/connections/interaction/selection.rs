@@ -1,5 +1,6 @@
 use gpui::Context;
 use nyaterm_core::{SavedConnection, uuid};
+use nyaterm_store::{StoreDomain, store_request};
 
 use crate::features::NyaTermApp;
 
@@ -43,48 +44,54 @@ impl NyaTermApp {
             return;
         }
 
-        match self.copy_connections_to_store(&selected) {
-            Ok(count) => {
-                self.connection_state.clear_list_selection();
-                self.shell
-                    .set_status(format!("copied {count} saved connection(s)"));
-            }
-            Err(error) => {
-                self.shell
-                    .set_status(format!("copy selected connections failed: {error}"));
-                self.settings
-                    .update_store_status(self.shell.status().to_string(), false);
-            }
-        }
-        cx.notify();
+        self.submit_connection_copies(selected, cx);
     }
 
-    pub(in crate::features) fn copy_connections_to_store(
+    pub(in crate::features) fn submit_connection_copies(
         &mut self,
-        connections: &[SavedConnection],
-    ) -> Result<usize, String> {
-        let connections = connections.to_vec();
+        connections: Vec<SavedConnection>,
+        cx: &mut Context<Self>,
+    ) {
         let count = connections.len();
-        let loaded = self.with_connection_store(move |store| {
-            for connection in &connections {
-                let mut copy = connection.clone();
-                copy.id = uuid();
-                copy.name = format!("{} (copy)", connection.name);
-                copy.created_at_ms = None;
-                copy.updated_at_ms = None;
-                copy.last_used_at_ms = None;
-                if let Some(auth) = copy.auth.as_mut() {
-                    auth.password = None;
-                    auth.password_id = None;
-                    auth.has_password = false;
+        self.submit_store_request(
+            0,
+            store_request(StoreDomain::Connections, move |store| {
+                for connection in &connections {
+                    let mut copy = connection.clone();
+                    copy.id = uuid();
+                    copy.name = format!("{} (copy)", connection.name);
+                    copy.created_at_ms = None;
+                    copy.updated_at_ms = None;
+                    copy.last_used_at_ms = None;
+                    if let Some(auth) = copy.auth.as_mut() {
+                        auth.password = None;
+                        auth.password_id = None;
+                        auth.has_password = false;
+                    }
+                    store.save_connection(&copy)?;
                 }
-                store.save_connection(&copy)?;
-            }
-            store.load_sessions().map(|sessions| sessions.connections)
-        })?;
-        self.connection_state.replace_connections(loaded);
-        self.settings
-            .update_store_status("saved connections copied", true);
-        Ok(count)
+                store.load_sessions()
+            }),
+            move |this, event, cx| match event.outcome {
+                Ok(sessions) => {
+                    this.connection_state
+                        .replace_loaded(sessions.connections, sessions.groups);
+                    this.connection_state.clear_list_selection();
+                    this.shell
+                        .set_status(format!("copied {count} saved connection(s)"));
+                    this.settings
+                        .update_store_status("saved connections copied", true);
+                    cx.notify();
+                }
+                Err(error) => {
+                    let message = format!("copy saved connections failed: {error}");
+                    this.shell.set_status(message.clone());
+                    this.settings.update_store_status(message, false);
+                    cx.notify();
+                }
+            },
+            cx,
+        );
+        cx.notify();
     }
 }

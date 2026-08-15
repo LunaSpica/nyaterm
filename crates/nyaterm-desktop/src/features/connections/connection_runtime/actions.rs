@@ -1,5 +1,6 @@
 use gpui::{Context, KeyDownEvent, Window};
 use nyaterm_core::{SavedConnection, SessionsConfig};
+use nyaterm_store::{StoreDomain, store_request};
 
 use crate::features::NyaTermApp;
 
@@ -45,21 +46,32 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn confirm_connections_clear_all(&mut self, cx: &mut Context<Self>) {
-        match self.with_connection_store(|store| store.replace_sessions(&SessionsConfig::default()))
-        {
-            Ok(()) => {
-                self.connection_state.clear_list_runtime_state();
-                self.refresh_store_from_runtime_and_sync_theme(cx);
-                self.shell
-                    .set_status(self.tr("savedConnections.clearAllSuccess").to_string());
-            }
-            Err(error) => {
-                self.shell
-                    .set_status(format!("clear saved connections failed: {error}"));
-                self.settings
-                    .update_store_status(self.shell.status().to_string(), false);
-            }
-        }
+        self.submit_store_request(
+            0,
+            store_request(StoreDomain::Connections, |store| {
+                store.replace_sessions(&SessionsConfig::default())?;
+                store.load_sessions()
+            }),
+            |this, event, cx| match event.outcome {
+                Ok(sessions) => {
+                    this.connection_state.clear_list_runtime_state();
+                    this.connection_state
+                        .replace_loaded(sessions.connections, sessions.groups);
+                    this.shell
+                        .set_status(this.tr("savedConnections.clearAllSuccess").to_string());
+                    this.settings
+                        .update_store_status(this.shell.status().to_string(), true);
+                    cx.notify();
+                }
+                Err(error) => {
+                    let message = format!("clear saved connections failed: {error}");
+                    this.shell.set_status(message.clone());
+                    this.settings.update_store_status(message, false);
+                    cx.notify();
+                }
+            },
+            cx,
+        );
         cx.notify();
     }
 
@@ -133,18 +145,29 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let persisted_id = connection_id.clone();
-        match self.with_connection_store(move |store| store.delete_connection(&persisted_id)) {
-            Ok(()) => {
-                self.connection_state
-                    .remove_list_connection_references(&connection_id);
-                self.refresh_store_from_runtime_and_sync_theme(cx);
-                self.shell.set_status(format!("deleted connection {label}"));
-            }
-            Err(error) => {
-                self.shell
-                    .set_status(format!("delete connection failed: {error}"));
-            }
-        }
+        self.submit_store_request(
+            0,
+            store_request(StoreDomain::Connections, move |store| {
+                store.delete_connection(&persisted_id)?;
+                store.load_sessions()
+            }),
+            move |this, event, cx| match event.outcome {
+                Ok(sessions) => {
+                    this.connection_state
+                        .remove_list_connection_references(&connection_id);
+                    this.connection_state
+                        .replace_loaded(sessions.connections, sessions.groups);
+                    this.shell.set_status(format!("deleted connection {label}"));
+                    cx.notify();
+                }
+                Err(error) => {
+                    this.shell
+                        .set_status(format!("delete connection failed: {error}"));
+                    cx.notify();
+                }
+            },
+            cx,
+        );
         cx.notify();
     }
 
@@ -208,19 +231,30 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let persisted_id = group_id.clone();
-        match self.with_connection_store(move |store| store.delete_group(&persisted_id)) {
-            Ok(()) => {
-                self.connection_state
-                    .remove_list_group_references(&group_id);
-                self.refresh_store_from_runtime_and_sync_theme(cx);
-                self.shell
-                    .set_status(format!("deleted connection group {label}"));
-            }
-            Err(error) => {
-                self.shell
-                    .set_status(format!("delete connection group failed: {error}"));
-            }
-        }
+        self.submit_store_request(
+            0,
+            store_request(StoreDomain::Connections, move |store| {
+                store.delete_group(&persisted_id)?;
+                store.load_sessions()
+            }),
+            move |this, event, cx| match event.outcome {
+                Ok(sessions) => {
+                    this.connection_state
+                        .remove_list_group_references(&group_id);
+                    this.connection_state
+                        .replace_loaded(sessions.connections, sessions.groups);
+                    this.shell
+                        .set_status(format!("deleted connection group {label}"));
+                    cx.notify();
+                }
+                Err(error) => {
+                    this.shell
+                        .set_status(format!("delete connection group failed: {error}"));
+                    cx.notify();
+                }
+            },
+            cx,
+        );
         cx.notify();
     }
 
@@ -400,26 +434,34 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let persisted = selected.clone();
-        match self.with_connection_store(move |store| {
-            for connection in &persisted {
-                store.delete_connection(&connection.id)?;
-            }
-            Ok(())
-        }) {
-            Ok(()) => {
-                for connection in &selected {
-                    self.connection_state
-                        .remove_list_connection_references(&connection.id);
+        self.submit_store_request(
+            0,
+            store_request(StoreDomain::Connections, move |store| {
+                for connection in &persisted {
+                    store.delete_connection(&connection.id)?;
                 }
-                self.refresh_store_from_runtime_and_sync_theme(cx);
-                self.shell
-                    .set_status(format!("deleted {} connection(s)", selected.len()));
-            }
-            Err(error) => {
-                self.shell
-                    .set_status(format!("delete selected connections failed: {error}"));
-            }
-        }
+                store.load_sessions()
+            }),
+            move |this, event, cx| match event.outcome {
+                Ok(sessions) => {
+                    for connection in &selected {
+                        this.connection_state
+                            .remove_list_connection_references(&connection.id);
+                    }
+                    this.connection_state
+                        .replace_loaded(sessions.connections, sessions.groups);
+                    this.shell
+                        .set_status(format!("deleted {} connection(s)", selected.len()));
+                    cx.notify();
+                }
+                Err(error) => {
+                    this.shell
+                        .set_status(format!("delete selected connections failed: {error}"));
+                    cx.notify();
+                }
+            },
+            cx,
+        );
         cx.notify();
     }
 

@@ -3,7 +3,7 @@ use gpui::{
     Window, div, prelude::*, rgb,
 };
 use nyaterm_store::ConnectionStore;
-use nyaterm_store::LoadBootstrap;
+use nyaterm_store::{BootstrapSnapshot, LoadBootstrap};
 use nyaterm_transport::SftpDuplicatePolicy;
 
 use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
@@ -606,27 +606,27 @@ impl NyaTermApp {
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        self.refresh_store_from_runtime();
-        self.sync_component_theme(cx);
+        self.submit_store_request(
+            0,
+            LoadBootstrap,
+            |this, event, cx| match event.outcome {
+                Ok(snapshot) => {
+                    this.apply_store_refresh(snapshot);
+                    this.sync_component_theme(cx);
+                    cx.notify();
+                }
+                Err(error) => {
+                    let message = format!("store refresh failed: {error}");
+                    this.settings.update_store_status(message.clone(), false);
+                    this.shell.set_status(message);
+                    cx.notify();
+                }
+            },
+            cx,
+        );
     }
 
-    pub(in crate::features) fn refresh_store_from_runtime(&mut self) {
-        let event = match self.store_blocking.request(0, LoadBootstrap) {
-            Ok(event) => event,
-            Err(error) => {
-                self.settings
-                    .update_store_status(format!("store refresh request failed: {error}"), false);
-                return;
-            }
-        };
-        let snapshot = match event.outcome {
-            Ok(snapshot) => snapshot,
-            Err(error) => {
-                self.settings
-                    .update_store_status(format!("store refresh failed: {error}"), false);
-                return;
-            }
-        };
+    fn apply_store_refresh(&mut self, snapshot: BootstrapSnapshot) {
         self.connection_state
             .replace_loaded(snapshot.connections, snapshot.connection_groups);
         self.security.replace_catalog(

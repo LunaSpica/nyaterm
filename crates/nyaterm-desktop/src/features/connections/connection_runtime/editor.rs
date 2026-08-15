@@ -3,6 +3,7 @@ use nyaterm_core::{
     Group, RdpClipboardSettings, RdpDisplaySettings, RdpReconnectSettings, RdpSecuritySettings,
     VncClipboardSettings, VncDisplaySettings, VncReconnectSettings, VncSecuritySettings, uuid,
 };
+use nyaterm_store::{StoreDomain, store_request};
 
 use super::helpers::{
     ConnectionEditorToggle, ConnectionEditorValidationError, build_saved_connection_from_editor,
@@ -98,7 +99,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.refresh_connection_auth_catalog();
+        self.refresh_connection_auth_catalog(cx);
         let editor = if let Some(connection_id) = connection_id {
             let Some(connection) = self
                 .connection_state
@@ -581,7 +582,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn save_connection_editor(
         &mut self,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(mut editor) = self.connection_state.active_editor_draft() else {
@@ -609,25 +610,55 @@ impl NyaTermApp {
             }
         };
 
-        match self.persist_saved_connection_with_group(built.clone(), pending_group.as_ref()) {
-            Ok(saved) => {
-                let connect_after_save = editor.connect_after_save;
-                self.connection_state
-                    .finish_editor_save(saved.id.clone(), saved.group_id.clone());
-                self.shell
-                    .set_status(self.tr("dialog.connectionSaved").to_string());
-                if connect_after_save {
-                    self.start_saved_connection(saved, window, cx);
+        let saved_id = built.id.clone();
+        let persisted = built.clone();
+        let connect_after_save = editor.connect_after_save;
+        self.shell.set_status("saving connection...".to_string());
+        self.submit_store_request(
+            0,
+            store_request(StoreDomain::Connections, move |store| {
+                if let Some(group) = &pending_group {
+                    store.save_group_and_connection(group, &persisted)?;
                 } else {
-                    cx.notify();
+                    store.save_connection(&persisted)?;
                 }
-            }
-            Err(error) => {
-                let message = self
-                    .tr("dialog.connectionSaveFailed")
-                    .replace("{{error}}", &error);
-                self.set_connection_editor_error(message, cx);
-            }
-        }
+                store.load_sessions()
+            }),
+            move |this, event, cx| match event.outcome {
+                Ok(sessions) => {
+                    let saved = sessions
+                        .connections
+                        .iter()
+                        .find(|connection| connection.id == saved_id)
+                        .cloned();
+                    this.connection_state
+                        .replace_loaded(sessions.connections, sessions.groups);
+                    let Some(saved) = saved else {
+                        this.set_connection_editor_error(
+                            "saved connection was not returned by storage".to_string(),
+                            cx,
+                        );
+                        return;
+                    };
+                    this.connection_state
+                        .finish_editor_save(saved.id.clone(), saved.group_id.clone());
+                    this.shell
+                        .set_status(this.tr("dialog.connectionSaved").to_string());
+                    if connect_after_save {
+                        this.continue_saved_connection_start(saved, Default::default(), cx);
+                    } else {
+                        cx.notify();
+                    }
+                }
+                Err(error) => {
+                    let message = this
+                        .tr("dialog.connectionSaveFailed")
+                        .replace("{{error}}", &error.to_string());
+                    this.set_connection_editor_error(message, cx);
+                }
+            },
+            cx,
+        );
+        cx.notify();
     }
 }

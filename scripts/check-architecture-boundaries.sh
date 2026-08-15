@@ -186,6 +186,10 @@ check_no_matches \
   'ConnectionStore::open(_with_portable_key_path)?' \
   crates/nyaterm-desktop/src
 check_no_matches \
+  "desktop GPUI state must not synchronously wait on the store client" \
+  '(with_connection_store|self\.store_blocking\.request|refresh_store_from_runtime\()' \
+  crates/nyaterm-desktop/src/features
+check_no_matches \
   "nyaterm-desktop must not depend on redb directly" \
   '^redb(\.workspace)?[[:space:]]*=' \
   crates/nyaterm-desktop/Cargo.toml

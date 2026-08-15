@@ -1,5 +1,6 @@
 use gpui::{Context, KeyDownEvent, Window};
 use nyaterm_core::{Group, uuid};
+use nyaterm_store::{StoreDomain, store_request};
 
 use crate::features::NyaTermApp;
 use crate::models::ConnectionGroupEditorMode;
@@ -151,22 +152,34 @@ impl NyaTermApp {
         };
 
         let persisted = group.clone();
-        match self.with_connection_store(move |store| store.save_group(&persisted)) {
-            Ok(()) => {
-                if let Some(parent_id) = group.parent_id.clone() {
-                    self.connection_state.expand_list_group(parent_id);
+        self.submit_store_request(
+            0,
+            store_request(StoreDomain::Connections, move |store| {
+                store.save_group(&persisted)?;
+                store.load_sessions()
+            }),
+            move |this, event, cx| match event.outcome {
+                Ok(sessions) => {
+                    if let Some(parent_id) = group.parent_id.clone() {
+                        this.connection_state.expand_list_group(parent_id);
+                    }
+                    this.connection_state.expand_list_group(group.id.clone());
+                    this.connection_state
+                        .replace_loaded(sessions.connections, sessions.groups);
+                    this.connection_state.close_group_editor();
+                    this.connection_state.clear_group_editor_field();
+                    this.shell
+                        .set_status(format!("saved connection group {}", group.name));
+                    cx.notify();
                 }
-                self.connection_state.expand_list_group(group.id.clone());
-                self.connection_state.close_group_editor();
-                self.connection_state.clear_group_editor_field();
-                self.refresh_store_from_runtime_and_sync_theme(cx);
-                self.shell
-                    .set_status(format!("saved connection group {}", group.name));
-            }
-            Err(error) => {
-                self.connection_state.set_group_editor_error(error);
-            }
-        }
+                Err(error) => {
+                    this.connection_state
+                        .set_group_editor_error(error.to_string());
+                    cx.notify();
+                }
+            },
+            cx,
+        );
         cx.notify();
     }
 
