@@ -1,5 +1,6 @@
 use gpui::{Context, KeyDownEvent, Window};
-use nyaterm_core::{ConnectionStore, QuickCommand, QuickCommandCategory, uuid};
+use nyaterm_core::{QuickCommand, QuickCommandCategory, uuid};
+use nyaterm_store::ConnectionStore;
 
 use crate::features::{NyaTermApp, non_empty_string};
 use crate::models::QuickCommandEditorField;

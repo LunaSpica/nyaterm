@@ -1,5 +1,6 @@
 use gpui::{Context, Window};
-use nyaterm_core::{ConnectionStore, TunnelConfig, uuid};
+use nyaterm_core::{TunnelConfig, uuid};
+use nyaterm_store::ConnectionStore;
 
 use super::helpers::{network_section_key, parse_port};
 use crate::features::NyaTermApp;

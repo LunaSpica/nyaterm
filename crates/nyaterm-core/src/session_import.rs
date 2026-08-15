@@ -2,10 +2,7 @@
 //! SecureCRT (.xml), FinalShell conn directories, NyaTerm JSON files, Electerm
 //! bookmarks, and Termius IndexedDB data.
 
-use crate::{
-    AiExecutionProfile, ConnectionAuth, ConnectionStore, ConnectionType, Group, SavedConnection,
-    SavedPassword, SshKey, StorageError,
-};
+use crate::{AiExecutionProfile, ConnectionAuth, ConnectionType, SavedPassword, SshKey};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::io::Read;
@@ -28,8 +25,6 @@ pub enum SessionImportError {
     Config(String),
     #[error("{0}")]
     Crypto(String),
-    #[error(transparent)]
-    Storage(#[from] StorageError),
 }
 
 type AppError = SessionImportError;
@@ -46,23 +41,36 @@ struct ImportedSession {
     description: Option<String>,
 }
 
-#[derive(Debug)]
-struct PreparedJsonConnection {
-    name: String,
-    config: ConnectionType,
-    group_path: Option<Vec<String>>,
-    description: Option<String>,
-    sort_order: i32,
-    icon: Option<String>,
-    auth: Option<ConnectionAuth>,
+pub struct PreparedSessionConnection {
+    pub name: String,
+    pub config: ConnectionType,
+    pub group_path: Option<Vec<String>>,
+    pub description: Option<String>,
+    pub sort_order: i32,
+    pub icon: Option<String>,
+    pub auth: Option<ConnectionAuth>,
 }
 
-#[derive(Debug)]
-struct PreparedJsonImport {
-    groups: Vec<Vec<String>>,
-    passwords: Vec<SavedPassword>,
-    ssh_keys: Vec<SshKey>,
-    connections: Vec<PreparedJsonConnection>,
+pub struct PreparedSessionImport {
+    pub groups: Vec<Vec<String>>,
+    pub passwords: Vec<SavedPassword>,
+    pub ssh_keys: Vec<SshKey>,
+    pub connections: Vec<PreparedSessionConnection>,
+}
+
+type PreparedJsonConnection = PreparedSessionConnection;
+type PreparedJsonImport = PreparedSessionImport;
+
+impl std::fmt::Debug for PreparedSessionImport {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("PreparedSessionImport")
+            .field("group_count", &self.groups.len())
+            .field("password_count", &self.passwords.len())
+            .field("ssh_key_count", &self.ssh_keys.len())
+            .field("connection_count", &self.connections.len())
+            .finish()
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -621,13 +629,13 @@ fn parse_windterm_target(target: &str) -> (String, String) {
 
 // NyaTerm JSON (.json)
 
-fn parse_nyaterm_json_content(content: &str) -> AppResult<PreparedJsonImport> {
+fn parse_nyaterm_json_content(content: &str) -> AppResult<PreparedSessionImport> {
     let file: NyatermJsonImportFile = serde_json::from_str(content)
         .map_err(|e| AppError::Config(format!("Invalid NyaTerm JSON: {e}")))?;
     prepare_nyaterm_json_import(file)
 }
 
-fn prepare_nyaterm_json_import(file: NyatermJsonImportFile) -> AppResult<PreparedJsonImport> {
+fn prepare_nyaterm_json_import(file: NyatermJsonImportFile) -> AppResult<PreparedSessionImport> {
     if file.version != 1 {
         return Err(AppError::Config(format!(
             "Unsupported NyaTerm JSON import version: {}",
@@ -707,7 +715,7 @@ fn prepare_nyaterm_json_import(file: NyatermJsonImportFile) -> AppResult<Prepare
         )?);
     }
 
-    Ok(PreparedJsonImport {
+    Ok(PreparedSessionImport {
         groups,
         passwords,
         ssh_keys,
@@ -719,7 +727,7 @@ fn prepare_nyaterm_json_session(
     session: NyatermJsonSession,
     password_ref_map: &HashMap<String, String>,
     key_ref_map: &HashMap<String, String>,
-) -> AppResult<PreparedJsonConnection> {
+) -> AppResult<PreparedSessionConnection> {
     match session {
         NyatermJsonSession::Ssh {
             name,
@@ -734,7 +742,7 @@ fn prepare_nyaterm_json_session(
         } => {
             validate_port(port, "ssh session")?;
             let context = format!("ssh session '{name}'");
-            Ok(PreparedJsonConnection {
+            Ok(PreparedSessionConnection {
                 name: required_string(name, "name", "ssh session")?,
                 config: ConnectionType::Ssh {
                     host: required_string(host, "host", &context)?,
@@ -770,7 +778,7 @@ fn prepare_nyaterm_json_session(
             icon,
         } => {
             let context = format!("local_terminal session '{name}'");
-            Ok(PreparedJsonConnection {
+            Ok(PreparedSessionConnection {
                 name: required_string(name, "name", "local_terminal session")?,
                 config: ConnectionType::LocalTerminal {
                     shell_path: required_string(shell_path, "shell_path", &context)?,
@@ -799,7 +807,7 @@ fn prepare_nyaterm_json_session(
             validate_port(port, "telnet session")?;
             validate_backspace_mode(&backspace_mode, "telnet session")?;
             let context = format!("telnet session '{name}'");
-            Ok(PreparedJsonConnection {
+            Ok(PreparedSessionConnection {
                 name: required_string(name, "name", "telnet session")?,
                 config: ConnectionType::Telnet {
                     host: required_string(host, "host", &context)?,
@@ -839,7 +847,7 @@ fn prepare_nyaterm_json_session(
         } => {
             validate_serial_config(baud_rate, data_bits, &parity, &stop_bits, &backspace_mode)?;
             let context = format!("serial session '{name}'");
-            Ok(PreparedJsonConnection {
+            Ok(PreparedSessionConnection {
                 name: required_string(name, "name", "serial session")?,
                 config: ConnectionType::Serial {
                     port_name: required_string(port_name, "port_name", &context)?,
@@ -1060,104 +1068,15 @@ fn validate_serial_config(
 
 // Shared import persistence helpers
 
-fn build_group_path(groups: &[Group], id: &str) -> Vec<String> {
-    let mut segments = Vec::new();
-    let mut current = id;
-    let mut visited = std::collections::HashSet::new();
-    loop {
-        if !visited.insert(current.to_string()) {
-            break;
-        }
-        if let Some(g) = groups.iter().find(|g| g.id == current) {
-            segments.push(g.name.clone());
-            if let Some(ref pid) = g.parent_id {
-                current = pid;
-            } else {
-                break;
-            }
-        } else {
-            break;
-        }
-    }
-    segments.reverse();
-    segments
-}
-
-fn build_group_path_map(groups: &[Group]) -> HashMap<Vec<String>, String> {
-    let mut path_map = HashMap::new();
-    for group in groups {
-        let path = build_group_path(groups, &group.id);
-        path_map.insert(path, group.id.clone());
-    }
-    path_map
-}
-
-fn ensure_group_path(
-    groups: &mut Vec<Group>,
-    path_map: &mut HashMap<Vec<String>, String>,
-    next_sort: &mut i32,
-    segments: &[String],
-) -> Option<String> {
-    if segments.is_empty() {
-        return None;
-    }
-
-    let mut leaf_id = String::new();
-    for depth in 1..=segments.len() {
-        let prefix: Vec<String> = segments[..depth].to_vec();
-        if let Some(existing) = path_map.get(&prefix) {
-            leaf_id = existing.clone();
-        } else {
-            let id = uuid::Uuid::new_v4().to_string();
-            let parent_id = if depth > 1 {
-                let parent_prefix: Vec<String> = segments[..depth - 1].to_vec();
-                path_map.get(&parent_prefix).cloned()
-            } else {
-                None
-            };
-            groups.push(Group {
-                id: id.clone(),
-                name: segments[depth - 1].clone(),
-                parent_id,
-                sort_order: *next_sort,
-                created_at_ms: None,
-                updated_at_ms: None,
-            });
-            *next_sort += 1;
-            path_map.insert(prefix, id.clone());
-            leaf_id = id;
-        }
-    }
-    Some(leaf_id)
-}
-
-fn import_legacy_sessions(
-    store: &ConnectionStore,
-    imported: Vec<ImportedSession>,
-) -> AppResult<usize> {
-    if imported.is_empty() {
-        return Ok(0);
-    }
-
-    let mut groups = store.list_groups()?;
-    let existing_group_count = groups.len();
-    let count = imported.len();
-    let mut path_map = build_group_path_map(&groups);
-    let mut next_sort = groups.iter().map(|g| g.sort_order).max().unwrap_or(0) + 1;
-    let mut connections = Vec::with_capacity(count);
-
-    for sess in imported {
-        let group_id = sess.group_path.as_ref().and_then(|segments| {
-            ensure_group_path(&mut groups, &mut path_map, &mut next_sort, segments)
-        });
-
-        connections.push(SavedConnection {
-            id: uuid::Uuid::new_v4().to_string(),
-            name: sess.name,
+fn prepare_legacy_sessions(imported: Vec<ImportedSession>) -> PreparedSessionImport {
+    let connections = imported
+        .into_iter()
+        .map(|session| PreparedSessionConnection {
+            name: session.name,
             config: ConnectionType::Ssh {
-                host: sess.host,
-                port: sess.port,
-                username: sess.username,
+                host: session.host,
+                port: session.port,
+                username: session.username,
                 backspace_mode: "del".to_string(),
                 ai_execution_profile: AiExecutionProfile::Auto,
                 x11_forwarding: false,
@@ -1165,13 +1084,12 @@ fn import_legacy_sessions(
                 agent_forwarding: false,
                 encoding: String::new(),
             },
-            group_id,
-            description: sess.description,
+            group_path: session.group_path,
+            description: session.description,
             sort_order: 0,
             icon: None,
-            icon_auto_detect: None,
             auth: Some(ConnectionAuth {
-                mode: sess.auth_type,
+                mode: session.auth_type,
                 password_id: None,
                 password: None,
                 key_id: None,
@@ -1179,115 +1097,38 @@ fn import_legacy_sessions(
                 auto_fill_otp: false,
                 has_password: false,
             }),
-            network: None,
-            post_login: None,
-            recording: None,
-            ssh_algorithms: None,
-            ssh_profile: Default::default(),
-            terminal_type: None,
-            sftp: Default::default(),
-            created_at_ms: None,
-            updated_at_ms: None,
-            last_used_at_ms: None,
-        });
-    }
+        })
+        .collect();
 
-    for group in &groups[existing_group_count..] {
-        store.save_group(group)?;
+    PreparedSessionImport {
+        groups: Vec::new(),
+        passwords: Vec::new(),
+        ssh_keys: Vec::new(),
+        connections,
     }
-    for connection in &connections {
-        store.save_connection(connection)?;
-    }
-    Ok(count)
 }
 
-fn import_prepared_nyaterm_json(
-    store: &ConnectionStore,
-    prepared: PreparedJsonImport,
-) -> AppResult<usize> {
-    if prepared.connections.is_empty() {
-        return Ok(0);
-    }
-
-    let mut groups = store.list_groups()?;
-    let existing_group_count = groups.len();
-    let mut path_map = build_group_path_map(&groups);
-    let mut next_sort = groups.iter().map(|g| g.sort_order).max().unwrap_or(0) + 1;
-
-    for group_path in &prepared.groups {
-        ensure_group_path(&mut groups, &mut path_map, &mut next_sort, group_path);
-    }
-
-    let count = prepared.connections.len();
-    let mut connections = Vec::with_capacity(count);
-    for conn in prepared.connections {
-        let group_id = conn.group_path.as_ref().and_then(|segments| {
-            ensure_group_path(&mut groups, &mut path_map, &mut next_sort, segments)
-        });
-
-        connections.push(SavedConnection {
-            id: uuid::Uuid::new_v4().to_string(),
-            name: conn.name,
-            config: conn.config,
-            group_id,
-            description: conn.description,
-            sort_order: conn.sort_order,
-            icon: conn.icon,
-            // Imported sessions carry whatever icon the source client had; leave
-            // auto-detection unconfigured so it only fills in a blank.
-            icon_auto_detect: None,
-            auth: conn.auth,
-            network: None,
-            post_login: None,
-            recording: None,
-            ssh_algorithms: None,
-            ssh_profile: Default::default(),
-            terminal_type: None,
-            sftp: Default::default(),
-            created_at_ms: None,
-            updated_at_ms: None,
-            last_used_at_ms: None,
-        });
-    }
-
-    for password in prepared.passwords {
-        store.save_password(password)?;
-    }
-    for key in prepared.ssh_keys {
-        store.save_ssh_key(key)?;
-    }
-    for group in &groups[existing_group_count..] {
-        store.save_group(group)?;
-    }
-    for connection in &connections {
-        store.save_connection(connection)?;
-    }
-    Ok(count)
-}
-
-pub fn import_sessions(
-    store: &ConnectionStore,
+pub fn prepare_session_import(
     file_path: &Path,
-) -> Result<usize, SessionImportError> {
+) -> Result<PreparedSessionImport, SessionImportError> {
     if file_path.is_dir() {
-        return Ok(import_legacy_sessions(
-            store,
-            finalshell::parse_finalshell(file_path)?,
-        )?);
+        return Ok(prepare_legacy_sessions(finalshell::parse_finalshell(
+            file_path,
+        )?));
     }
 
     let path = file_path.to_string_lossy();
     let lower = path.to_ascii_lowercase();
-    let count = if lower.ends_with(".xts") {
-        import_legacy_sessions(store, parse_xshell(&path)?)?
+    let prepared = if lower.ends_with(".xts") {
+        prepare_legacy_sessions(parse_xshell(&path)?)
     } else if lower.ends_with(".mxtsessions") {
-        import_legacy_sessions(store, parse_mobaxterm(&path)?)?
+        prepare_legacy_sessions(parse_mobaxterm(&path)?)
     } else if lower.ends_with(".sessions") {
-        import_legacy_sessions(store, parse_windterm(&path)?)?
+        prepare_legacy_sessions(parse_windterm(&path)?)
     } else if lower.ends_with(".xml") {
-        import_legacy_sessions(store, securecrt::parse_securecrt(file_path)?)?
+        prepare_legacy_sessions(securecrt::parse_securecrt(file_path)?)
     } else if lower.ends_with(".json") {
-        import_prepared_nyaterm_json(store, electerm::parse_json_import(file_path)?)?
+        electerm::parse_json_import(file_path)?
     } else {
         return Err(AppError::Config(
             "Unsupported file format. Please use .xts (Xshell), .mxtsessions (MobaXterm), .sessions (WindTerm), .xml (SecureCRT), .json (NyaTerm JSON or Electerm bookmarks), or a FinalShell conn directory."
@@ -1295,18 +1136,14 @@ pub fn import_sessions(
         ));
     };
 
-    Ok(count)
+    Ok(prepared)
 }
 
-pub fn import_termius_sessions(
-    store: &ConnectionStore,
+pub fn prepare_termius_session_import(
     indexed_db_path: Option<&Path>,
     local_key: &[u8],
-) -> Result<usize, SessionImportError> {
-    import_prepared_nyaterm_json(
-        store,
-        termius::parse_termius_indexed_db(indexed_db_path, local_key)?,
-    )
+) -> Result<PreparedSessionImport, SessionImportError> {
+    termius::parse_termius_indexed_db(indexed_db_path, local_key)
 }
 
 #[cfg(test)]
@@ -1511,26 +1348,6 @@ UserKey=C:\keys\deploy.key
     }
 
     #[test]
-    fn group_path_builder_stops_on_parent_cycles() {
-        let groups = vec![
-            Group {
-                id: "a".to_string(),
-                name: "A".to_string(),
-                parent_id: Some("b".to_string()),
-                ..Group::default()
-            },
-            Group {
-                id: "b".to_string(),
-                name: "B".to_string(),
-                parent_id: Some("a".to_string()),
-                ..Group::default()
-            },
-        ];
-
-        assert_eq!(build_group_path(&groups, "a"), vec!["B", "A"]);
-    }
-
-    #[test]
     fn nyaterm_json_sample_import_prepares_supported_shapes() {
         let prepared = parse_nyaterm_json_content(SAMPLE_JSON).expect("parse sample");
 
@@ -1644,97 +1461,7 @@ UserKey=C:\keys\deploy.key
     }
 
     #[test]
-    fn nyaterm_json_import_persists_groups_credentials_and_connections() {
-        let dir = std::env::temp_dir().join(format!(
-            "nyaterm-session-import-{}-{}",
-            std::process::id(),
-            uuid::Uuid::new_v4()
-        ));
-        std::fs::create_dir_all(&dir).expect("create import directory");
-        let import_path = dir.join("sessions.json");
-        std::fs::write(&import_path, SAMPLE_JSON).expect("write import file");
-        let store = ConnectionStore::open(&dir).expect("open store");
-
-        let count = import_sessions(&store, &import_path).expect("import sessions");
-
-        assert_eq!(count, 6);
-        let sessions = store.load_sessions().expect("load imported sessions");
-        assert_eq!(sessions.connections.len(), 6);
-        assert!(
-            sessions
-                .groups
-                .iter()
-                .any(|group| group.name == "Production")
-        );
-        assert!(sessions.groups.iter().any(|group| group.name == "Database"));
-
-        let saved_password = store
-            .list_passwords()
-            .expect("list passwords")
-            .into_iter()
-            .next()
-            .expect("saved password");
-        assert!(saved_password.has_password);
-        let saved_key = store
-            .list_ssh_keys()
-            .expect("list keys")
-            .into_iter()
-            .next()
-            .expect("saved key");
-        assert!(saved_key.has_key_data);
-
-        let password_connection = sessions
-            .connections
-            .iter()
-            .find(|connection| connection.name == "Prod db saved password")
-            .expect("password connection");
-        assert_eq!(
-            password_connection
-                .auth
-                .as_ref()
-                .and_then(|auth| auth.password_id.as_deref()),
-            Some(saved_password.id.as_str())
-        );
-        let key_connection = sessions
-            .connections
-            .iter()
-            .find(|connection| connection.name == "Bastion saved key")
-            .expect("key connection");
-        assert_eq!(
-            key_connection
-                .auth
-                .as_ref()
-                .and_then(|auth| auth.key_id.as_deref()),
-            Some(saved_key.id.as_str())
-        );
-
-        let direct_connection = sessions
-            .connections
-            .iter()
-            .find(|connection| connection.name == "Prod web direct password")
-            .expect("direct password connection");
-        assert_eq!(
-            direct_connection
-                .auth
-                .as_ref()
-                .and_then(|auth| auth.password.as_deref()),
-            Some("replace-me")
-        );
-
-        assert_eq!(
-            import_sessions(&store, &import_path).expect("merge sessions again"),
-            6
-        );
-        let merged = store.load_sessions().expect("load merged sessions");
-        assert_eq!(merged.connections.len(), 12);
-        assert_eq!(merged.groups.len(), 4);
-
-        drop(store);
-        std::fs::remove_dir_all(dir).ok();
-    }
-
-    #[test]
-    fn securecrt_import_persists_xml_sessions_with_groups() {
+    fn securecrt_import_prepares_xml_sessions_with_groups() {
         let dir = temp_import_dir("securecrt");
         let import_path = dir.join("sessions.xml");
         std::fs::write(
@@ -1756,13 +1483,10 @@ UserKey=C:\keys\deploy.key
 "#,
         )
         .expect("write SecureCRT XML");
-        let store = ConnectionStore::open(&dir).expect("open store");
+        let prepared = prepare_session_import(&import_path).expect("prepare SecureCRT");
 
-        let count = import_sessions(&store, &import_path).expect("import SecureCRT");
-
-        assert_eq!(count, 1);
-        let sessions = store.load_sessions().expect("load sessions");
-        let connection = sessions
+        assert_eq!(prepared.connections.len(), 1);
+        let connection = prepared
             .connections
             .iter()
             .find(|connection| connection.name == "Prod web")
@@ -1772,14 +1496,10 @@ UserKey=C:\keys\deploy.key
             ConnectionType::Ssh { host, port, username, .. }
                 if host == "web.example.com" && *port == 2200 && username == "deploy"
         ));
-        assert!(
-            sessions
-                .groups
-                .iter()
-                .any(|group| group.name == "Production")
+        assert_eq!(
+            connection.group_path.as_deref(),
+            Some(["Production".to_string(), "Web".to_string()].as_slice())
         );
-        assert!(sessions.groups.iter().any(|group| group.name == "Web"));
-        drop(store);
         std::fs::remove_dir_all(dir).ok();
     }
 
@@ -1799,25 +1519,19 @@ UserKey=C:\keys\deploy.key
             r#"{"name":"Prod shell","host":"prod.example.com","port":2222,"user_name":"ops","parent_id":"folder-prod","conection_type":100,"description":"primary","delete_time":0}"#,
         )
         .expect("write FinalShell connection");
-        let store = ConnectionStore::open(&dir).expect("open store");
+        let prepared = prepare_session_import(&conn_dir).expect("prepare FinalShell");
 
-        let count = import_sessions(&store, &conn_dir).expect("import FinalShell");
-
-        assert_eq!(count, 1);
-        let sessions = store.load_sessions().expect("load sessions");
-        let connection = sessions
+        assert_eq!(prepared.connections.len(), 1);
+        let connection = prepared
             .connections
             .iter()
             .find(|connection| connection.name == "Prod shell")
             .expect("FinalShell connection");
         assert_eq!(connection.description.as_deref(), Some("primary"));
-        assert!(
-            sessions
-                .groups
-                .iter()
-                .any(|group| group.name == "Production")
+        assert_eq!(
+            connection.group_path.as_deref(),
+            Some(["Production".to_string()].as_slice())
         );
-        drop(store);
         std::fs::remove_dir_all(dir).ok();
     }
 
@@ -1847,13 +1561,10 @@ UserKey=C:\keys\deploy.key
 "#,
         )
         .expect("write Electerm bookmarks");
-        let store = ConnectionStore::open(&dir).expect("open store");
+        let prepared = prepare_session_import(&import_path).expect("prepare Electerm");
 
-        let count = import_sessions(&store, &import_path).expect("import Electerm");
-
-        assert_eq!(count, 1);
-        let sessions = store.load_sessions().expect("load sessions");
-        let connection = sessions
+        assert_eq!(prepared.connections.len(), 1);
+        let connection = prepared
             .connections
             .iter()
             .find(|connection| connection.name == "Web")
@@ -1867,13 +1578,10 @@ UserKey=C:\keys\deploy.key
             connection.auth.as_ref().map(|auth| auth.mode.as_str()),
             Some("password")
         );
-        assert!(
-            sessions
-                .groups
-                .iter()
-                .any(|group| group.name == "Production")
+        assert_eq!(
+            connection.group_path.as_deref(),
+            Some(["Production".to_string()].as_slice())
         );
-        drop(store);
         std::fs::remove_dir_all(dir).ok();
     }
 

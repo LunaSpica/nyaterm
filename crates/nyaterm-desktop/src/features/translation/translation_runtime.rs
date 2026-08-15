@@ -1,5 +1,5 @@
 use gpui::{ClipboardItem, Context, IntoElement, SharedString, Window, div, prelude::*, px, rgb};
-use nyaterm_core::ConnectionStore;
+use nyaterm_store::ConnectionStore;
 use nyaterm_ui::NyaDialogWindowExt as _;
 
 use crate::features::NyaTermApp;

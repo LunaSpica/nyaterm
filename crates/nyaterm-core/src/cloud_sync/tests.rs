@@ -13,12 +13,144 @@ use super::{
     append_cloud_sync_history, build_s3_signed_request, build_s3_signed_request_with_query,
     decide_cloud_remote_check, decode_snippet_blob, drive_remote_segments, encode_snippet_blob,
     gitee_snippet_patch_body, github_gist_patch_body, google_drive_query_literal,
-    merge_masked_cloud_sync_settings, pull_local_snapshot, pull_snapshot_with_remote,
-    push_local_snapshot, push_snapshot_with_remote, read_cloud_sync_history,
-    recover_current_snapshot_with_remote, remote_path, s3_payload_sha256, snippet_remote_filename,
-    snippet_remote_path,
+    merge_masked_cloud_sync_settings, read_cloud_sync_history, remote_path, s3_payload_sha256,
+    snippet_remote_filename, snippet_remote_path,
 };
-use crate::{AiExecutionProfile, ConnectionStore, ConnectionType, SavedConnection, SessionsConfig};
+use crate::{
+    AiExecutionProfile, CloudLocalStore, CloudSyncBackupInfo, CloudSyncResult, ConnectionStore,
+    ConnectionType, PortableSnapshotKind, RawPortableSnapshot, SavedConnection, SessionsConfig,
+};
+
+struct TestLocalStore;
+
+impl CloudLocalStore for TestLocalStore {
+    fn build_sync_snapshot(
+        &self,
+        options: &LocalCloudSyncOptions,
+    ) -> Result<RawPortableSnapshot, CloudSyncError> {
+        let store = ConnectionStore::open_with_portable_key_path(
+            &options.config_dir,
+            options.portable_key_path.clone(),
+        )
+        .map_err(|error| CloudSyncError::LocalStore(error.to_string()))?;
+        store
+            .build_raw_portable_snapshot(
+                PortableSnapshotKind::Sync,
+                options.device_id.clone(),
+                options.app_version.clone(),
+            )
+            .map_err(|error| CloudSyncError::LocalStore(error.to_string()))
+    }
+
+    fn apply_sync_snapshot(
+        &self,
+        options: &LocalCloudSyncOptions,
+        snapshot: &RawPortableSnapshot,
+    ) -> Result<CloudSyncBackupInfo, CloudSyncError> {
+        let store = ConnectionStore::open_with_portable_key_path(
+            &options.config_dir,
+            options.portable_key_path.clone(),
+        )
+        .map_err(|error| CloudSyncError::LocalStore(error.to_string()))?;
+        store
+            .apply_raw_portable_snapshot(snapshot)
+            .map_err(|error| CloudSyncError::LocalStore(error.to_string()))?;
+        Ok(CloudSyncBackupInfo {
+            database_path: store.db_path().to_path_buf(),
+            safety_backup_path: None,
+        })
+    }
+
+    fn persist_cloud_sync_state(&self, state: &CloudSyncState) -> Result<(), CloudSyncError> {
+        Err(CloudSyncError::LocalStore(format!(
+            "test store requires options to persist state for {}",
+            state.device_id
+        )))
+    }
+}
+
+struct OptionsTestLocalStore<'a>(&'a LocalCloudSyncOptions);
+
+impl CloudLocalStore for OptionsTestLocalStore<'_> {
+    fn build_sync_snapshot(
+        &self,
+        options: &LocalCloudSyncOptions,
+    ) -> Result<RawPortableSnapshot, CloudSyncError> {
+        TestLocalStore.build_sync_snapshot(options)
+    }
+
+    fn apply_sync_snapshot(
+        &self,
+        options: &LocalCloudSyncOptions,
+        snapshot: &RawPortableSnapshot,
+    ) -> Result<CloudSyncBackupInfo, CloudSyncError> {
+        TestLocalStore.apply_sync_snapshot(options, snapshot)
+    }
+
+    fn persist_cloud_sync_state(&self, state: &CloudSyncState) -> Result<(), CloudSyncError> {
+        let store = ConnectionStore::open_with_portable_key_path(
+            &self.0.config_dir,
+            self.0.portable_key_path.clone(),
+        )
+        .map_err(|error| CloudSyncError::LocalStore(error.to_string()))?;
+        store
+            .save_cloud_sync_state(state)
+            .map_err(|error| CloudSyncError::LocalStore(error.to_string()))
+    }
+}
+
+fn push_local_snapshot(
+    options: &LocalCloudSyncOptions,
+    state: &CloudSyncState,
+    force: bool,
+) -> Result<CloudSyncResult, CloudSyncError> {
+    super::push_local_snapshot(&OptionsTestLocalStore(options), options, state, force)
+}
+
+fn pull_local_snapshot(
+    options: &LocalCloudSyncOptions,
+    state: &CloudSyncState,
+    force: bool,
+) -> Result<CloudSyncResult, CloudSyncError> {
+    super::pull_local_snapshot(&OptionsTestLocalStore(options), options, state, force)
+}
+
+fn push_snapshot_with_remote(
+    options: &LocalCloudSyncOptions,
+    remote: &dyn CloudSyncRemote,
+    state: &CloudSyncState,
+    force: bool,
+) -> Result<CloudSyncResult, CloudSyncError> {
+    super::push_snapshot_with_remote(
+        &OptionsTestLocalStore(options),
+        options,
+        remote,
+        state,
+        force,
+    )
+}
+
+fn pull_snapshot_with_remote(
+    options: &LocalCloudSyncOptions,
+    remote: &dyn CloudSyncRemote,
+    state: &CloudSyncState,
+    force: bool,
+) -> Result<CloudSyncResult, CloudSyncError> {
+    super::pull_snapshot_with_remote(
+        &OptionsTestLocalStore(options),
+        options,
+        remote,
+        state,
+        force,
+    )
+}
+
+fn recover_current_snapshot_with_remote(
+    options: &LocalCloudSyncOptions,
+    remote: &dyn CloudSyncRemote,
+) -> Result<CloudSyncResult, CloudSyncError> {
+    super::recover_current_snapshot_with_remote(&OptionsTestLocalStore(options), options, remote)
+}
 
 #[derive(Default)]
 struct MemoryRemote {

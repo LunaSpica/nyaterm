@@ -1,5 +1,5 @@
 use gpui::{Context, Window};
-use nyaterm_core::ConnectionStore;
+use nyaterm_store::ConnectionStore;
 
 use crate::features::NyaTermApp;
 use crate::models::{NetworkGroupEditorState, NetworkTab};

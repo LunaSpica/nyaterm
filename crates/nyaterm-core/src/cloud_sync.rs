@@ -14,10 +14,7 @@ use sha2::{Digest, Sha256};
 use thiserror::Error;
 use time::{OffsetDateTime, macros::format_description};
 
-use crate::{
-    ConfigBackupInfo, ConnectionStore, PortableSnapshotError, PortableSnapshotKind,
-    RawPortableSnapshot, StorageError,
-};
+use crate::{PortableSnapshotError, RawPortableSnapshot};
 
 mod gc;
 mod protocol;
@@ -93,8 +90,8 @@ pub enum CloudSyncError {
         path: PathBuf,
         source: std::io::Error,
     },
-    #[error("storage error: {0}")]
-    Storage(#[from] StorageError),
+    #[error("local cloud-sync store error: {0}")]
+    LocalStore(String),
     #[error("portable snapshot error: {0}")]
     PortableSnapshot(#[from] PortableSnapshotError),
     #[error("redb database error: {0}")]
@@ -585,7 +582,13 @@ pub struct CloudSyncResult {
     pub state: CloudSyncState,
     pub status: CloudSyncStatus,
     pub pointer: Option<RemoteSyncPointer>,
-    pub backup: Option<ConfigBackupInfo>,
+    pub backup: Option<CloudSyncBackupInfo>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CloudSyncBackupInfo {
+    pub database_path: PathBuf,
+    pub safety_backup_path: Option<PathBuf>,
 }
 
 pub trait CloudSyncRemote {
@@ -595,6 +598,21 @@ pub trait CloudSyncRemote {
     fn write(&self, path: &str, bytes: &[u8]) -> Result<(), CloudSyncError>;
     fn delete(&self, path: &str) -> Result<(), CloudSyncError>;
     fn list_files(&self, path: &str) -> Result<Vec<String>, CloudSyncError>;
+}
+
+pub trait CloudLocalStore: Send + Sync {
+    fn build_sync_snapshot(
+        &self,
+        options: &LocalCloudSyncOptions,
+    ) -> Result<RawPortableSnapshot, CloudSyncError>;
+
+    fn apply_sync_snapshot(
+        &self,
+        options: &LocalCloudSyncOptions,
+        snapshot: &RawPortableSnapshot,
+    ) -> Result<CloudSyncBackupInfo, CloudSyncError>;
+
+    fn persist_cloud_sync_state(&self, state: &CloudSyncState) -> Result<(), CloudSyncError>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1531,15 +1549,17 @@ pub fn read_cloud_sync_history(
 }
 
 pub fn push_local_snapshot(
+    local_store: &dyn CloudLocalStore,
     options: &LocalCloudSyncOptions,
     state: &CloudSyncState,
     force: bool,
 ) -> Result<CloudSyncResult, CloudSyncError> {
     let remote = LocalDirectoryRemote::new(options.remote_dir.clone());
-    push_snapshot_with_remote(options, &remote, state, force)
+    push_snapshot_with_remote(local_store, options, &remote, state, force)
 }
 
 pub fn push_snapshot_with_remote(
+    local_store: &dyn CloudLocalStore,
     options: &LocalCloudSyncOptions,
     remote: &dyn CloudSyncRemote,
     state: &CloudSyncState,
@@ -1548,7 +1568,7 @@ pub fn push_snapshot_with_remote(
     ensure_enabled(options)?;
     ensure_remote_layout(remote, &options.remote_root)?;
     let mut next_state = normalized_state(state, &options.device_id);
-    let mut snapshot = build_sync_snapshot(options)?;
+    let mut snapshot = local_store.build_sync_snapshot(options)?;
     snapshot.recalculate_hash()?;
     let local_hash = snapshot.meta.payload_hash.clone();
     let latest = load_sync_pointer_from_remote(remote, &options.remote_root)?;
@@ -1585,7 +1605,7 @@ pub fn push_snapshot_with_remote(
             None,
             None,
         );
-        persist_cloud_sync_state(options, &result.state)?;
+        local_store.persist_cloud_sync_state(&result.state)?;
         return Ok(result);
     }
 
@@ -1631,20 +1651,22 @@ pub fn push_snapshot_with_remote(
         None,
         None,
     );
-    persist_cloud_sync_state(options, &result.state)?;
+    local_store.persist_cloud_sync_state(&result.state)?;
     Ok(result)
 }
 
 pub fn pull_local_snapshot(
+    local_store: &dyn CloudLocalStore,
     options: &LocalCloudSyncOptions,
     state: &CloudSyncState,
     force: bool,
 ) -> Result<CloudSyncResult, CloudSyncError> {
     let remote = LocalDirectoryRemote::new(options.remote_dir.clone());
-    pull_snapshot_with_remote(options, &remote, state, force)
+    pull_snapshot_with_remote(local_store, options, &remote, state, force)
 }
 
 pub fn pull_snapshot_with_remote(
+    local_store: &dyn CloudLocalStore,
     options: &LocalCloudSyncOptions,
     remote: &dyn CloudSyncRemote,
     state: &CloudSyncState,
@@ -1655,7 +1677,7 @@ pub fn pull_snapshot_with_remote(
     let latest = load_sync_pointer_from_remote(remote, &options.remote_root)?
         .ok_or(CloudSyncError::NoRemoteSnapshot)?;
     let mut next_state = normalized_state(state, &options.device_id);
-    let mut local_snapshot = build_sync_snapshot(options)?;
+    let mut local_snapshot = local_store.build_sync_snapshot(options)?;
     local_snapshot.recalculate_hash()?;
     let remote_snapshot = match protocol::resolve_remote_snapshot(remote, options, &latest)? {
         protocol::RemoteSnapshotResolution::Current(snapshot)
@@ -1688,7 +1710,7 @@ pub fn pull_snapshot_with_remote(
             None,
             None,
         );
-        persist_cloud_sync_state(options, &result.state)?;
+        local_store.persist_cloud_sync_state(&result.state)?;
         return Ok(result);
     }
 
@@ -1715,7 +1737,7 @@ pub fn pull_snapshot_with_remote(
     }
 
     let snapshot = remote_snapshot;
-    let backup = apply_sync_snapshot(options, &snapshot)?;
+    let backup = local_store.apply_sync_snapshot(options, &snapshot)?;
     let _ = protocol::write_current_sync_snapshot_compat(remote, options, &snapshot);
     next_state.last_synced_payload_hash = Some(snapshot.meta.payload_hash.clone());
     next_state.last_applied_remote_revision = Some(snapshot.meta.revision_id.clone());
@@ -1730,25 +1752,27 @@ pub fn pull_snapshot_with_remote(
         None,
         Some(backup),
     );
-    persist_cloud_sync_state(options, &result.state)?;
+    local_store.persist_cloud_sync_state(&result.state)?;
     Ok(result)
 }
 
 pub fn recover_local_current_snapshot(
+    local_store: &dyn CloudLocalStore,
     options: &LocalCloudSyncOptions,
 ) -> Result<CloudSyncResult, CloudSyncError> {
     let remote = LocalDirectoryRemote::new(options.remote_dir.clone());
-    recover_current_snapshot_with_remote(options, &remote)
+    recover_current_snapshot_with_remote(local_store, options, &remote)
 }
 
 pub fn recover_current_snapshot_with_remote(
+    local_store: &dyn CloudLocalStore,
     options: &LocalCloudSyncOptions,
     remote: &dyn CloudSyncRemote,
 ) -> Result<CloudSyncResult, CloudSyncError> {
     ensure_enabled(options)?;
     ensure_remote_layout(remote, &options.remote_root)?;
     let snapshot = protocol::recover_current_remote_snapshot(remote, options)?;
-    let backup = apply_sync_snapshot(options, &snapshot)?;
+    let backup = local_store.apply_sync_snapshot(options, &snapshot)?;
     let pointer = protocol::pointer_from_snapshot(&snapshot);
     let now = current_time_ms();
     let state = CloudSyncState {
@@ -1767,7 +1791,7 @@ pub fn recover_current_snapshot_with_remote(
         None,
         Some(backup),
     );
-    persist_cloud_sync_state(options, &result.state)?;
+    local_store.persist_cloud_sync_state(&result.state)?;
     Ok(result)
 }
 
@@ -1804,80 +1828,6 @@ fn ensure_remote_layout(
     for child in ["sync", SYNC_SNAPSHOTS_DIR] {
         remote.create_dir(&remote_path(remote_root, child))?;
     }
-    Ok(())
-}
-
-fn build_sync_snapshot(
-    options: &LocalCloudSyncOptions,
-) -> Result<RawPortableSnapshot, CloudSyncError> {
-    let store = ConnectionStore::open_with_portable_key_path(
-        &options.config_dir,
-        options.portable_key_path.clone(),
-    )?;
-    let snapshot = store.build_raw_portable_snapshot(
-        PortableSnapshotKind::Sync,
-        options.device_id.clone(),
-        options.app_version.clone(),
-    )?;
-    Ok(snapshot)
-}
-
-fn apply_sync_snapshot(
-    options: &LocalCloudSyncOptions,
-    snapshot: &RawPortableSnapshot,
-) -> Result<ConfigBackupInfo, CloudSyncError> {
-    std::fs::create_dir_all(&options.config_dir).map_err(|source| CloudSyncError::CreateDir {
-        path: options.config_dir.clone(),
-        source,
-    })?;
-    let store = ConnectionStore::open_with_portable_key_path(
-        &options.config_dir,
-        options.portable_key_path.clone(),
-    )?;
-    let database_path = store.db_path().to_path_buf();
-    // On Windows, redb keeps file ranges locked while the database handle is
-    // alive. Release it before copying the current DB for the safety backup.
-    drop(store);
-    let safety_backup_path = if database_path.exists() {
-        let path = options.config_dir.join(format!(
-            "nyaterm.redb.cloud-sync-backup-{}.redb",
-            current_time_ms()
-        ));
-        std::fs::copy(&database_path, &path).map_err(|source| CloudSyncError::WriteFile {
-            path: path.clone(),
-            source,
-        })?;
-        Some(path)
-    } else {
-        None
-    };
-    let store = ConnectionStore::open_with_portable_key_path(
-        &options.config_dir,
-        options.portable_key_path.clone(),
-    )?;
-    if let Err(error) = store.apply_raw_portable_snapshot(snapshot) {
-        if let Some(backup) = &safety_backup_path {
-            let _ = std::fs::copy(backup, &database_path);
-        }
-        return Err(error.into());
-    }
-    Ok(ConfigBackupInfo {
-        database_path,
-        backup_path: PathBuf::from("cloud-sync"),
-        bytes: 0,
-        safety_backup_path,
-    })
-}
-
-fn persist_cloud_sync_state(
-    options: &LocalCloudSyncOptions,
-    state: &CloudSyncState,
-) -> Result<(), CloudSyncError> {
-    let store = ConnectionStore::open_with_portable_key_path(
-        &options.config_dir,
-        options.portable_key_path.clone(),
-    )?;
-    store.save_cloud_sync_state(state)?;
     Ok(())
 }
 
@@ -1974,7 +1924,7 @@ fn result(
     message: &str,
     pointer: Option<RemoteSyncPointer>,
     conflict: Option<CloudConflictPreview>,
-    backup: Option<ConfigBackupInfo>,
+    backup: Option<CloudSyncBackupInfo>,
 ) -> CloudSyncResult {
     CloudSyncResult {
         status: CloudSyncStatus {

@@ -1,5 +1,5 @@
 use gpui::{Context, ParentElement as _, Window, div};
-use nyaterm_core::ConnectionStore;
+use nyaterm_store::ConnectionStore;
 use nyaterm_ui::{NyaConfirmDialog, NyaDialogFooter, NyaDialogWindowExt};
 
 use crate::features::NyaTermApp;

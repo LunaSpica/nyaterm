@@ -1,7 +1,6 @@
 use std::time::{Duration, Instant};
 
 use gpui::{Bounds, ClipboardItem, Context, DevicePixels, Point, Size, Window, point, size};
-use nyaterm_core::{ConnectionStore, KnownHostCheck, RdpCertificateMetadata};
 use nyaterm_remote_desktop::{
     CertificateDecision, ClipboardOrigin, DirtyRect, Framebuffer, RdpCapability,
     RdpCertificatePolicy, RdpCertificateRequest, RdpCertificateResponse, RdpClipboardMode,
@@ -9,6 +8,7 @@ use nyaterm_remote_desktop::{
     RdpSessionConfig, RdpSessionState, VncError, VncErrorKind, VncInputEvent, VncRuntimeEvent,
     VncSessionConfig, VncSessionState,
 };
+use nyaterm_store::{ConnectionStore, KnownHostCheck, RdpCertificateMetadata};
 
 use crate::features::NyaTermApp;
 

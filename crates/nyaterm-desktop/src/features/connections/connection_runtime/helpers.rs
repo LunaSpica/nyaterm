@@ -3,10 +3,10 @@ use nyaterm_core::{
     AiExecutionProfile, ConnectionAuth, ConnectionNetwork, ConnectionPostLogin, ConnectionType,
     Group, RdpClipboardSettings, RdpDisplaySettings, RdpReconnectSettings, RdpSecuritySettings,
     SavedConnection, SftpCwdFollowMode, SftpSettings, SshAlgorithmMode, SshAlgorithmPreferences,
-    StorageError, TelnetAutoLoginConfig, VncClipboardSettings, VncDisplaySettings,
-    VncReconnectSettings, VncSecuritySettings, uuid,
+    TelnetAutoLoginConfig, VncClipboardSettings, VncDisplaySettings, VncReconnectSettings,
+    VncSecuritySettings, uuid,
 };
-use nyaterm_store::{StoreDomain, store_request};
+use nyaterm_store::{StorageError, StoreDomain, store_request};
 
 use crate::features::NyaTermApp;
 use crate::models::{

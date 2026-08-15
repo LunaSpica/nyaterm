@@ -2,7 +2,7 @@ use gpui::{
     AnyElement, AppContext, Context, FontWeight, KeyDownEvent, PathPromptOptions, SharedString,
     Window, div, prelude::*, rgb,
 };
-use nyaterm_core::ConnectionStore;
+use nyaterm_store::ConnectionStore;
 use nyaterm_store::LoadBootstrap;
 use nyaterm_transport::SftpDuplicatePolicy;
 

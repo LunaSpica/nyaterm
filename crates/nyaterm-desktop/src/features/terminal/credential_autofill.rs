@@ -4,9 +4,8 @@ use gpui::{
     Context, FontWeight, IntoElement, KeyDownEvent, SharedString, div, prelude::*, px, rgb, rgba,
     svg,
 };
-use nyaterm_core::{
-    ConnectionStore, CredentialPromptKind, SavedCredential, TerminalInputState, truncate_preview,
-};
+use nyaterm_core::{CredentialPromptKind, SavedCredential, TerminalInputState, truncate_preview};
+use nyaterm_store::ConnectionStore;
 use nyaterm_terminal::TerminalSnapshot;
 
 use crate::features::NyaTermApp;

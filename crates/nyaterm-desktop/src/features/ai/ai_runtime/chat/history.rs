@@ -1,5 +1,5 @@
 use gpui::{AppContext, Context};
-use nyaterm_core::ConnectionStore;
+use nyaterm_store::ConnectionStore;
 
 use crate::features::{NyaTermApp, compact_id};
 

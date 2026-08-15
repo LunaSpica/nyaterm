@@ -1,5 +1,5 @@
 use gpui::{Context, Window};
-use nyaterm_core::ConnectionStore;
+use nyaterm_store::ConnectionStore;
 use nyaterm_transport::{RemoteFilePath, SftpFileEntry};
 
 use std::collections::VecDeque;

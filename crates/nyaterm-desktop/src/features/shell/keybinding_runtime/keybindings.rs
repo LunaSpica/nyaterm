@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use gpui::{Context, KeyDownEvent, Window};
-use nyaterm_core::ConnectionStore;
+use nyaterm_store::ConnectionStore;
 
 use crate::features::NyaTermApp;
 use crate::shortcuts::event_to_hotkey_string;

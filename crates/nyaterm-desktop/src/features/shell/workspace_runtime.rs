@@ -4,7 +4,8 @@ use gpui::{
     Context, InteractiveElement as _, IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent,
     SharedString, StatefulInteractiveElement as _, Styled as _, Window, deferred,
 };
-use nyaterm_core::{ConnectionStore, uuid};
+use nyaterm_core::uuid;
+use nyaterm_store::ConnectionStore;
 
 use crate::features::{
     NyaTermApp, horizontal_resize_handle_visual, short_id, vertical_resize_handle_visual,

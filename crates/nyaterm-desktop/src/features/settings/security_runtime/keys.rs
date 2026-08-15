@@ -2,7 +2,8 @@ use gpui::{
     AppContext, ClipboardItem, Context, IntoElement as _, KeyDownEvent, PathPromptOptions,
     SharedString, Window,
 };
-use nyaterm_core::{ConnectionStore, SshKey};
+use nyaterm_core::SshKey;
+use nyaterm_store::ConnectionStore;
 use nyaterm_ui::NyaDialogWindowExt as _;
 
 use crate::features::{NyaTermApp, compact_id};

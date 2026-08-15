@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::io::Read;
 use std::path::PathBuf;
 
-use nyaterm_core::ConnectionStore;
+use nyaterm_store::ConnectionStore;
 use serde_json::Value;
 
 use crate::models::QuickCommandImportPathPromptKind;

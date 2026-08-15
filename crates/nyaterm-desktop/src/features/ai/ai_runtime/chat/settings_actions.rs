@@ -2,7 +2,8 @@ use gpui::{Context, KeyDownEvent, Window};
 
 use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::{AiActionEditorField, AiActionListKind};
-use nyaterm_core::{AiSettings, ConnectionStore};
+use nyaterm_core::AiSettings;
+use nyaterm_store::ConnectionStore;
 
 impl NyaTermApp {
     pub(in crate::features) fn pending_ai_settings(&self) -> AiSettings {

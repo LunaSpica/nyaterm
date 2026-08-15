@@ -3,9 +3,10 @@ use std::time::{Duration, Instant};
 use gpui::{AppContext, Context};
 use nyaterm_core::{
     AgentCapturedOutput, AiAction, AiChatRequest, AiCommandCard, AiExecutionProfile, AiMode,
-    AppendAiAuditRequest, CommandObservation, ConnectionStore, build_agent_capture_command,
+    AppendAiAuditRequest, CommandObservation, build_agent_capture_command,
     build_observation_message, truncate_preview, uuid,
 };
+use nyaterm_store::ConnectionStore;
 use nyaterm_transport::{SessionKind, SshProcessService, run_local_command};
 
 use crate::features::{

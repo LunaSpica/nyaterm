@@ -62,6 +62,7 @@ impl NyaTermApp {
         let options = self.local_cloud_sync_options(master_password);
         let cleanup_options = options.clone();
         let state = self.cloud_sync.state().clone();
+        let local_store = self.store_blocking_client();
         let started_at = Instant::now();
         self.cloud_sync.set_status(if force {
             "force pushing local cloud sync snapshot".to_string()
@@ -69,7 +70,9 @@ impl NyaTermApp {
             "pushing local cloud sync snapshot".to_string()
         });
         self.shell.set_status("cloud sync push started".to_string());
-        let task = cx.background_spawn(async move { push_local_snapshot(&options, &state, force) });
+        let task = cx.background_spawn(async move {
+            push_local_snapshot(&local_store, &options, &state, force)
+        });
         cx.spawn(async move |this, cx| {
             let result = task.await;
             let _ = this.update(cx, |this, cx| {
@@ -149,6 +152,7 @@ impl NyaTermApp {
         let options = self.local_cloud_sync_options(master_password);
         let cleanup_options = options.clone();
         let state = self.cloud_sync.state().clone();
+        let local_store = self.store_blocking_client();
         let started_at = Instant::now();
         self.cloud_sync.set_status(if force {
             "force pulling local cloud sync snapshot".to_string()
@@ -156,7 +160,9 @@ impl NyaTermApp {
             "pulling local cloud sync snapshot".to_string()
         });
         self.shell.set_status("cloud sync pull started".to_string());
-        let task = cx.background_spawn(async move { pull_local_snapshot(&options, &state, force) });
+        let task = cx.background_spawn(async move {
+            pull_local_snapshot(&local_store, &options, &state, force)
+        });
         cx.spawn(async move |this, cx| {
             let result = task.await;
             let _ = this.update(cx, |this, cx| {
@@ -238,6 +244,7 @@ impl NyaTermApp {
         let cleanup_options = options.clone();
         let state = self.cloud_sync.state().clone();
         let settings = self.cloud_sync.settings().clone();
+        let local_store = self.store_blocking_client();
         let cleanup_settings = settings.clone();
         let result_settings = settings.clone();
         let provider = configured_cloud_sync_provider(&settings);
@@ -250,7 +257,7 @@ impl NyaTermApp {
         self.shell
             .set_status("provider cloud sync push started".to_string());
         let task = cx.background_spawn(async move {
-            push_provider_snapshot(&settings, &options, &state, force)
+            push_provider_snapshot(&local_store, &settings, &options, &state, force)
         });
         cx.spawn(async move |this, cx| {
             let result = task.await;
@@ -332,6 +339,7 @@ impl NyaTermApp {
         let cleanup_options = options.clone();
         let state = self.cloud_sync.state().clone();
         let settings = self.cloud_sync.settings().clone();
+        let local_store = self.store_blocking_client();
         let cleanup_settings = settings.clone();
         let result_settings = settings.clone();
         let provider = configured_cloud_sync_provider(&settings);
@@ -344,7 +352,7 @@ impl NyaTermApp {
         self.shell
             .set_status("provider cloud sync pull started".to_string());
         let task = cx.background_spawn(async move {
-            pull_provider_snapshot(&settings, &options, &state, force)
+            pull_provider_snapshot(&local_store, &settings, &options, &state, force)
         });
         cx.spawn(async move |this, cx| {
             let result = task.await;
@@ -439,6 +447,7 @@ impl NyaTermApp {
         let options = self.local_cloud_sync_options(master_password);
         let cleanup_options = options.clone();
         let settings = self.cloud_sync.settings().clone();
+        let local_store = self.store_blocking_client();
         let cleanup_settings = settings.clone();
         let provider = if provider_action {
             configured_cloud_sync_provider(&settings)
@@ -452,9 +461,9 @@ impl NyaTermApp {
             .set_status("cloud sync metadata recovery started".to_string());
         let task = cx.background_spawn(async move {
             if provider_action {
-                recover_provider_snapshot(&settings, &options)
+                recover_provider_snapshot(&local_store, &settings, &options)
             } else {
-                recover_local_current_snapshot(&options)
+                recover_local_current_snapshot(&local_store, &options)
             }
         });
         cx.spawn(async move |this, cx| {

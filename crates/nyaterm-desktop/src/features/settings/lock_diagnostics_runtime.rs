@@ -1,8 +1,8 @@
 use gpui::{AppContext, Context, KeyDownEvent, Window};
 use nyaterm_core::{
-    ConnectionStore, DiagnosticsExportOptions, DiagnosticsRuntimeSnapshot,
-    export_diagnostics_archive,
+    DiagnosticsExportOptions, DiagnosticsRuntimeSnapshot, export_diagnostics_archive,
 };
+use nyaterm_store::ConnectionStore;
 use nyaterm_transport::SessionKind;
 
 use crate::features::{NyaTermApp, TextInputSetup};

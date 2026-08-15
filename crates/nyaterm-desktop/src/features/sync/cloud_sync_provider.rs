@@ -104,6 +104,7 @@ pub(in crate::features) fn test_provider_connection(
 }
 
 pub(in crate::features) fn push_provider_snapshot(
+    local_store: &nyaterm_store::StoreBlockingClient,
     settings: &CloudSyncSettings,
     options: &LocalCloudSyncOptions,
     state: &CloudSyncState,
@@ -112,23 +113,23 @@ pub(in crate::features) fn push_provider_snapshot(
     match settings.provider.as_str() {
         "webdav" => {
             let remote = NativeWebdavRemote::new(&settings.webdav)?;
-            push_snapshot_with_remote(options, &remote, state, force)
+            push_snapshot_with_remote(local_store, options, &remote, state, force)
         }
         "s3" => {
             let remote = NativeS3Remote::new(&settings.s3)?;
-            push_snapshot_with_remote(options, &remote, state, force)
+            push_snapshot_with_remote(local_store, options, &remote, state, force)
         }
         "google_drive" => {
             let remote = NativeGoogleDriveRemote::new(&settings.google_drive)?;
-            push_snapshot_with_remote(options, &remote, state, force)
+            push_snapshot_with_remote(local_store, options, &remote, state, force)
         }
         "onedrive" => {
             let remote = NativeOneDriveRemote::new(&settings.onedrive)?;
-            push_snapshot_with_remote(options, &remote, state, force)
+            push_snapshot_with_remote(local_store, options, &remote, state, force)
         }
         "aliyun_drive" => {
             let remote = NativeAliyunDriveRemote::new(&settings.aliyun_drive)?;
-            push_snapshot_with_remote(options, &remote, state, force)
+            push_snapshot_with_remote(local_store, options, &remote, state, force)
         }
         "gitee_snippet" => {
             let backend = GiteeSnippetHttpBackend::new(
@@ -136,15 +137,15 @@ pub(in crate::features) fn push_provider_snapshot(
                 NativeSnippetHttpClient::new()?,
             )?;
             let remote = SnippetRemote::new("gitee_snippet", backend);
-            push_snapshot_with_remote(options, &remote, state, force)
+            push_snapshot_with_remote(local_store, options, &remote, state, force)
         }
         "github_gist" => {
             let backend =
                 GithubGistHttpBackend::new(&settings.github_gist, NativeSnippetHttpClient::new()?)?;
             let remote = SnippetRemote::new("github_gist", backend);
-            push_snapshot_with_remote(options, &remote, state, force)
+            push_snapshot_with_remote(local_store, options, &remote, state, force)
         }
-        "local_directory" => push_local_snapshot(options, state, force),
+        "local_directory" => push_local_snapshot(local_store, options, state, force),
         provider => Err(CloudSyncError::Remote(format!(
             "native cloud provider '{provider}' is not wired yet"
         ))),
@@ -152,6 +153,7 @@ pub(in crate::features) fn push_provider_snapshot(
 }
 
 pub(in crate::features) fn pull_provider_snapshot(
+    local_store: &nyaterm_store::StoreBlockingClient,
     settings: &CloudSyncSettings,
     options: &LocalCloudSyncOptions,
     state: &CloudSyncState,
@@ -160,23 +162,23 @@ pub(in crate::features) fn pull_provider_snapshot(
     match settings.provider.as_str() {
         "webdav" => {
             let remote = NativeWebdavRemote::new(&settings.webdav)?;
-            pull_snapshot_with_remote(options, &remote, state, force)
+            pull_snapshot_with_remote(local_store, options, &remote, state, force)
         }
         "s3" => {
             let remote = NativeS3Remote::new(&settings.s3)?;
-            pull_snapshot_with_remote(options, &remote, state, force)
+            pull_snapshot_with_remote(local_store, options, &remote, state, force)
         }
         "google_drive" => {
             let remote = NativeGoogleDriveRemote::new(&settings.google_drive)?;
-            pull_snapshot_with_remote(options, &remote, state, force)
+            pull_snapshot_with_remote(local_store, options, &remote, state, force)
         }
         "onedrive" => {
             let remote = NativeOneDriveRemote::new(&settings.onedrive)?;
-            pull_snapshot_with_remote(options, &remote, state, force)
+            pull_snapshot_with_remote(local_store, options, &remote, state, force)
         }
         "aliyun_drive" => {
             let remote = NativeAliyunDriveRemote::new(&settings.aliyun_drive)?;
-            pull_snapshot_with_remote(options, &remote, state, force)
+            pull_snapshot_with_remote(local_store, options, &remote, state, force)
         }
         "gitee_snippet" => {
             let backend = GiteeSnippetHttpBackend::new(
@@ -184,15 +186,15 @@ pub(in crate::features) fn pull_provider_snapshot(
                 NativeSnippetHttpClient::new()?,
             )?;
             let remote = SnippetRemote::new("gitee_snippet", backend);
-            pull_snapshot_with_remote(options, &remote, state, force)
+            pull_snapshot_with_remote(local_store, options, &remote, state, force)
         }
         "github_gist" => {
             let backend =
                 GithubGistHttpBackend::new(&settings.github_gist, NativeSnippetHttpClient::new()?)?;
             let remote = SnippetRemote::new("github_gist", backend);
-            pull_snapshot_with_remote(options, &remote, state, force)
+            pull_snapshot_with_remote(local_store, options, &remote, state, force)
         }
-        "local_directory" => pull_local_snapshot(options, state, force),
+        "local_directory" => pull_local_snapshot(local_store, options, state, force),
         provider => Err(CloudSyncError::Remote(format!(
             "native cloud provider '{provider}' is not wired yet"
         ))),
@@ -200,11 +202,12 @@ pub(in crate::features) fn pull_provider_snapshot(
 }
 
 pub(in crate::features) fn recover_provider_snapshot(
+    local_store: &nyaterm_store::StoreBlockingClient,
     settings: &CloudSyncSettings,
     options: &LocalCloudSyncOptions,
 ) -> Result<CloudSyncResult, CloudSyncError> {
     with_provider_remote!(settings, remote, {
-        recover_current_snapshot_with_remote(options, &remote)
+        recover_current_snapshot_with_remote(local_store, options, &remote)
     })
 }
 

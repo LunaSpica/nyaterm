@@ -9,11 +9,13 @@ use std::task::{Context, Poll};
 
 use futures::channel::oneshot;
 use nyaterm_core::{
-    AiSettings, AppSettingsSummary, CloudSyncSettings, CloudSyncState, CommandHistoryEntry,
-    ConnectionStore, Group, KeywordHighlightConfig, OtpEntry, ProxyConfig, ProxyGroup,
-    QuickCommand, QuickCommandCategory, SavedConnection, SavedCredential, SavedPassword, SshKey,
-    StorageError, TranslationSettings, TunnelConfig, TunnelGroup,
+    AiSettings, AppSettingsSummary, CloudSyncSettings, CloudSyncState, CommandHistoryEntry, Group,
+    KeywordHighlightConfig, OtpEntry, ProxyConfig, ProxyGroup, QuickCommand, QuickCommandCategory,
+    SavedConnection, SavedCredential, SavedPassword, SshKey, TranslationSettings, TunnelConfig,
+    TunnelGroup,
 };
+
+use crate::storage::{ConnectionStore, StorageError};
 
 const STORE_QUEUE_CAPACITY: usize = 256;
 
@@ -334,6 +336,73 @@ impl StoreRuntime {
     pub fn blocking_client(&self) -> StoreBlockingClient {
         self.blocking_client.clone()
     }
+}
+
+impl nyaterm_core::CloudLocalStore for StoreBlockingClient {
+    fn build_sync_snapshot(
+        &self,
+        options: &nyaterm_core::LocalCloudSyncOptions,
+    ) -> Result<nyaterm_core::RawPortableSnapshot, nyaterm_core::CloudSyncError> {
+        let device_id = options.device_id.clone();
+        let app_version = options.app_version.clone();
+        cloud_store_response(self.request(
+            0,
+            store_request(StoreDomain::CloudSync, move |store| {
+                store.build_raw_portable_snapshot(
+                    nyaterm_core::PortableSnapshotKind::Sync,
+                    device_id,
+                    app_version,
+                )
+            }),
+        ))
+    }
+
+    fn apply_sync_snapshot(
+        &self,
+        options: &nyaterm_core::LocalCloudSyncOptions,
+        snapshot: &nyaterm_core::RawPortableSnapshot,
+    ) -> Result<nyaterm_core::CloudSyncBackupInfo, nyaterm_core::CloudSyncError> {
+        let config_dir = options.config_dir.clone();
+        let snapshot = snapshot.clone();
+        let database_path = config_dir.join("nyaterm.redb");
+        let safety_backup_path = cloud_store_response(self.request(
+            0,
+            store_request(StoreDomain::CloudSync, move |store| {
+                store.apply_cloud_sync_snapshot(&config_dir, &snapshot)
+            }),
+        ))?;
+        Ok(nyaterm_core::CloudSyncBackupInfo {
+            database_path,
+            safety_backup_path,
+        })
+    }
+
+    fn persist_cloud_sync_state(
+        &self,
+        state: &nyaterm_core::CloudSyncState,
+    ) -> Result<(), nyaterm_core::CloudSyncError> {
+        let state = state.clone();
+        cloud_store_response(self.request(
+            0,
+            store_request(StoreDomain::CloudSync, move |store| {
+                store.save_cloud_sync_state(&state)
+            }),
+        ))
+    }
+}
+
+fn cloud_store_response<T>(
+    response: Result<StoreEvent<T>, StoreSubmitError>,
+) -> Result<T, nyaterm_core::CloudSyncError> {
+    let event =
+        response.map_err(|error| nyaterm_core::CloudSyncError::LocalStore(error.to_string()))?;
+    event.outcome.map_err(|error| {
+        nyaterm_core::CloudSyncError::LocalStore(format!(
+            "{}: {}",
+            error.category(),
+            error.user_message()
+        ))
+    })
 }
 
 fn store_worker(config: StoreConfig, receiver: mpsc::Receiver<WorkerMessage>) {

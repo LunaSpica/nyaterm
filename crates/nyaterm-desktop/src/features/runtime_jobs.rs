@@ -4,8 +4,8 @@ use std::time::Instant;
 
 use nyaterm_core::{
     AiCommandCard, AiMode, AiModelDiscovery, CommandHistoryEntry, CommandObservation,
-    ConnectionStore,
 };
+use nyaterm_store::ConnectionStore;
 use nyaterm_transport::{
     DockerComposeService, DockerContainerDetails, RemoteDockerOverview, RemoteGpuOverview,
     RemoteNpuOverview, RemoteProcess, RemoteStats, SessionInfo, SessionKind, SshMultiplexHandle,

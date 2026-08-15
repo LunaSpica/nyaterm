@@ -9,11 +9,12 @@ use std::time::Instant;
 use crate::http::ai::{complete_native_chat, stream_native_chat};
 use nyaterm_core::{
     AgentApprovalDecision, AiChatRequest, AiChatStreamDelta, AiCommandCard, AiMessage,
-    AiMessageRole, AiMode, AiSettings, CommandObservation, ConnectionStore, agent_response_action,
+    AiMessageRole, AiMode, AiSettings, CommandObservation, agent_response_action,
     assess_agent_command_risk, decide_agent_command_execution, now_rfc3339,
     parse_agent_model_output, parse_agent_tool_call, parse_model_output, redact_context,
     redact_sensitive_text, truncate_preview, uuid,
 };
+use nyaterm_store::ConnectionStore;
 use nyaterm_transport::RemoteCommandOutput;
 
 use crate::features::{AiChatJobOutput, AiChatWorkerEvent};

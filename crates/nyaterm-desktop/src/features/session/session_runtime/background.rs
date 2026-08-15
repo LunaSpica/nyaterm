@@ -1,7 +1,8 @@
 use std::time::{Duration, Instant};
 
 use gpui::Context;
-use nyaterm_core::{AiExecutionProfile, ConnectionStore, uuid};
+use nyaterm_core::{AiExecutionProfile, uuid};
+use nyaterm_store::ConnectionStore;
 use nyaterm_transport::{
     LocalSessionConfig, SerialSessionConfig, SessionInfo, SessionKind, SessionManager,
     SshSessionConfig, TelnetSessionConfig, open_ssh_multiplex_handle,

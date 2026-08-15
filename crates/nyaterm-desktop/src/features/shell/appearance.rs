@@ -4,9 +4,9 @@ use gpui::{
     App, Context, Font, FontFallbacks, PathPromptOptions, SharedString, font, px, rgb, rgba,
 };
 use nyaterm_core::{
-    AppSettingsSummary, ConnectionStore, ResolvedKeywordHighlightRule,
-    merge_keyword_highlight_rules_for_paint,
+    AppSettingsSummary, ResolvedKeywordHighlightRule, merge_keyword_highlight_rules_for_paint,
 };
+use nyaterm_store::ConnectionStore;
 
 use crate::features::NyaTermApp;
 pub(in crate::features) use crate::theme::{ThemePalette, apply_component_theme, theme_palette};

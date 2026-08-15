@@ -1,5 +1,6 @@
 use gpui::{AppContext, Context, KeyDownEvent, PathPromptOptions, SharedString, Window};
-use nyaterm_core::{ConnectionStore, KeywordHighlightRule};
+use nyaterm_core::KeywordHighlightRule;
+use nyaterm_store::ConnectionStore;
 
 use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::{KeywordHighlightEditorField, KeywordHighlightPathPromptResult};

@@ -4,7 +4,8 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use nyaterm_core::{ConnectionStore, DecryptedOtpEntry, KnownHostCheck};
+use nyaterm_core::DecryptedOtpEntry;
+use nyaterm_store::{ConnectionStore, KnownHostCheck};
 use nyaterm_transport::{
     SftpDuplicateDecision, SftpDuplicateRequest, SftpDuplicateResolver, SshAgentPrompt,
     SshAgentPromptAction, SshAgentPromptProvider, SshCredentialPrompt, SshCredentialProvider,

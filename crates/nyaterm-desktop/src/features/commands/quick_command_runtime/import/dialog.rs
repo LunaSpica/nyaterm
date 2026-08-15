@@ -1,5 +1,6 @@
 use gpui::{AppContext, Context, IntoElement, PathPromptOptions, SharedString, Window};
-use nyaterm_core::{ConnectionStore, export_quick_commands_json};
+use nyaterm_core::export_quick_commands_json;
+use nyaterm_store::ConnectionStore;
 use nyaterm_ui::NyaDialogWindowExt as _;
 
 use crate::features::NyaTermApp;

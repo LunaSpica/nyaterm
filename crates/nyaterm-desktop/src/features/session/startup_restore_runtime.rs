@@ -1,8 +1,8 @@
 use gpui::{Context, Window};
 use nyaterm_core::{
-    AiExecutionProfile, ConnectionStore, RestorableOpenTab, RestorablePaneNode,
-    RestorableWorkspacePaneNode,
+    AiExecutionProfile, RestorableOpenTab, RestorablePaneNode, RestorableWorkspacePaneNode,
 };
+use nyaterm_store::ConnectionStore;
 use nyaterm_transport::{
     LocalSessionConfig, RdpClipboardConfig, RdpDisplayConfig, RdpReconnectConfig, RdpSessionConfig,
     SessionInfo, VncClipboardConfig, VncDisplayConfig, VncReconnectConfig, VncSecurityConfig,

@@ -1,4 +1,5 @@
-use nyaterm_core::{ConfigBackupInfo, DiagnosticsExportInfo};
+use nyaterm_core::DiagnosticsExportInfo;
+use nyaterm_store::ConfigBackupInfo;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

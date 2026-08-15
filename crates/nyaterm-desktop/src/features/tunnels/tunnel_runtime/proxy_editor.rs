@@ -1,5 +1,6 @@
 use gpui::{Context, Window};
-use nyaterm_core::{ConnectionStore, ProxyConfig, uuid};
+use nyaterm_core::{ProxyConfig, uuid};
+use nyaterm_store::ConnectionStore;
 
 use super::helpers::parse_port;
 use crate::features::NyaTermApp;

@@ -1,6 +1,7 @@
 //! Persistent-store boundary and single-owner runtime.
 
 mod runtime;
+mod storage;
 
 pub use runtime::{
     BootstrapSnapshot, FlushBarrier, LoadBootstrap, RequestId, StoreBlockingClient, StoreConfig,
@@ -8,10 +9,14 @@ pub use runtime::{
     StoreSubmitError, StoreTask, StoreUiClient, store_request,
 };
 
+pub use storage::{
+    ConfigBackupInfo, ConnectionStore, KnownHostCheck, RdpCertificateMetadata,
+    RemoteFileBackendCache, RemoteFileBackendCacheEntry, StorageError,
+};
+
 pub use nyaterm_core::{
-    ConfigBackupInfo, ConnectionStore, DiagnosticsError, DiagnosticsExportInfo,
-    DiagnosticsExportOptions, DiagnosticsRuntimeSnapshot, KnownHostCheck, PortableSnapshotError,
-    PortableSnapshotKind, PortableSnapshotMeta, RawPortableSnapshot, StorageError,
+    DiagnosticsError, DiagnosticsExportInfo, DiagnosticsExportOptions, DiagnosticsRuntimeSnapshot,
+    PortableSnapshotError, PortableSnapshotKind, PortableSnapshotMeta, RawPortableSnapshot,
     decode_encrypted_raw_portable_snapshot, decode_raw_portable_snapshot,
     encode_encrypted_raw_portable_snapshot, encode_raw_portable_snapshot,
     export_diagnostics_archive,

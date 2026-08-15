@@ -1,5 +1,5 @@
 use gpui::{AppContext, Context, IntoElement, PathPromptOptions, SharedString, Window};
-use nyaterm_core::ConnectionStore;
+use nyaterm_store::ConnectionStore;
 use nyaterm_ui::NyaDialogWindowExt as _;
 use zeroize::Zeroize as _;
 
@@ -283,14 +283,23 @@ fn import_connection_source(
     match source {
         ConnectionImportSource::Termius => {
             let mut local_key = load_termius_local_key_secret()?;
-            let result = nyaterm_core::import_termius_sessions(store, path, &local_key)
-                .map_err(|error| error.to_string());
+            let result = nyaterm_core::prepare_termius_session_import(path, &local_key)
+                .map_err(|error| error.to_string())
+                .and_then(|prepared| {
+                    store
+                        .commit_session_import(prepared)
+                        .map_err(|error| error.to_string())
+                });
             local_key.zeroize();
             result
         }
         _ => {
             let path = path.ok_or_else(|| "connection import path was not selected".to_string())?;
-            nyaterm_core::import_sessions(store, path).map_err(|error| error.to_string())
+            let prepared =
+                nyaterm_core::prepare_session_import(path).map_err(|error| error.to_string())?;
+            store
+                .commit_session_import(prepared)
+                .map_err(|error| error.to_string())
         }
     }
 }

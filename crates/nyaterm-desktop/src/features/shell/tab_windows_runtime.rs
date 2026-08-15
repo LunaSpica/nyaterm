@@ -1,5 +1,5 @@
 use gpui::Context;
-use nyaterm_core::ConnectionStore;
+use nyaterm_store::ConnectionStore;
 
 use crate::features::terminal::{TerminalWindowDockResult, TerminalWindowReconcileResult};
 use crate::features::{NyaTermApp, short_id};

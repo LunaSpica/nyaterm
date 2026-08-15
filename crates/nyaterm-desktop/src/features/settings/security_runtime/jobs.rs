@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
-use nyaterm_core::{ConnectionStore, OtpEntry, SavedCredential, SavedPassword, SshKey};
+use nyaterm_core::{OtpEntry, SavedCredential, SavedPassword, SshKey};
+use nyaterm_store::ConnectionStore;
 
 use crate::features::SecurityCatalogState;
 

@@ -3,7 +3,7 @@ use gpui::{
     SharedString, StatefulInteractiveElement as _, Styled as _, deferred,
     prelude::FluentBuilder as _,
 };
-use nyaterm_core::ConnectionStore;
+use nyaterm_store::ConnectionStore;
 
 use crate::features::{
     NyaTermApp, horizontal_resize_handle_visual, settings::UiLayoutSettingsUpdate,

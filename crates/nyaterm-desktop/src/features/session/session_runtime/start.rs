@@ -4,10 +4,10 @@ use std::time::Instant;
 
 use gpui::{Context, Window};
 use nyaterm_core::{
-    AiExecutionProfile, ConnectionAuth, ConnectionStore, ConnectionType, SavedConnection,
-    SftpCwdFollowMode, SftpSettings, SshAlgorithmMode, SshAlgorithmPreferences, SshProfile,
-    resolve_ssh_terminal_type,
+    AiExecutionProfile, ConnectionAuth, ConnectionType, SavedConnection, SftpCwdFollowMode,
+    SftpSettings, SshAlgorithmMode, SshAlgorithmPreferences, SshProfile, resolve_ssh_terminal_type,
 };
+use nyaterm_store::ConnectionStore;
 use nyaterm_transport::{
     LocalSessionConfig, RdpClipboardConfig, RdpDisplayConfig, RdpReconnectConfig, RdpSessionConfig,
     SerialSessionConfig, SessionKind, SshKeyAuthConfig, SshProxyConfig, SshSessionConfig,
@@ -902,9 +902,8 @@ mod tests {
     use std::sync::Arc;
 
     use nyaterm_core::{
-        AiExecutionProfile, ConnectionAuth, ConnectionStore, ConnectionType, SavedConnection,
-        SftpCwdFollowMode, SftpSettings, SshAlgorithmMode, SshAlgorithmPreferences, SshProfile,
-        SshTerminalType, uuid,
+        AiExecutionProfile, ConnectionAuth, ConnectionType, SavedConnection, SftpCwdFollowMode,
+        SftpSettings, SshAlgorithmMode, SshAlgorithmPreferences, SshProfile, SshTerminalType, uuid,
     };
     use nyaterm_transport::SshSessionProfile;
 

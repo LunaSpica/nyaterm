@@ -13,7 +13,8 @@ mod transfer_widgets;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use nyaterm_core::{AppRuntime, ConnectionStore};
+use nyaterm_core::AppRuntime;
+use nyaterm_store::ConnectionStore;
 use nyaterm_transport::{
     RemoteFileBackendKind, RemoteFileBackendPreference, RemoteFileBackendPreferenceStore,
     RemoteFileService, SshMultiplexHandle, SshProcessService, SshSessionConfig,

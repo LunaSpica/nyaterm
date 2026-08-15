@@ -6,12 +6,13 @@ use gpui::{
     px, rgb, rgba, svg,
 };
 use nyaterm_core::{
-    CommandHistoryEntry, ConnectionStore, QuickCommand, TerminalInputState,
-    apply_terminal_input_data, apply_terminal_input_data_in_place,
-    can_suggest_from_tracked_command, command_starts_suggestion_suppressing_program,
-    get_tracked_command, get_tracked_submission_command, manual_empty_command_suggestions,
-    resync_from_terminal_line, search_command_sources, terminal_input_tracker_below_min_chars,
+    CommandHistoryEntry, QuickCommand, TerminalInputState, apply_terminal_input_data,
+    apply_terminal_input_data_in_place, can_suggest_from_tracked_command,
+    command_starts_suggestion_suppressing_program, get_tracked_command,
+    get_tracked_submission_command, manual_empty_command_suggestions, resync_from_terminal_line,
+    search_command_sources, terminal_input_tracker_below_min_chars,
 };
+use nyaterm_store::ConnectionStore;
 
 use crate::features::NyaTermApp;
 use crate::features::terminal::terminal_runtime::TERMINAL_INPUT_LATENCY_WINDOW;
