@@ -27,8 +27,10 @@ This is a Rust 2024 Cargo workspace using resolver `3`.
 * `crates/nyaterm-app`: executable entry point, bundled assets, logging setup,
   and root window creation.
 * `crates/nyaterm-core`: UI-independent domain models, compatibility formats,
-  parsing, policies, AI settings/risk/provider logic, persistence
-  implementation, and shared pure logic. Do not add GPUI dependencies here.
+  parsing, policies, AI settings/risk/provider logic, schema-neutral
+  serialization/encryption policies, and shared pure logic. Persistence
+  implementation and database compatibility readers live in
+  `crates/nyaterm-store`; do not add GPUI dependencies here.
 * `crates/nyaterm-desktop`: GPUI application composition, `AppShell`,
   `NyaTermApp`, feature state, views, platform adapters, background-job
   coordination, native HTTP adapters, and GPUI Entity stores.
@@ -42,10 +44,9 @@ This is a Rust 2024 Cargo workspace using resolver `3`.
   of GPUI and desktop presentation types.
 * `crates/nyaterm-ui`: shared GPUI theme tokens, the `gpui-component`
   integration boundary, and reusable NyaTerm presentation/interaction widgets.
-* `crates/nyaterm-store`: transitional persistence facade. Storage
-  implementation currently remains in `nyaterm-core`; do not expand the
-  re-export-only boundary without either moving the implementation or updating
-  consumers to use this crate.
+* `crates/nyaterm-store`: persistence implementation, transactions, redb
+  schema, encryption adapters, and database compatibility readers. Keep pure
+  compatibility models and serialization policies in `nyaterm-core`.
 * `crates/nyaterm-otp`: bundled OTP implementation used for HOTP/TOTP
   compatibility.
 * `crates/nyaterm-app/assets`: bundled icon assets. `icons/**` is monochrome
@@ -71,8 +72,9 @@ Persisted collections and compatibility-sensitive catalogs belong on focused
 feature owners. `SettingsFeatureState` owns `AppSettingsSummary`,
 `KeywordHighlightConfig`, the staged master-password state, and storage status;
 connection, security, tunnel/proxy, command, cloud-sync and session catalogs
-likewise live under their domain owners. Keep their persistence formats and
-fallback readers in `nyaterm-core`.
+likewise live under their domain owners. Keep their schema-neutral persistence
+formats and fallback parsing contracts in `nyaterm-core`; database execution
+and compatibility readers belong to `nyaterm-store`.
 
 The remaining Entity stores own state the app does not:
 
@@ -160,11 +162,11 @@ Before changing these areas:
 * Do not overwrite existing user data until validation succeeds.
 * Keep secret-bearing values masked when returning settings to the UI.
 
-`nyaterm-core/src/storage.rs` has been split by domain under
-`nyaterm-core/src/storage/`, but the public facade and compatibility contract
-still matter. Treat the `.nya` backup format, master-key wrapping, legacy
-Dragonfly fallback, legacy text-document fallbacks, and existing redb data as
-public compatibility contracts.
+`nyaterm-store/src/storage.rs` owns the database implementation and has been
+split by domain under `nyaterm-store/src/storage/`. The schema-neutral models
+and policies exposed by `nyaterm-core` remain compatibility contracts. Treat
+the `.nya` backup format, master-key wrapping, legacy Dragonfly fallback,
+legacy text-document fallbacks, and existing redb data as public contracts.
 
 ## Security Rules
 
