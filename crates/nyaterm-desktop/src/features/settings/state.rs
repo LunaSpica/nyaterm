@@ -289,6 +289,28 @@ impl SettingsFeatureState {
         self.persistence.values().any(|slot| slot.dirty)
     }
 
+    pub(in crate::features) fn dirty_persistence_domains(&self) -> Vec<SettingsPersistenceDomain> {
+        const DOMAINS: [SettingsPersistenceDomain; 13] = [
+            SettingsPersistenceDomain::Diagnostics,
+            SettingsPersistenceDomain::General,
+            SettingsPersistenceDomain::Interaction,
+            SettingsPersistenceDomain::ScreenLock,
+            SettingsPersistenceDomain::HostKey,
+            SettingsPersistenceDomain::Recording,
+            SettingsPersistenceDomain::Transfer,
+            SettingsPersistenceDomain::Terminal,
+            SettingsPersistenceDomain::QuickCommands,
+            SettingsPersistenceDomain::Appearance,
+            SettingsPersistenceDomain::UiLayout,
+            SettingsPersistenceDomain::Keybindings,
+            SettingsPersistenceDomain::FileExplorer,
+        ];
+        DOMAINS
+            .into_iter()
+            .filter(|domain| self.persistence.get(domain).is_some_and(|slot| slot.dirty))
+            .collect()
+    }
+
     pub(in crate::features) fn rebase_master_password(&mut self) {
         self.master_password.reset(self.summary.has_master_password);
     }
@@ -1773,5 +1795,20 @@ mod tests {
         assert!(completion.report_result);
         assert!(!completion.apply_result);
         assert!(state.persistence_is_dirty());
+    }
+
+    #[test]
+    fn shutdown_snapshot_lists_only_dirty_settings_domains() {
+        let mut state = settings_state();
+        state.queue_persistence(SettingsPersistenceDomain::Transfer);
+        state.queue_persistence(SettingsPersistenceDomain::General);
+
+        assert_eq!(
+            state.dirty_persistence_domains(),
+            [
+                SettingsPersistenceDomain::General,
+                SettingsPersistenceDomain::Transfer,
+            ]
+        );
     }
 }

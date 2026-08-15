@@ -119,6 +119,18 @@ impl AppShell {
             overlays,
             _subscriptions: subscriptions,
         };
+        let quit_subscription = cx.on_app_quit(|this, cx| {
+            let store = this
+                .store_runtime
+                .as_ref()
+                .map(StoreRuntime::blocking_client);
+            cx.background_executor().spawn(async move {
+                if let Some(store) = store {
+                    let _ = store.request_shutdown(u64::MAX, FlushBarrier);
+                }
+            })
+        });
+        shell._subscriptions.push(quit_subscription);
         shell.begin_bootstrap();
         shell
     }
@@ -345,7 +357,16 @@ impl AppShell {
             cx.notify();
             return;
         };
-        let task = match store_runtime.ui_client().try_submit(u64::MAX, FlushBarrier) {
+        store_runtime.begin_shutdown();
+        let Some(app) = &self.app else {
+            self.lifecycle = AppShellLifecycle::FlushFailed(
+                "The application state is unavailable; pending changes cannot be captured."
+                    .to_string(),
+            );
+            cx.notify();
+            return;
+        };
+        let snapshot_task = match app.update(cx, |app, _| app.submit_shutdown_persistence()) {
             Ok(task) => task,
             Err(error) => {
                 self.lifecycle = AppShellLifecycle::FlushFailed(error.to_string());
@@ -353,6 +374,18 @@ impl AppShell {
                 return;
             }
         };
+        let task = match store_runtime
+            .ui_client()
+            .try_submit_shutdown(u64::MAX, FlushBarrier)
+        {
+            Ok(task) => task,
+            Err(error) => {
+                self.lifecycle = AppShellLifecycle::FlushFailed(error.to_string());
+                cx.notify();
+                return;
+            }
+        };
+        drop(snapshot_task);
         self.lifecycle = AppShellLifecycle::Flushing;
         cx.spawn(async move |this, cx| {
             let event = task.await;
@@ -479,6 +512,12 @@ impl AppShell {
                                 .text_sm()
                                 .text_color(rgb(0xaeb4b8))
                                 .child(message.clone()),
+                        )
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(rgb(0xd6a85f))
+                                .child("Force Quit will discard changes that could not be saved."),
                         )
                         .child(
                             div()

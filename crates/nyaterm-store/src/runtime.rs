@@ -3,8 +3,8 @@ use std::future::Future;
 use std::marker::PhantomData;
 use std::path::PathBuf;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, mpsc};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, mpsc};
 use std::task::{Context, Poll};
 
 use futures::channel::oneshot;
@@ -53,6 +53,7 @@ pub enum StoreDomain {
     Ai,
     Terminal,
     Transfers,
+    Shutdown,
     Barrier,
 }
 
@@ -119,6 +120,7 @@ impl std::error::Error for StoreOperationError {}
 pub enum StoreSubmitError {
     QueueFull,
     Disconnected,
+    ShuttingDown,
 }
 
 impl fmt::Display for StoreSubmitError {
@@ -126,6 +128,7 @@ impl fmt::Display for StoreSubmitError {
         match self {
             Self::QueueFull => formatter.write_str("the storage request queue is full"),
             Self::Disconnected => formatter.write_str("the storage worker is unavailable"),
+            Self::ShuttingDown => formatter.write_str("the storage runtime is shutting down"),
         }
     }
 }
@@ -223,16 +226,21 @@ impl<T> Future for StoreTask<T> {
     }
 }
 
-type WorkerJob = Box<dyn FnOnce(Result<&ConnectionStore, &StoreOperationError>) + Send>;
+type WorkerJob = Box<
+    dyn FnOnce(Result<&ConnectionStore, &StoreOperationError>) -> Option<StoreOperationError>
+        + Send,
+>;
 
 enum WorkerMessage {
-    Execute(WorkerJob),
+    Execute { domain: StoreDomain, job: WorkerJob },
 }
 
 #[derive(Clone)]
 pub struct StoreUiClient {
     sender: mpsc::SyncSender<WorkerMessage>,
     next_request_id: Arc<AtomicU64>,
+    accepting: Arc<AtomicBool>,
+    submission_gate: Arc<Mutex<()>>,
 }
 
 impl StoreUiClient {
@@ -241,6 +249,30 @@ impl StoreUiClient {
         generation: u64,
         request: R,
     ) -> Result<StoreTask<R::Response>, StoreSubmitError> {
+        self.try_submit_inner(generation, request, false)
+    }
+
+    pub fn try_submit_shutdown<R: StoreRequest>(
+        &self,
+        generation: u64,
+        request: R,
+    ) -> Result<StoreTask<R::Response>, StoreSubmitError> {
+        self.try_submit_inner(generation, request, true)
+    }
+
+    fn try_submit_inner<R: StoreRequest>(
+        &self,
+        generation: u64,
+        request: R,
+        allow_shutdown: bool,
+    ) -> Result<StoreTask<R::Response>, StoreSubmitError> {
+        let _gate = self
+            .submission_gate
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if !allow_shutdown && !self.accepting.load(Ordering::Acquire) {
+            return Err(StoreSubmitError::ShuttingDown);
+        }
         let request_id = self.next_request_id.fetch_add(1, Ordering::Relaxed);
         let domain = request.domain();
         let (sender, receiver) = oneshot::channel();
@@ -250,15 +282,17 @@ impl StoreUiClient {
                     Ok(store) => request.execute(store).map_err(StoreOperationError::from),
                     Err(error) => Err(error.clone()),
                 };
+                let failure = outcome.as_ref().err().cloned();
                 let _ = sender.send(StoreEvent {
                     request_id,
                     domain,
                     generation,
                     outcome,
                 });
+                failure
             },
         );
-        match self.sender.try_send(WorkerMessage::Execute(job)) {
+        match self.sender.try_send(WorkerMessage::Execute { domain, job }) {
             Ok(()) => Ok(StoreTask {
                 request_id,
                 receiver,
@@ -273,6 +307,8 @@ impl StoreUiClient {
 pub struct StoreBlockingClient {
     sender: mpsc::SyncSender<WorkerMessage>,
     next_request_id: Arc<AtomicU64>,
+    accepting: Arc<AtomicBool>,
+    submission_gate: Arc<Mutex<()>>,
 }
 
 impl StoreBlockingClient {
@@ -292,6 +328,23 @@ impl StoreBlockingClient {
         generation: u64,
         request: R,
     ) -> Result<StoreEvent<R::Response>, StoreSubmitError> {
+        self.request_inner(generation, request, false)
+    }
+
+    pub fn request_shutdown<R: StoreRequest>(
+        &self,
+        generation: u64,
+        request: R,
+    ) -> Result<StoreEvent<R::Response>, StoreSubmitError> {
+        self.request_inner(generation, request, true)
+    }
+
+    fn request_inner<R: StoreRequest>(
+        &self,
+        generation: u64,
+        request: R,
+        allow_shutdown: bool,
+    ) -> Result<StoreEvent<R::Response>, StoreSubmitError> {
         let request_id = self.next_request_id.fetch_add(1, Ordering::Relaxed);
         let domain = request.domain();
         let (sender, receiver) = mpsc::sync_channel(1);
@@ -301,17 +354,28 @@ impl StoreBlockingClient {
                     Ok(store) => request.execute(store).map_err(StoreOperationError::from),
                     Err(error) => Err(error.clone()),
                 };
+                let failure = outcome.as_ref().err().cloned();
                 let _ = sender.send(StoreEvent {
                     request_id,
                     domain,
                     generation,
                     outcome,
                 });
+                failure
             },
         );
-        self.sender
-            .send(WorkerMessage::Execute(job))
-            .map_err(|_| StoreSubmitError::Disconnected)?;
+        {
+            let _gate = self
+                .submission_gate
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            if !allow_shutdown && !self.accepting.load(Ordering::Acquire) {
+                return Err(StoreSubmitError::ShuttingDown);
+            }
+            self.sender
+                .send(WorkerMessage::Execute { domain, job })
+                .map_err(|_| StoreSubmitError::Disconnected)?;
+        }
         receiver.recv().map_err(|_| StoreSubmitError::Disconnected)
     }
 }
@@ -336,6 +400,7 @@ impl StoreClientError {
         match self {
             Self::Submit(StoreSubmitError::QueueFull) => "queue_full",
             Self::Submit(StoreSubmitError::Disconnected) => "unavailable",
+            Self::Submit(StoreSubmitError::ShuttingDown) => "shutting_down",
             Self::Operation(error) => error.category(),
         }
     }
@@ -361,6 +426,8 @@ impl StoreRuntime {
     pub fn spawn(config: StoreConfig) -> Result<Self, std::io::Error> {
         let (sender, receiver) = mpsc::sync_channel(STORE_QUEUE_CAPACITY);
         let next_request_id = Arc::new(AtomicU64::new(1));
+        let accepting = Arc::new(AtomicBool::new(true));
+        let submission_gate = Arc::new(Mutex::new(()));
         std::thread::Builder::new()
             .name("nyaterm-store".to_string())
             .spawn(move || store_worker(config, receiver))?;
@@ -368,10 +435,14 @@ impl StoreRuntime {
             ui_client: StoreUiClient {
                 sender: sender.clone(),
                 next_request_id: next_request_id.clone(),
+                accepting: accepting.clone(),
+                submission_gate: submission_gate.clone(),
             },
             blocking_client: StoreBlockingClient {
                 sender: sender.clone(),
                 next_request_id,
+                accepting,
+                submission_gate,
             },
         })
     }
@@ -382,6 +453,15 @@ impl StoreRuntime {
 
     pub fn blocking_client(&self) -> StoreBlockingClient {
         self.blocking_client.clone()
+    }
+
+    pub fn begin_shutdown(&self) {
+        let _gate = self
+            .ui_client
+            .submission_gate
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        self.ui_client.accepting.store(false, Ordering::Release);
     }
 }
 
@@ -490,11 +570,47 @@ fn store_worker(config: StoreConfig, receiver: mpsc::Receiver<WorkerMessage>) {
     let store =
         ConnectionStore::open_with_portable_key_path(config.config_dir, config.portable_key_path)
             .map_err(StoreOperationError::from);
+    let mut barrier_failures = Vec::new();
     while let Ok(message) = receiver.recv() {
         match message {
-            WorkerMessage::Execute(job) => job(store.as_ref()),
+            WorkerMessage::Execute { domain, job } if domain == StoreDomain::Barrier => {
+                let aggregate = aggregate_barrier_failures(&barrier_failures);
+                barrier_failures.clear();
+                if let Some(error) = aggregate.as_ref() {
+                    job(Err(error));
+                } else {
+                    job(store.as_ref());
+                }
+            }
+            WorkerMessage::Execute { domain, job } => {
+                if let Some(error) = job(store.as_ref()) {
+                    barrier_failures.push((domain, error));
+                }
+            }
         }
     }
+}
+
+fn aggregate_barrier_failures(
+    failures: &[(StoreDomain, StoreOperationError)],
+) -> Option<StoreOperationError> {
+    if failures.is_empty() {
+        return None;
+    }
+    let mut categories = failures
+        .iter()
+        .map(|(domain, error)| format!("{domain:?}:{}", error.category()))
+        .collect::<Vec<_>>();
+    categories.sort();
+    categories.dedup();
+    Some(StoreOperationError {
+        category: "barrier",
+        message: format!(
+            "{} storage request(s) failed before the flush barrier ({})",
+            failures.len(),
+            categories.join(", ")
+        ),
+    })
 }
 
 pub struct BootstrapSnapshot {
@@ -683,6 +799,87 @@ mod tests {
             )
             .expect_err("operation should fail");
         assert_eq!(error.category(), "invalid_data");
+
+        drop(runtime);
+        std::fs::remove_dir_all(config_dir).ok();
+    }
+
+    #[test]
+    fn flush_barrier_reports_prior_failures_and_resets_the_retry_window() {
+        let config_dir = temp_dir("barrier-failure");
+        let runtime = StoreRuntime::spawn(StoreConfig {
+            config_dir: config_dir.clone(),
+            portable_key_path: None,
+        })
+        .expect("spawn runtime");
+        let client = runtime.blocking_client();
+
+        let failed = client
+            .request_fn(
+                StoreDomain::Settings,
+                |_| -> Result<(), crate::StorageError> {
+                    Err(crate::StorageError::InvalidData(
+                        "secret-bearing invalid payload".to_string(),
+                    ))
+                },
+            )
+            .expect_err("operation should fail");
+        assert_eq!(failed.category(), "invalid_data");
+
+        let barrier_error = client
+            .request(0, FlushBarrier)
+            .expect("receive failed barrier")
+            .outcome
+            .expect_err("barrier should aggregate the prior failure");
+        assert_eq!(barrier_error.category(), "barrier");
+        assert!(
+            barrier_error
+                .user_message()
+                .contains("Settings:invalid_data")
+        );
+        assert!(
+            !barrier_error
+                .user_message()
+                .contains("secret-bearing invalid payload")
+        );
+
+        client
+            .request(0, FlushBarrier)
+            .expect("receive retry barrier")
+            .outcome
+            .expect("retry window should start clean");
+
+        drop(runtime);
+        std::fs::remove_dir_all(config_dir).ok();
+    }
+
+    #[test]
+    fn shutdown_rejects_normal_clients_but_accepts_the_final_barrier() {
+        let config_dir = temp_dir("shutdown-rejection");
+        let runtime = StoreRuntime::spawn(StoreConfig {
+            config_dir: config_dir.clone(),
+            portable_key_path: None,
+        })
+        .expect("spawn runtime");
+        let ui = runtime.ui_client();
+        let blocking = runtime.blocking_client();
+
+        runtime.begin_shutdown();
+
+        assert!(matches!(
+            ui.try_submit(0, FlushBarrier),
+            Err(super::StoreSubmitError::ShuttingDown)
+        ));
+        assert!(matches!(
+            blocking.request(0, FlushBarrier),
+            Err(super::StoreSubmitError::ShuttingDown)
+        ));
+        futures::executor::block_on(
+            ui.try_submit_shutdown(0, FlushBarrier)
+                .expect("final barrier"),
+        )
+        .outcome
+        .expect("final barrier should run");
 
         drop(runtime);
         std::fs::remove_dir_all(config_dir).ok();

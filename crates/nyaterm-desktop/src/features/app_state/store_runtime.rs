@@ -1,7 +1,29 @@
 use gpui::Context;
-use nyaterm_store::{StoreEvent, StoreRequest};
+use nyaterm_core::{
+    AiSettings, AppSettingsSummary, KeywordHighlightConfig, RestorableOpenTab,
+    RestorableTerminalWindowNode, RestorableWorkspacePaneNode, TranslationSettings,
+};
+use nyaterm_store::{
+    StoreDomain, StoreEvent, StoreRequest, StoreSubmitError, StoreTask, store_request,
+};
 
 use super::NyaTermApp;
+use crate::features::settings::SettingsPersistenceDomain;
+
+struct ShutdownPersistenceSnapshot {
+    settings: AppSettingsSummary,
+    settings_domains: Vec<SettingsPersistenceDomain>,
+    keyword_highlights: KeywordHighlightConfig,
+    ai_settings: Option<AiSettings>,
+    translation_settings: Option<TranslationSettings>,
+    session: Option<ShutdownSessionSnapshot>,
+}
+
+struct ShutdownSessionSnapshot {
+    open_tabs: Vec<RestorableOpenTab>,
+    terminal_layout: Option<RestorableTerminalWindowNode>,
+    workspace_layout: Option<RestorableWorkspacePaneNode>,
+}
 
 impl NyaTermApp {
     pub(in crate::features) fn submit_store_request<R>(
@@ -35,5 +57,132 @@ impl NyaTermApp {
 
     pub(in crate::features) fn store_blocking_client(&self) -> nyaterm_store::StoreBlockingClient {
         self.store_blocking.clone()
+    }
+
+    pub(crate) fn submit_shutdown_persistence(
+        &mut self,
+    ) -> Result<StoreTask<()>, StoreSubmitError> {
+        let settings_domains = self.settings.dirty_persistence_domains();
+        let settings = self.settings.summary().clone();
+        let keyword_highlights = self.settings.keyword_config().clone();
+        let ai_settings = self
+            .ai
+            .settings_persistence_is_dirty()
+            .then(|| self.ai.pending_settings());
+        let translation_settings = self
+            .translation
+            .settings_persistence_is_dirty()
+            .then(|| self.translation.pending_settings());
+        let session = if settings.startup_restore {
+            let open_tabs = self.serialize_open_tabs();
+            let ordered = self
+                .ordered_tab_sessions()
+                .into_iter()
+                .map(|session| session.id)
+                .collect::<Vec<_>>();
+            let terminal_layout = settings
+                .startup_restore_window_layout
+                .then(|| self.terminal.serialize_terminal_window_layout(&ordered))
+                .flatten();
+            let workspace_layout = if settings.startup_restore_window_layout {
+                self.sync_workspace_split_from_active_tab();
+                let ordered = self
+                    .session
+                    .ordered_sessions()
+                    .into_iter()
+                    .map(|session| session.id)
+                    .collect::<Vec<_>>();
+                self.shell
+                    .workspace_split()
+                    .as_ref()
+                    .filter(|root| root.is_split())
+                    .and_then(|root| root.serialize_layout(&ordered))
+                    .or_else(|| {
+                        self.shell
+                            .workspace_pane_roots()
+                            .values()
+                            .find(|root| root.is_split())
+                            .and_then(|root| root.serialize_layout(&ordered))
+                    })
+            } else {
+                None
+            };
+            Some(ShutdownSessionSnapshot {
+                open_tabs,
+                terminal_layout,
+                workspace_layout,
+            })
+        } else {
+            None
+        };
+        let snapshot = ShutdownPersistenceSnapshot {
+            settings,
+            settings_domains,
+            keyword_highlights,
+            ai_settings,
+            translation_settings,
+            session,
+        };
+        self.store_ui.try_submit_shutdown(
+            u64::MAX - 1,
+            store_request(StoreDomain::Shutdown, move |store| {
+                for domain in snapshot.settings_domains {
+                    match domain {
+                        SettingsPersistenceDomain::Diagnostics => {
+                            store.save_diagnostics_settings(&snapshot.settings)?;
+                        }
+                        SettingsPersistenceDomain::General => {
+                            store.save_general_settings(&snapshot.settings)?;
+                        }
+                        SettingsPersistenceDomain::Interaction => {
+                            store.save_interaction_settings(&snapshot.settings)?;
+                        }
+                        SettingsPersistenceDomain::ScreenLock => {
+                            store.save_screen_lock_settings(&snapshot.settings)?;
+                        }
+                        SettingsPersistenceDomain::HostKey => {
+                            store.save_host_key_policy(&snapshot.settings.host_key_policy)?;
+                        }
+                        SettingsPersistenceDomain::Recording => {
+                            store.save_recording_settings(&snapshot.settings)?;
+                        }
+                        SettingsPersistenceDomain::Transfer => {
+                            store.save_transfer_settings(&snapshot.settings)?;
+                        }
+                        SettingsPersistenceDomain::Terminal => {
+                            store.save_terminal_settings(&snapshot.settings)?;
+                        }
+                        SettingsPersistenceDomain::QuickCommands => {
+                            store.save_quick_command_ui_settings(&snapshot.settings)?;
+                        }
+                        SettingsPersistenceDomain::Appearance => {
+                            store.save_appearance_settings(&snapshot.settings)?;
+                        }
+                        SettingsPersistenceDomain::UiLayout => {
+                            store.save_ui_layout_settings(&snapshot.settings)?;
+                        }
+                        SettingsPersistenceDomain::Keybindings => {
+                            store.save_keybindings(&snapshot.settings.keybindings)?;
+                        }
+                        SettingsPersistenceDomain::FileExplorer => {
+                            store.save_file_explorer_favorite_dirs(&snapshot.settings)?;
+                        }
+                    }
+                }
+                store.save_keyword_highlights(&snapshot.keyword_highlights)?;
+                if let Some(settings) = snapshot.ai_settings {
+                    store.save_ai_settings(settings)?;
+                }
+                if let Some(settings) = snapshot.translation_settings {
+                    store.save_translation_settings(settings)?;
+                }
+                if let Some(session) = snapshot.session {
+                    store.save_open_tabs(&session.open_tabs)?;
+                    store.save_terminal_window_layout(session.terminal_layout.as_ref())?;
+                    store.save_workspace_pane_layout(session.workspace_layout.as_ref())?;
+                }
+                Ok(())
+            }),
+        )
     }
 }
