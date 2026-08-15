@@ -10,11 +10,9 @@ mod transfer_options;
 mod transfer_paths;
 mod transfer_widgets;
 
-use std::path::PathBuf;
 use std::sync::Arc;
 
-use nyaterm_core::AppRuntime;
-use nyaterm_store::ConnectionStore;
+use nyaterm_store::{StoreBlockingClient, StoreDomain};
 use nyaterm_transport::{
     RemoteFileBackendKind, RemoteFileBackendPreference, RemoteFileBackendPreferenceStore,
     RemoteFileService, SshMultiplexHandle, SshProcessService, SshSessionConfig,
@@ -28,26 +26,13 @@ pub(in crate::features) struct SftpJobSession {
     pub service: RemoteFileService,
 }
 
-#[derive(Debug)]
 struct ConnectionStoreBackendPreferences {
-    config_dir: PathBuf,
-    portable_key_path: Option<PathBuf>,
+    store: StoreBlockingClient,
 }
 
 impl ConnectionStoreBackendPreferences {
-    fn new(runtime: &AppRuntime) -> Self {
-        Self {
-            config_dir: runtime.config_dir().to_path_buf(),
-            portable_key_path: runtime.portable_key_path().map(ToOwned::to_owned),
-        }
-    }
-
-    fn open(&self) -> anyhow::Result<ConnectionStore> {
-        ConnectionStore::open_with_portable_key_path(
-            &self.config_dir,
-            self.portable_key_path.clone(),
-        )
-        .map_err(Into::into)
+    fn new(store: StoreBlockingClient) -> Self {
+        Self { store }
     }
 }
 
@@ -56,7 +41,9 @@ impl RemoteFileBackendPreferenceStore for ConnectionStoreBackendPreferences {
         &self,
         endpoint_key: &str,
     ) -> anyhow::Result<Option<RemoteFileBackendPreference>> {
-        let cache = self.open()?.load_remote_file_backend_cache()?;
+        let cache = self.store.request_fn(StoreDomain::Transfers, |store| {
+            store.load_remote_file_backend_cache()
+        })?;
         Ok(cache.entries.get(endpoint_key).and_then(|entry| {
             RemoteFileBackendKind::from_cache_name(&entry.last_working_backend).map(|backend| {
                 RemoteFileBackendPreference {
@@ -73,12 +60,19 @@ impl RemoteFileBackendPreferenceStore for ConnectionStoreBackendPreferences {
         endpoint_key: &str,
         preference: &RemoteFileBackendPreference,
     ) -> anyhow::Result<()> {
-        self.open()?.update_remote_file_backend_cache_entry(
-            endpoint_key,
-            preference.backend.cache_name(),
-            preference.sftp_unavailable,
-            preference.last_failure_reason.clone(),
-        )?;
+        let endpoint_key = endpoint_key.to_string();
+        let backend = preference.backend.cache_name().to_string();
+        let sftp_unavailable = preference.sftp_unavailable;
+        let last_failure_reason = preference.last_failure_reason.clone();
+        self.store
+            .request_fn(StoreDomain::Transfers, move |store| {
+                store.update_remote_file_backend_cache_entry(
+                    &endpoint_key,
+                    &backend,
+                    sftp_unavailable,
+                    last_failure_reason,
+                )
+            })?;
         Ok(())
     }
 }
@@ -89,8 +83,9 @@ impl NyaTermApp {
         session_id: &str,
         config: SshSessionConfig,
     ) -> anyhow::Result<RemoteFileService> {
-        let preferences: Arc<dyn RemoteFileBackendPreferenceStore> =
-            Arc::new(ConnectionStoreBackendPreferences::new(&self.runtime));
+        let preferences: Arc<dyn RemoteFileBackendPreferenceStore> = Arc::new(
+            ConnectionStoreBackendPreferences::new(self.store_blocking_client()),
+        );
         self.session
             .remote_file_service_for_session(session_id, config, preferences)
     }
