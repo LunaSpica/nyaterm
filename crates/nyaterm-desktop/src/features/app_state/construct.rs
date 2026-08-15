@@ -71,10 +71,7 @@ impl NyaTermApp {
         );
         let (appearance_ui_font_options, appearance_terminal_font_options) =
             appearance_font_options(cx);
-        let otp_provider = Arc::new(NativeOtpProvider::new(
-            runtime.config_dir().to_path_buf(),
-            runtime.portable_key_path().map(ToOwned::to_owned),
-        ));
+        let otp_provider = Arc::new(NativeOtpProvider::new(store_blocking.clone()));
         let transfer_duplicate_policy =
             SftpDuplicatePolicy::from_legacy_value(&settings.transfer_duplicate_strategy);
         let recording = RecordingFeatureState::new(settings.recording_memory_limit_bytes as usize);

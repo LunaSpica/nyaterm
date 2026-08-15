@@ -2,7 +2,8 @@ use std::sync::{Arc, mpsc};
 use std::time::Instant;
 
 use gpui::TestAppContext;
-use nyaterm_core::{AiExecutionProfile, ConnectionType, SavedConnection};
+use nyaterm_core::{AiExecutionProfile, ConnectionType, SavedConnection, uuid};
+use nyaterm_store::{StoreConfig, StoreRuntime};
 use nyaterm_transport::{
     LocalSessionConfig, SessionEvent, SessionKind, SessionManager, SshCredentialPrompt,
     SshCredentialPromptKind, SshCredentialPromptReason, SshHostKey, SshKeyboardInteractivePrompt,
@@ -76,6 +77,21 @@ fn saved_connection(id: &str) -> SavedConnection {
     }
 }
 
+fn test_otp_provider() -> Arc<NativeOtpProvider> {
+    let config_dir = std::env::temp_dir().join(format!(
+        "nyaterm-session-state-test-{}-{}",
+        std::process::id(),
+        uuid()
+    ));
+    let store = StoreRuntime::spawn(StoreConfig {
+        config_dir,
+        portable_key_path: None,
+    })
+    .expect("spawn test store")
+    .blocking_client();
+    Arc::new(NativeOtpProvider::new(store))
+}
+
 fn prompt_state(cx: &TestAppContext) -> SessionPromptState {
     SessionPromptState {
         duplicate_prompts: Arc::new(SftpDuplicatePromptBroker::default()),
@@ -89,7 +105,7 @@ fn prompt_state(cx: &TestAppContext) -> SessionPromptState {
         active_agent_prompt: None,
         credential_prompt_focus_pending: false,
         credential_focus: cx.update(|cx| cx.focus_handle()),
-        otp_provider: Arc::new(NativeOtpProvider::new(std::path::PathBuf::new(), None)),
+        otp_provider: test_otp_provider(),
     }
 }
 
@@ -105,7 +121,7 @@ fn session_state(cx: &TestAppContext) -> SessionFeatureState {
     SessionFeatureState::new(
         manager,
         event_bridge,
-        Arc::new(NativeOtpProvider::new(std::path::PathBuf::new(), None)),
+        test_otp_provider(),
         SessionFeatureFocus {
             credential: focus(),
             tab_actions: focus(),
@@ -282,7 +298,7 @@ fn session_state_owns_live_runtime_and_initializes_transient_state() {
         "utf-8".to_string(),
         10_000,
     );
-    let otp_provider = Arc::new(NativeOtpProvider::new(std::path::PathBuf::new(), None));
+    let otp_provider = test_otp_provider();
     let mut sessions = SessionFeatureState::new(
         Arc::clone(&manager),
         event_bridge,

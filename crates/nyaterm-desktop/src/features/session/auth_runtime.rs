@@ -1,11 +1,11 @@
 use std::collections::{HashMap, VecDeque};
+use std::fmt;
 use std::hash::{Hash, Hasher};
-use std::path::PathBuf;
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use nyaterm_core::DecryptedOtpEntry;
-use nyaterm_store::{ConnectionStore, KnownHostCheck};
+use nyaterm_store::{KnownHostCheck, StoreBlockingClient, StoreDomain};
 use nyaterm_transport::{
     SftpDuplicateDecision, SftpDuplicateRequest, SftpDuplicateResolver, SshAgentPrompt,
     SshAgentPromptAction, SshAgentPromptProvider, SshCredentialPrompt, SshCredentialProvider,
@@ -19,29 +19,25 @@ use super::{
 };
 
 pub(in crate::features) struct NativeHostKeyVerifier {
-    pub(in crate::features) config_dir: PathBuf,
-    pub(in crate::features) portable_key_path: Option<PathBuf>,
+    pub(in crate::features) store: StoreBlockingClient,
     pub(in crate::features) policy: String,
     pub(in crate::features) prompt_broker: Arc<HostKeyPromptBroker>,
 }
 
 impl SshHostKeyVerifier for NativeHostKeyVerifier {
     fn verify(&self, host_key: &SshHostKey) -> Result<SshHostKeyDecision, String> {
-        let store = ConnectionStore::open_with_portable_key_path(
-            &self.config_dir,
-            self.portable_key_path.clone(),
-        )
-        .map_err(|error| error.to_string())?;
         let line = format!(
             "{} {} {}",
             host_key.host_identifier, host_key.key_type, host_key.key_base64
         );
-        match store
-            .check_known_host(
-                &host_key.host_identifier,
-                &host_key.key_type,
-                &host_key.key_base64,
-            )
+        let host_identifier = host_key.host_identifier.clone();
+        let key_type = host_key.key_type.clone();
+        let key_base64 = host_key.key_base64.clone();
+        match self
+            .store
+            .request_fn(StoreDomain::Security, move |store| {
+                store.check_known_host(&host_identifier, &key_type, &key_base64)
+            })
             .map_err(|error| error.to_string())?
         {
             KnownHostCheck::Match => Ok(SshHostKeyDecision::Accept),
@@ -57,8 +53,10 @@ impl SshHostKeyVerifier for NativeHostKeyVerifier {
                     .request_decision(host_key.clone(), HostKeyPromptIssue::Unknown)
                 {
                     Ok(HostKeyPromptChoice::Accept) => {
-                        store
-                            .upsert_known_host(&line)
+                        self.store
+                            .request_fn(StoreDomain::Security, move |store| {
+                                store.upsert_known_host(&line)
+                            })
                             .map_err(|error| error.to_string())?;
                         Ok(SshHostKeyDecision::Accept)
                     }
@@ -70,14 +68,19 @@ impl SshHostKeyVerifier for NativeHostKeyVerifier {
                 }
             }
             KnownHostCheck::UnknownHost => {
-                store
-                    .upsert_known_host(&line)
+                self.store
+                    .request_fn(StoreDomain::Security, move |store| {
+                        store.upsert_known_host(&line)
+                    })
                     .map_err(|error| error.to_string())?;
                 Ok(SshHostKeyDecision::Accept)
             }
             KnownHostCheck::HostSeen if self.policy == "accept" => {
-                store
-                    .replace_known_host_for_host(&host_key.host_identifier, &line)
+                let host_identifier = host_key.host_identifier.clone();
+                self.store
+                    .request_fn(StoreDomain::Security, move |store| {
+                        store.replace_known_host_for_host(&host_identifier, &line)
+                    })
                     .map_err(|error| error.to_string())?;
                 Ok(SshHostKeyDecision::Accept)
             }
@@ -87,8 +90,11 @@ impl SshHostKeyVerifier for NativeHostKeyVerifier {
                     .request_decision(host_key.clone(), HostKeyPromptIssue::Changed)
                 {
                     Ok(HostKeyPromptChoice::Accept) => {
-                        store
-                            .replace_known_host_for_host(&host_key.host_identifier, &line)
+                        let host_identifier = host_key.host_identifier.clone();
+                        self.store
+                            .request_fn(StoreDomain::Security, move |store| {
+                                store.replace_known_host_for_host(&host_identifier, &line)
+                            })
                             .map_err(|error| error.to_string())?;
                         Ok(SshHostKeyDecision::Accept)
                     }
@@ -113,33 +119,25 @@ struct TotpUseRecord {
     time_step: u64,
 }
 
-#[derive(Debug)]
 pub(in crate::features) struct NativeOtpProvider {
-    config_dir: PathBuf,
-    portable_key_path: Option<PathBuf>,
+    store: StoreBlockingClient,
     used_totp_codes: Mutex<HashMap<String, TotpUseRecord>>,
 }
 
 impl NativeOtpProvider {
-    pub(in crate::features) fn new(
-        config_dir: PathBuf,
-        portable_key_path: Option<PathBuf>,
-    ) -> Self {
+    pub(in crate::features) fn new(store: StoreBlockingClient) -> Self {
         Self {
-            config_dir,
-            portable_key_path,
+            store,
             used_totp_codes: Mutex::new(HashMap::new()),
         }
     }
 
     fn load_entry(&self, otp_id: &str) -> Result<Option<DecryptedOtpEntry>, String> {
-        let store = ConnectionStore::open_with_portable_key_path(
-            &self.config_dir,
-            self.portable_key_path.clone(),
-        )
-        .map_err(|error| error.to_string())?;
-        store
-            .load_decrypted_otp_entry_by_id(otp_id)
+        let otp_id = otp_id.to_string();
+        self.store
+            .request_fn(StoreDomain::Security, move |store| {
+                store.load_decrypted_otp_entry_by_id(&otp_id)
+            })
             .map_err(|error| error.to_string())
     }
 
@@ -177,13 +175,11 @@ impl NativeOtpProvider {
     }
 
     fn increment_counter(&self, otp_id: &str) -> Result<(), String> {
-        let store = ConnectionStore::open_with_portable_key_path(
-            &self.config_dir,
-            self.portable_key_path.clone(),
-        )
-        .map_err(|error| error.to_string())?;
-        store
-            .increment_otp_counter(otp_id)
+        let otp_id = otp_id.to_string();
+        self.store
+            .request_fn(StoreDomain::Security, move |store| {
+                store.increment_otp_counter(&otp_id)
+            })
             .map_err(|error| error.to_string())
     }
 
@@ -210,6 +206,20 @@ impl NativeOtpProvider {
             },
         );
         Ok(())
+    }
+}
+
+impl fmt::Debug for NativeOtpProvider {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let used_code_count = self
+            .used_totp_codes
+            .lock()
+            .map(|codes| codes.len())
+            .unwrap_or_default();
+        formatter
+            .debug_struct("NativeOtpProvider")
+            .field("used_code_count", &used_code_count)
+            .finish_non_exhaustive()
     }
 }
 
@@ -653,7 +663,11 @@ fn agent_prompt_id(prompt: &SshAgentPrompt) -> String {
 
 #[cfg(test)]
 mod prompt_state_debug_tests {
-    use super::{AgentPromptBroker, CredentialPromptState, KeyboardInteractivePromptState};
+    use super::{
+        AgentPromptBroker, CredentialPromptState, KeyboardInteractivePromptState,
+        NativeOtpProvider, TotpUseRecord,
+    };
+    use nyaterm_store::{StoreConfig, StoreRuntime};
     use nyaterm_transport::{
         SshAgentPrompt, SshAgentPromptAction, SshAgentPromptPhase, SshCredentialPrompt,
         SshCredentialPromptKind, SshCredentialPromptReason, SshKeyboardInteractivePrompt,
@@ -763,5 +777,37 @@ mod prompt_state_debug_tests {
         assert!(!debug.contains("interactive-secret"));
         assert!(!debug.contains("otp-secret"));
         assert!(debug.contains("response_count: 1"));
+    }
+
+    #[test]
+    fn native_otp_provider_debug_redacts_used_codes() {
+        let config_dir = std::env::temp_dir().join(format!(
+            "nyaterm-otp-debug-test-{}-{}",
+            std::process::id(),
+            nyaterm_core::uuid()
+        ));
+        let store = StoreRuntime::spawn(StoreConfig {
+            config_dir,
+            portable_key_path: None,
+        })
+        .expect("spawn test store")
+        .blocking_client();
+        let provider = NativeOtpProvider::new(store);
+        provider
+            .used_totp_codes
+            .lock()
+            .expect("lock used codes")
+            .insert(
+                "otp-1".to_string(),
+                TotpUseRecord {
+                    code: "123456".to_string(),
+                    time_step: 42,
+                },
+            );
+
+        let debug = format!("{provider:?}");
+        assert!(debug.contains("used_code_count: 1"));
+        assert!(!debug.contains("123456"));
+        assert!(!debug.contains("otp-1"));
     }
 }

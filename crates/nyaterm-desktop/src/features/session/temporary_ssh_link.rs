@@ -244,8 +244,7 @@ impl NyaTermApp {
             pixel_width: 0,
             pixel_height: 0,
             host_key_verifier: Some(Arc::new(NativeHostKeyVerifier {
-                config_dir: self.runtime.config_dir().to_path_buf(),
-                portable_key_path: self.runtime.portable_key_path().map(ToOwned::to_owned),
+                store: self.store_blocking_client(),
                 policy: self.settings.summary().host_key_policy.clone(),
                 prompt_broker: self.session.prompts.host_key_broker(),
             })),

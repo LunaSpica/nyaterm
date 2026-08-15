@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -7,7 +6,7 @@ use nyaterm_core::{
     AiExecutionProfile, ConnectionAuth, ConnectionType, SavedConnection, SftpCwdFollowMode,
     SftpSettings, SshAlgorithmMode, SshAlgorithmPreferences, SshProfile, resolve_ssh_terminal_type,
 };
-use nyaterm_store::ConnectionStore;
+use nyaterm_store::{ConnectionStore, StoreBlockingClient, StoreDomain};
 use nyaterm_transport::{
     LocalSessionConfig, RdpClipboardConfig, RdpDisplayConfig, RdpReconnectConfig, RdpSessionConfig,
     SerialSessionConfig, SessionKind, SshKeyAuthConfig, SshProxyConfig, SshSessionConfig,
@@ -28,8 +27,7 @@ use crate::models::SessionLaunchConfig;
 
 #[derive(Clone)]
 pub(in crate::features) struct SshSessionConfigBuildContext {
-    pub(in crate::features) config_dir: PathBuf,
-    pub(in crate::features) portable_key_path: Option<PathBuf>,
+    pub(in crate::features) store: StoreBlockingClient,
     pub(in crate::features) host_key_policy: String,
     pub(in crate::features) x11_display: String,
     pub(in crate::features) default_encoding: String,
@@ -532,8 +530,7 @@ impl NyaTermApp {
                 self.settings.summary().terminal_keep_alive_interval
             };
         SshSessionConfigBuildContext {
-            config_dir: self.runtime.config_dir().to_path_buf(),
-            portable_key_path: self.runtime.portable_key_path().map(ToOwned::to_owned),
+            store: self.store_blocking_client(),
             host_key_policy: self.settings.summary().host_key_policy.clone(),
             x11_display: self.settings.summary().x11_display.clone(),
             default_encoding: self.settings.summary().interaction_default_encoding.clone(),
@@ -653,8 +650,7 @@ pub(in crate::features) fn build_ssh_session_config_with_context(
         pixel_width: 0,
         pixel_height: 0,
         host_key_verifier: Some(Arc::new(NativeHostKeyVerifier {
-            config_dir: context.config_dir.clone(),
-            portable_key_path: context.portable_key_path.clone(),
+            store: context.store.clone(),
             policy: context.host_key_policy.clone(),
             prompt_broker: context.host_key_prompts.clone(),
         })),
@@ -688,18 +684,17 @@ fn load_ssh_connection_password_with_context(
         return Ok(None);
     };
 
-    let store = ConnectionStore::open_with_portable_key_path(
-        &context.config_dir,
-        context.portable_key_path.clone(),
-    )
-    .map_err(|error| error.to_string())?;
-    let password = store
-        .load_decrypted_password_by_id(password_id)
+    let password_id = password_id.to_string();
+    let password = context
+        .store
+        .request_fn(StoreDomain::Security, move |store| {
+            store.load_decrypted_password_by_id(&password_id)
+        })
         .map_err(|error| error.to_string())?
-        .ok_or_else(|| format!("saved password '{password_id}' was not found"))?
+        .ok_or_else(|| "saved password was not found".to_string())?
         .password
         .filter(|value| !value.trim().is_empty())
-        .ok_or_else(|| format!("saved password '{password_id}' is empty or locked"))?;
+        .ok_or_else(|| "saved password is empty or locked".to_string())?;
     Ok(Some(password))
 }
 
@@ -799,15 +794,14 @@ fn load_ssh_key_auth_with_context(
     let key_id = key_id
         .filter(|key_id| !key_id.trim().is_empty())
         .ok_or_else(|| "connection is set to key auth but has no key_id".to_string())?;
-    let store = ConnectionStore::open_with_portable_key_path(
-        &context.config_dir,
-        context.portable_key_path.clone(),
-    )
-    .map_err(|error| error.to_string())?;
-    let key = store
-        .load_decrypted_ssh_key_by_id(key_id)
+    let key_id = key_id.to_string();
+    let key = context
+        .store
+        .request_fn(StoreDomain::Security, move |store| {
+            store.load_decrypted_ssh_key_by_id(&key_id)
+        })
         .map_err(|error| error.to_string())?
-        .ok_or_else(|| format!("SSH key '{key_id}' was not found"))?;
+        .ok_or_else(|| "SSH key was not found".to_string())?;
     let key_data = key
         .key_data
         .filter(|value| !value.trim().is_empty())
@@ -831,13 +825,9 @@ fn load_proxy_config_with_context(
     else {
         return Ok(None);
     };
-    let store = ConnectionStore::open_with_portable_key_path(
-        &context.config_dir,
-        context.portable_key_path.clone(),
-    )
-    .map_err(|error| error.to_string())?;
-    let proxy = store
-        .list_proxies()
+    let proxy = context
+        .store
+        .request_fn(StoreDomain::Tunnels, |store| store.list_proxies())
         .map_err(|error| error.to_string())?
         .into_iter()
         .find(|proxy| proxy.id == proxy_id)
@@ -878,15 +868,14 @@ fn load_proxy_jump_config_with_context(
         ));
     }
     visited_proxy_jumps.push(proxy_jump_id.to_string());
-    let store = ConnectionStore::open_with_portable_key_path(
-        &context.config_dir,
-        context.portable_key_path.clone(),
-    )
-    .map_err(|error| error.to_string())?;
-    let jump_connection = store
-        .get_connection(proxy_jump_id)
+    let proxy_jump_id = proxy_jump_id.to_string();
+    let jump_connection = context
+        .store
+        .request_fn(StoreDomain::Connections, move |store| {
+            store.get_connection(&proxy_jump_id)
+        })
         .map_err(|error| error.to_string())?
-        .ok_or_else(|| format!("ProxyJump connection '{proxy_jump_id}' was not found"))?;
+        .ok_or_else(|| "ProxyJump connection was not found".to_string())?;
     if !matches!(jump_connection.config, ConnectionType::Ssh { .. }) {
         return Err("Only SSH connections can be used as jump hosts".to_string());
     }
@@ -905,7 +894,7 @@ mod tests {
         AiExecutionProfile, ConnectionAuth, ConnectionType, SavedConnection, SftpCwdFollowMode,
         SftpSettings, SshAlgorithmMode, SshAlgorithmPreferences, SshProfile, SshTerminalType, uuid,
     };
-    use nyaterm_store::ConnectionStore;
+    use nyaterm_store::{ConnectionStore, StoreConfig, StoreRuntime};
     use nyaterm_transport::SshSessionProfile;
 
     use super::{
@@ -928,9 +917,14 @@ mod tests {
     }
 
     fn test_ssh_build_context(config_dir: PathBuf) -> SshSessionConfigBuildContext {
-        SshSessionConfigBuildContext {
+        let store = StoreRuntime::spawn(StoreConfig {
             config_dir: config_dir.clone(),
             portable_key_path: None,
+        })
+        .expect("spawn test store")
+        .blocking_client();
+        SshSessionConfigBuildContext {
+            store: store.clone(),
             host_key_policy: "accept".to_string(),
             x11_display: String::new(),
             default_encoding: "UTF-8".to_string(),
@@ -939,7 +933,7 @@ mod tests {
             host_key_prompts: Arc::new(HostKeyPromptBroker::default()),
             credential_prompts: Arc::new(CredentialPromptBroker::default()),
             agent_prompts: Arc::new(AgentPromptBroker::default()),
-            otp_provider: Arc::new(NativeOtpProvider::new(config_dir, None)),
+            otp_provider: Arc::new(NativeOtpProvider::new(store)),
         }
     }
 
