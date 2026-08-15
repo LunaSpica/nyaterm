@@ -12,7 +12,6 @@ pub mod natural_order;
 pub mod portable_snapshot;
 pub mod runtime;
 pub mod session_import;
-pub mod storage;
 pub mod terminal_file_drop;
 pub mod terminal_input_fanout;
 pub mod terminal_input_tracker;
@@ -111,10 +110,6 @@ pub use runtime::{AppRuntime, RuntimeMode};
 pub use session_import::{
     PreparedSessionConnection, PreparedSessionImport, SessionImportError, prepare_session_import,
     prepare_termius_session_import,
-};
-pub use storage::{
-    ConfigBackupInfo, ConnectionStore, KnownHostCheck, RdpCertificateMetadata,
-    RemoteFileBackendCache, RemoteFileBackendCacheEntry, StorageError,
 };
 pub use terminal_file_drop::{
     format_local_terminal_drop_input, quote_local_path, terminal_drop_overlay_copy,

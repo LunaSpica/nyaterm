@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, UNIX_EPOCH};
 
 use super::{
@@ -17,9 +17,115 @@ use super::{
     snippet_remote_filename, snippet_remote_path,
 };
 use crate::{
-    AiExecutionProfile, CloudLocalStore, CloudSyncBackupInfo, CloudSyncResult, ConnectionStore,
-    ConnectionType, PortableSnapshotKind, RawPortableSnapshot, SavedConnection, SessionsConfig,
+    AiExecutionProfile, CloudLocalStore, CloudSyncBackupInfo, CloudSyncResult, ConnectionType,
+    PortableSnapshotKind, RawPortableSnapshot, SavedConnection, SessionsConfig,
 };
+
+#[derive(Default, Clone)]
+struct TestLocalData {
+    sessions: SessionsConfig,
+    cloud_sync_state: CloudSyncState,
+}
+
+fn test_local_data() -> &'static Mutex<HashMap<PathBuf, TestLocalData>> {
+    static DATA: OnceLock<Mutex<HashMap<PathBuf, TestLocalData>>> = OnceLock::new();
+    DATA.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+struct ConnectionStore {
+    config_dir: PathBuf,
+}
+
+impl ConnectionStore {
+    fn open(config_dir: impl AsRef<Path>) -> Result<Self, std::io::Error> {
+        Self::open_with_portable_key_path(config_dir, None)
+    }
+
+    fn open_with_portable_key_path(
+        config_dir: impl AsRef<Path>,
+        _portable_key_path: Option<PathBuf>,
+    ) -> Result<Self, std::io::Error> {
+        let config_dir = config_dir.as_ref().to_path_buf();
+        test_local_data()
+            .lock()
+            .expect("test local store lock")
+            .entry(config_dir.clone())
+            .or_default();
+        Ok(Self { config_dir })
+    }
+
+    fn replace_sessions(&self, sessions: &SessionsConfig) -> Result<(), std::io::Error> {
+        test_local_data()
+            .lock()
+            .expect("test local store lock")
+            .entry(self.config_dir.clone())
+            .or_default()
+            .sessions = sessions.clone();
+        Ok(())
+    }
+
+    fn load_sessions(&self) -> Result<SessionsConfig, std::io::Error> {
+        Ok(test_local_data()
+            .lock()
+            .expect("test local store lock")
+            .get(&self.config_dir)
+            .cloned()
+            .unwrap_or_default()
+            .sessions)
+    }
+
+    fn save_cloud_sync_state(&self, state: &CloudSyncState) -> Result<(), std::io::Error> {
+        test_local_data()
+            .lock()
+            .expect("test local store lock")
+            .entry(self.config_dir.clone())
+            .or_default()
+            .cloud_sync_state = state.clone();
+        Ok(())
+    }
+
+    fn load_cloud_sync_state(&self) -> Result<CloudSyncState, std::io::Error> {
+        Ok(test_local_data()
+            .lock()
+            .expect("test local store lock")
+            .get(&self.config_dir)
+            .cloned()
+            .unwrap_or_default()
+            .cloud_sync_state)
+    }
+
+    fn build_raw_portable_snapshot(
+        &self,
+        kind: PortableSnapshotKind,
+        device_id: String,
+        app_version: String,
+    ) -> Result<RawPortableSnapshot, std::io::Error> {
+        let mut snapshot = match kind {
+            PortableSnapshotKind::Sync => RawPortableSnapshot::sync(device_id, app_version),
+            PortableSnapshotKind::Backup => RawPortableSnapshot::backup(device_id, app_version),
+        };
+        snapshot.entities.insert(
+            "sessions".to_string(),
+            serde_json::to_string(&self.load_sessions()?).map_err(std::io::Error::other)?,
+        );
+        Ok(snapshot)
+    }
+
+    fn apply_raw_portable_snapshot(
+        &self,
+        snapshot: &RawPortableSnapshot,
+    ) -> Result<(), std::io::Error> {
+        let sessions = snapshot
+            .entities
+            .get("sessions")
+            .ok_or_else(|| std::io::Error::other("missing sessions"))?;
+        self.replace_sessions(&serde_json::from_str(sessions).map_err(std::io::Error::other)?)
+    }
+
+    fn db_path(&self) -> PathBuf {
+        self.config_dir.join("nyaterm.redb")
+    }
+}
 
 struct TestLocalStore;
 
