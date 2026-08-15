@@ -207,12 +207,11 @@ pub(crate) fn terminal_expensive_interactions_enabled(
 }
 
 /// Unified paint policy for terminal surfaces (single decision point for
-/// decorations / action links / command marks under pressure).
+/// decorations and action links under pressure).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct EffectiveTerminalPaintPolicy {
     pub enhanced_decorations: bool,
     pub expensive_interactions: bool,
-    pub include_command_marks: bool,
 }
 
 impl EffectiveTerminalPaintPolicy {
@@ -233,11 +232,9 @@ impl EffectiveTerminalPaintPolicy {
             output_burst_bytes,
             performance_mode,
         );
-        let include_command_marks = is_active && enhanced_decorations && !runtime_output_pressure;
         Self {
             enhanced_decorations,
             expensive_interactions,
-            include_command_marks,
         }
     }
 }

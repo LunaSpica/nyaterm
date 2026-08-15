@@ -484,6 +484,24 @@ impl ScreenLineState {
             let _ = retained.split_off(&after_last);
         }
         self.metadata = retained;
+        match (self.active_input_start, self.active_input_end) {
+            (Some(start), Some(end)) if start <= end => {
+                let retained_start = start.max(first);
+                let retained_end = end.min(last);
+                if retained_start <= retained_end {
+                    self.active_input_start = Some(retained_start);
+                    self.active_input_end = Some(retained_end);
+                } else {
+                    self.active_input_start = None;
+                    self.active_input_end = None;
+                }
+            }
+            (None, None) => {}
+            _ => {
+                self.active_input_start = None;
+                self.active_input_end = None;
+            }
+        }
         before.saturating_sub(self.metadata.len())
     }
 
@@ -531,6 +549,8 @@ pub struct TerminalCore {
     last_signature_scan_count: usize,
     #[cfg(test)]
     last_metadata_prune_count: usize,
+    #[cfg(test)]
+    last_shell_input_commit_count: usize,
 }
 
 pub type TerminalScreen = TerminalCore;
@@ -705,6 +725,8 @@ impl TerminalCore {
             last_signature_scan_count: 0,
             #[cfg(test)]
             last_metadata_prune_count: 0,
+            #[cfg(test)]
+            last_shell_input_commit_count: 0,
         }
     }
 
@@ -743,6 +765,10 @@ impl TerminalCore {
         if self.cols != old_cols {
             self.primary_lines.metadata.clear();
             self.alternate_lines.metadata.clear();
+            self.primary_lines.active_input_start = None;
+            self.primary_lines.active_input_end = None;
+            self.alternate_lines.active_input_start = None;
+            self.alternate_lines.active_input_end = None;
             self.primary_lines.epoch = self.primary_lines.epoch.saturating_add(1);
             self.alternate_lines.epoch = self.alternate_lines.epoch.saturating_add(1);
             self.graphics.clear_screen(GraphicsScreenKind::Primary);
@@ -1650,8 +1676,25 @@ impl TerminalCore {
     }
 
     fn commit_shell_input_range(&mut self, start: i64, end: i64) {
+        let topmost = self.term.topmost_line();
+        let bottommost = self.term.bottommost_line();
+        let state = self.active_line_state();
+        let retained_start = state.logical_line(topmost);
+        let retained_end = state.logical_line(bottommost);
+        let start = start.max(retained_start);
+        let end = end.min(retained_end);
         if end < start {
+            #[cfg(test)]
+            {
+                self.last_shell_input_commit_count = 0;
+            }
             return;
+        }
+        #[cfg(test)]
+        {
+            self.last_shell_input_commit_count = usize::try_from(end - start)
+                .unwrap_or(usize::MAX)
+                .saturating_add(1);
         }
         let state = self.active_line_state_mut();
         for logical_line in start..=end {

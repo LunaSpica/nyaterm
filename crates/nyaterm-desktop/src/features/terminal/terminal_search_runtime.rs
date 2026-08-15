@@ -781,7 +781,6 @@ mod tests {
                 frame_action_links: &[],
                 include_action_links: false,
                 include_hyperlinks: false,
-                include_command_marks: false,
             },
         );
         let markers = filtered

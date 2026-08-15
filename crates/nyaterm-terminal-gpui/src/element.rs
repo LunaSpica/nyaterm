@@ -46,8 +46,6 @@ pub struct TerminalLineDecorations {
     pub search_ranges: Vec<(usize, usize)>,
     pub active_search_ranges: Vec<(usize, usize)>,
     pub link_ranges: Vec<(usize, usize)>,
-    /// OSC 133 shell-integration mark for this viewport row.
-    pub command_mark: Option<nyaterm_terminal::ShellCommandMark>,
 }
 
 /// Dynamic absolute-buffer selection. Endpoints are inclusive terminal cells.

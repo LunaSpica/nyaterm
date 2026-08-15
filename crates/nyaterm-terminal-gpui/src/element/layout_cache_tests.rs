@@ -4,14 +4,14 @@ use std::sync::Arc;
 
 use gpui::{Bounds, ShapedLine, SharedString, font, point, px, rgb, size};
 use nyaterm_core::ResolvedKeywordHighlightRule;
-use nyaterm_terminal::{TerminalScreen, TerminalSnapshot};
+use nyaterm_terminal::{ShellInputLineKind, TerminalScreen, TerminalSnapshot};
 
 use super::{
     NyaTerminalElement, NyaTerminalLayoutCache, TERMINAL_LAYOUT_CACHE_ROW_CAP,
     TerminalGridSelection, TerminalKeywordLayoutState, TerminalLineDecorations,
     TerminalRowBackgroundRange, TerminalRowUnderlineRange, append_padded_wide_cells,
     hash_styled_spans, pad_wide_cells, push_dynamic_decoration_backgrounds,
-    push_dynamic_link_underlines, push_dynamic_selection_background,
+    push_dynamic_link_underlines, push_dynamic_selection_background, push_terminal_zebra_stripes,
     terminal_background_ranges_for_spans, terminal_cursor_cell_hidden,
     terminal_glyph_decorations_needed, terminal_layout_height_px, terminal_layout_prefetch_row,
     terminal_link_underline_color, terminal_plain_row_fast_path, terminal_row_layout_key,
@@ -417,13 +417,106 @@ fn row_layout_key_ignores_dynamic_overlay_decorations() {
     let base = TerminalLineDecorations::default();
     let dynamic = TerminalLineDecorations {
         search_ranges: vec![(0, 2)],
-        command_mark: Some(nyaterm_terminal::ShellCommandMark::Prompt),
         ..TerminalLineDecorations::default()
     };
 
     assert_eq!(
         element.row_layout_key(0, "same", None, &base),
         element.row_layout_key(0, "same", None, &dynamic)
+    );
+}
+
+#[test]
+fn zebra_state_does_not_invalidate_row_shaping() {
+    let mut plain_snapshot = TerminalScreen::default().snapshot();
+    edit_snapshot_row(&mut plain_snapshot, 0, |row| {
+        row.text = "same".to_string();
+        row.signature = 7;
+    });
+    let mut striped_snapshot = plain_snapshot.clone();
+    edit_snapshot_row(&mut striped_snapshot, 0, |row| {
+        row.shell_input = Some(ShellInputLineKind::Active);
+    });
+    let make_element = |snapshot| {
+        NyaTerminalElement::new(
+            Arc::new(snapshot),
+            Arc::new(Vec::new()),
+            Vec::new(),
+            false,
+            "block",
+            8.0,
+            16.0,
+            nyaterm_ui::theme_palette("github-dark"),
+            "monospace".to_string(),
+            14.0,
+            400.0,
+            700.0,
+        )
+    };
+    let plain = make_element(plain_snapshot);
+    let striped = make_element(striped_snapshot);
+    let decorations = TerminalLineDecorations::default();
+    let plain_key = plain.row_layout_key(0, "same", None, &decorations);
+    let striped_key = striped.row_layout_key(0, "same", None, &decorations);
+    assert_eq!(plain_key, striped_key);
+
+    let mut cache = NyaTerminalLayoutCache::default();
+    let (_, did_shape, _) = cache.paint_row(0, plain_key, || {
+        (
+            Arc::new(ShapedLine::default()),
+            std::time::Duration::ZERO,
+            1,
+            Vec::new(),
+            Vec::new(),
+        )
+    });
+    assert!(did_shape);
+    let (_, did_shape, _) = cache.paint_row(0, striped_key, || {
+        panic!("zebra-only changes must reuse the shaped row")
+    });
+    assert!(!did_shape);
+    assert_eq!(cache.shape_calls, 1);
+}
+
+#[test]
+fn zebra_stripes_merge_input_rows_and_target_row_takes_priority() {
+    let mut snapshot = TerminalScreen::new(8, 4).viewport_snapshot(0);
+    for row_index in 0..3 {
+        edit_snapshot_row(&mut snapshot, row_index, |row| {
+            row.shell_input = Some(ShellInputLineKind::Submitted);
+        });
+    }
+    let target_line = snapshot.rows()[1].line_id.expect("stable line id");
+    let palette = nyaterm_ui::theme_palette("github-dark");
+    let geometry = TerminalPaintGeometry {
+        bounds: Bounds::new(point(px(0.), px(0.)), size(px(64.), px(64.))),
+        visual_y_offset: 0.0,
+        cell_width: 8.0,
+        cell_height: 16.0,
+    };
+    let mut stripes = Vec::new();
+
+    push_terminal_zebra_stripes(&snapshot, 0..3, None, palette, geometry, &mut stripes);
+    assert_eq!(stripes.len(), 1);
+    assert_eq!(stripes[0].bounds.size.height, px(48.0));
+    assert_eq!(
+        stripes[0].background,
+        gpui::rgba((palette.terminal_fg << 8) | 0x0f).into()
+    );
+
+    stripes.clear();
+    push_terminal_zebra_stripes(
+        &snapshot,
+        0..3,
+        Some(target_line),
+        palette,
+        geometry,
+        &mut stripes,
+    );
+    assert_eq!(stripes.len(), 3);
+    assert_eq!(
+        stripes[1].background,
+        gpui::rgba((palette.accent << 8) | 0x24).into()
     );
 }
 
@@ -1108,7 +1201,6 @@ fn terminal_glyph_decorations_detects_glyph_only_work() {
     ));
 
     let mut decorations = TerminalLineDecorations {
-        command_mark: Some(nyaterm_terminal::ShellCommandMark::Prompt),
         ..TerminalLineDecorations::default()
     };
     assert!(!terminal_glyph_decorations_needed(&decorations));
@@ -1161,10 +1253,6 @@ fn plain_row_fast_path_rejects_enhanced_rows() {
         color: "#ff0000".to_string(),
         enabled: true,
     };
-    let command_mark = TerminalLineDecorations {
-        command_mark: Some(nyaterm_terminal::ShellCommandMark::Prompt),
-        ..TerminalLineDecorations::default()
-    };
     let active_search = TerminalLineDecorations {
         active_search_ranges: vec![(0, 2)],
         ..TerminalLineDecorations::default()
@@ -1180,7 +1268,6 @@ fn plain_row_fast_path_rejects_enhanced_rows() {
         &[keyword_rule],
         &TerminalLineDecorations::default()
     ));
-    assert!(terminal_plain_row_fast_path(None, &[], &command_mark));
     assert!(!terminal_plain_row_fast_path(None, &[], &active_search));
 }
 

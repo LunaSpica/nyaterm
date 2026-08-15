@@ -368,10 +368,7 @@ fn terminal_scroll_text_first_decorations(
     frame_action_links: &[TerminalFrameActionLinks],
     include_action_links: bool,
     include_hyperlinks: bool,
-    include_command_marks: bool,
 ) -> Vec<TerminalLineDecorations> {
-    let has_command_marks =
-        include_command_marks && snapshot.rows().iter().any(|row| row.command_mark.is_some());
     let mut search_ranges_by_line: HashMap<usize, Vec<(usize, usize)>> = HashMap::new();
     if let Some(search_matches) = search_matches {
         let (abs_start, abs_end) =
@@ -400,7 +397,6 @@ fn terminal_scroll_text_first_decorations(
         has_search_decorations,
         has_frame_action_links,
         has_hyperlinks,
-        has_command_marks,
     ) {
         return Vec::new();
     }
@@ -415,7 +411,6 @@ fn terminal_scroll_text_first_decorations(
             frame_action_links,
             include_action_links,
             include_hyperlinks,
-            include_command_marks,
         },
     )
 }
@@ -779,9 +774,6 @@ impl NyaTermApp {
             &frame_action_links,
             action_links_enabled,
             action_links_enabled,
-            is_active
-                && !input_latency_active
-                && !self.settings.summary().terminal_low_latency_mode,
         );
         let has_action_link_decorations =
             crate::features::terminal::terminal_surface::terminal_action_links_have_ranges_for_snapshot(
@@ -1243,9 +1235,6 @@ impl NyaTermApp {
             );
         let has_hyperlinks =
             action_links_enabled && snapshot.rows().iter().any(|row| !row.hyperlinks.is_empty());
-        let include_command_marks = paint_policy.include_command_marks;
-        let has_command_marks =
-            include_command_marks && snapshot.rows().iter().any(|row| row.command_mark.is_some());
         let decorations_started_at = Instant::now();
         let decorations =
             if crate::features::terminal::terminal_surface::terminal_line_decorations_needed(
@@ -1253,7 +1242,6 @@ impl NyaTermApp {
                 has_search_decorations,
                 has_frame_action_links,
                 has_hyperlinks,
-                has_command_marks,
             ) {
                 let include_action_links = action_links_enabled;
                 let include_hyperlinks = action_links_enabled;
@@ -1265,7 +1253,6 @@ impl NyaTermApp {
                         frame_action_links: &frame_action_links,
                         include_action_links,
                         include_hyperlinks,
-                        include_command_marks,
                     };
                 let decoration_cache_key = crate::features::terminal::terminal_surface::terminal_line_decorations_cache_key(
                     &snapshot,

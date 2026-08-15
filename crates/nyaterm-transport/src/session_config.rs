@@ -214,6 +214,22 @@ impl SshSessionConfig {
             SftpCwdFollowMode::Off
         }
     }
+
+    pub fn effective_terminal_shell_integration(&self) -> bool {
+        self.terminal_shell_integration && !self.is_network_device()
+    }
+
+    pub fn shell_integration_detection_timeout_ms(
+        &self,
+        cwd_follow_mode: SftpCwdFollowMode,
+    ) -> u64 {
+        let configured = self.sftp.shell_detection_timeout_ms.clamp(100, 60_000);
+        if matches!(cwd_follow_mode, SftpCwdFollowMode::Off) {
+            configured.min(1_000)
+        } else {
+            configured
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -550,6 +566,7 @@ mod tests {
         assert!(!config.remote_file_browser_enabled());
         assert!(!config.remote_stats_enabled());
         assert_eq!(config.effective_cwd_follow_mode(), SftpCwdFollowMode::Off);
+        assert!(!config.effective_terminal_shell_integration());
         assert!(config.sftp.enabled);
         assert_eq!(config.sftp.cwd_follow_mode, SftpCwdFollowMode::RcFile);
     }
@@ -562,6 +579,15 @@ mod tests {
         assert_eq!(
             config.effective_cwd_follow_mode(),
             SftpCwdFollowMode::ShellIntegration
+        );
+        assert!(config.effective_terminal_shell_integration());
+        assert_eq!(
+            config.shell_integration_detection_timeout_ms(SftpCwdFollowMode::Off),
+            1_000
+        );
+        assert_eq!(
+            config.shell_integration_detection_timeout_ms(SftpCwdFollowMode::ShellIntegration),
+            3_000
         );
     }
 }

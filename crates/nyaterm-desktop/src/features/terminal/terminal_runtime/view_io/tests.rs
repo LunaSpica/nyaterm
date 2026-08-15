@@ -671,7 +671,6 @@ fn terminal_scroll_text_first_decorations_keep_search_overlay_without_links() {
         &[],
         true,
         true,
-        false,
     );
 
     assert_eq!(decorations.len(), snapshot.row_count());
@@ -703,7 +702,6 @@ fn terminal_scroll_text_first_decorations_include_links_for_current_snapshot() {
         std::slice::from_ref(&links),
         true,
         true,
-        false,
     );
 
     assert_eq!(decorations.len(), snapshot.row_count());
@@ -735,7 +733,6 @@ fn terminal_scroll_text_first_decorations_map_covering_action_link_window() {
         std::slice::from_ref(&links),
         true,
         true,
-        false,
     );
 
     assert_eq!(decorations.len(), snapshot.row_count());
@@ -772,7 +769,6 @@ fn terminal_scroll_text_first_decorations_keep_partially_covered_bottom_links() 
         &[top_links, bottom_links],
         true,
         true,
-        false,
     );
 
     assert_eq!(decorations.len(), snapshot.row_count());

@@ -13,7 +13,6 @@ pub(in crate::features) struct TerminalDecorationSources<'a> {
     pub frame_action_links: &'a [TerminalFrameActionLinks],
     pub include_action_links: bool,
     pub include_hyperlinks: bool,
-    pub include_command_marks: bool,
 }
 
 pub(in crate::features) fn terminal_snapshot_absolute_range(
@@ -46,7 +45,6 @@ pub(in crate::features) fn terminal_line_decorations_cache_key(
         frame_action_links,
         include_action_links,
         include_hyperlinks,
-        include_command_marks,
     } = *sources;
     let mut hasher = DefaultHasher::new();
     snapshot.row_count().hash(&mut hasher);
@@ -58,7 +56,6 @@ pub(in crate::features) fn terminal_line_decorations_cache_key(
     hash_ranges_by_line(selected_occurrence_ranges_by_line, &mut hasher);
     include_action_links.hash(&mut hasher);
     include_hyperlinks.hash(&mut hasher);
-    include_command_marks.hash(&mut hasher);
     hash_ranges_by_line(search_ranges_by_line, &mut hasher);
     hash_ranges_by_line(active_search_ranges_by_line, &mut hasher);
     if include_action_links {
@@ -78,11 +75,6 @@ pub(in crate::features) fn terminal_line_decorations_cache_key(
                 span.end_col.hash(&mut hasher);
                 span.uri.hash(&mut hasher);
             }
-        }
-    }
-    if include_command_marks {
-        for row in snapshot.rows() {
-            row.command_mark.hash(&mut hasher);
         }
     }
     hasher.finish()
@@ -224,7 +216,6 @@ pub(in crate::features) fn build_terminal_line_decorations(
         frame_action_links,
         include_action_links,
         include_hyperlinks,
-        include_command_marks,
     } = *sources;
     let line_count = snapshot.row_count();
     let mut line_decorations = Vec::with_capacity(line_count);
@@ -256,9 +247,6 @@ pub(in crate::features) fn build_terminal_line_decorations(
             .get(&line_index)
             .map(|ranges| ranges.as_slice())
             .unwrap_or(&empty_ranges);
-        let command_mark = include_command_marks
-            .then(|| snapshot.row(line_index).and_then(|row| row.command_mark))
-            .flatten();
         line_decorations.push(TerminalLineDecorations {
             selected_occurrence_ranges: selected_occurrence_ranges_by_line
                 .get(&line_index)
@@ -268,7 +256,6 @@ pub(in crate::features) fn build_terminal_line_decorations(
             search_ranges: line_search_ranges.to_vec(),
             active_search_ranges: line_active_search_ranges.to_vec(),
             link_ranges,
-            command_mark,
         });
     }
     line_decorations
@@ -279,13 +266,8 @@ pub(in crate::features) fn terminal_line_decorations_needed(
     has_search_decorations: bool,
     has_frame_action_links: bool,
     has_hyperlinks: bool,
-    has_command_marks: bool,
 ) -> bool {
-    has_selected_occurrences
-        || has_search_decorations
-        || has_frame_action_links
-        || has_hyperlinks
-        || has_command_marks
+    has_selected_occurrences || has_search_decorations || has_frame_action_links || has_hyperlinks
 }
 
 #[cfg(test)]
@@ -324,7 +306,6 @@ mod tests {
                 frame_action_links: std::slice::from_ref(&links),
                 include_action_links: true,
                 include_hyperlinks: true,
-                include_command_marks: false,
             },
         );
 
@@ -358,7 +339,6 @@ mod tests {
                 frame_action_links: std::slice::from_ref(&links),
                 include_action_links: true,
                 include_hyperlinks: false,
-                include_command_marks: false,
             },
         );
 
@@ -404,7 +384,6 @@ mod tests {
                 frame_action_links: &[top_links, bottom_links],
                 include_action_links: true,
                 include_hyperlinks: false,
-                include_command_marks: false,
             },
         );
 
@@ -438,7 +417,6 @@ mod tests {
                 frame_action_links: &[links],
                 include_action_links: true,
                 include_hyperlinks: false,
-                include_command_marks: false,
             },
         );
 
@@ -489,7 +467,6 @@ mod tests {
                 frame_action_links: &sources,
                 include_action_links: true,
                 include_hyperlinks: false,
-                include_command_marks: false,
             },
         );
 

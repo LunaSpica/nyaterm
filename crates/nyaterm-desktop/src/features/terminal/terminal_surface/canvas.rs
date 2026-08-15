@@ -427,17 +427,11 @@ impl NyaTermApp {
                 && terminal_action_links_have_ranges_for_snapshot(&snapshot, &frame_action_links);
             let has_hyperlinks = action_links_enabled
                 && snapshot.rows().iter().any(|row| !row.hyperlinks.is_empty());
-            let include_command_marks = is_active
-                && render_profile.enhanced_decorations_enabled()
-                && !render_output_pressure;
-            let has_command_marks = include_command_marks
-                && snapshot.rows().iter().any(|row| row.command_mark.is_some());
             let needs_line_decorations = terminal_line_decorations_needed(
                 has_selected_occurrences,
                 has_search_decorations,
                 has_frame_action_links,
                 has_hyperlinks,
-                has_command_marks,
             );
             let line_decorations = if needs_line_decorations {
                 let include_action_links = action_links_enabled;
@@ -449,7 +443,6 @@ impl NyaTermApp {
                     frame_action_links: &frame_action_links,
                     include_action_links,
                     include_hyperlinks,
-                    include_command_marks,
                 };
                 let decoration_cache_key =
                     terminal_line_decorations_cache_key(&snapshot, &decoration_sources);
@@ -1419,27 +1412,16 @@ mod tests {
     #[test]
     fn terminal_line_decorations_skip_plain_viewport() {
         assert!(!terminal_line_decorations_needed(
-            false, false, false, false, false
+            false, false, false, false
         ));
     }
 
     #[test]
     fn terminal_line_decorations_keep_interactive_marks() {
-        assert!(terminal_line_decorations_needed(
-            true, false, false, false, false
-        ));
-        assert!(terminal_line_decorations_needed(
-            false, true, false, false, false
-        ));
-        assert!(terminal_line_decorations_needed(
-            false, false, true, false, false
-        ));
-        assert!(terminal_line_decorations_needed(
-            false, false, false, true, false
-        ));
-        assert!(terminal_line_decorations_needed(
-            false, false, false, false, true
-        ));
+        assert!(terminal_line_decorations_needed(true, false, false, false));
+        assert!(terminal_line_decorations_needed(false, true, false, false));
+        assert!(terminal_line_decorations_needed(false, false, true, false));
+        assert!(terminal_line_decorations_needed(false, false, false, true));
     }
 
     #[test]
@@ -1501,7 +1483,6 @@ mod tests {
                 frame_action_links: std::slice::from_ref(&links),
                 include_action_links: true,
                 include_hyperlinks: false,
-                include_command_marks: false,
             },
         );
         links.cell_ranges_by_line[0] = vec![(2, 5)];
@@ -1514,7 +1495,6 @@ mod tests {
                 frame_action_links: std::slice::from_ref(&links),
                 include_action_links: true,
                 include_hyperlinks: false,
-                include_command_marks: false,
             },
         );
 
@@ -1522,35 +1502,13 @@ mod tests {
     }
 
     #[test]
-    fn terminal_line_decorations_cache_key_tracks_command_mark_mode() {
-        let snapshot = TerminalScreen::default().viewport_snapshot(0);
-        let search = HashMap::new();
-        let active = HashMap::new();
-        let without_marks = terminal_line_decorations_cache_key(
-            &snapshot,
-            &TerminalDecorationSources {
-                selected_occurrence_ranges_by_line: &HashMap::new(),
-                search_ranges_by_line: &search,
-                active_search_ranges_by_line: &active,
-                frame_action_links: &[],
-                include_action_links: false,
-                include_hyperlinks: false,
-                include_command_marks: false,
-            },
-        );
-        let with_marks = terminal_line_decorations_cache_key(
-            &snapshot,
-            &TerminalDecorationSources {
-                selected_occurrence_ranges_by_line: &HashMap::new(),
-                search_ranges_by_line: &search,
-                active_search_ranges_by_line: &active,
-                frame_action_links: &[],
-                include_action_links: false,
-                include_hyperlinks: false,
-                include_command_marks: true,
-            },
-        );
-
-        assert_ne!(without_marks, with_marks);
+    fn command_mark_only_snapshot_does_not_need_line_decorations() {
+        let mut screen = TerminalScreen::default();
+        screen.advance(b"prompt\x1b]133;A\x07");
+        let snapshot = screen.viewport_snapshot(0);
+        assert!(snapshot.rows().iter().any(|row| row.command_mark.is_some()));
+        assert!(!terminal_line_decorations_needed(
+            false, false, false, false
+        ));
     }
 }

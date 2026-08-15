@@ -1523,7 +1523,6 @@ fn empty_selection_press_and_release_preserve_action_link_decorations() {
         search_ranges: vec![(1, 2)],
         active_search_ranges: vec![(2, 3)],
         link_ranges: vec![(3, 7)],
-        command_mark: Some(nyaterm_terminal::ShellCommandMark::Prompt),
         ..TerminalLineDecorations::default()
     }];
     surface.set_decorations_and_keywords(decorations.clone(), Arc::new(Vec::new()), true, "block");

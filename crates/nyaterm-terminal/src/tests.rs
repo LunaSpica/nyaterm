@@ -1,7 +1,7 @@
 use std::sync::{Arc, Weak};
 
 use super::{
-    CursorShape, GraphicsProtocol, ShellCommandMark, ShellInputLineKind,
+    CursorShape, GraphicsProtocol, ScreenLineState, ShellCommandMark, ShellInputLineKind,
     TERMINAL_SNAPSHOT_ROW_CACHE_LIMIT, TerminalOutputDecoder, TerminalScreen,
     TerminalSearchDirection, TerminalSearchQuery, TerminalSnapshot, TerminalSnapshotRowCache,
     TerminalSnapshotRowCacheEntry, TerminalSnapshotRowCacheKey, alternate_scroll_key_bytes,
@@ -314,6 +314,86 @@ fn shell_input_ids_change_after_reset_and_alternate_screen_does_not_mark_rows() 
     screen.clear();
     let after = screen.snapshot().rows().iter().find_map(|row| row.line_id);
     assert!(after.is_none() || after != before);
+}
+
+#[test]
+fn shell_input_commit_is_bounded_to_retained_scrollback() {
+    let mut screen = TerminalScreen::new(12, 3);
+    screen.set_scrollback_limit(5);
+    screen.advance(b"prompt \x1b]133;B\x07input");
+    for line in 0..100 {
+        screen.advance(format!("\r\nline-{line}").as_bytes());
+    }
+    screen.advance(b"\x1b]133;C\x07");
+
+    assert!(screen.last_shell_input_commit_count <= screen.total_rows());
+    assert!(screen.primary_lines.metadata.len() <= screen.total_rows());
+}
+
+#[test]
+fn active_shell_input_range_is_clamped_or_closed_with_retained_rows() {
+    let mut partially_retained = ScreenLineState {
+        logical_origin: 10,
+        active_input_start: Some(5),
+        active_input_end: Some(12),
+        ..ScreenLineState::default()
+    };
+    partially_retained.retain_physical_range(
+        alacritty_terminal::index::Line(-2),
+        alacritty_terminal::index::Line(2),
+    );
+    assert_eq!(partially_retained.active_input_start, Some(8));
+    assert_eq!(partially_retained.active_input_end, Some(12));
+
+    let mut evicted = ScreenLineState {
+        logical_origin: 10,
+        active_input_start: Some(1),
+        active_input_end: Some(7),
+        ..ScreenLineState::default()
+    };
+    evicted.retain_physical_range(
+        alacritty_terminal::index::Line(-2),
+        alacritty_terminal::index::Line(2),
+    );
+    assert_eq!(evicted.active_input_start, None);
+    assert_eq!(evicted.active_input_end, None);
+
+    let mut malformed = ScreenLineState {
+        logical_origin: 10,
+        active_input_start: Some(12),
+        active_input_end: Some(8),
+        ..ScreenLineState::default()
+    };
+    malformed.retain_physical_range(
+        alacritty_terminal::index::Line(-2),
+        alacritty_terminal::index::Line(2),
+    );
+    assert_eq!(malformed.active_input_start, None);
+    assert_eq!(malformed.active_input_end, None);
+}
+
+#[test]
+fn width_reflow_closes_active_shell_input_and_invalidates_line_ids() {
+    let mut screen = TerminalScreen::new(12, 3);
+    screen.advance(b"prompt \x1b]133;B\x07one two three");
+    let before_ids = screen
+        .snapshot()
+        .rows()
+        .iter()
+        .filter_map(|row| row.line_id)
+        .collect::<Vec<_>>();
+
+    screen.resize(6, 4);
+    let reflowed = screen.snapshot();
+
+    assert!(reflowed.rows().iter().all(|row| row.shell_input.is_none()));
+    assert!(
+        reflowed
+            .rows()
+            .iter()
+            .filter_map(|row| row.line_id)
+            .all(|line_id| !before_ids.contains(&line_id))
+    );
 }
 
 #[test]

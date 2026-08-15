@@ -151,8 +151,8 @@ pub(crate) use remote_process::{
 };
 #[cfg(test)]
 use ssh_shell_integration::{
-    OscStripper, activation_script, bytes_after_ssh_ready_marker, persistent_script,
-    rc_managed_block, ssh_shell_injection_script, strip_ssh_ready_markers,
+    OscStripper, ShellIntegrationMode, activation_script, bytes_after_ssh_ready_marker,
+    persistent_script, rc_managed_block, ssh_shell_injection_script, strip_ssh_ready_markers,
 };
 use ssh_shell_integration::{
     ShellKind, SshIntegrationOutput, SshShellIntegrationState, build_legacy_ssh_ready_marker,
@@ -1954,20 +1954,24 @@ async fn open_ssh_shell_from_pending(
         "SSH shell accepted"
     );
     let cwd_follow_mode = config.effective_cwd_follow_mode();
-    let shell_kind = if config.terminal_shell_integration
-        || !matches!(cwd_follow_mode, SftpCwdFollowMode::Off)
-    {
-        detect_ssh_shell_type(&handle, config.sftp.shell_detection_timeout_ms).await
-    } else {
-        None
-    };
+    let terminal_shell_integration = config.effective_terminal_shell_integration();
+    let shell_kind =
+        if terminal_shell_integration || !matches!(cwd_follow_mode, SftpCwdFollowMode::Off) {
+            detect_ssh_shell_type(
+                &handle,
+                config.shell_integration_detection_timeout_ms(cwd_follow_mode),
+            )
+            .await
+        } else {
+            None
+        };
     let injection_script = match shell_kind {
         Some(kind) => {
             build_ssh_shell_integration_script(
                 &handle,
                 kind,
                 &ready_marker,
-                config.terminal_shell_integration,
+                terminal_shell_integration,
                 cwd_follow_mode,
                 config.sftp.shell_detection_timeout_ms,
             )

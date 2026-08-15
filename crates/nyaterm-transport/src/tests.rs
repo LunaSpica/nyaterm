@@ -635,8 +635,12 @@ fn ssh_host_identifier_uses_openssh_port_format() {
 #[test]
 fn ssh_shell_integration_script_emits_osc7_and_ready_marker() {
     let ready = super::build_ssh_ready_marker("session-1");
-    let script =
-        super::ssh_shell_injection_script(super::ShellKind::Bash, &ready).expect("bash script");
+    let script = super::ssh_shell_injection_script(
+        super::ShellKind::Bash,
+        &ready,
+        super::ShellIntegrationMode::Full,
+    )
+    .expect("bash script");
 
     assert!(script.contains("printf '\\033]7;file://%s%s\\007'"));
     assert!(script.contains("NyaTermCommand"));
@@ -656,7 +660,9 @@ fn ssh_shell_scripts_emit_complete_standard_osc133_lifecycle() {
         assert!(script.contains("133;B"), "missing B for {shell:?}");
         assert!(script.contains("133;C"), "missing C for {shell:?}");
         assert!(script.contains("133;D"), "missing D for {shell:?}");
-        let inline = super::ssh_shell_injection_script(shell, &ready).expect("inline script");
+        let inline =
+            super::ssh_shell_injection_script(shell, &ready, super::ShellIntegrationMode::Full)
+                .expect("inline script");
         assert!(inline.contains("NyaTermReady:session-lifecycle"));
     }
 
@@ -669,15 +675,84 @@ fn ssh_shell_scripts_emit_complete_standard_osc133_lifecycle() {
 }
 
 #[test]
+fn cwd_only_shell_scripts_omit_semantic_markers_and_bash_debug_trap() {
+    let ready = super::build_ssh_ready_marker("session-cwd-only");
+    for shell in [
+        super::ShellKind::Bash,
+        super::ShellKind::Zsh,
+        super::ShellKind::Fish,
+    ] {
+        let script =
+            super::ssh_shell_injection_script(shell, &ready, super::ShellIntegrationMode::CwdOnly)
+                .expect("cwd-only script");
+        assert!(
+            !script.contains("133;"),
+            "unexpected semantic marker for {shell:?}"
+        );
+        assert!(script.contains("NyaTermCommand"));
+        assert!(script.contains("NyaTermReady:session-cwd-only"));
+        if shell == super::ShellKind::Bash {
+            assert!(!script.contains("DEBUG"));
+        }
+    }
+}
+
+#[test]
+fn generated_bash_shell_integration_scripts_pass_syntax_check() {
+    if std::process::Command::new("bash")
+        .arg("--version")
+        .output()
+        .is_err()
+    {
+        return;
+    }
+    let ready = super::build_ssh_ready_marker("syntax-check");
+    let scripts = [
+        super::persistent_script(super::ShellKind::Bash)
+            .expect("persistent bash script")
+            .to_string(),
+        super::ssh_shell_injection_script(
+            super::ShellKind::Bash,
+            &ready,
+            super::ShellIntegrationMode::CwdOnly,
+        )
+        .expect("cwd-only bash script"),
+    ];
+    for script in scripts {
+        let output = std::process::Command::new("bash")
+            .args(["-n", "-c", script.as_str()])
+            .output()
+            .expect("run bash syntax check");
+        assert!(
+            output.status.success(),
+            "bash syntax error: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
+#[test]
 fn ssh_activation_and_persistent_scripts_match_rc_file_mode_contract() {
     let ready = super::build_ssh_ready_marker("session-1");
-    let activation =
-        super::activation_script(super::ShellKind::Bash, &ready).expect("activation script");
+    let activation = super::activation_script(
+        super::ShellKind::Bash,
+        &ready,
+        super::ShellIntegrationMode::Full,
+    )
+    .expect("activation script");
     let persistent = super::persistent_script(super::ShellKind::Bash).expect("persistent script");
     let block = super::rc_managed_block(super::ShellKind::Bash).expect("managed block");
 
     assert!(activation.contains("shell-integration.bash"));
     assert!(activation.contains("NyaTermReady:session-1"));
+    assert!(activation.contains("__nyaterm_install_prompt full"));
+    let cwd_activation = super::activation_script(
+        super::ShellKind::Bash,
+        &ready,
+        super::ShellIntegrationMode::CwdOnly,
+    )
+    .expect("cwd-only activation script");
+    assert!(cwd_activation.contains("__nyaterm_install_prompt cwd"));
     assert!(persistent.contains("__nyaterm_install_prompt"));
     assert!(persistent.contains("NyaTermCommand:%s"));
     assert!(block.contains("# >>> nyaterm shell integration >>>"));

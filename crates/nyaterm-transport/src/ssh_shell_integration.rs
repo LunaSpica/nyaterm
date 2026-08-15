@@ -22,6 +22,21 @@ pub(super) enum ShellKind {
     Unknown,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum ShellIntegrationMode {
+    Full,
+    CwdOnly,
+}
+
+impl ShellIntegrationMode {
+    fn install_arg(self) -> &'static str {
+        match self {
+            Self::Full => "full",
+            Self::CwdOnly => "cwd",
+        }
+    }
+}
+
 impl ShellKind {
     fn from_name(name: &str) -> Self {
         let value = name.to_ascii_lowercase();
@@ -209,19 +224,24 @@ pub(super) async fn build_ssh_shell_integration_script(
     cwd_follow_mode: super::SftpCwdFollowMode,
     timeout_ms: u64,
 ) -> Option<Vec<u8>> {
+    let mode = if terminal_shell_integration {
+        ShellIntegrationMode::Full
+    } else {
+        ShellIntegrationMode::CwdOnly
+    };
     match cwd_follow_mode {
         super::SftpCwdFollowMode::Off => terminal_shell_integration
-            .then(|| ssh_shell_injection_script(shell, ready_marker))
+            .then(|| ssh_shell_injection_script(shell, ready_marker, mode))
             .flatten()
             .map(String::into_bytes),
         super::SftpCwdFollowMode::ShellIntegration => {
-            ssh_shell_injection_script(shell, ready_marker).map(String::into_bytes)
+            ssh_shell_injection_script(shell, ready_marker, mode).map(String::into_bytes)
         }
         super::SftpCwdFollowMode::RcFile => {
             match install_remote_shell_integration(handle, shell, timeout_ms).await {
-                Ok(()) => activation_script(shell, ready_marker).map(String::into_bytes),
+                Ok(()) => activation_script(shell, ready_marker, mode).map(String::into_bytes),
                 Err(_error) => {
-                    ssh_shell_injection_script(shell, ready_marker).map(String::into_bytes)
+                    ssh_shell_injection_script(shell, ready_marker, mode).map(String::into_bytes)
                 }
             }
         }
@@ -315,9 +335,17 @@ fn ready_printf(marker: &str) -> String {
         .replace('\'', "'\\''")
 }
 
-pub(super) fn ssh_shell_injection_script(shell: ShellKind, ready_marker: &str) -> Option<String> {
-    let script = persistent_script(shell)?;
+pub(super) fn ssh_shell_injection_script(
+    shell: ShellKind,
+    ready_marker: &str,
+    mode: ShellIntegrationMode,
+) -> Option<String> {
+    let script = match mode {
+        ShellIntegrationMode::Full => persistent_script(shell)?,
+        ShellIntegrationMode::CwdOnly => cwd_only_script(shell)?,
+    };
     let ready = ready_printf(ready_marker);
+    let install_arg = mode.install_arg();
     let prefix = match shell {
         ShellKind::Bash => {
             " NYATERM_PRUNE_HISTORY=1; NYATERM_LAST_HISTCMD=\"${HISTCMD-}\"; export NYATERM_INJ=1;\n"
@@ -328,32 +356,39 @@ pub(super) fn ssh_shell_injection_script(shell: ShellKind, ready_marker: &str) -
     };
     let suffix = match shell {
         ShellKind::Bash => {
-            format!("\n__nyaterm_install_prompt 2>/dev/null || true; printf '{ready}'\n")
+            format!(
+                "\n__nyaterm_install_prompt {install_arg} 2>/dev/null || true; printf '{ready}'\n"
+            )
         }
         ShellKind::Zsh => format!(
-            "\n__nyaterm_install_prompt 2>/dev/null || true; fc -P 2>/dev/null\nprintf '{ready}'\n"
+            "\n__nyaterm_install_prompt {install_arg} 2>/dev/null || true; fc -P 2>/dev/null\nprintf '{ready}'\n"
         ),
         ShellKind::Fish => format!(
-            "\n__nyaterm_install_prompt 2>/dev/null; or true\nset -e fish_private_mode 2>/dev/null\nprintf '{ready}'\n"
+            "\n__nyaterm_install_prompt {install_arg} 2>/dev/null; or true\nset -e fish_private_mode 2>/dev/null\nprintf '{ready}'\n"
         ),
         ShellKind::PosixSh | ShellKind::Unknown => return None,
     };
     Some(format!("{prefix}{script}{suffix}"))
 }
 
-pub(super) fn activation_script(shell: ShellKind, ready_marker: &str) -> Option<String> {
+pub(super) fn activation_script(
+    shell: ShellKind,
+    ready_marker: &str,
+    mode: ShellIntegrationMode,
+) -> Option<String> {
     let ready = ready_printf(ready_marker);
+    let install_arg = mode.install_arg();
     match shell {
         ShellKind::Bash => Some(format!(
-            " NYATERM_PRUNE_HISTORY=1; NYATERM_READY_PENDING=1; export NYATERM_INJ=1; export NYATERM_READY_MARKER=\"$(printf '{}')\"; [ -r \"$HOME/.config/nyaterm/shell-integration.bash\" ] && . \"$HOME/.config/nyaterm/shell-integration.bash\"; __nyaterm_install_prompt 2>/dev/null; if [ -n \"${{NYATERM_READY_PENDING:-}}\" ]; then unset NYATERM_READY_PENDING; printf '%s' \"${{NYATERM_READY_MARKER-}}\"; fi\n",
+            " NYATERM_PRUNE_HISTORY=1; NYATERM_READY_PENDING=1; export NYATERM_INJ=1; export NYATERM_READY_MARKER=\"$(printf '{}')\"; [ -r \"$HOME/.config/nyaterm/shell-integration.bash\" ] && . \"$HOME/.config/nyaterm/shell-integration.bash\"; __nyaterm_install_prompt {install_arg} 2>/dev/null; if [ -n \"${{NYATERM_READY_PENDING:-}}\" ]; then unset NYATERM_READY_PENDING; printf '%s' \"${{NYATERM_READY_MARKER-}}\"; fi\n",
             ready
         )),
         ShellKind::Zsh => Some(format!(
-            " fc -p /dev/null 2>/dev/null\n NYATERM_READY_PENDING=1; export NYATERM_INJ=1; export NYATERM_READY_MARKER=\"$(printf '{}')\"; [ -r \"$HOME/.config/nyaterm/shell-integration.zsh\" ] && . \"$HOME/.config/nyaterm/shell-integration.zsh\"; __nyaterm_install_prompt 2>/dev/null; fc -P 2>/dev/null\n if [ -n \"${{NYATERM_READY_PENDING:-}}\" ]; then unset NYATERM_READY_PENDING; printf '%s' \"${{NYATERM_READY_MARKER-}}\"; fi\n",
+            " fc -p /dev/null 2>/dev/null\n NYATERM_READY_PENDING=1; export NYATERM_INJ=1; export NYATERM_READY_MARKER=\"$(printf '{}')\"; [ -r \"$HOME/.config/nyaterm/shell-integration.zsh\" ] && . \"$HOME/.config/nyaterm/shell-integration.zsh\"; __nyaterm_install_prompt {install_arg} 2>/dev/null; fc -P 2>/dev/null\n if [ -n \"${{NYATERM_READY_PENDING:-}}\" ]; then unset NYATERM_READY_PENDING; printf '%s' \"${{NYATERM_READY_MARKER-}}\"; fi\n",
             ready
         )),
         ShellKind::Fish => Some(format!(
-            " set fish_private_mode 1 2>/dev/null\n set -g NYATERM_READY_PENDING 1; set -gx NYATERM_INJ 1; set -gx NYATERM_READY_MARKER (printf '{}'); if test -r \"$HOME/.config/nyaterm/shell-integration.fish\"; source \"$HOME/.config/nyaterm/shell-integration.fish\"; end; __nyaterm_install_prompt 2>/dev/null; set -e fish_private_mode 2>/dev/null\n if set -q NYATERM_READY_PENDING; set -e NYATERM_READY_PENDING; printf '%s' \"$NYATERM_READY_MARKER\"; end\n",
+            " set fish_private_mode 1 2>/dev/null\n set -g NYATERM_READY_PENDING 1; set -gx NYATERM_INJ 1; set -gx NYATERM_READY_MARKER (printf '{}'); if test -r \"$HOME/.config/nyaterm/shell-integration.fish\"; source \"$HOME/.config/nyaterm/shell-integration.fish\"; end; __nyaterm_install_prompt {install_arg} 2>/dev/null; set -e fish_private_mode 2>/dev/null\n if set -q NYATERM_READY_PENDING; set -e NYATERM_READY_PENDING; printf '%s' \"$NYATERM_READY_MARKER\"; end\n",
             ready
         )),
         ShellKind::PosixSh | ShellKind::Unknown => None,
@@ -365,6 +400,15 @@ pub(super) fn persistent_script(shell: ShellKind) -> Option<&'static str> {
         ShellKind::Bash => Some(BASH_PERSISTENT_SCRIPT),
         ShellKind::Zsh => Some(ZSH_PERSISTENT_SCRIPT),
         ShellKind::Fish => Some(FISH_PERSISTENT_SCRIPT),
+        ShellKind::PosixSh | ShellKind::Unknown => None,
+    }
+}
+
+fn cwd_only_script(shell: ShellKind) -> Option<&'static str> {
+    match shell {
+        ShellKind::Bash => Some(BASH_CWD_ONLY_SCRIPT),
+        ShellKind::Zsh => Some(ZSH_CWD_ONLY_SCRIPT),
+        ShellKind::Fish => Some(FISH_CWD_ONLY_SCRIPT),
         ShellKind::PosixSh | ShellKind::Unknown => None,
     }
 }
@@ -500,8 +544,10 @@ async fn install_remote_shell_integration(
         .map(|_| ())
 }
 
-// Hook plumbing follows bash-preexec's DEBUG/PROMPT_COMMAND design
-// (https://github.com/rcaloras/bash-preexec, MIT), reduced to NyaTerm's needs.
+// Precmd/preexec plumbing is adapted from bash-preexec
+// (https://github.com/rcaloras/bash-preexec, MIT), using the vendored subset
+// validated by temp/tty7. NyaTerm-prefixed symbols avoid replacing an existing
+// bash-preexec installation.
 const BASH_PERSISTENT_SCRIPT: &str = r#"# nyaterm shell integration v2
 __nyaterm_host(){ hostname 2>/dev/null || printf localhost; }
 __nyaterm_prune_history(){
@@ -526,9 +572,24 @@ __nyaterm_emit_command(){
     [ -n "$b64" ] && printf '\033]7777;NyaTermCommand:%s\007' "$b64"
   fi
 }
+__nyaterm_emit_history_command(){
+  local histcmd="${HISTCMD-}"
+  if [ -n "$histcmd" ] && [ "${NYATERM_LAST_HISTCMD-}" != "$histcmd" ]; then
+    NYATERM_LAST_HISTCMD="$histcmd"
+    local cmd; cmd="$(fc -ln -1 2>/dev/null)"
+    __nyaterm_emit_command "$cmd"
+  fi
+}
+__nyaterm_cwd_prompt(){
+  local ret=$?
+  [ -n "${NYATERM_BASH_CWD_READY:-}" ] || return "$ret"
+  __nyaterm_prune_history
+  __nyaterm_emit_history_command
+  printf '\033]7;file://%s%s\007' "$(__nyaterm_host)" "$PWD"
+  return "$ret"
+}
 __nyaterm_precmd_d(){
   local ret=$?
-  unset __nyaterm_at_prompt
   if [ -n "${NYATERM_BASH_HOOKS_READY:-}" ] && [ -n "${__nyaterm_cmd_active:-}" ]; then
     printf '\033]133;D;%s\007' "$ret"
     unset __nyaterm_cmd_active
@@ -542,7 +603,6 @@ __nyaterm_prompt(){
   printf '\033]7;file://%s%s\007' "$(__nyaterm_host)" "$PWD"
   printf '\033]133;A\007'
   case "$PS1" in (*133\;B*) ;; (*) PS1="$PS1"'\[\033]133;B\007\]' ;; esac
-  __nyaterm_at_prompt=1
   return "$ret"
 }
 __nyaterm_preexec(){
@@ -554,67 +614,185 @@ __nyaterm_preexec(){
   __nyaterm_emit_command "$cmd"
   printf '\033]133;C\007'
 }
-__nyaterm_in_prompt_command(){
+__nyaterm_array_contains(){
   local needle="$1" candidate
-  for candidate in "${PROMPT_COMMAND[@]}"; do
-    [ "$candidate" = "$needle" ] && return 0
-  done
-  case "${PROMPT_COMMAND[*]:-}" in (*"$needle"*) return 0 ;; esac
+  shift
+  for candidate; do [ "$candidate" = "$needle" ] && return 0; done
   return 1
 }
-__nyaterm_debug_trap(){
-  local ret=$? command="${BASH_COMMAND-}"
-  if [ -n "${NYATERM_BASH_HOOKS_READY:-}" ] \
-    && [ -n "${__nyaterm_at_prompt:-}" ] \
-    && [ -z "${COMP_LINE:-}" ] \
-    && [ -z "${READLINE_LINE+x}" ] \
-    && ! __nyaterm_in_prompt_command "$command"; then
-    unset __nyaterm_at_prompt
-    local cmd
-    cmd="$(HISTTIMEFORMAT= builtin history 1 2>/dev/null | sed '1 s/^ *[0-9][0-9]*[* ] //')"
-    __nyaterm_preexec "$cmd"
-  fi
-  if declare -F __nyaterm_original_debug_trap >/dev/null; then
-    __nyaterm_original_debug_trap
-  fi
-  return "$ret"
-}
-__nyaterm_register_bash_preexec(){
-  local hook
-  for hook in "${precmd_functions[@]}"; do
-    [ "$hook" = __nyaterm_prompt ] && return 0
+__nyaterm_hook_arrays_writable(){
+  local var decl
+  for var; do
+    decl="$(declare -p "$var" 2>/dev/null)" || return 1
+    [[ "$decl" =~ ^declare\ -[^[:space:]]*a[^[:space:]]*\  ]] || return 1
+    [[ ! "$decl" =~ ^declare\ -[^[:space:]]*r[^[:space:]]*\  ]] || return 1
   done
-  precmd_functions=(__nyaterm_precmd_d "${precmd_functions[@]}" __nyaterm_prompt)
-  preexec_functions+=(__nyaterm_preexec)
-  NYATERM_BASH_HOOKS_READY=1
 }
-__nyaterm_install_compat_hooks(){
-  command -v sed >/dev/null 2>&1 || return 1
-  (PROMPT_COMMAND="${PROMPT_COMMAND-}") 2>/dev/null || return 1
-  local decl prior_trap prior_body
-  decl="$(declare -p PROMPT_COMMAND 2>/dev/null || true)"
-  prior_trap="$(trap -p DEBUG)"
-  prior_body="$(sed "s/[^']*'\(.*\)'[^']*/\1/" <<<"$prior_trap")"
-  if [ -n "$prior_body" ]; then
-    eval '__nyaterm_original_debug_trap(){ '"$prior_body"'; }'
+__nyaterm_register_full_hooks(){
+  __nyaterm_array_contains __nyaterm_precmd_d "${precmd_functions[@]}" \
+    || precmd_functions=(__nyaterm_precmd_d "${precmd_functions[@]}")
+  __nyaterm_array_contains __nyaterm_prompt "${precmd_functions[@]}" \
+    || precmd_functions+=(__nyaterm_prompt)
+  __nyaterm_array_contains __nyaterm_preexec "${preexec_functions[@]}" \
+    || preexec_functions+=(__nyaterm_preexec)
+}
+__nya_bp_require_not_readonly(){
+  local var
+  for var; do
+    if ! ( unset "$var" 2>/dev/null ); then return 1; fi
+  done
+}
+__nya_bp_trim_whitespace(){
+  local var=${1:?} text=${2:-}
+  text="${text#"${text%%[![:space:]]*}"}"
+  text="${text%"${text##*[![:space:]]}"}"
+  printf -v "$var" '%s' "$text"
+}
+__nya_bp_sanitize_string(){
+  local var=${1:?} text=${2:-} sanitized
+  __nya_bp_trim_whitespace sanitized "$text"
+  sanitized=${sanitized%;}; sanitized=${sanitized#;}
+  __nya_bp_trim_whitespace sanitized "$sanitized"
+  printf -v "$var" '%s' "$sanitized"
+}
+__nya_bp_set_ret_value(){ return ${1:+"$1"}; }
+__nya_bp_interactive_mode(){ __nya_bp_preexec_interactive_mode=on; }
+__nya_bp_precmd_invoke_cmd(){
+  __nya_bp_last_ret_value="$?" NYATERM_BP_PIPESTATUS=("${PIPESTATUS[@]}")
+  if (( __nya_bp_inside_precmd > 0 )); then return; fi
+  local __nya_bp_inside_precmd=1 precmd_function
+  for precmd_function in "${precmd_functions[@]}"; do
+    if type -t "$precmd_function" >/dev/null; then
+      __nya_bp_set_ret_value "$__nya_bp_last_ret_value" "$__nya_bp_last_argument"
+      "$precmd_function"
+    fi
+  done
+  __nya_bp_set_ret_value "$__nya_bp_last_ret_value"
+}
+__nya_bp_in_prompt_command(){
+  local prompt_command_array IFS=$'\n;'
+  read -rd '' -a prompt_command_array <<< "${PROMPT_COMMAND[*]:-}"
+  local trimmed_arg command trimmed_command
+  __nya_bp_trim_whitespace trimmed_arg "${1:-}"
+  for command in "${prompt_command_array[@]:-}"; do
+    __nya_bp_trim_whitespace trimmed_command "$command"
+    [ "$trimmed_command" = "$trimmed_arg" ] && return 0
+  done
+  return 1
+}
+__nya_bp_preexec_invoke_exec(){
+  __nya_bp_last_argument="${1:-}"
+  if (( __nya_bp_inside_preexec > 0 )); then return; fi
+  local __nya_bp_inside_preexec=1
+  [ -t 1 ] || return
+  [ -z "${COMP_LINE:-}" ] || return
+  [ -z "${READLINE_LINE+x}" ] || return
+  if [ -z "${__nya_bp_preexec_interactive_mode:-}" ]; then
+    return
+  elif [ "${BASH_SUBSHELL:-0}" -eq 0 ]; then
+    __nya_bp_preexec_interactive_mode=
   fi
-  trap '__nyaterm_debug_trap' DEBUG || return 1
-  if [[ "$decl" =~ ^declare\ -[^[:space:]]*a[^[:space:]]*\ PROMPT_COMMAND= ]]; then
-    PROMPT_COMMAND=(__nyaterm_precmd_d "${PROMPT_COMMAND[@]}" __nyaterm_prompt)
+  if __nya_bp_in_prompt_command "${BASH_COMMAND:-}"; then
+    __nya_bp_preexec_interactive_mode=
+    return
+  fi
+  local this_command
+  this_command=$(LC_ALL=C HISTTIMEFORMAT='' builtin history 1 | sed '1 s/^ *[0-9][0-9]*[* ] //')
+  [ -n "$this_command" ] || return
+  local preexec_function preexec_ret=0 function_ret
+  for preexec_function in "${preexec_functions[@]:-}"; do
+    if type -t "$preexec_function" >/dev/null; then
+      __nya_bp_set_ret_value "${__nya_bp_last_ret_value:-}"
+      "$preexec_function" "$this_command"
+      function_ret=$?
+      [ "$function_ret" -eq 0 ] || preexec_ret=$function_ret
+    fi
+  done
+  __nya_bp_set_ret_value "$preexec_ret" "$__nya_bp_last_argument"
+}
+__nya_bp_install(){
+  case "${PROMPT_COMMAND[*]:-}" in (*__nya_bp_precmd_invoke_cmd*) return 1 ;; esac
+  trap '__nya_bp_preexec_invoke_exec "$_"' DEBUG || return 1
+  local prior_trap
+  prior_trap=$(sed "s/[^']*'\(.*\)'[^']*/\1/" <<<"${__nya_bp_trap_string:-}")
+  unset __nya_bp_trap_string
+  if [ -n "$prior_trap" ]; then
+    eval '__nya_bp_original_debug_trap(){ '"$prior_trap"'; }'
+    preexec_functions+=(__nya_bp_original_debug_trap)
+  fi
+  local existing_prompt_command="${PROMPT_COMMAND:-}"
+  existing_prompt_command="${existing_prompt_command//$__nya_bp_install_string/:}"
+  existing_prompt_command="${existing_prompt_command//$'\n':$'\n'/$'\n'}"
+  existing_prompt_command="${existing_prompt_command//$'\n':;/$'\n'}"
+  __nya_bp_sanitize_string existing_prompt_command "$existing_prompt_command"
+  [ "${existing_prompt_command:-:}" = : ] && existing_prompt_command=
+  PROMPT_COMMAND=__nya_bp_precmd_invoke_cmd
+  PROMPT_COMMAND+=${existing_prompt_command:+$'\n'$existing_prompt_command}
+  if (( BASH_VERSINFO[0] > 5 || (BASH_VERSINFO[0] == 5 && BASH_VERSINFO[1] >= 1) )); then
+    PROMPT_COMMAND+=(__nya_bp_interactive_mode)
   else
-    PROMPT_COMMAND="__nyaterm_precmd_d${PROMPT_COMMAND:+; $PROMPT_COMMAND}; __nyaterm_prompt"
+    PROMPT_COMMAND+=$'\n__nya_bp_interactive_mode'
   fi
   NYATERM_BASH_HOOKS_READY=1
+  unset NYATERM_BASH_INSTALL_PENDING
+  __nya_bp_precmd_invoke_cmd
+  __nya_bp_interactive_mode
+}
+__nya_bp_install_after_session_init(){
+  __nya_bp_require_not_readonly PROMPT_COMMAND HISTCONTROL HISTTIMEFORMAT || return 1
+  local sanitized_prompt_command
+  __nya_bp_sanitize_string sanitized_prompt_command "${PROMPT_COMMAND:-}"
+  [ -z "$sanitized_prompt_command" ] || PROMPT_COMMAND=${sanitized_prompt_command}$'\n'
+  PROMPT_COMMAND+=${__nya_bp_install_string}
+}
+__nyaterm_install_cwd(){
+  [ -n "${NYATERM_BASH_CWD_READY:-}" ] && return 0
+  local decl hook
+  decl="$(declare -p PROMPT_COMMAND 2>/dev/null || true)"
+  if [[ "$decl" =~ ^declare\ -[^[:space:]]*a[^[:space:]]*\ PROMPT_COMMAND= ]]; then
+    for hook in "${PROMPT_COMMAND[@]}"; do
+      [ "$hook" = __nyaterm_cwd_prompt ] && { NYATERM_BASH_CWD_READY=1; return 0; }
+    done
+    PROMPT_COMMAND=(__nyaterm_cwd_prompt "${PROMPT_COMMAND[@]}")
+  else
+    case "${PROMPT_COMMAND-}" in
+      (*__nyaterm_cwd_prompt*) ;;
+      (*) PROMPT_COMMAND="__nyaterm_cwd_prompt${PROMPT_COMMAND:+; $PROMPT_COMMAND}" ;;
+    esac
+  fi
+  NYATERM_BASH_CWD_READY=1
+}
+__nyaterm_install_full(){
+  [ -n "${NYATERM_BASH_HOOKS_READY:-}" ] && return 0
+  [ -n "${NYATERM_BASH_INSTALL_PENDING:-}" ] && return 0
+  if [ -n "${bash_preexec_imported:-}" ]; then
+    __nyaterm_hook_arrays_writable precmd_functions preexec_functions || return 1
+    __nyaterm_register_full_hooks
+    NYATERM_BASH_HOOKS_READY=1
+    return 0
+  fi
+  command -v sed >/dev/null 2>&1 || return 1
+  __nya_bp_require_not_readonly \
+    PROMPT_COMMAND HISTCONTROL HISTTIMEFORMAT precmd_functions preexec_functions || return 1
+  bash_preexec_imported=defined
+  declare -ga precmd_functions preexec_functions
+  __nya_bp_last_ret_value="$?"
+  __nya_bp_last_argument="$_"
+  __nya_bp_inside_precmd=0
+  __nya_bp_inside_preexec=0
+  __nya_bp_preexec_interactive_mode=
+  __nya_bp_install_string=$'__nya_bp_trap_string="$(trap -p DEBUG)"\ntrap - DEBUG\n__nya_bp_install'
+  __nyaterm_register_full_hooks
+  NYATERM_BASH_INSTALL_PENDING=1
+  __nya_bp_install_after_session_init || { unset NYATERM_BASH_INSTALL_PENDING; return 1; }
 }
 __nyaterm_install_prompt(){
-  [ -n "${NYATERM_BASH_HOOKS_READY:-}" ] && return 0
   NYATERM_LAST_HISTCMD="${HISTCMD-}"
-  if [ -n "${bash_preexec_imported:-}" ]; then
-    declare -p precmd_functions preexec_functions >/dev/null 2>&1 || return 1
-    __nyaterm_register_bash_preexec
-  else
-    __nyaterm_install_compat_hooks
-  fi
+  case "${1:-full}" in
+    (full) __nyaterm_install_full ;;
+    (cwd) __nyaterm_install_cwd ;;
+    (*) return 1 ;;
+  esac
 }
 "#;
 
@@ -625,6 +803,14 @@ __nyaterm_emit_command(){
     local b64; b64="$(printf '%s' "$1" | base64 | tr -d '\r\n')"
     [ -n "$b64" ] && printf '\033]7777;NyaTermCommand:%s\007' "$b64"
   fi
+}
+__nyaterm_cwd_prompt(){
+  [ -n "${NYATERM_ZSH_CWD_READY:-}" ] || return 0
+  printf '\033]7;file://%s%s\007' "$(__nyaterm_host)" "$PWD"
+}
+__nyaterm_cwd_preexec(){
+  [ -n "${NYATERM_ZSH_CWD_READY:-}" ] || return 0
+  __nyaterm_emit_command "$1"
 }
 __nyaterm_precmd_d(){
   local ret=$?
@@ -647,7 +833,16 @@ __nyaterm_preexec(){
   __nyaterm_emit_command "$1"
   printf '\033]133;C\007'
 }
-__nyaterm_install_prompt(){
+__nyaterm_install_cwd(){
+  [ -n "${NYATERM_ZSH_CWD_READY:-}" ] && return 0
+  autoload -Uz add-zsh-hook 2>/dev/null || return 1
+  add-zsh-hook -d precmd __nyaterm_cwd_prompt 2>/dev/null || true
+  add-zsh-hook -d preexec __nyaterm_cwd_preexec 2>/dev/null || true
+  add-zsh-hook precmd __nyaterm_cwd_prompt || return 1
+  add-zsh-hook preexec __nyaterm_cwd_preexec || return 1
+  typeset -g NYATERM_ZSH_CWD_READY=1
+}
+__nyaterm_install_full(){
   [ -n "${NYATERM_ZSH_HOOKS_READY:-}" ] && return 0
   autoload -Uz add-zsh-hook 2>/dev/null || return 1
   typeset -ga precmd_functions preexec_functions
@@ -658,6 +853,13 @@ __nyaterm_install_prompt(){
   add-zsh-hook preexec __nyaterm_preexec || return 1
   typeset -g NYATERM_ZSH_HOOKS_READY=1
 }
+__nyaterm_install_prompt(){
+  case "${1:-full}" in
+    (full) __nyaterm_install_full ;;
+    (cwd) __nyaterm_install_cwd ;;
+    (*) return 1 ;;
+  esac
+}
 "#;
 
 const FISH_PERSISTENT_SCRIPT: &str = r#"# nyaterm shell integration v2
@@ -666,6 +868,14 @@ function __nyaterm_emit_command
     set -l b64 (printf '%s' "$argv[1]" | base64 | tr -d '\r\n')
     test -n "$b64"; and printf '\033]7777;NyaTermCommand:%s\007' "$b64"
   end
+end
+function __nyaterm_cwd_prompt
+  set -q NYATERM_FISH_CWD_READY; or return 0
+  printf '\033]7;file://%s%s\007' (hostname) $PWD
+end
+function __nyaterm_cwd_preexec
+  set -q NYATERM_FISH_CWD_READY; or return 0
+  __nyaterm_emit_command "$argv[1]"
 end
 function __nyaterm_prompt_end
   printf '\033]133;B\007'
@@ -697,7 +907,18 @@ function __nyaterm_preexec
   __nyaterm_emit_command "$argv[1]"
   printf '\033]133;C\007'
 end
-function __nyaterm_install_prompt
+function __nyaterm_install_cwd
+  set -q NYATERM_FISH_CWD_READY; and return 0
+  functions -e __nyaterm_cwd_prompt_event __nyaterm_cwd_preexec_event 2>/dev/null
+  function __nyaterm_cwd_prompt_event --on-event fish_prompt
+    __nyaterm_cwd_prompt
+  end
+  function __nyaterm_cwd_preexec_event --on-event fish_preexec
+    __nyaterm_cwd_preexec $argv
+  end
+  set -g NYATERM_FISH_CWD_READY 1
+end
+function __nyaterm_install_full
   set -q NYATERM_FISH_HOOKS_READY; and return 0
   functions -e __nyaterm_precmd_event __nyaterm_preexec_event 2>/dev/null
   function __nyaterm_precmd_event --on-event fish_prompt
@@ -707,6 +928,125 @@ function __nyaterm_install_prompt
     __nyaterm_preexec $argv
   end
   set -g NYATERM_FISH_HOOKS_READY 1
+end
+function __nyaterm_install_prompt
+  switch "$argv[1]"
+    case full ''
+      __nyaterm_install_full
+    case cwd
+      __nyaterm_install_cwd
+    case '*'
+      return 1
+  end
+end
+"#;
+
+const BASH_CWD_ONLY_SCRIPT: &str = r#"# nyaterm cwd integration v2
+__nyaterm_host(){ hostname 2>/dev/null || printf localhost; }
+__nyaterm_prune_history(){
+  [ -n "${NYATERM_PRUNE_HISTORY:-}" ] || return 0
+  unset NYATERM_PRUNE_HISTORY
+  local hline
+  hline="$(HISTTIMEFORMAT= history 1 2>/dev/null || true)"
+  case "$hline" in
+    (*NYATERM_PRUNE_HISTORY*|*NYATERM_INJ*|*NyaTermReady*)
+      if [[ "$hline" =~ ^[[:space:]]*([0-9]+) ]]; then
+        history -d "${BASH_REMATCH[1]}" 2>/dev/null || true
+      fi
+      ;;
+  esac
+}
+__nyaterm_emit_command(){
+  local cmd="$1"
+  [ -n "$cmd" ] && command -v base64 >/dev/null 2>&1 || return 0
+  local b64; b64="$(printf '%s' "$cmd" | base64 | tr -d '\r\n')"
+  [ -n "$b64" ] && printf '\033]7777;NyaTermCommand:%s\007' "$b64"
+}
+__nyaterm_cwd_prompt(){
+  local ret=$? histcmd="${HISTCMD-}"
+  [ -n "${NYATERM_BASH_CWD_READY:-}" ] || return "$ret"
+  __nyaterm_prune_history
+  histcmd="${HISTCMD-}"
+  if [ -n "$histcmd" ] && [ "${NYATERM_LAST_HISTCMD-}" != "$histcmd" ]; then
+    NYATERM_LAST_HISTCMD="$histcmd"
+    __nyaterm_emit_command "$(fc -ln -1 2>/dev/null)"
+  fi
+  printf '\033]7;file://%s%s\007' "$(__nyaterm_host)" "$PWD"
+  return "$ret"
+}
+__nyaterm_install_prompt(){
+  [ "${1:-cwd}" = cwd ] || return 1
+  [ -n "${NYATERM_BASH_CWD_READY:-}" ] && return 0
+  local decl hook
+  decl="$(declare -p PROMPT_COMMAND 2>/dev/null || true)"
+  if [[ "$decl" =~ ^declare\ -[^[:space:]]*a[^[:space:]]*\ PROMPT_COMMAND= ]]; then
+    for hook in "${PROMPT_COMMAND[@]}"; do
+      [ "$hook" = __nyaterm_cwd_prompt ] && { NYATERM_BASH_CWD_READY=1; return 0; }
+    done
+    PROMPT_COMMAND=(__nyaterm_cwd_prompt "${PROMPT_COMMAND[@]}")
+  else
+    case "${PROMPT_COMMAND-}" in
+      (*__nyaterm_cwd_prompt*) ;;
+      (*) PROMPT_COMMAND="__nyaterm_cwd_prompt${PROMPT_COMMAND:+; $PROMPT_COMMAND}" ;;
+    esac
+  fi
+  NYATERM_BASH_CWD_READY=1
+}
+"#;
+
+const ZSH_CWD_ONLY_SCRIPT: &str = r#"# nyaterm cwd integration v2
+__nyaterm_host(){ hostname 2>/dev/null || printf localhost; }
+__nyaterm_emit_command(){
+  [ -n "$1" ] && command -v base64 >/dev/null 2>&1 || return 0
+  local b64; b64="$(printf '%s' "$1" | base64 | tr -d '\r\n')"
+  [ -n "$b64" ] && printf '\033]7777;NyaTermCommand:%s\007' "$b64"
+}
+__nyaterm_cwd_prompt(){
+  [ -n "${NYATERM_ZSH_CWD_READY:-}" ] || return 0
+  printf '\033]7;file://%s%s\007' "$(__nyaterm_host)" "$PWD"
+}
+__nyaterm_cwd_preexec(){
+  [ -n "${NYATERM_ZSH_CWD_READY:-}" ] || return 0
+  __nyaterm_emit_command "$1"
+}
+__nyaterm_install_prompt(){
+  [ "${1:-cwd}" = cwd ] || return 1
+  [ -n "${NYATERM_ZSH_CWD_READY:-}" ] && return 0
+  autoload -Uz add-zsh-hook 2>/dev/null || return 1
+  add-zsh-hook -d precmd __nyaterm_cwd_prompt 2>/dev/null || true
+  add-zsh-hook -d preexec __nyaterm_cwd_preexec 2>/dev/null || true
+  add-zsh-hook precmd __nyaterm_cwd_prompt || return 1
+  add-zsh-hook preexec __nyaterm_cwd_preexec || return 1
+  typeset -g NYATERM_ZSH_CWD_READY=1
+}
+"#;
+
+const FISH_CWD_ONLY_SCRIPT: &str = r#"# nyaterm cwd integration v2
+function __nyaterm_emit_command
+  if test -n "$argv[1]"; and command -sq base64
+    set -l b64 (printf '%s' "$argv[1]" | base64 | tr -d '\r\n')
+    test -n "$b64"; and printf '\033]7777;NyaTermCommand:%s\007' "$b64"
+  end
+end
+function __nyaterm_cwd_prompt
+  set -q NYATERM_FISH_CWD_READY; or return 0
+  printf '\033]7;file://%s%s\007' (hostname) $PWD
+end
+function __nyaterm_cwd_preexec
+  set -q NYATERM_FISH_CWD_READY; or return 0
+  __nyaterm_emit_command "$argv[1]"
+end
+function __nyaterm_install_prompt
+  test "$argv[1]" = cwd; or return 1
+  set -q NYATERM_FISH_CWD_READY; and return 0
+  functions -e __nyaterm_cwd_prompt_event __nyaterm_cwd_preexec_event 2>/dev/null
+  function __nyaterm_cwd_prompt_event --on-event fish_prompt
+    __nyaterm_cwd_prompt
+  end
+  function __nyaterm_cwd_preexec_event --on-event fish_preexec
+    __nyaterm_cwd_preexec $argv
+  end
+  set -g NYATERM_FISH_CWD_READY 1
 end
 "#;
 
