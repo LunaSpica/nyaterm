@@ -82,7 +82,7 @@ pub enum AiModelSource {
     Manual,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AiProviderProfile {
     pub id: String,
     pub name: String,
@@ -112,7 +112,7 @@ pub struct AiModelConfigItem {
     pub last_seen_at: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AiProviderCredential {
     pub id: String,
     pub name: String,
@@ -123,6 +123,35 @@ pub struct AiProviderCredential {
     pub api_key: Option<String>,
     #[serde(default = "default_true")]
     pub enabled: bool,
+}
+
+impl std::fmt::Debug for AiProviderProfile {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("AiProviderProfile")
+            .field("id", &self.id)
+            .field("name", &self.name)
+            .field("provider_kind", &self.provider_kind)
+            .field("model", &self.model)
+            .field("base_url", &self.base_url)
+            .field("api_key", &self.api_key.as_ref().map(|_| "<redacted>"))
+            .field("enabled", &self.enabled)
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for AiProviderCredential {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("AiProviderCredential")
+            .field("id", &self.id)
+            .field("name", &self.name)
+            .field("provider_kind", &self.provider_kind)
+            .field("base_url", &self.base_url)
+            .field("api_key", &self.api_key.as_ref().map(|_| "<redacted>"))
+            .field("enabled", &self.enabled)
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -1235,6 +1264,23 @@ fn resolve_prompt_language(language: &str) -> PromptLanguage {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn provider_debug_output_redacts_api_keys() {
+        let secret = "nya-ai-key-never-log";
+        let credential = AiProviderCredential {
+            id: "credential-1".to_string(),
+            name: "Test".to_string(),
+            provider_kind: AiProviderKind::Openai,
+            base_url: None,
+            api_key: Some(secret.to_string()),
+            enabled: true,
+        };
+        let output = format!("{credential:?}");
+
+        assert!(!output.contains(secret));
+        assert!(output.contains("<redacted>"));
+    }
 
     #[test]
     fn old_history_without_reasoning_defaults_cleanly() {

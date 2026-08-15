@@ -155,7 +155,7 @@ pub struct ConnectionStore {
     portable_key_path: Option<PathBuf>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 struct ConnectionPasswordRecord {
     id: String,
     connection_id: String,

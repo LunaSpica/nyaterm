@@ -32,10 +32,23 @@ pub enum CredentialCryptoError {
     Utf8(#[from] std::string::FromUtf8Error),
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct CredentialCrypto {
     portable_key_path: Option<PathBuf>,
     master_password: Option<String>,
+}
+
+impl std::fmt::Debug for CredentialCrypto {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("CredentialCrypto")
+            .field("portable_key_path", &self.portable_key_path)
+            .field(
+                "master_password",
+                &self.master_password.as_ref().map(|_| "<redacted>"),
+            )
+            .finish()
+    }
 }
 
 impl CredentialCrypto {
@@ -233,6 +246,16 @@ fn encrypt_bytes(plaintext: &[u8], key: &Key<Aes256Gcm>) -> Result<String, Crede
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn debug_output_redacts_master_password() {
+        let secret = "nya-master-password-never-log";
+        let crypto = CredentialCrypto::new(None, Some(secret.to_string()));
+        let output = format!("{crypto:?}");
+
+        assert!(!output.contains(secret));
+        assert!(output.contains("<redacted>"));
+    }
 
     fn encrypt_for_test(plaintext: &[u8], key: &Key<Aes256Gcm>) -> String {
         let cipher = Aes256Gcm::new(key);

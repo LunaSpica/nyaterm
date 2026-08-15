@@ -36,6 +36,40 @@ struct ConnectionStore {
     config_dir: PathBuf,
 }
 
+#[test]
+fn cloud_sync_debug_output_redacts_all_secret_values() {
+    let secret = "nya-cloud-secret-never-log";
+    let mut settings = CloudSyncSettings::default();
+    settings.webdav.password = Some(secret.to_string());
+    settings.s3.access_key_id = Some(secret.to_string());
+    settings.s3.secret_access_key = Some(secret.to_string());
+    settings.s3.session_token = Some(secret.to_string());
+    settings.gitee_snippet.access_token = Some(secret.to_string());
+    settings.google_drive.access_token = Some(secret.to_string());
+    settings.google_drive.refresh_token = Some(secret.to_string());
+    settings.google_drive.client_secret = Some(secret.to_string());
+    settings.aliyun_drive.access_token = Some(secret.to_string());
+    settings.github_gist.access_token = Some(secret.to_string());
+    let settings_output = format!("{settings:?}");
+
+    let options = LocalCloudSyncOptions {
+        config_dir: PathBuf::from("config"),
+        portable_key_path: None,
+        remote_dir: PathBuf::from("remote"),
+        remote_root: "nyaterm".to_string(),
+        device_id: "device".to_string(),
+        app_version: "test".to_string(),
+        master_password: secret.to_string(),
+        enabled: true,
+    };
+    let options_output = format!("{options:?}");
+
+    assert!(!settings_output.contains(secret));
+    assert!(!options_output.contains(secret));
+    assert!(settings_output.contains("<redacted>"));
+    assert!(options_output.contains("<redacted>"));
+}
+
 impl ConnectionStore {
     fn open(config_dir: impl AsRef<Path>) -> Result<Self, std::io::Error> {
         Self::open_with_portable_key_path(config_dir, None)

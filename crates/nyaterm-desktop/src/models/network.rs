@@ -68,7 +68,7 @@ pub(crate) enum NetworkProxyEditorField {
     Password,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub(crate) struct NetworkProxyEditorState {
     pub(crate) id: Option<String>,
     pub(crate) name: String,
@@ -85,8 +85,58 @@ pub(crate) struct NetworkProxyEditorState {
     pub(crate) error: Option<String>,
 }
 
+impl std::fmt::Debug for NetworkProxyEditorState {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("NetworkProxyEditorState")
+            .field("id", &self.id)
+            .field("name", &self.name)
+            .field("protocol", &self.protocol)
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .field("command", &"<redacted>")
+            .field("username", &self.username)
+            .field("password", &"<redacted>")
+            .field("existing_password", &"<redacted>")
+            .field("password_id", &self.password_id)
+            .field("group_id", &self.group_id)
+            .field("focused_field", &self.focused_field)
+            .field("error", &self.error)
+            .finish()
+    }
+}
+
 impl NetworkProxyEditorState {
     pub(crate) fn is_proxy_command(&self) -> bool {
         self.protocol == "proxycommand"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{NetworkProxyEditorField, NetworkProxyEditorState};
+
+    #[test]
+    fn proxy_editor_debug_output_redacts_password_and_command() {
+        let secret = "nya-proxy-secret-never-log";
+        let state = NetworkProxyEditorState {
+            id: None,
+            name: "Test".to_string(),
+            protocol: "proxycommand".to_string(),
+            host: "localhost".to_string(),
+            port: "22".to_string(),
+            command: secret.to_string(),
+            username: "tester".to_string(),
+            password: secret.to_string(),
+            existing_password: Some(secret.to_string()),
+            password_id: None,
+            group_id: None,
+            focused_field: NetworkProxyEditorField::Name,
+            error: None,
+        };
+        let output = format!("{state:?}");
+
+        assert!(!output.contains(secret));
+        assert!(output.contains("<redacted>"));
     }
 }

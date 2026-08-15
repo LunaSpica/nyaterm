@@ -15,7 +15,7 @@ pub struct TranslateResult {
     pub provider: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TranslationSettings {
     #[serde(default = "default_translation_target_language")]
     pub target_language: String,
@@ -47,6 +47,22 @@ impl Default for TranslationSettings {
             youdao_app_id: String::new(),
             youdao_app_key: String::new(),
         }
+    }
+}
+
+impl std::fmt::Debug for TranslationSettings {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("TranslationSettings")
+            .field("target_language", &self.target_language)
+            .field("deepl_api_key", &"<redacted>")
+            .field("baidu_app_id", &self.baidu_app_id)
+            .field("baidu_app_key", &"<redacted>")
+            .field("ali_app_id", &self.ali_app_id)
+            .field("ali_app_key", &"<redacted>")
+            .field("youdao_app_id", &self.youdao_app_id)
+            .field("youdao_app_key", &"<redacted>")
+            .finish()
     }
 }
 
@@ -561,6 +577,22 @@ fn days_to_ymd(days: u64) -> (u64, u64, u64) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn settings_debug_output_redacts_provider_keys() {
+        let secret = "nya-translation-key-never-log";
+        let settings = TranslationSettings {
+            deepl_api_key: secret.to_string(),
+            baidu_app_key: secret.to_string(),
+            ali_app_key: secret.to_string(),
+            youdao_app_key: secret.to_string(),
+            ..TranslationSettings::default()
+        };
+        let output = format!("{settings:?}");
+
+        assert!(!output.contains(secret));
+        assert!(output.contains("<redacted>"));
+    }
 
     #[test]
     fn maps_google_language_codes_like_legacy() {

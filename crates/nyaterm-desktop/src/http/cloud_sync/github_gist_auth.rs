@@ -18,7 +18,7 @@ const GITHUB_API_ENDPOINT: &str = "https://api.github.com";
 const GITHUB_API_VERSION: &str = "2022-11-28";
 const GITHUB_GIST_SCOPE: &str = "gist";
 
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 struct DeviceCodeResponse {
     device_code: String,
     user_code: String,
@@ -27,7 +27,7 @@ struct DeviceCodeResponse {
     interval: Option<u64>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 struct AccessTokenResponse {
     #[serde(default)]
     access_token: Option<String>,

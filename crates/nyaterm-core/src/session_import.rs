@@ -73,7 +73,7 @@ impl std::fmt::Debug for PreparedSessionImport {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 struct NyatermJsonImportFile {
     #[serde(default = "default_import_version")]
     version: u32,
@@ -91,7 +91,7 @@ fn default_import_version() -> u32 {
     1
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 struct NyatermJsonPassword {
     #[serde(rename = "ref")]
     ref_name: String,
@@ -99,7 +99,7 @@ struct NyatermJsonPassword {
     password: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 struct NyatermJsonSshKey {
     #[serde(rename = "ref")]
     ref_name: String,
@@ -111,12 +111,12 @@ struct NyatermJsonSshKey {
     passphrase: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 struct NyatermJsonGroup {
     path: Vec<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 struct NyatermJsonSshAuth {
     mode: String,
     #[serde(default)]
@@ -127,7 +127,7 @@ struct NyatermJsonSshAuth {
     key_ref: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum NyatermJsonSession {
     Ssh {

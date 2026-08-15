@@ -233,7 +233,7 @@ impl CloudSyncHistoryEntry {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct WebdavSyncSettings {
     #[serde(default)]
     pub endpoint: String,
@@ -245,7 +245,7 @@ pub struct WebdavSyncSettings {
     pub password: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct S3SyncSettings {
     #[serde(default)]
     pub endpoint: String,
@@ -265,7 +265,7 @@ pub struct S3SyncSettings {
     pub virtual_host_style: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GiteeSnippetSyncSettings {
     #[serde(default = "default_gitee_api_endpoint")]
     pub api_endpoint: String,
@@ -285,7 +285,7 @@ impl Default for GiteeSnippetSyncSettings {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct OAuthDriveSyncSettings {
     #[serde(default)]
     pub root: String,
@@ -299,7 +299,7 @@ pub struct OAuthDriveSyncSettings {
     pub client_secret: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AliyunDriveSyncSettings {
     #[serde(default)]
     pub root: String,
@@ -328,13 +328,89 @@ impl Default for AliyunDriveSyncSettings {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct GithubGistSyncSettings {
     #[serde(default)]
     pub gist_id: String,
     #[serde(default)]
     pub access_token: Option<String>,
 }
+
+macro_rules! impl_redacted_sync_debug {
+    ($type:ident, safe { $($safe:ident),* $(,)? }, secret { $($secret:ident),* $(,)? }) => {
+        impl std::fmt::Debug for $type {
+            fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                let mut debug = formatter.debug_struct(stringify!($type));
+                $(debug.field(stringify!($safe), &self.$safe);)*
+                $(debug.field(
+                    stringify!($secret),
+                    &self.$secret.as_ref().map(|_| "<redacted>"),
+                );)*
+                debug.finish()
+            }
+        }
+    };
+}
+
+impl_redacted_sync_debug!(
+    WebdavSyncSettings,
+    safe {
+        endpoint,
+        root,
+        username
+    },
+    secret { password }
+);
+impl_redacted_sync_debug!(
+    S3SyncSettings,
+    safe {
+        endpoint,
+        bucket,
+        region,
+        root,
+        virtual_host_style
+    },
+    secret {
+        access_key_id,
+        secret_access_key,
+        session_token
+    }
+);
+impl_redacted_sync_debug!(
+    GiteeSnippetSyncSettings,
+    safe {
+        api_endpoint,
+        gist_id
+    },
+    secret { access_token }
+);
+impl_redacted_sync_debug!(
+    OAuthDriveSyncSettings,
+    safe { root, client_id },
+    secret {
+        access_token,
+        refresh_token,
+        client_secret
+    }
+);
+impl_redacted_sync_debug!(
+    AliyunDriveSyncSettings,
+    safe {
+        root,
+        client_id,
+        drive_type
+    },
+    secret {
+        access_token,
+        refresh_token,
+        client_secret
+    }
+);
+impl_redacted_sync_debug!(
+    GithubGistSyncSettings,
+    safe { gist_id },
+    secret { access_token }
+);
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CloudSyncSettings {
@@ -476,7 +552,7 @@ pub fn merge_masked_cloud_sync_settings(
     next
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct LocalCloudSyncOptions {
     pub config_dir: PathBuf,
     pub portable_key_path: Option<PathBuf>,
@@ -486,6 +562,22 @@ pub struct LocalCloudSyncOptions {
     pub app_version: String,
     pub master_password: String,
     pub enabled: bool,
+}
+
+impl std::fmt::Debug for LocalCloudSyncOptions {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("LocalCloudSyncOptions")
+            .field("config_dir", &self.config_dir)
+            .field("portable_key_path", &self.portable_key_path)
+            .field("remote_dir", &self.remote_dir)
+            .field("remote_root", &self.remote_root)
+            .field("device_id", &self.device_id)
+            .field("app_version", &self.app_version)
+            .field("master_password", &"<redacted>")
+            .field("enabled", &self.enabled)
+            .finish()
+    }
 }
 
 fn default_provider() -> String {

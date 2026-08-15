@@ -12,7 +12,7 @@ use super::{
     AppError, AppResult, PreparedJsonConnection, PreparedJsonImport, normalize_optional_string,
 };
 
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 struct TermiusRawStore {
     hosts: Vec<TermiusRawHost>,
     ssh_configs: Vec<TermiusRawSshConfig>,
@@ -21,7 +21,7 @@ struct TermiusRawStore {
     groups: Vec<TermiusRawGroup>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 struct TermiusRawHost {
     id: String,
     local_id: Option<String>,
@@ -45,7 +45,7 @@ struct TermiusRawSshConfig {
     updated_at: Option<String>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 struct TermiusRawIdentity {
     id: String,
     local_id: Option<String>,
@@ -56,7 +56,7 @@ struct TermiusRawIdentity {
     updated_at: Option<String>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 struct TermiusRawSshKey {
     id: String,
     local_id: Option<String>,

@@ -40,7 +40,7 @@ pub enum TelnetEnterMode {
     Lf,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct TelnetSessionConfig {
     pub name: String,
     pub host: String,
@@ -59,6 +59,31 @@ pub struct TelnetSessionConfig {
     pub encoding: String,
     pub cols: u16,
     pub rows: u16,
+}
+
+impl std::fmt::Debug for TelnetSessionConfig {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("TelnetSessionConfig")
+            .field("name", &self.name)
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .field("username", &self.username)
+            .field("password", &self.password.as_ref().map(|_| "<redacted>"))
+            .field("backspace_mode", &self.backspace_mode)
+            .field("raw_tcp", &self.raw_tcp)
+            .field("enter_mode", &self.enter_mode)
+            .field("local_echo", &self.local_echo)
+            .field("local_line_edit", &self.local_line_edit)
+            .field("force_character_at_a_time", &self.force_character_at_a_time)
+            .field("send_naws", &self.send_naws)
+            .field("send_sga", &self.send_sga)
+            .field("auto_login", &self.auto_login)
+            .field("encoding", &self.encoding)
+            .field("cols", &self.cols)
+            .field("rows", &self.rows)
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -549,7 +574,22 @@ impl Default for LocalSessionConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::{SftpCwdFollowMode, SftpSettings, SshSessionConfig, SshSessionProfile};
+    use super::{
+        SftpCwdFollowMode, SftpSettings, SshSessionConfig, SshSessionProfile, TelnetSessionConfig,
+    };
+
+    #[test]
+    fn telnet_debug_output_redacts_password() {
+        let secret = "nya-telnet-password-never-log";
+        let config = TelnetSessionConfig {
+            password: Some(secret.to_string()),
+            ..TelnetSessionConfig::default()
+        };
+        let output = format!("{config:?}");
+
+        assert!(!output.contains(secret));
+        assert!(output.contains("<redacted>"));
+    }
 
     #[test]
     fn network_device_runtime_capabilities_do_not_mutate_saved_settings() {

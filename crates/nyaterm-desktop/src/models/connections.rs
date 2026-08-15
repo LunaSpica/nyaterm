@@ -289,7 +289,7 @@ mod connection_editor_field_tests {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub(crate) struct ConnectionEditorState {
     pub(crate) id: Option<String>,
     pub(crate) kind: ConnectionKindTab,
@@ -378,6 +378,26 @@ pub(crate) struct ConnectionEditorState {
     pub(crate) connect_after_save: bool,
     pub(crate) focused_field: ConnectionEditorField,
     pub(crate) error: Option<String>,
+}
+
+impl std::fmt::Debug for ConnectionEditorState {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("ConnectionEditorState")
+            .field("id", &self.id)
+            .field("kind", &self.kind)
+            .field("name", &self.name)
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .field("username", &self.username)
+            .field("auth_mode", &self.auth_mode)
+            .field("password", &"<redacted>")
+            .field("existing_password", &"<redacted>")
+            .field("post_login_command", &"<redacted>")
+            .field("focused_field", &self.focused_field)
+            .field("error", &self.error)
+            .finish_non_exhaustive()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

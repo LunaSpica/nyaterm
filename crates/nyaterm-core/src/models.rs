@@ -443,7 +443,7 @@ impl Default for VncReconnectSettings {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct ConnectionAuth {
     #[serde(default = "default_auth_mode")]
     pub mode: String,
@@ -461,7 +461,7 @@ pub struct ConnectionAuth {
     pub has_password: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SshKey {
     #[serde(default = "uuid_v4")]
     pub id: String,
@@ -482,7 +482,7 @@ pub struct SshKey {
     pub has_cert_data: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct DecryptedSshKey {
     pub id: String,
     pub name: String,
@@ -491,7 +491,7 @@ pub struct DecryptedSshKey {
     pub passphrase: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SavedPassword {
     #[serde(default = "uuid_v4")]
     pub id: String,
@@ -502,14 +502,14 @@ pub struct SavedPassword {
     pub has_password: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct DecryptedSavedPassword {
     pub id: String,
     pub name: String,
     pub password: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SavedCredential {
     #[serde(default = "uuid_v4")]
     pub id: String,
@@ -529,7 +529,7 @@ pub struct SavedCredential {
     pub has_password: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct DecryptedSavedCredential {
     pub id: String,
     pub sort_order: i32,
@@ -541,7 +541,7 @@ pub struct DecryptedSavedCredential {
     pub enabled: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct OtpEntry {
     #[serde(default = "uuid_v4")]
     pub id: String,
@@ -565,7 +565,7 @@ pub struct OtpEntry {
     pub has_secret: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct DecryptedOtpEntry {
     pub id: String,
     pub otp_type: String,
@@ -577,6 +577,130 @@ pub struct DecryptedOtpEntry {
     pub period: u64,
     pub counter: u64,
 }
+
+macro_rules! impl_redacted_debug {
+    ($type:ident, safe { $($safe:ident),* $(,)? }, secret { $($secret:ident),* $(,)? }) => {
+        impl std::fmt::Debug for $type {
+            fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                let mut debug = formatter.debug_struct(stringify!($type));
+                $(debug.field(stringify!($safe), &self.$safe);)*
+                $(debug.field(
+                    stringify!($secret),
+                    &self.$secret.as_ref().map(|_| "<redacted>"),
+                );)*
+                debug.finish()
+            }
+        }
+    };
+}
+
+impl_redacted_debug!(
+    ConnectionAuth,
+    safe {
+        mode,
+        password_id,
+        key_id,
+        otp_id,
+        auto_fill_otp,
+        has_password
+    },
+    secret { password }
+);
+impl_redacted_debug!(
+    SshKey,
+    safe {
+        id,
+        name,
+        key_file_path,
+        cert_file_path,
+        has_key_data,
+        has_cert_data
+    },
+    secret {
+        key,
+        cert,
+        passphrase
+    }
+);
+impl_redacted_debug!(
+    DecryptedSshKey,
+    safe { id, name },
+    secret {
+        key_data,
+        cert_data,
+        passphrase
+    }
+);
+impl_redacted_debug!(
+    SavedPassword,
+    safe {
+        id,
+        name,
+        has_password
+    },
+    secret { password }
+);
+impl_redacted_debug!(
+    DecryptedSavedPassword,
+    safe { id, name },
+    secret { password }
+);
+impl_redacted_debug!(
+    SavedCredential,
+    safe {
+        id,
+        sort_order,
+        name,
+        username,
+        username_prompt_regex,
+        password_prompt_regex,
+        enabled,
+        has_password
+    },
+    secret { password }
+);
+impl_redacted_debug!(
+    DecryptedSavedCredential,
+    safe {
+        id,
+        sort_order,
+        name,
+        username,
+        username_prompt_regex,
+        password_prompt_regex,
+        enabled
+    },
+    secret { password }
+);
+impl_redacted_debug!(
+    OtpEntry,
+    safe {
+        id,
+        otp_type,
+        issuer,
+        username,
+        algorithm,
+        digits,
+        period,
+        counter,
+        has_secret
+    },
+    secret { secret }
+);
+impl_redacted_debug!(
+    DecryptedOtpEntry,
+    safe {
+        id,
+        otp_type,
+        issuer,
+        username,
+        algorithm,
+        digits,
+        period,
+        counter
+    },
+    secret { secret }
+);
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct ConnectionNetwork {
@@ -651,7 +775,7 @@ pub struct TunnelGroupsConfig {
     pub groups: Vec<TunnelGroup>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ProxyConfig {
     #[serde(default = "uuid_v4")]
     pub id: String,
@@ -672,6 +796,24 @@ pub struct ProxyConfig {
     pub password_id: Option<String>,
     #[serde(default)]
     pub group_id: Option<String>,
+}
+
+impl std::fmt::Debug for ProxyConfig {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("ProxyConfig")
+            .field("id", &self.id)
+            .field("name", &self.name)
+            .field("protocol", &self.protocol)
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .field("command", &self.command.as_ref().map(|_| "<redacted>"))
+            .field("username", &self.username)
+            .field("password", &self.password.as_ref().map(|_| "<redacted>"))
+            .field("password_id", &self.password_id)
+            .field("group_id", &self.group_id)
+            .finish()
+    }
 }
 
 impl Default for ProxyConfig {
@@ -2330,6 +2472,74 @@ fn uuid_v4() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn secret_bearing_model_debug_output_is_redacted() {
+        let secret = "nya-test-secret-never-log";
+        let values = [
+            format!(
+                "{:?}",
+                ConnectionAuth {
+                    password: Some(secret.to_string()),
+                    ..ConnectionAuth::default()
+                }
+            ),
+            format!(
+                "{:?}",
+                SshKey {
+                    id: "key-1".to_string(),
+                    name: "Test key".to_string(),
+                    key: Some(secret.to_string()),
+                    cert: Some(secret.to_string()),
+                    passphrase: Some(secret.to_string()),
+                    key_file_path: None,
+                    cert_file_path: None,
+                    has_key_data: true,
+                    has_cert_data: true,
+                }
+            ),
+            format!(
+                "{:?}",
+                DecryptedSavedCredential {
+                    id: "credential-1".to_string(),
+                    sort_order: 0,
+                    name: "Test credential".to_string(),
+                    username: "tester".to_string(),
+                    password: Some(secret.to_string()),
+                    username_prompt_regex: None,
+                    password_prompt_regex: None,
+                    enabled: true,
+                }
+            ),
+            format!(
+                "{:?}",
+                DecryptedOtpEntry {
+                    id: "otp-1".to_string(),
+                    otp_type: "totp".to_string(),
+                    issuer: "NyaTerm".to_string(),
+                    username: "tester".to_string(),
+                    secret: Some(secret.to_string()),
+                    algorithm: "SHA1".to_string(),
+                    digits: 6,
+                    period: 30,
+                    counter: 0,
+                }
+            ),
+            format!(
+                "{:?}",
+                ProxyConfig {
+                    command: Some(secret.to_string()),
+                    password: Some(secret.to_string()),
+                    ..ProxyConfig::default()
+                }
+            ),
+        ];
+
+        for output in values {
+            assert!(!output.contains(secret));
+            assert!(output.contains("<redacted>"));
+        }
+    }
 
     #[test]
     fn parses_legacy_ssh_connection_shape() {

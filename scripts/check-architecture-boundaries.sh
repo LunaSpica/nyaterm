@@ -2161,30 +2161,49 @@ check_no_matches \
   'use[[:space:]]+gpui_component|gpui_component::' \
   crates/nyaterm-desktop/src/features
 
-# Obvious secret-bearing Debug derives are forbidden. This is intentionally
-# conservative; if a secret-bearing type really needs Debug, implement a custom
-# redacted formatter and add a narrow exception here with a comment.
-# NOTE: the name match below is deliberately case-sensitive. `IGNORECASE` is a
-# gawk extension, so relying on it made this check behave differently depending
-# on which awk was installed. Keeping it case-sensitive keeps the result
-# identical everywhere. It also means the heuristic is currently very weak and
-# still needs a real triage pass over secret-bearing types.
+# Secret-bearing types may implement an explicitly redacted Debug formatter,
+# but must never derive one. The field check catches new types by content; the
+# type-name check also covers secret-bearing enums and private import records.
 if awk '
+  FNR == 1 {
+    derive = ""
+    in_struct = 0
+  }
   /#\[derive\(/ {
     derive = $0
-    file = FILENAME
-    line = FNR
+    derive_line = FNR
     next
   }
-  derive && /struct .*(secret|password|credential|otp|token|key)/ {
-    if (derive ~ /Debug/) {
-      printf "%s:%d: %s -> %s\n", file, line, derive, $0
+  derive && /^#\[/ {
+    next
+  }
+  derive && /(struct|enum)[[:space:]]+[[:alnum:]_]+/ {
+    dangerous_type = $0 ~ /(struct|enum)[[:space:]]+(ConnectionPasswordRecord|ConnectionAuth|SshKey|DecryptedSshKey|SavedPassword|DecryptedSavedPassword|SavedCredential|DecryptedSavedCredential|OtpEntry|DecryptedOtpEntry|AiProviderProfile|AiProviderCredential|CredentialCrypto|WebdavSyncSettings|S3SyncSettings|GiteeSnippetSyncSettings|OAuthDriveSyncSettings|AliyunDriveSyncSettings|GithubGistSyncSettings|LocalCloudSyncOptions|TranslationSettings|NyatermJsonImportFile|NyatermJsonPassword|NyatermJsonSshKey|NyatermJsonSshAuth|NyatermJsonSession|TermiusRawHost|TermiusRawIdentity|TermiusRawSshKey|GithubGistAuthState|GithubGistAuthEvent|CloudSyncSecretDraft|TranslationSecretDraft|NetworkProxyEditorState|ConnectionEditorState|TelnetSessionConfig)([^[:alnum:]_]|$)/
+    if (derive ~ /Debug/ && dangerous_type) {
+      printf "%s:%d: dangerous type derives Debug: %s -> %s\n", FILENAME, derive_line, derive, $0
+    }
+    if (derive ~ /Debug/ && $0 ~ /struct[[:space:]]+/) {
+      in_struct = 1
+      owner = $0
+      owner_derive = derive
+      owner_line = derive_line
+    }
+    derive = ""
+    next
+  }
+  in_struct {
+    lower = tolower($0)
+    if (lower ~ /^[[:space:]]*(pub(\([^)]*\))?[[:space:]]+)?(password|passphrase|private_key|key_data|secret|api_key|access_token|refresh_token|client_secret|secret_access_key|session_token|master_password|device_code|user_code)[[:space:]]*:/) {
+      printf "%s:%d: secret field owner derives Debug: %s -> %s -> %s\n", FILENAME, owner_line, owner_derive, owner, $0
+    }
+    if ($0 ~ /^[[:space:]]*}/) {
+      in_struct = 0
     }
   }
-  $0 !~ /^#\[derive\(/ && $0 !~ /^[[:space:]]*$/ {
+  derive && $0 !~ /^[[:space:]]*$/ {
     derive = ""
   }
-' crates/nyaterm-core/src/*.rs crates/nyaterm-desktop/src/models/*.rs crates/nyaterm-transport/src/*.rs \
+' $(rg --files crates -g '*.rs') \
   >/tmp/nyaterm-secret-debug.$$; then
   if [[ -s /tmp/nyaterm-secret-debug.$$ ]]; then
     fail "secret-bearing structs must not derive Debug"
