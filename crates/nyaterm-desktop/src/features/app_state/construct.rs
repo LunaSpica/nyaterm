@@ -63,6 +63,7 @@ impl NyaTermApp {
             ai_session_count,
             ai_message_count,
             ai_audit_count,
+            open_tabs,
         } = bootstrap;
         let store_status = (
             database_path.display().to_string(),
@@ -143,6 +144,9 @@ impl NyaTermApp {
             settings.interaction_default_encoding.clone(),
             settings.terminal_scrollback_lines.clamp(100, 100_000) as usize,
         );
+        stores.startup_restore.update(cx, |store, _| {
+            store.set_loaded_open_tabs(open_tabs);
+        });
 
         let connections_filter_placeholder =
             crate::i18n::text(&settings.language, "savedConnections.filter");

@@ -2,7 +2,7 @@ use gpui::{AppContext, Context, KeyDownEvent, Window};
 use nyaterm_core::{
     DiagnosticsExportOptions, DiagnosticsRuntimeSnapshot, export_diagnostics_archive,
 };
-use nyaterm_store::ConnectionStore;
+use nyaterm_store::{StoreDomain, store_request};
 use nyaterm_transport::SessionKind;
 
 use crate::features::{NyaTermApp, TextInputSetup};
@@ -41,28 +41,38 @@ impl NyaTermApp {
             return;
         }
 
-        match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .and_then(|store| store.verify_master_password(self.security.screen_lock_password_draft()))
-        {
-            Ok(true) => self.unlock_app(cx),
-            Ok(false) => {
-                let status = self.tr("lockScreen.wrongPassword").to_string();
-                self.security.clear_screen_lock_password_with_status(status);
-                self.reset_text_input("lock-screen.password", "", cx);
-                self.shell.set_status("screen unlock rejected".to_string());
+        let password = self.security.screen_lock_password_draft().to_string();
+        let request_password = password.clone();
+        self.submit_store_request(
+            0,
+            store_request(StoreDomain::Security, move |store| {
+                store.verify_master_password(&request_password)
+            }),
+            move |this, event, cx| {
+                match event.outcome {
+                    Ok(true) if this.security.screen_lock_password_draft() == password => {
+                        this.unlock_app(cx);
+                    }
+                    Ok(true) => {}
+                    Ok(false) if this.security.screen_lock_password_draft() == password => {
+                        let status = this.tr("lockScreen.wrongPassword").to_string();
+                        this.security.clear_screen_lock_password_with_status(status);
+                        this.reset_text_input("lock-screen.password", "", cx);
+                        this.shell.set_status("screen unlock rejected".to_string());
+                    }
+                    Ok(false) => {}
+                    Err(error) if this.security.screen_lock_password_draft() == password => {
+                        let status = format!("{}: {error}", this.tr("lockScreen.unlockFailed"));
+                        this.security.clear_screen_lock_password_with_status(status);
+                        this.reset_text_input("lock-screen.password", "", cx);
+                        this.shell.set_status("screen unlock failed".to_string());
+                    }
+                    Err(_) => {}
+                }
                 cx.notify();
-            }
-            Err(error) => {
-                let status = format!("{}: {error}", self.tr("lockScreen.unlockFailed"));
-                self.security.clear_screen_lock_password_with_status(status);
-                self.reset_text_input("lock-screen.password", "", cx);
-                self.shell.set_status("screen unlock failed".to_string());
-                cx.notify();
-            }
-        }
+            },
+            cx,
+        );
     }
 
     pub(in crate::features) fn handle_lock_key_down(

@@ -19,6 +19,7 @@ pub(in crate::features) enum SettingsSaveKind {
     Appearance,
     UiLayout,
     Keybindings,
+    FileExplorer,
 }
 
 impl SettingsSaveKind {
@@ -36,6 +37,7 @@ impl SettingsSaveKind {
             Self::Appearance => SettingsPersistenceDomain::Appearance,
             Self::UiLayout => SettingsPersistenceDomain::UiLayout,
             Self::Keybindings => SettingsPersistenceDomain::Keybindings,
+            Self::FileExplorer => SettingsPersistenceDomain::FileExplorer,
         }
     }
 
@@ -53,6 +55,7 @@ impl SettingsSaveKind {
             Self::Appearance => "appearance settings",
             Self::UiLayout => "UI layout settings",
             Self::Keybindings => "keybindings",
+            Self::FileExplorer => "file explorer settings",
         }
     }
 }
@@ -300,6 +303,7 @@ impl NyaTermApp {
             SettingsSaveKind::Appearance => store.save_appearance_settings(&snapshot),
             SettingsSaveKind::UiLayout => store.save_ui_layout_settings(&snapshot),
             SettingsSaveKind::Keybindings => store.save_keybindings(&snapshot.keybindings),
+            SettingsSaveKind::FileExplorer => store.save_file_explorer_favorite_dirs(&snapshot),
         });
         let task = match self.store_ui.try_submit(generation, request) {
             Ok(task) => task,

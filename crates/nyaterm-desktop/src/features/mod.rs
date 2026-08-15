@@ -38,8 +38,7 @@ pub(in crate::features) use crate::action_links::{
 };
 pub(in crate::features) use crate::theme::ThemePalette;
 pub(in crate::features) use ai::{
-    AiFeatureFocus, AiFeatureInit, AiFeatureState, ai_active_profile_drafts, ai_usage_counts,
-    is_agent_command_card,
+    AiFeatureFocus, AiFeatureInit, AiFeatureState, ai_active_profile_drafts, is_agent_command_card,
 };
 pub use app_state::NyaTermApp;
 pub(in crate::features) use commands::{

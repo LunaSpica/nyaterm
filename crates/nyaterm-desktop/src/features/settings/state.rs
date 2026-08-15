@@ -43,6 +43,7 @@ pub(in crate::features) enum SettingsPersistenceDomain {
     Appearance,
     UiLayout,
     Keybindings,
+    FileExplorer,
 }
 
 struct SettingsPersistenceSlot {

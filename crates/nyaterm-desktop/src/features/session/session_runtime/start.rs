@@ -6,7 +6,7 @@ use nyaterm_core::{
     AiExecutionProfile, ConnectionAuth, ConnectionType, SavedConnection, SftpCwdFollowMode,
     SftpSettings, SshAlgorithmMode, SshAlgorithmPreferences, SshProfile, resolve_ssh_terminal_type,
 };
-use nyaterm_store::{ConnectionStore, StoreBlockingClient, StoreDomain};
+use nyaterm_store::{ConnectionStore, StoreBlockingClient, StoreDomain, store_request};
 use nyaterm_transport::{
     LocalSessionConfig, RdpClipboardConfig, RdpDisplayConfig, RdpReconnectConfig, RdpSessionConfig,
     SerialSessionConfig, SessionKind, SshKeyAuthConfig, SshProxyConfig, SshSessionConfig,
@@ -281,15 +281,7 @@ impl NyaTermApp {
                             self.session
                                 .move_session_to_index(&session_id, insert_index);
                         }
-                        if let Ok(store) = ConnectionStore::open_with_portable_key_path(
-                            self.runtime.config_dir(),
-                            self.runtime.portable_key_path().map(ToOwned::to_owned),
-                        ) {
-                            let _ = store.mark_connection_used(&connection.id);
-                            if let Ok(Some(updated)) = store.get_connection(&connection.id) {
-                                self.connection_state.update_connection(updated);
-                            }
-                        }
+                        self.persist_connection_used(connection.id.clone(), cx);
                         self.activate_session_id(&session_id);
                         self.apply_pending_workspace_split_for_duplicate(&session_id);
                         self.shell
@@ -388,15 +380,7 @@ impl NyaTermApp {
                             self.session
                                 .move_session_to_index(&session_id, insert_index);
                         }
-                        if let Ok(store) = ConnectionStore::open_with_portable_key_path(
-                            self.runtime.config_dir(),
-                            self.runtime.portable_key_path().map(ToOwned::to_owned),
-                        ) {
-                            let _ = store.mark_connection_used(&connection.id);
-                            if let Ok(Some(updated)) = store.get_connection(&connection.id) {
-                                self.connection_state.update_connection(updated);
-                            }
-                        }
+                        self.persist_connection_used(connection.id.clone(), cx);
                         self.activate_session_id(&session_id);
                         self.apply_pending_workspace_split_for_duplicate(&session_id);
                         self.shell
@@ -541,6 +525,38 @@ impl NyaTermApp {
             agent_prompts: self.session.prompts.agent_broker(),
             otp_provider: self.session.prompts.otp_provider(),
         }
+    }
+
+    pub(in crate::features) fn persist_connection_used(
+        &mut self,
+        connection_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        let request_id = connection_id.clone();
+        self.submit_store_request(
+            0,
+            store_request(StoreDomain::Connections, move |store| {
+                store.mark_connection_used(&request_id)?;
+                store.get_connection(&request_id)
+            }),
+            move |this, event, cx| {
+                match event.outcome {
+                    Ok(Some(updated)) => {
+                        this.connection_state.update_connection(updated);
+                    }
+                    Ok(None) => {}
+                    Err(error) => {
+                        let message = format!(
+                            "failed to record recently used connection '{connection_id}': {error}"
+                        );
+                        this.shell.set_status(message.clone());
+                        this.settings.update_store_status(message, false);
+                    }
+                }
+                cx.notify();
+            },
+            cx,
+        );
     }
 
     pub(in crate::features) fn build_ssh_session_config(

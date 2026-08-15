@@ -1,6 +1,6 @@
 use gpui::{AppContext, Context, KeyDownEvent, PathPromptOptions, SharedString, Window};
 use nyaterm_core::KeywordHighlightRule;
-use nyaterm_store::ConnectionStore;
+use nyaterm_store::{StoreDomain, store_request};
 
 use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::{KeywordHighlightEditorField, KeywordHighlightPathPromptResult};
@@ -30,29 +30,30 @@ impl NyaTermApp {
         if self.defer_settings_persistence(cx) {
             return;
         }
-        match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .and_then(|store| store.save_keyword_highlights(self.settings.keyword_config()))
-        {
-            Ok(config) => {
-                self.settings.replace_keyword_config(config);
-                self.settings
-                    .update_store_status("keyword highlight settings saved", true);
-                self.shell
-                    .set_status("keyword highlight settings saved".to_string());
-            }
-            Err(error) => {
-                self.settings.update_store_status(
-                    format!("keyword highlight settings save failed: {error}"),
-                    false,
-                );
-                self.shell
-                    .set_status(self.settings.store_status().message.to_string());
-            }
-        }
-        cx.notify();
+        let config = self.settings.keyword_config().clone();
+        self.submit_store_request(
+            0,
+            store_request(StoreDomain::Settings, move |store| {
+                store.save_keyword_highlights(&config)
+            }),
+            |this, event, cx| {
+                match event.outcome {
+                    Ok(config) => {
+                        this.settings.replace_keyword_config(config);
+                        this.settings
+                            .update_store_status("keyword highlight settings saved", true);
+                    }
+                    Err(error) => this.settings.update_store_status(
+                        format!("keyword highlight settings save failed: {error}"),
+                        false,
+                    ),
+                }
+                this.shell
+                    .set_status(this.settings.store_status().message.to_string());
+                cx.notify();
+            },
+            cx,
+        );
     }
 
     pub(in crate::features) fn prompt_keyword_highlight_import(&mut self, cx: &mut Context<Self>) {
@@ -71,8 +72,7 @@ impl NyaTermApp {
             multiple: false,
             prompt: Some(SharedString::from("Import keyword highlight JSON")),
         };
-        let config_dir = self.runtime.config_dir().to_path_buf();
-        let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
+        let store = self.store_blocking_client();
         let receiver = cx.prompt_for_paths(options);
         self.shell
             .set_status("selecting keyword highlight import file".to_string());
@@ -82,12 +82,10 @@ impl NyaTermApp {
                     Some(path) => {
                         cx.background_spawn(async move {
                             match read_keyword_highlight_import_text(&path) {
-                                Ok(raw) => match ConnectionStore::open_with_portable_key_path(
-                                    &config_dir,
-                                    portable_key_path,
-                                )
-                                .and_then(|store| store.import_keyword_highlights_json(&raw))
-                                {
+                                Ok(raw) => match store
+                                    .request_fn(StoreDomain::Settings, move |database| {
+                                        database.import_keyword_highlights_json(&raw)
+                                    }) {
                                     Ok((_, result)) => KeywordHighlightPathPromptResult::Imported {
                                         imported_rules: result.imported_rules,
                                         updated_rules: result.updated_rules,
@@ -111,7 +109,7 @@ impl NyaTermApp {
                 Err(_) => KeywordHighlightPathPromptResult::Closed,
             };
             let _ = this.update(cx, |this, cx| {
-                this.apply_keyword_highlight_import_result(result);
+                this.apply_keyword_highlight_import_result(result, cx);
                 cx.notify();
             });
         })
@@ -119,7 +117,11 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    fn apply_keyword_highlight_import_result(&mut self, result: KeywordHighlightPathPromptResult) {
+    fn apply_keyword_highlight_import_result(
+        &mut self,
+        result: KeywordHighlightPathPromptResult,
+        cx: &mut Context<Self>,
+    ) {
         if !self.settings.finish_keyword_highlight_path_prompt() {
             return;
         }
@@ -129,7 +131,7 @@ impl NyaTermApp {
                 updated_rules,
                 total_rules,
             } => {
-                self.refresh_keyword_highlights();
+                self.refresh_keyword_highlights(cx);
                 self.rebase_open_settings_draft();
                 self.shell.set_status(format!(
                     "imported {imported_rules} keyword highlight rule(s), updated {updated_rules}, total {total_rules}"
@@ -155,16 +157,29 @@ impl NyaTermApp {
         }
     }
 
-    pub(in crate::features) fn refresh_keyword_highlights(&mut self) {
+    pub(in crate::features) fn refresh_keyword_highlights(&mut self, cx: &mut Context<Self>) {
         self.invalidate_paint_theme_caches();
-        if let Ok(store) = ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        ) && let Ok(config) = store.load_keyword_highlights()
-        {
-            self.settings.replace_keyword_config(config);
-            self.forget_text_inputs("keyword.highlight.");
-        }
+        self.submit_store_request(
+            0,
+            store_request(StoreDomain::Settings, |store| {
+                store.load_keyword_highlights()
+            }),
+            |this, event, cx| {
+                match event.outcome {
+                    Ok(config) => {
+                        this.settings.replace_keyword_config(config);
+                        this.forget_text_inputs("keyword.highlight.");
+                    }
+                    Err(error) => {
+                        let message = format!("keyword highlight refresh failed: {error}");
+                        this.shell.set_status(message.clone());
+                        this.settings.update_store_status(message, false);
+                    }
+                }
+                cx.notify();
+            },
+            cx,
+        );
     }
 
     pub(in crate::features) fn toggle_keyword_highlight_builtin(

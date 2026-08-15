@@ -7,6 +7,7 @@ pub struct StartupRestoreStore {
     queue: Vec<RestorableOpenTab>,
     pending_pane_layouts: Vec<RestorableWorkspacePaneNode>,
     pending_active_pane_indexes: Vec<usize>,
+    loaded_open_tabs: Option<Vec<RestorableOpenTab>>,
 }
 
 impl StartupRestoreStore {
@@ -40,6 +41,14 @@ impl StartupRestoreStore {
 
     pub fn set_queue(&mut self, queue: Vec<RestorableOpenTab>) {
         self.queue = queue;
+    }
+
+    pub fn set_loaded_open_tabs(&mut self, tabs: Vec<RestorableOpenTab>) {
+        self.loaded_open_tabs = Some(tabs);
+    }
+
+    pub fn take_loaded_open_tabs(&mut self) -> Option<Vec<RestorableOpenTab>> {
+        self.loaded_open_tabs.take()
     }
 
     pub fn queue_empty(&self) -> bool {

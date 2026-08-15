@@ -2,7 +2,7 @@ use gpui::{Context, Window};
 use nyaterm_core::{
     AiExecutionProfile, RestorableOpenTab, RestorablePaneNode, RestorableWorkspacePaneNode,
 };
-use nyaterm_store::{ConnectionStore, StoreDomain, store_request};
+use nyaterm_store::{StoreDomain, store_request};
 use nyaterm_transport::{
     LocalSessionConfig, RdpClipboardConfig, RdpDisplayConfig, RdpReconnectConfig, RdpSessionConfig,
     SessionInfo, VncClipboardConfig, VncDisplayConfig, VncReconnectConfig, VncSecurityConfig,
@@ -307,18 +307,14 @@ impl NyaTermApp {
             self.mark_startup_restore_complete();
             return;
         }
-        let Ok(store) = ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        ) else {
+        let Some(tabs) = self
+            .stores
+            .startup_restore
+            .update(cx, |store, _| store.take_loaded_open_tabs())
+        else {
             self.mark_startup_restore_complete();
             return;
         };
-        let Ok(tabs) = store.load_open_tabs() else {
-            self.mark_startup_restore_complete();
-            return;
-        };
-        drop(store);
         if tabs.is_empty() {
             self.mark_startup_restore_complete();
             return;

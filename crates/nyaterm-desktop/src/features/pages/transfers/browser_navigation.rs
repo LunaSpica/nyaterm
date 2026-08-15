@@ -1,5 +1,4 @@
 use gpui::{Context, Window};
-use nyaterm_store::ConnectionStore;
 use nyaterm_transport::{RemoteFilePath, SftpFileEntry};
 
 use std::collections::VecDeque;
@@ -266,7 +265,7 @@ impl NyaTermApp {
                 .set_browser_status("Auto CWD disabled for this connection");
         }
         self.transfer.reset_browser_auto_sync_cwd();
-        self.persist_transfer_browser_ui_settings();
+        self.persist_transfer_browser_ui_settings(cx);
         if enabled {
             self.start_transfer_sync_cwd_job(window, cx);
         } else {
@@ -290,7 +289,7 @@ impl NyaTermApp {
             "hidden files hidden".to_string()
         };
         self.transfer.set_browser_status(status);
-        self.persist_transfer_browser_ui_settings();
+        self.persist_transfer_browser_ui_settings(cx);
         cx.notify();
     }
 
@@ -341,31 +340,18 @@ impl NyaTermApp {
         let favorites = self.transfer.browser_favorites_owned();
         self.settings
             .set_file_explorer_favorites(connection_id, favorites);
-        self.persist_transfer_browser_ui_settings();
+        self.persist_transfer_browser_ui_settings(cx);
         cx.notify();
     }
 
-    pub(in crate::features::pages::transfers) fn persist_transfer_browser_ui_settings(&mut self) {
-        match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .and_then(|store| store.save_file_explorer_favorite_dirs(self.settings.summary()))
-        {
-            Ok(settings) => {
-                self.apply_gpui_settings(settings);
-                self.settings
-                    .update_store_status("file explorer favorites saved", true);
-            }
-            Err(error) => {
-                self.settings.update_store_status(
-                    format!("file explorer favorites save failed: {error}"),
-                    false,
-                );
-                self.transfer
-                    .set_browser_status(self.settings.store_status().message.to_string());
-            }
-        }
+    pub(in crate::features::pages::transfers) fn persist_transfer_browser_ui_settings(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        self.queue_settings_save(
+            crate::features::settings::SettingsSaveKind::FileExplorer,
+            cx,
+        );
     }
 
     pub(in crate::features::pages::transfers) fn active_transfer_browser_connection_id(

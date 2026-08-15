@@ -12,7 +12,7 @@ use nyaterm_core::{
     get_tracked_submission_command, manual_empty_command_suggestions, resync_from_terminal_line,
     search_command_sources, terminal_input_tracker_below_min_chars,
 };
-use nyaterm_store::ConnectionStore;
+use nyaterm_store::{StoreDomain, store_request};
 
 use crate::features::NyaTermApp;
 use crate::features::terminal::terminal_runtime::TERMINAL_INPUT_LATENCY_WINDOW;
@@ -996,45 +996,44 @@ impl NyaTermApp {
         if command.is_empty() {
             return;
         }
-        match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        ) {
-            Ok(store) => {
-                if let Err(error) = store.delete_command_history(&command) {
-                    self.shell
-                        .set_status(format!("failed to delete history: {error}"));
-                    cx.notify();
-                    return;
+        let request_command = command.clone();
+        self.submit_store_request(
+            0,
+            store_request(StoreDomain::Commands, move |store| {
+                store.delete_command_history(&request_command)?;
+                store.list_command_history(64)
+            }),
+            move |this, event, cx| {
+                match event.outcome {
+                    Ok(history) => {
+                        this.commands.replace_command_history(history);
+                        this.session.remove_command_from_all_history(&command);
+                        if let Some(state) = this.terminal.assist.command_suggestions.as_mut() {
+                            state.items.retain(|item| {
+                                !(item.source == "history" && item.command == command)
+                            });
+                            if state.items.is_empty() {
+                                this.terminal.assist.command_suggestions = None;
+                            } else {
+                                state.selected_index = command_suggestion_clamp_selection(
+                                    state.selected_index,
+                                    state.items.len(),
+                                );
+                            }
+                        } else {
+                            this.refresh_command_suggestions(cx);
+                        }
+                        this.shell
+                            .set_status(format!("deleted history command '{command}'"));
+                    }
+                    Err(error) => this
+                        .shell
+                        .set_status(format!("failed to delete history: {error}")),
                 }
-                self.commands
-                    .replace_command_history(store.list_command_history(64).unwrap_or_default());
-                self.session.remove_command_from_all_history(&command);
-            }
-            Err(error) => {
-                self.shell
-                    .set_status(format!("failed to open store: {error}"));
                 cx.notify();
-                return;
-            }
-        }
-
-        if let Some(state) = self.terminal.assist.command_suggestions.as_mut() {
-            state
-                .items
-                .retain(|item| !(item.source == "history" && item.command == command));
-            if state.items.is_empty() {
-                self.terminal.assist.command_suggestions = None;
-            } else {
-                state.selected_index =
-                    command_suggestion_clamp_selection(state.selected_index, state.items.len());
-            }
-        } else {
-            self.refresh_command_suggestions(cx);
-        }
-        self.shell
-            .set_status(format!("deleted history command '{command}'"));
-        cx.notify();
+            },
+            cx,
+        );
     }
 
     pub(in crate::features) fn command_suggestions_overlay(

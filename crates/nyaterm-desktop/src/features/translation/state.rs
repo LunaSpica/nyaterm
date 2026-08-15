@@ -495,9 +495,7 @@ mod tests {
         let mut first = state.finish_settings_persistence(first_generation, true);
         assert!(!first.apply_result());
         assert!(!first.report_result());
-        let (latest_generation, latest) = first
-            .take_next()
-            .expect("latest snapshot should follow");
+        let (latest_generation, latest) = first.take_next().expect("latest snapshot should follow");
         assert_eq!(latest.target_language, "ja");
 
         let failed = state.finish_settings_persistence(latest_generation, false);

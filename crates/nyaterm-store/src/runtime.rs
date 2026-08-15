@@ -521,6 +521,7 @@ pub struct BootstrapSnapshot {
     pub ai_session_count: usize,
     pub ai_message_count: usize,
     pub ai_audit_count: usize,
+    pub open_tabs: Vec<nyaterm_core::RestorableOpenTab>,
 }
 
 pub struct LoadBootstrap;
@@ -560,6 +561,7 @@ impl StoreRequest for LoadBootstrap {
             ai_session_count: ai_history.sessions.len(),
             ai_message_count: ai_history.messages.len(),
             ai_audit_count: store.list_ai_audit_logs(None)?.len(),
+            open_tabs: store.load_open_tabs()?,
         })
     }
 }
