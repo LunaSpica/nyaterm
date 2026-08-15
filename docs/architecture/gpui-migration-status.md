@@ -306,6 +306,9 @@ these as staged extraction candidates, not as formatting-only refactor targets.
 - The compatibility tests for the model façade now live in
   `nyaterm-core/src/models/tests.rs` with explicit imports, leaving
   `models/mod.rs` focused on default-value and compatibility helper functions.
+- Session-import compatibility tests now live in
+  `nyaterm-core/src/session_import/tests.rs` with explicit parser/helper
+  imports; importer behavior and format coverage are unchanged.
 - `gpui-component` infrastructure and ordinary-control migration are in place.
   The workspace uses vendored `gpui-component` `0.5.2` at
   `e1570bdc8fd2dc17d38cab09e74b1783bdf3b24b` and vendored Zed GPUI at
