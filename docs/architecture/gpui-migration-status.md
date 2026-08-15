@@ -285,6 +285,10 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   restorable pane, tab and window-layout contracts. The `models` facade keeps
   the existing root and `nyaterm_core::models::*` paths, while serde tags,
   defaults and sparse compatibility fields remain unchanged.
+- `nyaterm-core::models::settings` now owns the application-settings,
+  recording, search-engine and keyword-highlight compatibility models and
+  defaults. `SavedConnection` and crate-root re-exports retain their existing
+  paths; no persisted field names or default behavior changed.
 - `gpui-component` infrastructure and ordinary-control migration are in place.
   The workspace uses vendored `gpui-component` `0.5.2` at
   `e1570bdc8fd2dc17d38cab09e74b1783bdf3b24b` and vendored Zed GPUI at
