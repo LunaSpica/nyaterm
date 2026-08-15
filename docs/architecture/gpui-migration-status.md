@@ -293,6 +293,10 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   `nyaterm-core::models::credentials`, including their custom redacted
   `Debug` implementations. Credential, OTP and SSH-key serialization remains
   unchanged and the existing root-level compatibility exports remain intact.
+- Network/tunnel/proxy models and Quick Command catalogs now live in
+  `nyaterm-core::models::network` and `nyaterm-core::models::quick_commands`.
+  Their validation, export JSON shape, ordering behavior and root-level API are
+  unchanged.
 - `gpui-component` infrastructure and ordinary-control migration are in place.
   The workspace uses vendored `gpui-component` `0.5.2` at
   `e1570bdc8fd2dc17d38cab09e74b1783bdf3b24b` and vendored Zed GPUI at
