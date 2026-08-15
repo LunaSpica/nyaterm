@@ -167,6 +167,7 @@ icons/session/disconnect.svg	md:filled/link_off.svg
 icons/session/more.svg	md:filled/more_horiz.svg
 icons/session/reconnect.svg	md:filled/refresh.svg
 icons/session/record.svg	md:filled/fiber_manual_record.svg
+icons/session/folder-open.svg	md:filled/folder_open.svg
 icons/session/rename.svg	md:filled/drive_file_rename_outline.svg
 icons/session/save.svg	md:filled/save.svg
 icons/session/stop.svg	md:filled/stop.svg

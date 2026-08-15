@@ -62,7 +62,7 @@ pub(in crate::features) use formatting::{
 pub(in crate::features) use icons::{
     CONNECTION_ICON_OPTIONS, DEFAULT_CONNECTION_ICON, IconDef, QUICK_COMMAND_ICON_OPTIONS,
     SEARCH_ENGINE_ICON_IDS, file_entry_icon, infer_connection_icon_key_from_remote_system,
-    quick_command_icon, resolve_connection_icon, search_engine_icon,
+    known_search_engine_icon, quick_command_icon, resolve_connection_icon, search_engine_icon,
 };
 pub(in crate::features) use panels::{
     SendCommandFeatureFocus, SendCommandFeatureState, SendCommandPresentationState,

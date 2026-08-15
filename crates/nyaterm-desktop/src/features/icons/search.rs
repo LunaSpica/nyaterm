@@ -46,19 +46,31 @@ pub(in crate::features) fn search_engine_icon(
     icon: Option<&str>,
     palette: ThemePalette,
 ) -> IconDef {
-    let key = icon.unwrap_or("default");
+    known_search_engine_icon(icon)
+        .map(|(path, color)| IconDef::mono(path, color.unwrap_or(palette.text_muted)))
+        .unwrap_or_else(|| IconDef::mono("icons/fe/search.svg", palette.text_muted))
+}
+
+/// Resolve only configured Tauri search icons. The terminal context menu omits
+/// the icon slot when the old UI would not have found a matching component.
+pub(in crate::features) fn known_search_engine_icon(
+    icon: Option<&str>,
+) -> Option<(&'static str, Option<u32>)> {
+    let key = icon?;
+    if key == "default" {
+        return Some(("icons/fe/search.svg", None));
+    }
     SEARCH_ICONS
         .iter()
         .find(|(candidate, _, _)| *candidate == key)
-        .map_or_else(
-            || IconDef::mono("icons/fe/search.svg", palette.text_muted),
-            |(_, path, color)| IconDef::mono(path, *color),
-        )
+        .map(|(_, path, color)| (*path, Some(*color)))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{SEARCH_ENGINE_ICON_IDS, ThemePalette, search_engine_icon};
+    use super::{
+        SEARCH_ENGINE_ICON_IDS, ThemePalette, known_search_engine_icon, search_engine_icon,
+    };
 
     fn palette() -> ThemePalette {
         crate::theme::theme_palette("github-dark")
@@ -82,5 +94,19 @@ mod tests {
         assert_eq!(search_engine_icon(None, palette()), fallback);
         assert_eq!(search_engine_icon(Some("altavista"), palette()), fallback);
         assert_eq!(fallback.path, "icons/fe/search.svg");
+    }
+
+    #[test]
+    fn strict_lookup_omits_unknown_and_missing_icons() {
+        assert!(known_search_engine_icon(None).is_none());
+        assert!(known_search_engine_icon(Some("altavista")).is_none());
+        assert_eq!(
+            known_search_engine_icon(Some("google")),
+            Some(("icons/brand/google.svg", Some(0x4285f4)))
+        );
+        assert_eq!(
+            known_search_engine_icon(Some("default")),
+            Some(("icons/fe/search.svg", None))
+        );
     }
 }

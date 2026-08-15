@@ -725,7 +725,8 @@ impl NyaTermApp {
         let context_menu_enabled = !session_id.is_empty()
             && !terminal_mouse_reporting
             && !self.settings.summary().interaction_right_click_paste;
-        let context_menu_items = self.terminal_context_menu_items(context_selection, cx);
+        let context_menu_items =
+            self.terminal_context_menu_items(session_id.to_string(), context_selection, cx);
 
         let canvas = div()
             .flex_1()
@@ -1284,6 +1285,7 @@ impl NyaTermApp {
                                 }),
                             context_menu_items,
                         )
+                        .min_width(px(200.))
                         .enabled(context_menu_enabled),
                     )
                     .when(is_active && self.terminal.search.open, |this| {

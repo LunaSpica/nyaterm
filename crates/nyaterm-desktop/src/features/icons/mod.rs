@@ -23,7 +23,9 @@ pub(in crate::features) use connection::{
 pub(in crate::features) use file_kind::file_entry_icon;
 pub(in crate::features) use quick::{QUICK_COMMAND_ICON_OPTIONS, quick_command_icon};
 pub(in crate::features) use remote_system::infer_connection_icon_key_from_remote_system;
-pub(in crate::features) use search::{SEARCH_ENGINE_ICON_IDS, search_engine_icon};
+pub(in crate::features) use search::{
+    SEARCH_ENGINE_ICON_IDS, known_search_engine_icon, search_engine_icon,
+};
 
 use crate::theme::ThemePalette;
 

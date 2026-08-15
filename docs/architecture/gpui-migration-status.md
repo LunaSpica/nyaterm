@@ -6,10 +6,19 @@ remaining entries here describe targeted parity, compatibility, ownership, and
 cleanup work rather than a broad half-migrated application state. Keep dynamic
 counts here instead of in `AGENTS.md`.
 
-Last updated from the working tree on 2026-08-13.
+Last updated from the working tree on 2026-08-15.
 
 ## Tauri Main Parity Refreshes
 
+- 2026-08-15 completed terminal context-menu parity against the retained Tauri
+  reference. The native menu now matches its selection-dependent tree,
+  recording modes and actions, search-engine URL semantics and brand colors,
+  translation availability, and immediate custom AI submission. All
+  session-sensitive actions carry the clicked pane's session id; recording
+  templates receive the saved connection name and a bounded, cycle-safe group
+  path, while automatic transcript saves use collision-free paths. The GPUI
+  wrapper owns the 200px menu minimum width and optional icon tint without
+  modifying `gpui-component`.
 - 2026-08-13 fast-forwarded the clean Tauri reference from `b6b8ab71` to
   `0fe0fee` and implemented the VNC-focused delta natively. Core now stores a
   compatibility-safe `ConnectionType::Vnc` with sparse serde defaults for host,

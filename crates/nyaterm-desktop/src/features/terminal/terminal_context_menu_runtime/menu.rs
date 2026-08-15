@@ -1,14 +1,12 @@
 use gpui::{ClipboardItem, Context};
+use nyaterm_core::{AiAction, AiContext};
+use nyaterm_transport::{RecordingMode, RecordingStatus};
 use nyaterm_ui::NyaMenuItem;
 
-use crate::action_links::{ActionLinkAction, actions_for_match, find_action_links};
-use crate::features::NyaTermApp;
-use crate::models::{NavItem, RecordingPathPromptKind, SettingsTab, TerminalSearchMode};
+use crate::features::{NyaTermApp, known_search_engine_icon};
+use crate::models::{AiPreparedRequest, NavItem, SettingsTab, TerminalSearchMode};
 
-use super::helpers::{
-    available_translation_providers, open_external_url, search_engine_url,
-    selection_as_openable_url,
-};
+use super::helpers::{available_translation_providers, open_external_url, search_engine_url};
 
 impl NyaTermApp {
     pub(in crate::features) fn prepare_terminal_context_menu(&mut self, cx: &mut Context<Self>) {
@@ -23,6 +21,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn terminal_context_menu_items(
         &mut self,
+        session_id: String,
         selected: String,
         cx: &mut Context<Self>,
     ) -> Vec<NyaMenuItem> {
@@ -50,33 +49,14 @@ impl NyaTermApp {
                         cx.notify();
                     })),
             );
-            if let Some(url) = selection_as_openable_url(&selected) {
-                let open_url = url.clone();
-                items.push(
-                    NyaMenuItem::action(self.tr("terminalCtx.openLink"))
-                        .icon("icons/conn/connect.svg")
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            match open_external_url(&open_url) {
-                                Ok(()) => {
-                                    this.shell.set_status(format!("opened link: {open_url}"));
-                                }
-                                Err(error) => {
-                                    this.shell.set_status(format!("open link failed: {error}"));
-                                }
-                            }
-                            cx.notify();
-                        })),
-                );
-            }
-
-            items.extend(self.terminal_selection_action_link_items(&selected, cx));
-
             let selected_for_find = selected.clone();
+            let find_session_id = session_id.clone();
             items.push(
                 NyaMenuItem::action(self.tr("terminalCtx.find"))
                     .icon("icons/fe/search.svg")
                     .shortcut(find_sc)
                     .on_click(cx.listener(move |this, _, window, cx| {
+                        this.activate_workspace_pane(find_session_id.clone(), cx);
                         this.terminal.search.query = selected_for_find.clone();
                         this.terminal.search.mode = TerminalSearchMode::Buffer;
                         this.terminal.search.active_index = 0;
@@ -90,7 +70,7 @@ impl NyaTermApp {
                     .icon("icons/menu/travel-explore.svg"),
             );
 
-            let ai_items = self.terminal_ai_context_menu_items(&selected, cx);
+            let ai_items = self.terminal_ai_context_menu_items(&session_id, &selected, cx);
             if !ai_items.is_empty() {
                 items
                     .push(NyaMenuItem::submenu(self.tr("ai.title"), ai_items).icon("icons/ai.svg"));
@@ -105,50 +85,63 @@ impl NyaTermApp {
             }
 
             let selected_for_paste = selected.clone();
+            let paste_session_id = session_id.clone();
+            let paste_selected_session_id = session_id.clone();
             items.extend([
                 NyaMenuItem::separator(),
                 NyaMenuItem::action(self.tr("terminalCtx.paste"))
                     .icon("icons/menu/paste.svg")
                     .shortcut(paste_sc)
-                    .on_click(cx.listener(|this, _, window, cx| {
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.activate_workspace_pane(paste_session_id.clone(), cx);
                         this.paste_from_clipboard(window, cx);
                     })),
                 NyaMenuItem::action(self.tr("terminalCtx.pasteSelectedText"))
                     .icon("icons/menu/paste-go.svg")
                     .shortcut(paste_sel_sc)
                     .on_click(cx.listener(move |this, _, window, cx| {
+                        this.activate_workspace_pane(paste_selected_session_id.clone(), cx);
                         this.paste_terminal_text(selected_for_paste.clone(), window, cx);
                     })),
             ]);
         } else {
+            let paste_session_id = session_id.clone();
+            let find_session_id = session_id.clone();
             items.extend([
                 NyaMenuItem::action(self.tr("terminalCtx.paste"))
                     .icon("icons/menu/paste.svg")
                     .shortcut(paste_sc)
-                    .on_click(cx.listener(|this, _, window, cx| {
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.activate_workspace_pane(paste_session_id.clone(), cx);
                         this.paste_from_clipboard(window, cx);
                     })),
                 NyaMenuItem::action(self.tr("terminalCtx.find"))
                     .icon("icons/fe/search.svg")
                     .shortcut(find_sc)
-                    .on_click(cx.listener(|this, _, window, cx| {
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.activate_workspace_pane(find_session_id.clone(), cx);
                         this.open_terminal_search(window, cx);
                     })),
             ]);
         }
 
-        let recording_items = self.terminal_recording_menu_items(recording_sc, cx);
+        let recording_items = self.terminal_recording_menu_items(&session_id, recording_sc, cx);
+        let clear_screen_session_id = session_id.clone();
+        let clear_all_session_id = session_id.clone();
+        let select_all_session_id = session_id;
         items.extend([
             NyaMenuItem::separator(),
             NyaMenuItem::action(self.tr("terminalCtx.clearScreen"))
                 .icon("icons/menu/clear-all.svg")
                 .shortcut(clear_sc)
-                .on_click(cx.listener(|this, _, _, cx| {
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.activate_workspace_pane(clear_screen_session_id.clone(), cx);
                     this.send_terminal_clear_screen(cx);
                 })),
             NyaMenuItem::action(self.tr("terminalCtx.clearAll"))
                 .icon("icons/menu/delete-sweep.svg")
-                .on_click(cx.listener(|this, _, _, cx| {
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.activate_workspace_pane(clear_all_session_id.clone(), cx);
                     this.clear_terminal(cx);
                 })),
             NyaMenuItem::separator(),
@@ -158,13 +151,9 @@ impl NyaTermApp {
             NyaMenuItem::action(self.tr("terminalCtx.selectAll"))
                 .icon("icons/menu/select-all.svg")
                 .shortcut(select_all_sc)
-                .on_click(cx.listener(|this, _, _, cx| {
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.activate_workspace_pane(select_all_session_id.clone(), cx);
                     this.select_all_terminal(cx);
-                })),
-            NyaMenuItem::action(self.tr("terminalCtx.moreActions"))
-                .icon("icons/session/more.svg")
-                .on_click(cx.listener(|this, _, window, cx| {
-                    this.open_terminal_actions(window, cx);
                 })),
         ]);
         items
@@ -172,129 +161,89 @@ impl NyaTermApp {
 
     fn terminal_recording_menu_items(
         &self,
+        session_id: &str,
         shortcut: String,
         cx: &mut Context<Self>,
     ) -> Vec<NyaMenuItem> {
-        let active_id = self.session.active_id_owned();
-        let is_recording = active_id
-            .as_deref()
-            .is_some_and(|session_id| self.recording.is_recording(session_id));
-        let recording_path = active_id
-            .as_deref()
-            .and_then(|session_id| self.recording.status(session_id))
-            .and_then(|status| status.file_path);
-        let toggle_label = if is_recording {
-            self.tr("recording.stop")
-        } else {
-            self.tr("recording.startTranscript")
-        };
-        let mut items = vec![
-            NyaMenuItem::action(toggle_label)
-                .shortcut(shortcut)
-                .disabled(active_id.is_none())
-                .on_click(cx.listener(|this, _, _, cx| {
-                    this.toggle_active_session_recording(cx);
-                })),
-            NyaMenuItem::action(self.tr("recording.saveTranscript"))
-                .disabled(active_id.is_none())
-                .on_click(cx.listener(|this, _, _, cx| {
-                    let Some(session_id) = this.session.active_id_owned() else {
-                        return;
-                    };
-                    let session_name = this
-                        .session
-                        .ordered_sessions()
-                        .into_iter()
-                        .find(|session| session.id == session_id)
-                        .map(|session| session.name)
-                        .unwrap_or_else(|| session_id.clone());
-                    this.prompt_recording_path_for_session(
-                        RecordingPathPromptKind::SaveTranscript,
-                        session_id,
-                        session_name,
-                        cx,
-                    );
-                })),
-        ];
-        if let Some(path) = recording_path {
-            let reveal_path = path.clone();
-            items.extend([
-                NyaMenuItem::action(self.tr("recording.openLog")).on_click(cx.listener(
-                    move |this, _, _, cx| {
-                        cx.open_with_system(&path);
-                        this.shell.set_status("recording opened".to_string());
-                    },
-                )),
-                NyaMenuItem::action(self.tr("recording.showInFolder")).on_click(cx.listener(
-                    move |this, _, _, cx| {
-                        cx.reveal_path(&reveal_path);
-                        this.shell
-                            .set_status("recording folder revealed".to_string());
-                    },
-                )),
-            ]);
-        }
-        items.extend([
-            NyaMenuItem::separator(),
-            NyaMenuItem::action(self.tr("terminalCtx.recordingSettings")).on_click(cx.listener(
-                |this, _, _, cx| {
-                    this.shell.set_settings_active_tab(SettingsTab::Transfer);
-                    this.open_page(NavItem::Settings, cx);
-                },
-            )),
-        ]);
-        items
+        let recording_status = self.recording.status(session_id);
+        self.terminal_recording_menu_items_for_status(session_id, shortcut, recording_status, cx)
     }
 
-    fn terminal_selection_action_link_items(
-        &mut self,
-        selected: &str,
+    fn terminal_recording_menu_items_for_status(
+        &self,
+        session_id: &str,
+        shortcut: String,
+        recording_status: Option<RecordingStatus>,
         cx: &mut Context<Self>,
     ) -> Vec<NyaMenuItem> {
-        if !self.settings.summary().terminal_action_links_enabled {
-            return Vec::new();
-        }
-        let trimmed = selected.trim();
-        let matchers = &self.settings.summary().terminal_action_links_matchers;
-        let entity = find_action_links(trimmed, matchers, true)
-            .into_iter()
-            .find(|item| item.text == trimmed || item.value == trimmed)
-            .or_else(|| {
-                find_action_links(trimmed, matchers, true)
-                    .into_iter()
-                    .next()
-            });
-        let Some(entity) = entity else {
-            return Vec::new();
+        let mut items = if let Some(status) = recording_status {
+            let stop_session_id = session_id.to_string();
+            let open_path = status.file_path.clone();
+            let reveal_path = status.file_path;
+            vec![
+                NyaMenuItem::action(self.tr("recording.stop"))
+                    .icon("icons/session/stop.svg")
+                    .shortcut(shortcut)
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.stop_recording_for_session(&stop_session_id, cx);
+                    })),
+                NyaMenuItem::action(self.tr("recording.openLog"))
+                    .icon("icons/file/description.svg")
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        let Some(path) = open_path.as_ref() else {
+                            return;
+                        };
+                        cx.open_with_system(path);
+                        this.shell.set_status("recording opened".to_string());
+                    })),
+                NyaMenuItem::action(self.tr("recording.showInFolder"))
+                    .icon("icons/session/folder-open.svg")
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        let Some(path) = reveal_path.as_ref() else {
+                            return;
+                        };
+                        cx.reveal_path(path);
+                        this.shell
+                            .set_status("recording folder revealed".to_string());
+                    })),
+            ]
+        } else {
+            let transcript_session_id = session_id.to_string();
+            let raw_session_id = session_id.to_string();
+            vec![
+                NyaMenuItem::action(self.tr("recording.startTranscriptLog"))
+                    .icon("icons/file/description.svg")
+                    .shortcut(shortcut)
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.start_recording_for_session(
+                            &transcript_session_id,
+                            RecordingMode::Transcript,
+                            cx,
+                        );
+                    })),
+                NyaMenuItem::action(self.tr("recording.startRawLog"))
+                    .icon("icons/session/record.svg")
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.start_recording_for_session(&raw_session_id, RecordingMode::Raw, cx);
+                    })),
+            ]
         };
-        let kind = entity.kind.label().to_string();
-        actions_for_match(&entity)
-            .into_iter()
-            .map(|action| self.terminal_action_link_menu_item(kind.clone(), action, cx))
-            .collect()
-    }
-
-    fn terminal_action_link_menu_item(
-        &mut self,
-        kind: String,
-        action: ActionLinkAction,
-        cx: &mut Context<Self>,
-    ) -> NyaMenuItem {
-        let command = action.command.clone();
-        let open_url = action.open_url.clone();
-        NyaMenuItem::action(format!("{kind} · {}", action.label))
-            .icon("icons/fe/forward.svg")
-            .on_click(cx.listener(move |this, _, _, cx| {
-                if let Some(url) = open_url.clone() {
-                    match open_external_url(&url) {
-                        Ok(()) => this.shell.set_status(format!("opened link: {url}")),
-                        Err(error) => this.shell.set_status(format!("open link failed: {error}")),
-                    }
-                    cx.notify();
-                } else if let Some(command) = command.clone() {
-                    this.execute_action_link_command(command, cx);
-                }
-            }))
+        let save_session_id = session_id.to_string();
+        items.extend([
+            NyaMenuItem::separator(),
+            NyaMenuItem::action(self.tr("recording.saveTranscript"))
+                .icon("icons/file/description.svg")
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.save_session_transcript_for_session(&save_session_id, cx);
+                })),
+            NyaMenuItem::action(self.tr("terminalCtx.recordingSettings"))
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.shell.set_settings_active_tab(SettingsTab::Transfer);
+                    this.open_page(NavItem::Settings, cx);
+                }))
+                .icon("icons/settings.svg"),
+        ]);
+        items
     }
 
     fn terminal_online_search_menu_items(
@@ -306,24 +255,16 @@ impl NyaTermApp {
             .summary()
             .search_custom_engines
             .iter()
-            .filter(|engine| {
-                engine.show_in_menu
-                    && !engine.name.trim().is_empty()
-                    && !engine.url_template.trim().is_empty()
-            })
+            .filter(|engine| engine.show_in_menu)
             .cloned()
             .map(|engine| {
                 let query = selected.to_string();
                 let name = engine.name.clone();
                 let status_name = name.clone();
                 let template = engine.url_template;
-                let icon = crate::features::search_engine_icon(
-                    engine.icon.as_deref(),
-                    self.theme_palette(),
-                );
-                NyaMenuItem::action(name)
-                    .icon(icon.path)
-                    .on_click(cx.listener(move |this, _, _, cx| {
+                let icon = known_search_engine_icon(engine.icon.as_deref());
+                let item =
+                    NyaMenuItem::action(name).on_click(cx.listener(move |this, _, _, cx| {
                         let url = search_engine_url(&template, &query);
                         match open_external_url(&url) {
                             Ok(()) => this
@@ -334,13 +275,19 @@ impl NyaTermApp {
                                 .set_status(format!("online search failed: {error}")),
                         }
                         cx.notify();
-                    }))
+                    }));
+                match icon {
+                    Some((path, Some(color))) => item.icon(path).icon_color(color),
+                    Some((path, None)) => item.icon(path),
+                    None => item,
+                }
             })
             .collect()
     }
 
     fn terminal_ai_context_menu_items(
         &mut self,
+        session_id: &str,
         selected: &str,
         cx: &mut Context<Self>,
     ) -> Vec<NyaMenuItem> {
@@ -354,26 +301,30 @@ impl NyaTermApp {
             .filter(|action| action.enabled && !action.name.trim().is_empty())
             .cloned()
             .map(|action| {
-                let query = selected.to_string();
+                let selected = selected.to_string();
+                let session_id = session_id.to_string();
                 let name = action.name.clone();
                 let status_name = name.clone();
                 let prompt = action.prompt;
-                NyaMenuItem::action(name)
-                    .icon("icons/ai.svg")
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.ensure_panel_open(NavItem::AiAssistant);
-                        let body = if query.chars().count() > 2_800 {
-                            let clipped: String = query.chars().take(2_800).collect();
-                            format!("{clipped}…")
-                        } else {
-                            query.clone()
-                        };
-                        this.set_ai_prompt_draft(format!("{prompt}\n\n{body}"), cx);
-                        this.ai
-                            .set_panel_status(format!("AI action loaded: {status_name}"));
-                        window.focus(this.ai.chat_focus(), cx);
-                        cx.notify();
-                    }))
+                NyaMenuItem::action(name).on_click(cx.listener(move |this, _, window, cx| {
+                    this.activate_workspace_pane(session_id.clone(), cx);
+                    let context = this.ai_terminal_context_for_session(Some(&session_id));
+                    let request = terminal_ai_prepared_request(
+                        context,
+                        selected.clone(),
+                        status_name.clone(),
+                    );
+                    this.set_ai_prompt_draft(prompt.clone(), cx);
+                    this.ai.prepare_external_request(
+                        request,
+                        format!("Starting AI action: {status_name}"),
+                        format!("AI action started: {status_name}"),
+                        false,
+                    );
+                    this.ensure_panel_open(NavItem::AiAssistant);
+                    window.focus(this.ai.chat_focus(), cx);
+                    this.start_ai_ask(cx);
+                }))
             })
             .collect()
     }
@@ -400,18 +351,363 @@ impl NyaTermApp {
                 let selected = selected.to_string();
                 let provider_id = id.clone();
                 let provider_label = label.clone();
-                NyaMenuItem::action(label)
-                    .icon("icons/translation.svg")
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.open_translation_dialog(
-                            selected.clone(),
-                            provider_id.clone(),
-                            provider_label.clone(),
-                            window,
-                            cx,
-                        );
-                    }))
+                NyaMenuItem::action(label).on_click(cx.listener(move |this, _, window, cx| {
+                    this.open_translation_dialog(
+                        selected.clone(),
+                        provider_id.clone(),
+                        provider_label.clone(),
+                        window,
+                        cx,
+                    );
+                }))
             })
             .collect()
+    }
+}
+
+fn terminal_ai_prepared_request(
+    mut context: AiContext,
+    selected_text: String,
+    source_label: String,
+) -> AiPreparedRequest {
+    context.selected_text = selected_text;
+    AiPreparedRequest {
+        action: AiAction::CustomTerminalAction,
+        context,
+        source_label,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use gpui::{AppContext as _, TestAppContext};
+    use nyaterm_core::{
+        AiAction, AiContext, AiCustomActionConfig, AiSettings, AppRuntime, RuntimeMode,
+        SearchEngineConfig, TranslationSettings,
+    };
+    use nyaterm_transport::{RecordingMode, RecordingStatus, RecordingStatusState};
+    use nyaterm_ui::NyaMenuItem;
+
+    use crate::entities::{OverlayStore, StartupRestoreStore, UiStoreHandles};
+    use crate::features::NyaTermApp;
+    use crate::features::translation::TranslationFeatureState;
+
+    use super::terminal_ai_prepared_request;
+
+    fn unique_test_dir(label: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time after epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "nyaterm-terminal-menu-{label}-{}-{nanos}",
+            std::process::id()
+        ))
+    }
+
+    fn menu_app(cx: &mut TestAppContext) -> gpui::Entity<NyaTermApp> {
+        let root = unique_test_dir("app");
+        let runtime = AppRuntime::from_parts_for_test(
+            RuntimeMode::Portable,
+            root.clone(),
+            root.join("config"),
+            root.join("logs"),
+            root.join("cache"),
+            None,
+        );
+        let stores = UiStoreHandles {
+            startup_restore: cx.new(|_| StartupRestoreStore::default()),
+            overlays: cx.new(|_| OverlayStore::default()),
+        };
+        cx.new(|cx| NyaTermApp::new(runtime, stores, cx))
+    }
+
+    fn labels(items: &[NyaMenuItem]) -> Vec<&str> {
+        items.iter().map(NyaMenuItem::test_label).collect()
+    }
+
+    fn item<'a>(items: &'a [NyaMenuItem], label: &str) -> &'a NyaMenuItem {
+        items
+            .iter()
+            .find(|item| item.test_label() == label)
+            .unwrap_or_else(|| panic!("missing menu item {label}"))
+    }
+
+    #[test]
+    fn menu_tree_matches_tauri_for_selection_and_empty_selection() {
+        let mut cx = TestAppContext::single();
+        let app = menu_app(&mut cx);
+        let (selected, empty) = cx.update_entity(&app, |app, cx| {
+            let ai = AiSettings {
+                enabled: false,
+                ..AiSettings::default()
+            };
+            app.ai.replace_settings_config(ai, true);
+            let mut summary = app.settings.summary().clone();
+            summary.search_custom_engines = vec![
+                SearchEngineConfig {
+                    name: "Visible".to_string(),
+                    url_template: String::new(),
+                    icon: Some("google".to_string()),
+                    show_in_menu: true,
+                },
+                SearchEngineConfig {
+                    name: "Hidden".to_string(),
+                    url_template: "https://hidden.test/%s".to_string(),
+                    icon: Some("github".to_string()),
+                    show_in_menu: false,
+                },
+            ];
+            app.settings.replace_summary(summary);
+            (
+                app.terminal_context_menu_items(
+                    "clicked-pane".to_string(),
+                    "selected text".to_string(),
+                    cx,
+                ),
+                app.terminal_context_menu_items("clicked-pane".to_string(), String::new(), cx),
+            )
+        });
+
+        assert_eq!(
+            labels(&selected),
+            [
+                "Copy",
+                "Find...",
+                "Search Web",
+                "Translate",
+                "",
+                "Paste",
+                "Paste Selected Text",
+                "",
+                "Clear",
+                "Clear All",
+                "",
+                "Recording Logs",
+                "",
+                "Select All",
+            ]
+        );
+        assert_eq!(
+            labels(&empty),
+            [
+                "Paste",
+                "Find...",
+                "",
+                "Clear",
+                "Clear All",
+                "",
+                "Recording Logs",
+                "",
+                "Select All",
+            ]
+        );
+        assert!(!labels(&selected).contains(&"Open Link"));
+        assert!(!labels(&selected).contains(&"More Actions..."));
+
+        let search = item(&selected, "Search Web")
+            .children()
+            .expect("search submenu");
+        assert_eq!(labels(search), ["Visible"]);
+        assert_eq!(search[0].test_icon_color(), Some(0x4285f4));
+        assert_eq!(
+            search[0].test_presentation().1.as_deref(),
+            Some("icons/brand/google.svg")
+        );
+
+        let recording = item(&selected, "Recording Logs")
+            .children()
+            .expect("recording submenu");
+        assert_eq!(
+            labels(recording),
+            [
+                "Start Transcript Log",
+                "Start Raw Log",
+                "",
+                "Save Text",
+                "Settings...",
+            ]
+        );
+        assert_eq!(
+            recording
+                .iter()
+                .map(NyaMenuItem::test_presentation)
+                .map(|(_, icon, shortcut, _, _, _)| (icon, shortcut))
+                .collect::<Vec<_>>(),
+            vec![
+                (
+                    Some("icons/file/description.svg".to_string()),
+                    Some("Ctrl+Shift+R".to_string())
+                ),
+                (Some("icons/session/record.svg".to_string()), None),
+                (None, None),
+                (Some("icons/file/description.svg".to_string()), None),
+                (Some("icons/settings.svg".to_string()), None),
+            ]
+        );
+    }
+
+    #[test]
+    fn optional_ai_and_credential_translation_items_match_tauri() {
+        let mut cx = TestAppContext::single();
+        let app = menu_app(&mut cx);
+        let items = cx.update_entity(&app, |app, cx| {
+            let ai = AiSettings {
+                enabled: true,
+                terminal_ai_actions: vec![
+                    AiCustomActionConfig {
+                        id: "enabled".to_string(),
+                        name: "Explain".to_string(),
+                        prompt: "Explain this".to_string(),
+                        enabled: true,
+                    },
+                    AiCustomActionConfig {
+                        id: "hidden".to_string(),
+                        name: "Hidden".to_string(),
+                        prompt: "Hidden".to_string(),
+                        enabled: false,
+                    },
+                ],
+                ..AiSettings::default()
+            };
+            app.ai.replace_settings_config(ai, true);
+            app.translation = TranslationFeatureState::new(TranslationSettings {
+                deepl_api_key: "configured".to_string(),
+                baidu_app_id: "id".to_string(),
+                baidu_app_key: "key".to_string(),
+                ali_app_id: "id".to_string(),
+                ali_app_key: "key".to_string(),
+                youdao_app_id: "id".to_string(),
+                youdao_app_key: "key".to_string(),
+                ..TranslationSettings::default()
+            });
+            app.terminal_context_menu_items("clicked-pane".to_string(), "selection".to_string(), cx)
+        });
+
+        let ai = item(&items, "AI").children().expect("AI submenu");
+        assert_eq!(labels(ai), ["Explain"]);
+        assert!(ai[0].test_presentation().1.is_none());
+
+        let translation = item(&items, "Translate")
+            .children()
+            .expect("translation submenu");
+        assert_eq!(
+            labels(translation),
+            ["Google", "Microsoft", "DeepL", "Baidu", "Alibaba", "Youdao"]
+        );
+        assert!(
+            translation
+                .iter()
+                .all(|item| item.test_presentation().1.is_none())
+        );
+    }
+
+    #[test]
+    fn ai_request_keeps_full_selection_and_custom_action_metadata() {
+        let selected = "x".repeat(8_192);
+        let request = terminal_ai_prepared_request(
+            AiContext::default(),
+            selected.clone(),
+            "Explain".to_string(),
+        );
+
+        assert_eq!(request.action, AiAction::CustomTerminalAction);
+        assert_eq!(request.context.selected_text, selected);
+        assert_eq!(request.source_label, "Explain");
+    }
+
+    #[test]
+    fn recording_submenu_uses_clicked_session_status_and_active_icons() {
+        let mut cx = TestAppContext::single();
+        let app = menu_app(&mut cx);
+        let recording_path = unique_test_dir("active").join("recording.log");
+        let (clicked_items, other_items) = cx.update_entity(&app, |app, cx| {
+            app.recording
+                .manager_for_job()
+                .start(
+                    "clicked-pane",
+                    recording_path.to_string_lossy().as_ref(),
+                    true,
+                    true,
+                )
+                .expect("start recording fixture");
+            (
+                app.terminal_recording_menu_items("clicked-pane", "Ctrl+Shift+R".to_string(), cx),
+                app.terminal_recording_menu_items("other-pane", "Ctrl+Shift+R".to_string(), cx),
+            )
+        });
+
+        assert_eq!(
+            labels(&clicked_items),
+            [
+                "Stop",
+                "Open Recording",
+                "Show in Folder",
+                "",
+                "Save Text",
+                "Settings...",
+            ]
+        );
+        assert_eq!(
+            labels(&other_items),
+            [
+                "Start Transcript Log",
+                "Start Raw Log",
+                "",
+                "Save Text",
+                "Settings...",
+            ]
+        );
+        assert_eq!(
+            clicked_items[2].test_presentation().1.as_deref(),
+            Some("icons/session/folder-open.svg")
+        );
+
+        cx.update_entity(&app, |app, _| {
+            app.recording
+                .manager_for_job()
+                .stop("clicked-pane")
+                .expect("stop recording fixture");
+        });
+        let _ = std::fs::remove_file(recording_path);
+    }
+
+    #[test]
+    fn active_recording_without_a_path_keeps_open_and_reveal_actions_visible() {
+        let mut cx = TestAppContext::single();
+        let app = menu_app(&mut cx);
+        let items = cx.update_entity(&app, |app, cx| {
+            app.terminal_recording_menu_items_for_status(
+                "clicked-pane",
+                "Ctrl+Shift+R".to_string(),
+                Some(RecordingStatus {
+                    session_id: "clicked-pane".to_string(),
+                    state: RecordingStatusState::Starting,
+                    mode: RecordingMode::Transcript,
+                    file_path: None,
+                    started_at: None,
+                    written_bytes: 0,
+                    queued_bytes: 0,
+                    dropped_bytes: 0,
+                    last_error: None,
+                }),
+                cx,
+            )
+        });
+
+        assert_eq!(
+            labels(&items),
+            [
+                "Stop",
+                "Open Recording",
+                "Show in Folder",
+                "",
+                "Save Text",
+                "Settings...",
+            ]
+        );
     }
 }

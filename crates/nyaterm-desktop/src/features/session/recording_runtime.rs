@@ -1,8 +1,9 @@
-use std::path::PathBuf;
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
 
 use gpui::{AppContext, Context};
 use nyaterm_core::{
-    AppSettingsSummary, ExistingFileBehavior as CoreExistingFileBehavior,
+    AppSettingsSummary, ExistingFileBehavior as CoreExistingFileBehavior, Group,
     RecordingMode as CoreRecordingMode, RecordingRotationPolicy as CoreRecordingRotationPolicy,
 };
 use nyaterm_transport::{
@@ -10,6 +11,7 @@ use nyaterm_transport::{
     RecordingProfile, RecordingRotationPolicy as TransportRecordingRotationPolicy,
 };
 use time::OffsetDateTime;
+use time::macros::format_description;
 
 use crate::features::NyaTermApp;
 use crate::features::formatting::recording_file_path;
@@ -147,13 +149,23 @@ impl NyaTermApp {
     }
 
     fn start_recording_to_path(&mut self, session_id: &str, path: String, cx: &mut Context<Self>) {
-        self.start_recording_with_profile(session_id, Some(PathBuf::from(path)), cx);
+        self.start_recording_with_profile(session_id, Some(PathBuf::from(path)), None, cx);
+    }
+
+    pub(in crate::features) fn start_recording_for_session(
+        &mut self,
+        session_id: &str,
+        mode: RecordingMode,
+        cx: &mut Context<Self>,
+    ) {
+        self.start_recording_with_profile(session_id, None, Some(mode), cx);
     }
 
     fn start_recording_with_profile(
         &mut self,
         session_id: &str,
         explicit_path: Option<PathBuf>,
+        requested_mode: Option<RecordingMode>,
         cx: &mut Context<Self>,
     ) {
         if !self.recording.begin_action(session_id, "record") {
@@ -162,13 +174,16 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        let Some((context, profile)) = self.recording_profile_for_session(session_id) else {
+        let Some((context, mut profile)) = self.recording_profile_for_session(session_id) else {
             self.recording.finish_action(session_id);
             self.shell
                 .set_status("recording start failed: session no longer exists".to_string());
             cx.notify();
             return;
         };
+        if let Some(mode) = requested_mode {
+            profile.mode = mode;
+        }
         self.shell.set_status("starting recording".to_string());
         let manager = self.recording.manager_for_job();
         let writer = self.recording.writer();
@@ -307,6 +322,33 @@ impl NyaTermApp {
         cx.notify();
     }
 
+    pub(in crate::features) fn save_session_transcript_for_session(
+        &mut self,
+        session_id: &str,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(session) = self.session.session_info(session_id) else {
+            self.shell
+                .set_status("transcript save failed: session no longer exists".to_string());
+            cx.notify();
+            return;
+        };
+        let path = match session_transcript_file_path(
+            self.settings.summary(),
+            &session.name,
+            OffsetDateTime::now_utc(),
+        ) {
+            Ok(path) => path,
+            Err(error) => {
+                self.shell
+                    .set_status(format!("transcript save failed: {error}"));
+                cx.notify();
+                return;
+            }
+        };
+        self.save_transcript_to_path(session_id, path.display().to_string(), cx);
+    }
+
     pub(in crate::features) fn maybe_auto_start_recording(
         &mut self,
         session_id: &str,
@@ -317,7 +359,7 @@ impl NyaTermApp {
             return;
         }
         let _ = session_name;
-        self.start_recording_with_profile(session_id, None, cx);
+        self.start_recording_with_profile(session_id, None, None, cx);
     }
 
     pub(in crate::features) fn cleanup_recording_for_session(&mut self, session_id: &str) {
@@ -345,21 +387,14 @@ impl NyaTermApp {
             return None;
         }
         let summary = self.settings.summary();
-        let (session_name, protocol, host, port, username) =
+        let (launch_name, protocol, host, port, username) =
             recording_launch_context(&metadata.launch_config);
-        let context = RecordingContext {
-            session_id: session_id.to_string(),
-            session_name,
-            connection_id: metadata.source_connection_id.clone(),
-            connection_name: metadata.source_connection_id.clone(),
-            group_path: None,
-            protocol,
-            host,
-            port,
-            username,
-            started_at: OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc()),
-        };
-        let connection_recording = metadata
+        let session_name = self
+            .session
+            .session_info(session_id)
+            .map(|session| session.name)
+            .unwrap_or(launch_name);
+        let saved_connection = metadata
             .source_connection_id
             .as_deref()
             .and_then(|connection_id| {
@@ -367,8 +402,26 @@ impl NyaTermApp {
                     .connections()
                     .iter()
                     .find(|connection| connection.id == connection_id)
-            })
-            .and_then(|connection| connection.recording.as_ref());
+            });
+        let context = RecordingContext {
+            session_id: session_id.to_string(),
+            session_name,
+            connection_id: metadata.source_connection_id.clone(),
+            connection_name: saved_connection.map(|connection| connection.name.clone()),
+            group_path: saved_connection.and_then(|connection| {
+                recording_group_path(
+                    self.connection_state.groups(),
+                    connection.group_id.as_deref(),
+                )
+            }),
+            protocol,
+            host,
+            port,
+            username,
+            started_at: OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc()),
+        };
+        let connection_recording =
+            saved_connection.and_then(|connection| connection.recording.as_ref());
         let profile = RecordingProfile {
             mode: connection_recording
                 .and_then(|settings| settings.mode)
@@ -418,10 +471,79 @@ impl NyaTermApp {
 
 fn recording_base_path(settings: &AppSettingsSummary, config_dir: &std::path::Path) -> PathBuf {
     if settings.recording_path.trim().is_empty() {
-        dirs::download_dir().unwrap_or_else(|| config_dir.join("recordings"))
+        default_recording_directory().unwrap_or_else(|| config_dir.join("recordings"))
     } else {
         PathBuf::from(settings.recording_path.trim())
     }
+}
+
+fn default_recording_directory() -> Option<PathBuf> {
+    dirs::download_dir().or_else(|| dirs::home_dir().map(|home| home.join("Downloads")))
+}
+
+fn session_transcript_file_path(
+    settings: &AppSettingsSummary,
+    session_name: &str,
+    now: OffsetDateTime,
+) -> Result<PathBuf, String> {
+    let directory = if settings.recording_path.trim().is_empty() {
+        default_recording_directory()
+            .ok_or_else(|| "failed to resolve Downloads directory".to_string())?
+    } else {
+        PathBuf::from(settings.recording_path.trim())
+    };
+    let timestamp = now
+        .format(format_description!(
+            "[year]-[month]-[day]T[hour]-[minute]-[second]"
+        ))
+        .map_err(|error| format!("failed to format transcript timestamp: {error}"))?;
+    let file_name = format!(
+        "session-{}-{timestamp}.log",
+        nyaterm_transport::safe_recording_name(session_name)
+    );
+    Ok(first_available_path(&directory.join(file_name)))
+}
+
+fn first_available_path(path: &Path) -> PathBuf {
+    if !path.exists() {
+        return path.to_path_buf();
+    }
+    let parent = path.parent().unwrap_or_else(|| Path::new(""));
+    let stem = path
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or("session");
+    let extension = path.extension().and_then(|value| value.to_str());
+    for index in 1.. {
+        let file_name = extension.map_or_else(
+            || format!("{stem}-{index}"),
+            |extension| format!("{stem}-{index}.{extension}"),
+        );
+        let candidate = parent.join(file_name);
+        if !candidate.exists() {
+            return candidate;
+        }
+    }
+    unreachable!("unbounded suffix search must find an available path")
+}
+
+fn recording_group_path(groups: &[Group], group_id: Option<&str>) -> Option<String> {
+    let mut current = group_id?;
+    let mut names = Vec::new();
+    let mut visited = HashSet::new();
+    for _ in 0..32 {
+        if !visited.insert(current.to_string()) {
+            break;
+        }
+        let group = groups.iter().find(|group| group.id == current)?;
+        names.push(group.name.clone());
+        let Some(parent) = group.parent_id.as_deref() else {
+            break;
+        };
+        current = parent;
+    }
+    names.reverse();
+    (!names.is_empty()).then(|| names.join("/"))
 }
 
 fn recording_launch_context(
@@ -493,5 +615,109 @@ fn map_recording_rotation(
             max_bytes: *max_bytes,
         },
         CoreRecordingRotationPolicy::Session => TransportRecordingRotationPolicy::Session,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use nyaterm_core::{AppSettingsSummary, Group};
+    use time::{Date, Month, PrimitiveDateTime, Time, UtcOffset};
+
+    use super::{first_available_path, recording_group_path, session_transcript_file_path};
+
+    fn group(id: &str, name: &str, parent_id: Option<&str>) -> Group {
+        Group {
+            id: id.to_string(),
+            name: name.to_string(),
+            parent_id: parent_id.map(str::to_string),
+            ..Group::default()
+        }
+    }
+
+    #[test]
+    fn session_transcript_path_uses_safe_name_and_utc_iso_timestamp() {
+        let settings = AppSettingsSummary {
+            recording_path: "/tmp/nyaterm-recordings".to_string(),
+            ..AppSettingsSummary::default()
+        };
+        let now = PrimitiveDateTime::new(
+            Date::from_calendar_date(2026, Month::August, 15).expect("valid date"),
+            Time::from_hms(7, 8, 9).expect("valid time"),
+        )
+        .assume_offset(UtcOffset::UTC);
+
+        let path =
+            session_transcript_file_path(&settings, "prod / shell", now).expect("transcript path");
+
+        assert_eq!(
+            path.to_string_lossy(),
+            "/tmp/nyaterm-recordings/session-prod_shell-2026-08-15T07-08-09.log"
+        );
+    }
+
+    #[test]
+    fn first_available_path_never_overwrites_an_existing_log() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time after epoch")
+            .as_nanos();
+        let directory = std::env::temp_dir().join(format!(
+            "nyaterm-recording-path-{}-{unique}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&directory).expect("create test directory");
+        let path = directory.join("session-demo.log");
+        fs::write(&path, b"existing").expect("write existing log");
+        fs::write(directory.join("session-demo-1.log"), b"existing")
+            .expect("write first collision");
+
+        assert_eq!(
+            first_available_path(&path),
+            directory.join("session-demo-2.log")
+        );
+
+        fs::remove_dir_all(directory).expect("remove test directory");
+    }
+
+    #[test]
+    fn recording_group_path_is_nested_cycle_safe_and_bounded() {
+        let nested = vec![
+            group("root", "Production", None),
+            group("region", "Shanghai", Some("root")),
+            group("host", "Databases", Some("region")),
+        ];
+        assert_eq!(
+            recording_group_path(&nested, Some("host")).as_deref(),
+            Some("Production/Shanghai/Databases")
+        );
+
+        let cycle = vec![group("a", "A", Some("b")), group("b", "B", Some("a"))];
+        assert_eq!(
+            recording_group_path(&cycle, Some("a")).as_deref(),
+            Some("B/A")
+        );
+
+        let broken = vec![group("child", "Child", Some("missing"))];
+        assert_eq!(recording_group_path(&broken, Some("child")), None);
+
+        let deep = (0..40)
+            .map(|index| {
+                group(
+                    &format!("g{index}"),
+                    &format!("G{index}"),
+                    (index > 0).then(|| format!("g{}", index - 1)).as_deref(),
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            recording_group_path(&deep, Some("g39"))
+                .expect("bounded group path")
+                .split('/')
+                .count(),
+            32
+        );
     }
 }

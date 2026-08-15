@@ -98,10 +98,10 @@ pub(super) fn open_external_url(url: &str) -> Result<(), String> {
 
 pub(super) fn search_engine_url(template: &str, query: &str) -> String {
     let encoded = urlencoding_minimal(query);
-    if template.contains("%s") {
-        template.replace("%s", &encoded)
+    if template.is_empty() {
+        format!("https://www.google.com/search?q={encoded}")
     } else {
-        format!("{template}{encoded}")
+        template.replacen("%s", &encoded, 1)
     }
 }
 
@@ -109,7 +109,18 @@ pub(super) fn urlencoding_minimal(input: &str) -> String {
     let mut out = String::with_capacity(input.len() * 3);
     for b in input.as_bytes() {
         match *b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+            b'A'..=b'Z'
+            | b'a'..=b'z'
+            | b'0'..=b'9'
+            | b'-'
+            | b'_'
+            | b'.'
+            | b'!'
+            | b'~'
+            | b'*'
+            | b'\''
+            | b'('
+            | b')' => {
                 out.push(*b as char);
             }
             b' ' => out.push_str("%20"),
@@ -141,31 +152,32 @@ pub(super) fn available_translation_providers(
     providers
 }
 
-pub(super) fn selection_as_openable_url(selected: &str) -> Option<String> {
-    let trimmed = selected.trim();
-    if trimmed.is_empty() || trimmed.chars().any(|ch| ch.is_whitespace()) {
-        return None;
+#[cfg(test)]
+mod tests {
+    use super::{search_engine_url, urlencoding_minimal};
+
+    #[test]
+    fn online_search_url_matches_tauri_template_rules() {
+        assert_eq!(
+            search_engine_url("", "hello world"),
+            "https://www.google.com/search?q=hello%20world"
+        );
+        assert_eq!(
+            search_engine_url("https://search.test/?q=%s&again=%s", "Rust 中文"),
+            "https://search.test/?q=Rust%20%E4%B8%AD%E6%96%87&again=%s"
+        );
+        assert_eq!(
+            search_engine_url("https://search.test/static", "ignored"),
+            "https://search.test/static"
+        );
     }
-    let lower = trimmed.to_ascii_lowercase();
-    if lower.starts_with("https://") || lower.starts_with("http://") {
-        return Some(trimmed.to_string());
+
+    #[test]
+    fn search_query_encoding_matches_javascript_encode_uri_component() {
+        assert_eq!(
+            urlencoding_minimal("a b/中文"),
+            "a%20b%2F%E4%B8%AD%E6%96%87"
+        );
+        assert_eq!(urlencoding_minimal("!~*'()"), "!~*'()");
     }
-    // Bare domains like example.com/path — require a dotted host and no path spaces.
-    if trimmed.contains('.')
-        && !trimmed.contains("://")
-        && trimmed.chars().all(|ch| {
-            ch.is_ascii_alphanumeric()
-                || matches!(
-                    ch,
-                    '.' | '/' | ':' | '-' | '_' | '?' | '=' | '&' | '%' | '#' | '+'
-                )
-        })
-    {
-        // Prefer not to open single-token words without a TLD-ish shape.
-        let host = trimmed.split('/').next().unwrap_or(trimmed);
-        if host.contains('.') && host.split('.').all(|part| !part.is_empty()) {
-            return Some(format!("https://{trimmed}"));
-        }
-    }
-    None
 }

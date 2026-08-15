@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use gpui::{
     Anchor, App, ClickEvent, InteractiveElement, IntoElement, ParentElement, Pixels, RenderOnce,
-    SharedString, Styled, Window, div, prelude::FluentBuilder as _,
+    SharedString, Styled, Window, div, prelude::FluentBuilder as _, rgb,
 };
 use gpui_component::button::{Button, ButtonVariants as _};
 use gpui_component::menu::{ContextMenuExt as _, DropdownMenu as _, PopupMenu, PopupMenuItem};
@@ -44,6 +44,7 @@ pub struct NyaMenuItem {
     kind: NyaMenuItemKind,
     label: SharedString,
     icon_path: Option<SharedString>,
+    icon_color: Option<u32>,
     shortcut: Option<SharedString>,
     disabled: bool,
     checked: bool,
@@ -57,6 +58,7 @@ impl NyaMenuItem {
             kind: NyaMenuItemKind::Action,
             label: label.into(),
             icon_path: None,
+            icon_color: None,
             shortcut: None,
             disabled: false,
             checked: false,
@@ -88,6 +90,11 @@ impl NyaMenuItem {
 
     pub fn icon(mut self, icon_path: impl Into<SharedString>) -> Self {
         self.icon_path = Some(icon_path.into());
+        self
+    }
+
+    pub fn icon_color(mut self, color: u32) -> Self {
+        self.icon_color = Some(color);
         self
     }
 
@@ -142,6 +149,11 @@ impl NyaMenuItem {
             NyaMenuItemKind::Submenu(items) => Some(items.as_slice()),
             _ => None,
         }
+    }
+
+    #[doc(hidden)]
+    pub fn test_icon_color(&self) -> Option<u32> {
+        self.icon_color
     }
 
     pub(crate) fn append_to(
@@ -214,9 +226,11 @@ impl NyaMenuItem {
     }
 
     fn component_icon(&self) -> Option<Icon> {
-        self.icon_path
-            .clone()
-            .map(|path| Icon::default().path(path))
+        self.icon_path.clone().map(|path| {
+            Icon::default()
+                .path(path)
+                .when_some(self.icon_color, |icon, color| icon.text_color(rgb(color)))
+        })
     }
 }
 
@@ -376,6 +390,7 @@ where
     element: E,
     items_builder: ContextMenuItemsBuilder,
     enabled: bool,
+    min_width: Option<Pixels>,
 }
 
 impl<E> NyaContextMenu<E>
@@ -388,6 +403,7 @@ where
             element,
             items_builder: Rc::new(move |_, _| items.clone()),
             enabled: true,
+            min_width: None,
         }
     }
 
@@ -399,12 +415,23 @@ where
             element,
             items_builder: Rc::new(items_builder),
             enabled: true,
+            min_width: None,
         }
     }
 
     pub fn enabled(mut self, enabled: bool) -> Self {
         self.enabled = enabled;
         self
+    }
+
+    pub fn min_width(mut self, width: Pixels) -> Self {
+        self.min_width = Some(width);
+        self
+    }
+
+    #[doc(hidden)]
+    pub fn test_min_width(&self) -> Option<Pixels> {
+        self.min_width
     }
 }
 
@@ -417,8 +444,10 @@ where
             return self.element.into_any_element();
         }
         let items_builder = self.items_builder;
+        let min_width = self.min_width;
         self.element
             .context_menu(move |menu, window, cx| {
+                let menu = menu.when_some(min_width, |menu, width| menu.min_w(width));
                 let items = items_builder(window, cx);
                 items
                     .iter()
@@ -514,6 +543,7 @@ mod tests {
     fn menu_item_builders_preserve_behavior_flags() {
         let item = NyaMenuItem::action("Delete")
             .icon("icons/net/delete.svg")
+            .icon_color(0x336699)
             .disabled(true)
             .checked(true)
             .danger();
@@ -525,9 +555,17 @@ mod tests {
             Some("icons/net/delete.svg")
         );
         assert_eq!(item.shortcut, None);
+        assert_eq!(item.test_icon_color(), Some(0x336699));
         assert!(item.disabled);
         assert!(item.checked);
         assert!(item.danger);
+    }
+
+    #[test]
+    fn context_menu_retains_optional_minimum_width() {
+        let menu = NyaContextMenu::new(div(), [NyaMenuItem::action("Open")]).min_width(px(200.));
+
+        assert_eq!(menu.test_min_width(), Some(px(200.)));
     }
 
     #[test]
