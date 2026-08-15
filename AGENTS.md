@@ -162,8 +162,8 @@ Before changing these areas:
 * Do not overwrite existing user data until validation succeeds.
 * Keep secret-bearing values masked when returning settings to the UI.
 
-`nyaterm-store/src/storage.rs` owns the database implementation and has been
-split by domain under `nyaterm-store/src/storage/`. The schema-neutral models
+`nyaterm-store/src/storage/mod.rs` owns the database implementation and has
+been split by domain under `nyaterm-store/src/storage/`. The schema-neutral models
 and policies exposed by `nyaterm-core` remain compatibility contracts. Treat
 the `.nya` backup format, master-key wrapping, legacy Dragonfly fallback,
 legacy text-document fallbacks, and existing redb data as public contracts.
