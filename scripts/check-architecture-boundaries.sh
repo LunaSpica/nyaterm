@@ -174,6 +174,22 @@ check_no_matches \
 
 # Low-level crates must stay independent of GPUI and desktop presentation code.
 check_no_matches \
+  "desktop production code must not open the database directly" \
+  'ConnectionStore::open(_with_portable_key_path)?' \
+  crates/nyaterm-desktop/src
+check_no_matches \
+  "nyaterm-desktop must not depend on redb directly" \
+  '^redb(\.workspace)?[[:space:]]*=' \
+  crates/nyaterm-desktop/Cargo.toml
+check_no_matches \
+  "nyaterm-core must not depend on redb" \
+  '^redb(\.workspace)?[[:space:]]*=' \
+  crates/nyaterm-core/Cargo.toml
+check_no_matches \
+  "nyaterm-core must not depend on nyaterm-store" \
+  '^nyaterm-store(\.workspace)?[[:space:]]*=' \
+  crates/nyaterm-core/Cargo.toml
+check_no_matches \
   "nyaterm-terminal must not depend on GPUI" \
   '^gpui(\.workspace)?\s*=' \
   crates/nyaterm-terminal/Cargo.toml
@@ -182,6 +198,19 @@ check_no_matches \
   "nyaterm-transport must not depend on nyaterm-desktop" \
   '^nyaterm-desktop(\.workspace)?\s*=' \
   crates/nyaterm-transport/Cargo.toml
+
+if rg -n '^redb(\.workspace)?[[:space:]]*=' crates/*/Cargo.toml \
+  | rg -v '^crates/nyaterm-store/Cargo.toml:' \
+  >/tmp/nyaterm-redb-owner.$$; then
+  fail "nyaterm-store must remain the only workspace crate that depends on redb"
+  sed 's/^/  /' /tmp/nyaterm-redb-owner.$$ >&2
+fi
+rm -f /tmp/nyaterm-redb-owner.$$
+
+check_no_matches \
+  "TerminalSurface must keep only a weak NyaTermApp reference" \
+  '^[[:space:]]{4}app:[[:space:]]*(Option<)?Entity<NyaTermApp>' \
+  crates/nyaterm-desktop/src/features/terminal/terminal_surface_entity.rs
 
 check_no_matches \
   "quick switch app mirror fields must not return" \

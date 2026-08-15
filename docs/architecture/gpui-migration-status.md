@@ -6,7 +6,7 @@ remaining entries here describe targeted parity, compatibility, ownership, and
 cleanup work rather than a broad half-migrated application state. Keep dynamic
 counts here instead of in `AGENTS.md`.
 
-Last updated from the working tree on 2026-08-15.
+Last updated from the working tree on 2026-08-16.
 
 ## Tauri Main Parity Refreshes
 
@@ -188,17 +188,44 @@ Last updated from the working tree on 2026-08-15.
   tooltip. GPUI already owns the detail tooltip surface, but the copy affordance
   remains a focused connection-list parity task.
 
+## Current Storage Runtime
+
+- `nyaterm-store` is the only workspace crate that depends on redb. It owns the
+  schema, transactions, encryption adapters, compatibility readers and the
+  public `ConnectionStore` facade. `nyaterm-core` retains only pure models,
+  formats, policies, parsing and compatibility contracts; it has no redb or
+  `nyaterm-store` dependency.
+- Desktop creates one `StoreRuntime` worker named `nyaterm-store`. Its bounded
+  FIFO queue has capacity 256, monotonic request ids, non-blocking UI admission,
+  a blocking background client, typed/redacted completion events and an
+  aggregating FIFO flush barrier. Store requests perform database work only;
+  network, SSH/SFTP, file import/export and image decoding stay on their
+  existing background executors.
+- Startup requests one complete, validated `BootstrapSnapshot` before it
+  constructs `NyaTermApp`. Any domain failure keeps `AppShell` in Recovery,
+  where Retry, Open Config Directory, Export Diagnostics and Quit are
+  available. There is no path that continues with defaults or writes over an
+  unreadable database.
+- Desktop production code has zero direct database opens or redb transactions.
+  Runtime reads and writes use the shared UI or blocking store client, and the
+  existing window event pump applies completions to GPUI state.
+- Normal shutdown freezes new persistence, submits the latest dirty settings,
+  AI, translation, keyword-highlight and session-layout snapshots, then waits
+  for the FIFO barrier. Failure stays in `FlushFailed` with Retry and an
+  explicit data-loss Force Quit action. GPUI's 200 ms `on_app_quit` barrier is
+  a best-effort fallback rather than the normal close path.
+
 ## Current Metrics
 
 | Metric | Current value | Notes |
 | --- | ---: | --- |
-| `NyaTermApp` fields | 22 | Counted from `features/app_state/mod.rs`; down from 585. The remaining fields are composition services and focused feature owners, including the authoritative Remote Desktop owner. |
-| `impl NyaTermApp` blocks | 238 | Spread across 232 files. Method bodies and call sites, rather than the block count alone, remain the ownership check. |
+| `NyaTermApp` fields | 24 | Counted from `features/app_state/mod.rs`; down from 585. The remaining fields are composition services, the two store clients, and focused feature owners, including the authoritative Remote Desktop owner. |
+| `impl NyaTermApp` blocks | 240 | Spread across 234 files. Method bodies and call sites, rather than the block count alone, remain the ownership check. |
 | `#[path = "..."]` declarations in desktop | 0 | Cleared. Every directory is a real module; the boundary script fails on any new occurrence. |
 | `use super::*` imports in desktop | 0 | Cleared in production and test modules; guarded crate-wide. |
 | `use super::*` imports in terminal-GPUI | 0 | Cleared in production and test modules. The crate root is no longer a shared import bucket. |
 | `features/prelude.rs` rough exported-token count | 0 | The transitional shared prelude is removed and guarded against reintroduction. |
-| `cargo check -p nyaterm-app` desktop warnings | 0 | Cleared. The current cleanup either wired complete capabilities or removed superseded state and adapters. |
+| `cargo check -p nyaterm-app` desktop warnings | 9 | Current warnings are dead cleanup methods left after runtime migration plus one redundant field-pattern warning; the package still checks successfully. |
 | Desktop clippy warnings | 14 | Stable Rust 1.97.1 reports 12 library warnings and 2 additional test-only warnings in unchanged source. `cargo clippy --workspace --all-targets` still exits successfully. |
 | Other workspace clippy warnings | 24 | Stable Rust 1.97.1 reports 10 core, 2 terminal, 6 transport, 5 UI and 1 terminal-GPUI warnings in unchanged source. OTP, store and app are clean. Vendored `ironrdp-connector` reports two additional warnings, and Cargo reports the upstream `proc-macro-error2 v2.0.1` future-incompatibility notice. |
 | Entity Store structs | 3 | `WindowRuntime`, `StartupRestore`, `Overlay`. Each owns state the app does not. |
@@ -216,7 +243,7 @@ have these boundaries:
 | `crates/nyaterm-desktop/src/models/terminal.rs` | 3097 | 2610 | Frame-pipeline tests live in `models/terminal/tests.rs`; terminal cell and selection models remain in the production module. |
 | `crates/nyaterm-desktop/src/features/terminal/terminal_surface_entity.rs` | 2611 | 2600 | The 64 focused tests live in `terminal_surface_entity/tests.rs`; the paint hot path and private entity boundary are unchanged. |
 | `crates/nyaterm-transport/src/lib.rs` | 3328 | 1428 | Crate-root session lifecycle tests live in `src/tests.rs` with explicit imports. Session configuration contracts, the bounded event queue, and SSH command/process execution live in focused modules; the crate root preserves their public facade. |
-| `crates/nyaterm-core/src/storage.rs` | 1471 | 2893 | Compatibility tests live in `storage/tests.rs` with explicit imports. The facade, redb schema, encryption and fallback readers remain unchanged. |
+| `crates/nyaterm-store/src/storage.rs` | 1476 | 3185 | Compatibility tests live in `storage/tests.rs` with explicit imports. The store crate owns the facade, redb schema, encryption adapters and fallback readers; table names, formats and fallback behavior remain unchanged. |
 
 Other large modules now keep their focused tests behind the same normal
 child-module boundary:
@@ -853,7 +880,8 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   moved tree reconciliation, tab activation/reorder/docking, smart-split,
   restore/serialization, split ratios, reconnect id replacement and file-drop
   hover transitions onto `TerminalFeatureState`. Shell/session/page adapters
-  retain GPUI notification, navigation, persistence scheduling and redb opens;
+  retain GPUI notification, navigation and persistence scheduling through the
+  shared store runtime;
   they receive only immutable tree/drop projections and typed mutation
   results. A following inline-assistance batch made `assist`
   terminal-module-private and moved the command-suggestion and credential-
@@ -2065,7 +2093,7 @@ Current ownership map:
 
 | Area | Current owner | Kind | Notes |
 | --- | --- | --- | --- |
-| Saved connections | Private catalog child in `NyaTermApp.connection_state` | Persisted domain state | `ConnectionFeatureState` is authoritative and exposes read-only slices plus semantic replacement/update operations; `ConnectionStore` remains the persistence boundary. |
+| Saved connections | Private catalog child in `NyaTermApp.connection_state` | Persisted domain state | `ConnectionFeatureState` is authoritative and exposes read-only slices plus semantic replacement/update operations; `nyaterm-store` is the persistence boundary. |
 | Connection groups | Private catalog child in `NyaTermApp.connection_state` | Persisted domain state | Catalog replacement and stale list-reference cleanup occur in one `ConnectionFeatureState` transition. |
 | SSH keys | Private catalog in `NyaTermApp.security` | Secret-adjacent persisted catalog | The security feature is authoritative; consumers use a read-only slice and the catalog has no `Debug` implementation. |
 | OTP entries | Private catalog in `NyaTermApp.security` | Secret-adjacent persisted catalog | Consumers use a read-only slice; do not log secrets or widen Debug exposure. |
@@ -2077,8 +2105,8 @@ Current ownership map:
 | Command history and persistence worker | Private state in `NyaTermApp.commands` | Persisted catalog plus background runtime | History snapshots, queue admission, event polling and idle checks enter through `CommandFeatureState`; failed optimistic use-count updates roll back on the owner. |
 | Send-command composer/options/progress | Private children in `NyaTermApp.send_command` | Transient editor and send lifecycle | Views receive immutable presentation data; control edits, mutually-exclusive menus, data/mode defaults, progress counters and cancellation enter through `SendCommandFeatureState`. Session selection, terminal writes, GPUI/text-input routing and status remain in adapters. |
 | Settings interaction and prompts | Private children in `NyaTermApp.settings` | Transient settings UI and prompt lifecycle | Search-engine rows, keyword-highlight editing, appearance menus, keybinding recording/search and config/diagnostics/import/password prompt admission enter through `SettingsFeatureState`; views use immutable presentation values and read-only focus/font access. Persistence, native filesystem prompts, text inputs and GPUI notification remain in adapters. |
-| Application settings and keyword catalogs | State-private children in `NyaTermApp.settings` | Compatibility-sensitive persisted configuration plus staged master-password input | `AppSettingsSummary` and keyword-catalog mutations enter only through `SettingsFeatureState`; consumers borrow them immutably. Staged master-password changes use owner transitions and a non-`Debug` borrowed view. Serialization, encryption and persistence remain in `nyaterm-core` and existing adapters. |
-| Global storage status | State-private child in `NyaTermApp.settings` | Runtime persistence health/presentation state | Persistence adapters update message/readiness atomically through `SettingsFeatureState`; rendering receives a borrowed immutable view, while store reopen replaces path/message/readiness together. Database work and compatibility handling remain in existing adapters and `nyaterm-core`. |
+| Application settings and keyword catalogs | State-private children in `NyaTermApp.settings` | Compatibility-sensitive persisted configuration plus staged master-password input | `AppSettingsSummary` and keyword-catalog mutations enter only through `SettingsFeatureState`; consumers borrow them immutably. Staged master-password changes use owner transitions and a non-`Debug` borrowed view. Pure formats and compatibility contracts remain in `nyaterm-core`; database execution is owned by `nyaterm-store`. |
+| Global storage status | State-private child in `NyaTermApp.settings` | Runtime persistence health/presentation state | Persistence adapters update message/readiness atomically through `SettingsFeatureState`; rendering receives a borrowed immutable view, while store reopen replaces path/message/readiness together. Database work and compatibility readers live in `nyaterm-store`. |
 | AI settings/chat/history/discovery/agent/panel | Private children in `NyaTermApp.ai` | Persisted settings plus transient UI and background lifecycle | Desktop consumers use read-only slices/queries and semantic transitions; settings/profile/model/credential/action mutations, draft and secret merging, menu exclusion, confirmations, request/focus preparation, panel status/error ownership, picker clamping and Agent capture/reset enter through `AiFeatureState`. Persistence, provider/background execution, terminal-context collection, GPUI focus/rendering and notification remain in adapters. |
 | Shell viewport/navigation/panels/chrome/workspace/runtime | Private state and children in `NyaTermApp.shell` | Transient GPUI composition, interaction, status and event-pump scheduling state | Other desktop modules use semantic shell operations for the private application-wide status line and GPUI event-pump/repaint/persistence scheduling. Menu exclusion, settings-window lifecycle, mobile panels, failure chrome, submenu paths, pane ownership, persistence dirty snapshots and coalesced terminal repaint admission remain `ShellFeatureState` operations. Persistence execution, rendering, GPUI windows/notification and terminal coordination remain in adapters. |
 | Terminal interaction/presentation children | Terminal-module-private children in `NyaTermApp.terminal` | Per-session views/surfaces/frame queues plus search, focus/IME, paste review, inline command/credential assistance, selection/mouse, paint geometry, menus, caches and split/tab window ownership | Cross-domain adapters use immutable projections, typed frame-queue metrics and semantic lifecycle transitions. Session registration/removal, activation, reconnect output, discontinuity handling, render-cache invalidation and performance recovery now execute behind `TerminalFeatureState`; no desktop module outside `features/terminal` directly accesses `terminal.view`. GPUI notification, navigation, persistence execution, terminal parsing, snapshots, paint algorithms and protocol handling are unchanged. |
@@ -2135,18 +2163,19 @@ use the existing behavior.
 
 ## Temporary Compatibility
 
-- `nyaterm-store` remains a transitional persistence facade; storage
-  implementation still lives in `nyaterm-core`.
-- User-data compatibility readers remain in `nyaterm-core` beside legacy-format
-  tests; they are independent of the removed source inventory/dashboard code.
+- `nyaterm-store` is no longer a transitional re-export facade. It owns the
+  persistence implementation, transactions and database compatibility readers.
+- `nyaterm-core` keeps schema-neutral compatibility models, serialization
+  formats, parsing, encryption policies and ports. Representative legacy-data
+  tests remain beside the implementation or pure contract they exercise.
 
 ## Architecture Debt
 
 - `features/prelude.rs`, desktop `#[path = "..."]`, and desktop `use super::*`
   debt are cleared and guarded against reintroduction.
-- `NyaTermApp` is the composition root for two application services and twenty
-  focused feature owners. The architecture script checks that exact twenty-two-field
-  set. New state should move into a focused FeatureState or a deliberately
+- `NyaTermApp` is the composition root for runtime/store services and focused
+  feature owners. The architecture script checks the current exact field set.
+  New state should move into a focused FeatureState or a deliberately
   authoritative Entity, not into a new unrelated top-level field.
 - The connections state, runtime, list interaction and child-window adapters
   now live under the normal `features/connections` tree and are governed.
@@ -2155,12 +2184,11 @@ use the existing behavior.
   second connection domain. Saved connections, groups and discovered serial
   ports are now a private child of that same owner, so no root-level catalog or
   caller-supplied catalog projection remains.
-- `core/storage.rs` and `transport/lib.rs` are down from 7,662 and 8,418 lines
-  to 4,020 and 4,423. What is left in each is genuinely central: the store and
-  its shared transaction/JSON/crypto helpers on one side, the session manager
-  and session lifecycle on the other. Further extraction there would cut across
-  real coupling rather than along a seam, and must still preserve public facade
-  behavior and persistence/protocol compatibility.
+- The broad domain re-export facade in `features/mod.rs` remains the primary
+  module-boundary debt. Consumers should import from authoritative feature
+  modules, leaving the root with declarations, initialization and
+  `NyaTermApp` only. Secret-bearing derived `Debug` implementations remain the
+  next security cleanup; any required formatting must be explicitly redacted.
 
 ## Forbidden To Add
 
@@ -2201,7 +2229,7 @@ delete old fields in the same change that makes the Entity authoritative.
 
 ## Unwired Capabilities
 
-`nyaterm-desktop` went from 104 dead-code warnings to 0. The first reduction
+`nyaterm-desktop` previously went from 104 dead-code warnings to 0. The first reduction
 removed the superseded migration render layer: the old `left_*_panel` /
 `right_*_panel` tree that `panel_body`'s `*_view` dispatch replaced, the widget
 helpers only it called, and the handlers only those widgets invoked. The final
@@ -2210,16 +2238,18 @@ encrypted-backup behavior was connected to settings, one process label was
 wired, and producerless adapters, transient focus state and test-only wrappers
 were removed or scoped to tests.
 
-There is no warning-backed unwired-capability list now. Future capabilities
-must land with a production entry point, or remain outside production state
-until that product path exists. Treat any new desktop dead-code warning as a
+The storage-runtime migration currently leaves eight dead cleanup methods and
+one redundant field-pattern warning to remove. Future capabilities must land
+with a production entry point, or remain outside production state until that
+product path exists. Treat any additional desktop dead-code warning as a
 regression to classify, not as an accepted baseline.
 
 ## Migration-Only Exit List
 
 The legacy inventory crate, migration dashboard and local source checkout met
-their removal conditions together. Compatibility readers required for existing
-user data remain in `nyaterm-core`; only temporary API aliases remain to audit.
+their removal conditions together. Database compatibility readers required for
+existing user data now live in `nyaterm-store`; pure compatibility formats and
+parsers remain in `nyaterm-core`. Only temporary API aliases remain to audit.
 
 | Item | Current use | Default build | Removal condition | Replacement direction |
 | --- | --- | --- | --- | --- |
@@ -2227,15 +2257,13 @@ user data remain in `nyaterm-core`; only temporary API aliases remain to audit.
 
 ## Suggested Order
 
-The order below is deliberately different from earlier rounds. Narrowing
-`features/prelude.rs` one symbol at a time produced little real encapsulation
-while `features/mod.rs` still flattened every feature directory through
-`#[path = "..."]`: a file could stop importing a symbol from the prelude and
-still sit in the same crate-wide namespace, reachable from everywhere. Build the
-real module tree first, then the remaining steps actually enforce something.
+The normal module trees, explicit wildcard-import cleanup and authoritative
+feature owners are established. Remaining work should now close the broad
+feature-root facade and secret-formatting hazards rather than revisit the
+completed storage ownership migration.
 
-Items 1 through 7 are done for the current convergence boundary. Item 8 remains
-a deliberately deferred architectural decision.
+Items 1 through 8 are done for the current convergence boundary. Items 9 and
+10 are the remaining focused cleanup order.
 
 1. Done. `#[path = "..."]` no longer appears in `nyaterm-desktop` or
    `nyaterm-terminal-gpui`, and a crate-wide guard keeps it that way.
@@ -2494,8 +2522,9 @@ a deliberately deferred architectural decision.
 4. Done. No store is a projection any more; the three that remain own real
    state. If a future domain wants Entity ownership, migrate it authoritatively
    rather than reintroducing a published read model.
-5. Done for the original 4,000-line production files. `core/storage.rs` and
-   `transport/lib.rs` were split by domain rather than by individual type, so
+5. Done for the original 4,000-line production files. The storage implementation
+   now lives under `nyaterm-store`, and `transport/lib.rs` was split by domain,
+   so
    constants, records, helpers, tests and dependencies moved together. The
    terminal model and surface entity instead moved their focused tests into
    normal child modules, preserving private access without disturbing their
@@ -2510,8 +2539,14 @@ a deliberately deferred architectural decision.
 7. Done. The migration capability/service models had no consumer outside the
    retired dashboard, so their `nyaterm-core` crate-root exports and module were
    removed with that feature rather than kept as a compatibility facade.
-8. Revisit `nyaterm-store` only after storage modules have clearer internal
-   boundaries and consumers can move without changing persistence compatibility.
+8. Done. `nyaterm-store` owns the redb implementation and one bounded worker;
+   desktop access is routed through its typed clients, startup is bootstrap-
+   gated, and normal close waits for a FIFO flush barrier.
+9. Remove the remaining domain-level re-exports from `features/mod.rs` and
+   update consumers to import from their authoritative modules explicitly.
+10. Replace dangerous secret-bearing derived `Debug` implementations with
+   explicit redacted formatting and pin the invariant with focused tests and
+   architecture guards.
 
 ## Security Authentication Parity
 
