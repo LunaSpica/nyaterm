@@ -1,9 +1,11 @@
-use gpui::{Context, IntoElement, SharedString, div, prelude::*, px};
+use gpui::{Context, IntoElement, SharedString, div, prelude::*};
 use nyaterm_ui::NyaNumberInputOptions;
 
 use crate::features::{NyaTermApp, TextInputSetup};
 
-use super::super::{settings_form_row, settings_form_section, settings_switch};
+use super::super::{
+    settings_form_row, settings_form_section, settings_input_control, settings_switch,
+};
 
 impl NyaTermApp {
     pub(in crate::features::pages::settings) fn transfer_advanced_settings_section(
@@ -137,7 +139,7 @@ impl NyaTermApp {
                     Some(SharedString::from(
                         self.tr("settings.defaultFilePermissionsDesc"),
                     )),
-                    div().w_full().max_w(px(260.)).child(permissions_input),
+                    settings_input_control(260., permissions_input),
                 )),
         ))
     }

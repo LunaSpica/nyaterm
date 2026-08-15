@@ -593,6 +593,33 @@ pub(super) fn settings_form_row(
         )
 }
 
+/// Gives an input a definite width inside a content-sized settings row control slot.
+pub(super) fn settings_input_control(width: f32, input: impl IntoElement) -> impl IntoElement {
+    div()
+        .w(px(width))
+        .max_w_full()
+        .min_w_0()
+        .flex()
+        .child(div().min_w_0().flex_1().child(input))
+}
+
+/// Keeps an input and its trailing action on one line in a settings row.
+pub(super) fn settings_input_action_control(
+    width: f32,
+    input: impl IntoElement,
+    action: impl IntoElement,
+) -> impl IntoElement {
+    div()
+        .w(px(width))
+        .max_w_full()
+        .min_w_0()
+        .flex()
+        .items_center()
+        .gap_2()
+        .child(div().min_w_0().flex_1().child(input))
+        .child(div().flex_none().child(action))
+}
+
 /// Compact on/off switch control (Tauri SettingSwitch look).
 pub(in crate::features::pages) fn settings_switch(
     palette: ThemePalette,

@@ -5,7 +5,9 @@ use nyaterm_ui::{NyaNumberInputOptions, NyaSelectOption};
 use crate::features::{NyaTermApp, TextInputSetup};
 use crate::widgets::small_button;
 
-use super::super::{settings_form_row, settings_form_section, settings_switch};
+use super::super::{
+    settings_form_row, settings_form_section, settings_input_action_control, settings_switch,
+};
 
 impl NyaTermApp {
     pub(in crate::features) fn recording_settings_section(
@@ -84,21 +86,18 @@ impl NyaTermApp {
                     palette,
                     self.tr("settings.recordingPath"),
                     Some(SharedString::from(self.tr("settings.recordingPathDesc"))),
-                    div()
-                        .w_full()
-                        .max_w(px(260.))
-                        .flex()
-                        .flex_col()
-                        .gap_1()
-                        .child(recording_path_input)
-                        .child(small_button(
+                    settings_input_action_control(
+                        260.,
+                        recording_path_input,
+                        small_button(
                             palette,
                             "settings-recording-path-browse",
                             self.tr("settings.browse"),
                             cx.listener(|this, _, _, cx| {
                                 this.prompt_recording_path_setting(cx);
                             }),
-                        )),
+                        ),
+                    ),
                 ))
                 .child(
                     div()

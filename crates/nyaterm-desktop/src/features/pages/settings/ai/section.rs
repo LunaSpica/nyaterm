@@ -6,7 +6,9 @@ use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::AiInputField;
 use crate::theme::ThemePalette;
 
-use super::super::{settings_form_row, settings_form_section, settings_switch};
+use super::super::{
+    settings_form_row, settings_form_section, settings_input_control, settings_switch,
+};
 
 impl NyaTermApp {
     pub(in crate::features) fn ai_input(
@@ -117,13 +119,16 @@ impl NyaTermApp {
                         palette,
                         self.tr("ai.requestUserAgent"),
                         Some(SharedString::from(self.tr("ai.requestUserAgentDesc"))),
-                        div().w_full().max_w(px(300.)).child(self.ai_input(
-                            "ai-request-user-agent",
-                            self.tr("ai.requestUserAgent"),
-                            self.ai.settings_config().request_user_agent.clone(),
-                            AiInputField::RequestUserAgent,
-                            cx,
-                        )),
+                        settings_input_control(
+                            300.,
+                            self.ai_input(
+                                "ai-request-user-agent",
+                                self.tr("ai.requestUserAgent"),
+                                self.ai.settings_config().request_user_agent.clone(),
+                                AiInputField::RequestUserAgent,
+                                cx,
+                            ),
+                        ),
                     ))
                     .child(settings_form_row(
                         palette,

@@ -1,10 +1,10 @@
-use gpui::{Context, IntoElement, SharedString, div, prelude::*, px};
+use gpui::{Context, IntoElement, SharedString, div, prelude::*};
 use nyaterm_ui::NyaSelectOption;
 
 use crate::features::{NyaTermApp, TextInputSetup};
 use crate::widgets::small_button;
 
-use super::super::settings_form_row;
+use super::super::{settings_form_row, settings_input_action_control};
 
 impl NyaTermApp {
     pub(in crate::features::pages::settings) fn transfer_editor_settings_rows(
@@ -56,21 +56,18 @@ impl NyaTermApp {
                     palette,
                     self.tr("settings.defaultEditor"),
                     Some(SharedString::from(self.tr("settings.defaultEditorDesc"))),
-                    div()
-                        .w_full()
-                        .max_w(px(260.))
-                        .flex()
-                        .flex_col()
-                        .gap_1()
-                        .child(default_editor_input)
-                        .child(small_button(
+                    settings_input_action_control(
+                        260.,
+                        default_editor_input,
+                        small_button(
                             palette,
                             "settings-transfer-editor-browse",
                             self.tr("settings.browse"),
                             cx.listener(|this, _, _, cx| {
                                 this.prompt_transfer_default_editor_setting(cx);
                             }),
-                        )),
+                        ),
+                    ),
                 ))
             })
     }
