@@ -65,9 +65,23 @@ pub(in crate::features) struct TranslationFeatureState {
 }
 
 pub(super) struct TranslationPersistenceCompletion {
-    pub(super) apply_result: bool,
-    pub(super) report_result: bool,
-    pub(super) next: Option<(u64, TranslationSettings)>,
+    apply_result: bool,
+    report_result: bool,
+    next: Option<(u64, TranslationSettings)>,
+}
+
+impl TranslationPersistenceCompletion {
+    pub(super) fn apply_result(&self) -> bool {
+        self.apply_result
+    }
+
+    pub(super) fn report_result(&self) -> bool {
+        self.report_result
+    }
+
+    pub(super) fn take_next(&mut self) -> Option<(u64, TranslationSettings)> {
+        self.next.take()
+    }
 }
 
 impl TranslationFeatureState {
@@ -478,22 +492,24 @@ mod tests {
         state.select_target_language("ja");
         assert!(state.queue_settings_persistence().is_none());
 
-        let first = state.finish_settings_persistence(first_generation, true);
-        assert!(!first.apply_result);
-        assert!(!first.report_result);
-        let (latest_generation, latest) = first.next.expect("latest snapshot should follow");
+        let mut first = state.finish_settings_persistence(first_generation, true);
+        assert!(!first.apply_result());
+        assert!(!first.report_result());
+        let (latest_generation, latest) = first
+            .take_next()
+            .expect("latest snapshot should follow");
         assert_eq!(latest.target_language, "ja");
 
         let failed = state.finish_settings_persistence(latest_generation, false);
-        assert!(failed.report_result);
-        assert!(!failed.apply_result);
+        assert!(failed.report_result());
+        assert!(!failed.apply_result());
         assert!(state.settings_persistence_is_dirty());
 
         let (retry_generation, _) = state
             .queue_settings_persistence()
             .expect("retry should submit latest snapshot");
         let retried = state.finish_settings_persistence(retry_generation, true);
-        assert!(retried.apply_result);
+        assert!(retried.apply_result());
         assert!(!state.settings_persistence_is_dirty());
     }
 

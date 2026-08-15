@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use gpui::{Context, KeyDownEvent, Window};
-use nyaterm_store::ConnectionStore;
 
 use crate::features::NyaTermApp;
 use crate::shortcuts::event_to_hotkey_string;
@@ -103,26 +102,9 @@ impl NyaTermApp {
                 .set_status(success_message.replace("saved", "staged"));
             return;
         }
-        match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .and_then(|store| store.save_keybindings(&keybindings))
-        {
-            Ok(settings) => {
-                self.apply_gpui_settings(settings);
-                self.settings.finish_keybinding_recording();
-                self.settings
-                    .update_store_status(success_message.clone(), true);
-                self.shell.set_status(success_message);
-            }
-            Err(error) => {
-                self.settings
-                    .update_store_status(format!("shortcut save failed: {error}"), false);
-                self.shell
-                    .set_status(self.settings.store_status().message.to_string());
-            }
-        }
+        self.settings.finish_keybinding_recording();
+        self.shell.set_status(success_message);
+        self.queue_settings_save(crate::features::settings::SettingsSaveKind::Keybindings, cx);
         cx.notify();
     }
 

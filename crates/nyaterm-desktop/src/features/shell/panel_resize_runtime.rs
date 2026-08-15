@@ -3,7 +3,6 @@ use gpui::{
     SharedString, StatefulInteractiveElement as _, Styled as _, deferred,
     prelude::FluentBuilder as _,
 };
-use nyaterm_store::ConnectionStore;
 
 use crate::features::{
     NyaTermApp, horizontal_resize_handle_visual, settings::UiLayoutSettingsUpdate,
@@ -218,24 +217,7 @@ impl NyaTermApp {
                 .collect(),
         };
         self.settings.apply_ui_layout(update);
-        if let Ok(store) = ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        ) {
-            match store.save_ui_layout_settings(self.settings.summary()) {
-                Ok(summary) => {
-                    self.apply_gpui_settings(summary);
-                    self.settings
-                        .update_store_status("panel layout saved", true);
-                }
-                Err(error) => {
-                    self.settings.update_store_status(
-                        format!("failed to save panel layout: {error}"),
-                        false,
-                    );
-                }
-            }
-        }
+        self.shell.runtime.ui_layout_persist_pending = true;
     }
 
     pub(in crate::features) fn panel_resize_handle(

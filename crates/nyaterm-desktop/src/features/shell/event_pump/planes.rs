@@ -581,7 +581,10 @@ impl NyaTermApp {
         if self.shell.runtime.open_tabs_persist_dirty
             || self.shell.runtime.window_layout_persist_dirty
         {
-            self.flush_pending_session_persistence();
+            self.flush_pending_session_persistence(cx);
+        }
+        if std::mem::take(&mut self.shell.runtime.ui_layout_persist_pending) {
+            self.queue_settings_save(crate::features::settings::SettingsSaveKind::UiLayout, cx);
         }
         // Layout restore opens the config DB — never do it while sessions are
         // still connecting or the data plane is under pressure.
@@ -590,7 +593,7 @@ impl NyaTermApp {
             && !self.runtime_output_pressure_active()
             && !connect_settle
         {
-            self.try_restore_terminal_window_layout();
+            self.try_restore_terminal_window_layout(cx);
             if self.terminal.terminal_window_tree_is_some() {
                 self.reconcile_terminal_windows();
             }

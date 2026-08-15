@@ -16,6 +16,9 @@ pub(in crate::features) enum SettingsSaveKind {
     Transfer,
     Terminal,
     QuickCommands,
+    Appearance,
+    UiLayout,
+    Keybindings,
 }
 
 impl SettingsSaveKind {
@@ -30,6 +33,9 @@ impl SettingsSaveKind {
             Self::Transfer => SettingsPersistenceDomain::Transfer,
             Self::Terminal => SettingsPersistenceDomain::Terminal,
             Self::QuickCommands => SettingsPersistenceDomain::QuickCommands,
+            Self::Appearance => SettingsPersistenceDomain::Appearance,
+            Self::UiLayout => SettingsPersistenceDomain::UiLayout,
+            Self::Keybindings => SettingsPersistenceDomain::Keybindings,
         }
     }
 
@@ -44,6 +50,9 @@ impl SettingsSaveKind {
             Self::Transfer => "transfer settings",
             Self::Terminal => "terminal settings",
             Self::QuickCommands => "quick command UI settings",
+            Self::Appearance => "appearance settings",
+            Self::UiLayout => "UI layout settings",
+            Self::Keybindings => "keybindings",
         }
     }
 }
@@ -288,6 +297,9 @@ impl NyaTermApp {
             SettingsSaveKind::Transfer => store.save_transfer_settings(&snapshot),
             SettingsSaveKind::Terminal => store.save_terminal_settings(&snapshot),
             SettingsSaveKind::QuickCommands => store.save_quick_command_ui_settings(&snapshot),
+            SettingsSaveKind::Appearance => store.save_appearance_settings(&snapshot),
+            SettingsSaveKind::UiLayout => store.save_ui_layout_settings(&snapshot),
+            SettingsSaveKind::Keybindings => store.save_keybindings(&snapshot.keybindings),
         });
         let task = match self.store_ui.try_submit(generation, request) {
             Ok(task) => task,

@@ -1,5 +1,5 @@
 use gpui::Context;
-use nyaterm_store::ConnectionStore;
+use nyaterm_store::{StoreDomain, store_request};
 
 use crate::features::terminal::{TerminalWindowDockResult, TerminalWindowReconcileResult};
 use crate::features::{NyaTermApp, short_id};
@@ -216,7 +216,10 @@ impl NyaTermApp {
         self.shell.runtime.window_layout_persist_dirty = true;
     }
 
-    pub(in crate::features) fn try_restore_terminal_window_layout(&mut self) {
+    pub(in crate::features) fn try_restore_terminal_window_layout(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
         if self.terminal.terminal_windows_restore_is_complete() {
             return;
         }
@@ -246,24 +249,33 @@ impl NyaTermApp {
             return;
         }
         self.terminal.complete_terminal_windows_restore();
-        let Ok(store) = ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        ) else {
-            return;
-        };
-        let Ok(Some(layout)) = store.load_terminal_window_layout() else {
-            return;
-        };
         let active = self.session.active_id_owned();
-        let Some(focused_leaf_id) =
-            self.terminal
-                .restore_terminal_window_layout(&layout, &ordered, active.as_deref())
-        else {
-            return;
-        };
-        self.shell.workspace.focused_terminal_leaf_id = focused_leaf_id;
-        self.shell
-            .set_status("restored multi-leaf window layout".to_string());
+        self.submit_store_request(
+            0,
+            store_request(StoreDomain::Sessions, |store| {
+                store.load_terminal_window_layout()
+            }),
+            move |this, event, cx| {
+                match event.outcome {
+                    Ok(Some(layout)) => {
+                        if let Some(focused_leaf_id) = this.terminal.restore_terminal_window_layout(
+                            &layout,
+                            &ordered,
+                            active.as_deref(),
+                        ) {
+                            this.shell.workspace.focused_terminal_leaf_id = focused_leaf_id;
+                            this.shell
+                                .set_status("restored multi-leaf window layout".to_string());
+                        }
+                    }
+                    Ok(None) => {}
+                    Err(error) => this
+                        .shell
+                        .set_status(format!("failed to restore terminal layout: {error}")),
+                }
+                cx.notify();
+            },
+            cx,
+        );
     }
 }

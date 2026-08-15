@@ -6,7 +6,6 @@ use gpui::{
 use nyaterm_core::{
     AppSettingsSummary, ResolvedKeywordHighlightRule, merge_keyword_highlight_rules_for_paint,
 };
-use nyaterm_store::ConnectionStore;
 
 use crate::features::NyaTermApp;
 pub(in crate::features) use crate::theme::{ThemePalette, apply_component_theme, theme_palette};
@@ -620,30 +619,8 @@ impl NyaTermApp {
             self.refresh_visible_terminal_surfaces(cx);
             return;
         }
-        match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .and_then(|store| store.save_appearance_settings(self.settings.summary()))
-        {
-            Ok(settings) => {
-                self.apply_gpui_settings(settings);
-                self.refresh_visible_terminal_surfaces(cx);
-                self.settings
-                    .update_store_status("appearance settings saved", true);
-                self.shell
-                    .set_status("appearance settings saved".to_string());
-            }
-            Err(error) => {
-                self.settings.update_store_status(
-                    format!("appearance settings save failed: {error}"),
-                    false,
-                );
-                self.shell
-                    .set_status(self.settings.store_status().message.to_string());
-            }
-        }
-        cx.notify();
+        self.refresh_visible_terminal_surfaces(cx);
+        self.queue_settings_save(crate::features::settings::SettingsSaveKind::Appearance, cx);
     }
 }
 

@@ -5,7 +5,7 @@ use gpui::{
     SharedString, StatefulInteractiveElement as _, Styled as _, Window, deferred,
 };
 use nyaterm_core::uuid;
-use nyaterm_store::ConnectionStore;
+use nyaterm_store::{StoreDomain, store_request};
 
 use crate::features::{
     NyaTermApp, horizontal_resize_handle_visual, short_id, vertical_resize_handle_visual,
@@ -451,45 +451,13 @@ impl NyaTermApp {
         if !self.session.restore_is_complete() {
             return;
         }
-        self.sync_workspace_split_from_active_tab();
-        // Prefer serializing a global layout when a single split covers every tab-root leaf.
-        // Otherwise store the active tab's split against ordered_sessions indexes (legacy key).
-        let ordered = self
-            .session
-            .ordered_sessions()
-            .into_iter()
-            .map(|session| session.id)
-            .collect::<Vec<_>>();
-        let layout = self
-            .shell
-            .workspace
-            .split
-            .as_ref()
-            .filter(|root| root.is_split())
-            .and_then(|root| root.serialize_layout(&ordered))
-            .or_else(|| {
-                self.shell
-                    .workspace
-                    .pane_roots
-                    .values()
-                    .find(|root| root.is_split())
-                    .and_then(|root| root.serialize_layout(&ordered))
-            });
-        match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .and_then(|store| store.save_workspace_pane_layout(layout.as_ref()))
-        {
-            Ok(()) => {}
-            Err(error) => {
-                self.shell
-                    .set_status(format!("failed to save pane layout: {error}"));
-            }
-        }
+        self.shell.runtime.window_layout_persist_dirty = true;
     }
 
-    pub(in crate::features) fn try_restore_workspace_pane_layout(&mut self) {
+    pub(in crate::features) fn try_restore_workspace_pane_layout(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
         if self.shell.workspace.pane_layout_restored {
             return;
         }
@@ -518,41 +486,51 @@ impl NyaTermApp {
             return;
         }
         self.shell.workspace.pane_layout_restored = true;
-        let Ok(store) = ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        ) else {
-            return;
-        };
-        let Ok(Some(layout)) = store.load_workspace_pane_layout() else {
-            return;
-        };
-        let Some(restored) = WorkspacePaneNode::restore_layout(&layout, &ordered) else {
-            return;
-        };
-        if !restored.is_split() {
-            return;
-        }
-        // Prefer active session still present in the restored tree.
-        if let Some(active) = self.session.active_id_owned() {
-            if !restored.contains_session(&active)
-                && let Some(first) = restored.session_ids().into_iter().next()
-            {
-                self.session.select_active_session(first);
-            }
-        } else if let Some(first) = restored.session_ids().into_iter().next() {
-            self.session.select_active_session(first);
-        }
-        // Install as a per-tab root under the first leaf (legacy global layout path).
-        if let Some(first) = restored.session_ids().into_iter().next() {
-            self.shell.workspace.pane_roots.insert(first, restored);
-            self.rebuild_session_tab_owners();
-            self.sync_workspace_split_from_active_tab();
-        }
-        self.shell.navigation.selected_nav = NavItem::Workspace;
-        self.shell.navigation.main_mode = MainMode::Workspace;
-        self.shell
-            .set_status("restored workspace pane layout".to_string());
+        let active = self.session.active_id_owned();
+        self.submit_store_request(
+            0,
+            store_request(StoreDomain::Sessions, |store| {
+                store.load_workspace_pane_layout()
+            }),
+            move |this, event, cx| {
+                let layout = match event.outcome {
+                    Ok(Some(layout)) => layout,
+                    Ok(None) => return,
+                    Err(error) => {
+                        this.shell
+                            .set_status(format!("failed to restore pane layout: {error}"));
+                        cx.notify();
+                        return;
+                    }
+                };
+                let Some(restored) = WorkspacePaneNode::restore_layout(&layout, &ordered) else {
+                    return;
+                };
+                if !restored.is_split() {
+                    return;
+                }
+                if let Some(active) = active {
+                    if !restored.contains_session(&active)
+                        && let Some(first) = restored.session_ids().into_iter().next()
+                    {
+                        this.session.select_active_session(first);
+                    }
+                } else if let Some(first) = restored.session_ids().into_iter().next() {
+                    this.session.select_active_session(first);
+                }
+                if let Some(first) = restored.session_ids().into_iter().next() {
+                    this.shell.workspace.pane_roots.insert(first, restored);
+                    this.rebuild_session_tab_owners();
+                    this.sync_workspace_split_from_active_tab();
+                }
+                this.shell.navigation.selected_nav = NavItem::Workspace;
+                this.shell.navigation.main_mode = MainMode::Workspace;
+                this.shell
+                    .set_status("restored workspace pane layout".to_string());
+                cx.notify();
+            },
+            cx,
+        );
     }
 }
 

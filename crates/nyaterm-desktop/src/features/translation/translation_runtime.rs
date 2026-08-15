@@ -64,24 +64,24 @@ impl NyaTermApp {
         cx.spawn(async move |this, cx| {
             let event = task.await;
             let _ = this.update(cx, |this, cx| {
-                let completion = this
+                let mut completion = this
                     .translation
                     .finish_settings_persistence(event.generation, event.outcome.is_ok());
-                if completion.apply_result
+                if completion.apply_result()
                     && let Ok(saved) = event.outcome.as_ref()
                 {
                     this.translation.settings_saved(saved.clone());
                 }
-                if completion.report_result {
+                if completion.report_result() {
                     if let Err(error) = event.outcome {
                         this.translation.settings_save_failed(error);
                     }
                     this.settings.update_store_status(
                         this.translation.status().to_string(),
-                        completion.apply_result,
+                        completion.apply_result(),
                     );
                 }
-                if let Some((generation, snapshot)) = completion.next {
+                if let Some((generation, snapshot)) = completion.take_next() {
                     this.submit_translation_settings_save(generation, snapshot, cx);
                 }
                 cx.notify();

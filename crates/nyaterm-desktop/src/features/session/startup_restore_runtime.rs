@@ -2,7 +2,7 @@ use gpui::{Context, Window};
 use nyaterm_core::{
     AiExecutionProfile, RestorableOpenTab, RestorablePaneNode, RestorableWorkspacePaneNode,
 };
-use nyaterm_store::ConnectionStore;
+use nyaterm_store::{ConnectionStore, StoreDomain, store_request};
 use nyaterm_transport::{
     LocalSessionConfig, RdpClipboardConfig, RdpDisplayConfig, RdpReconnectConfig, RdpSessionConfig,
     SessionInfo, VncClipboardConfig, VncDisplayConfig, VncReconnectConfig, VncSecurityConfig,
@@ -32,13 +32,13 @@ impl NyaTermApp {
     }
 
     /// Force a durable open-tabs write (window close / explicit quit paths).
-    pub(in crate::features) fn flush_open_tabs_now(&mut self) {
+    pub(in crate::features) fn flush_open_tabs_now(&mut self, cx: &mut Context<Self>) {
         if !self.settings.summary().startup_restore {
             self.shell.clear_session_persistence_dirty();
             return;
         }
         self.shell.mark_session_persistence_dirty();
-        self.flush_pending_session_persistence_sync();
+        self.flush_pending_session_persistence(cx);
     }
 
     /// Idle plane: snapshot dirty state and write config on a background thread.
@@ -46,7 +46,10 @@ impl NyaTermApp {
     /// Serialization stays on the UI thread (local maps only). Opening redb and
     /// rewriting settings is never done on the UI tick — that freezes connect
     /// and the first idle frame after connect.
-    pub(in crate::features) fn flush_pending_session_persistence(&mut self) {
+    pub(in crate::features) fn flush_pending_session_persistence(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
         if !self.settings.summary().startup_restore {
             self.shell.clear_session_persistence_dirty();
             return;
@@ -70,99 +73,69 @@ impl NyaTermApp {
             None
         };
 
-        // Clear dirty before spawn so repeated idle ticks do not re-queue while
-        // the worker is still writing. Window-close uses the sync path below.
-        self.shell.acknowledge_session_persistence(dirty);
-
-        let config_dir = self.runtime.config_dir().to_path_buf();
-        let portable_key = self.runtime.portable_key_path().map(ToOwned::to_owned);
-        std::thread::Builder::new()
-            .name("nyaterm-persist-tabs".into())
-            .spawn(move || {
-                let Ok(store) =
-                    ConnectionStore::open_with_portable_key_path(config_dir, portable_key)
-                else {
-                    tracing::warn!(
-                        diagnostic = "session_persist",
-                        "failed to open config store for deferred tab persist"
-                    );
-                    return;
-                };
-                if let Some(tabs) = tabs.as_ref()
-                    && let Err(error) = store.save_open_tabs(tabs)
-                {
-                    tracing::warn!(
-                        diagnostic = "session_persist",
-                        error = %error,
-                        "failed to save open tabs in background"
-                    );
-                }
-                if let Some(layout) = layout.as_ref()
-                    && let Err(error) = store.save_terminal_window_layout(layout.as_ref())
-                {
-                    tracing::warn!(
-                        diagnostic = "session_persist",
-                        error = %error,
-                        "failed to save window layout in background"
-                    );
-                }
-            })
-            .ok();
-    }
-
-    /// Synchronous durable write used by window-close / quit (must not race exit).
-    fn flush_pending_session_persistence_sync(&mut self) {
-        if !self.settings.summary().startup_restore {
-            self.shell.clear_session_persistence_dirty();
-            return;
-        }
-        let dirty = self
-            .shell
-            .pending_session_persistence(self.settings.summary().startup_restore_window_layout);
-        if dirty.is_empty() {
-            return;
-        }
-
-        let tabs = dirty.open_tabs().then(|| self.serialize_open_tabs());
-        let layout = if dirty.window_layout() {
+        let workspace_layout = if dirty.window_layout() {
+            self.sync_workspace_split_from_active_tab();
             let ordered = self
-                .ordered_tab_sessions()
+                .session
+                .ordered_sessions()
                 .into_iter()
                 .map(|session| session.id)
                 .collect::<Vec<_>>();
-            Some(self.terminal.serialize_terminal_window_layout(&ordered))
+            self.shell
+                .workspace_split()
+                .as_ref()
+                .filter(|root| root.is_split())
+                .and_then(|root| root.serialize_layout(&ordered))
+                .or_else(|| {
+                    self.shell
+                        .workspace_pane_roots()
+                        .values()
+                        .find(|root| root.is_split())
+                        .and_then(|root| root.serialize_layout(&ordered))
+                })
         } else {
             None
         };
-
-        let config_dir = self.runtime.config_dir().to_path_buf();
-        let portable_key = self.runtime.portable_key_path().map(ToOwned::to_owned);
-        match ConnectionStore::open_with_portable_key_path(config_dir, portable_key) {
-            Ok(store) => {
-                if let Some(tabs) = tabs.as_ref() {
-                    match store.save_open_tabs(tabs) {
-                        Ok(()) => self.shell.acknowledge_open_tabs_persistence(),
-                        Err(error) => {
-                            self.shell
-                                .set_status(format!("failed to save open tabs: {error}"));
-                        }
-                    }
-                }
-                if let Some(layout) = layout.as_ref() {
-                    match store.save_terminal_window_layout(layout.as_ref()) {
-                        Ok(()) => self.shell.acknowledge_window_layout_persistence(),
-                        Err(error) => {
-                            self.shell
-                                .set_status(format!("failed to save window layout: {error}"));
-                        }
-                    }
-                }
+        let Some(generation) = self.shell.begin_session_persistence(dirty) else {
+            return;
+        };
+        let request = store_request(StoreDomain::Sessions, move |store| {
+            if let Some(tabs) = tabs.as_ref() {
+                store.save_open_tabs(tabs)?;
             }
+            if let Some(layout) = layout.as_ref() {
+                store.save_terminal_window_layout(layout.as_ref())?;
+            }
+            store.save_workspace_pane_layout(workspace_layout.as_ref())
+        });
+        let task = match self.store_ui.try_submit(generation, request) {
+            Ok(task) => task,
             Err(error) => {
                 self.shell
-                    .set_status(format!("failed to open config store: {error}"));
+                    .finish_session_persistence(generation, dirty, false);
+                let message = format!("session layout save was not queued: {error}");
+                self.shell.set_status(message.clone());
+                self.settings.update_store_status(message, false);
+                return;
             }
-        }
+        };
+        cx.spawn(async move |this, cx| {
+            let event = task.await;
+            let _ = this.update(cx, move |this, cx| {
+                let succeeded = event.outcome.is_ok();
+                if this
+                    .shell
+                    .finish_session_persistence(event.generation, dirty, succeeded)
+                    && let Err(error) = event.outcome
+                {
+                    let message = format!("failed to save session layout: {error}");
+                    this.shell.set_status(message.clone());
+                    this.settings.update_store_status(message, false);
+                }
+                cx.notify();
+            });
+        })
+        .detach();
     }
 
     pub(in crate::features) fn serialize_open_tabs(&self) -> Vec<RestorableOpenTab> {
@@ -439,7 +412,7 @@ impl NyaTermApp {
         // After all tabs reconnect, attempt multi-leaf then global pane layout restore.
         self.terminal.mark_terminal_windows_restore_pending();
         self.shell.set_workspace_pane_layout_restored(false);
-        self.try_restore_terminal_window_layout();
+        self.try_restore_terminal_window_layout(cx);
         // Prefer stored ui.workspace_pane_layout only when no open_tabs per-tab roots exist.
         // open_tabs[].root maps to per-tab session_pane_roots (Tauri Tab.root).
         let pending_layouts = self
@@ -451,7 +424,7 @@ impl NyaTermApp {
             .startup_restore
             .update(cx, |store, _| store.take_pending_active_pane_indexes());
         if pending_layouts.is_empty() {
-            self.try_restore_workspace_pane_layout();
+            self.try_restore_workspace_pane_layout(cx);
         } else {
             self.shell.set_workspace_pane_layout_restored(true);
             for layout in pending_layouts {

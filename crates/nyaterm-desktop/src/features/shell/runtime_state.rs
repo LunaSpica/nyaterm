@@ -72,6 +72,9 @@ pub(super) struct ShellRuntimeState {
     /// Open-tabs / window-layout settings need a durable write.
     pub(super) open_tabs_persist_dirty: bool,
     pub(super) window_layout_persist_dirty: bool,
+    pub(super) ui_layout_persist_pending: bool,
+    session_persistence_generation: u64,
+    session_persistence_in_flight: Option<u64>,
     pub(super) cursor_blink_on: bool,
     pub(super) cursor_blink_next_at: Option<Instant>,
 }
@@ -140,6 +143,9 @@ impl Default for ShellRuntimeState {
             last_perf_layout_cache_misses: 0,
             open_tabs_persist_dirty: false,
             window_layout_persist_dirty: false,
+            ui_layout_persist_pending: false,
+            session_persistence_generation: 0,
+            session_persistence_in_flight: None,
             cursor_blink_on: true,
             cursor_blink_next_at: None,
         }
@@ -239,6 +245,40 @@ impl ShellFeatureState {
         if dirty.window_layout {
             self.runtime.window_layout_persist_dirty = false;
         }
+    }
+
+    pub(in crate::features) fn begin_session_persistence(
+        &mut self,
+        dirty: ShellPersistenceDirty,
+    ) -> Option<u64> {
+        if dirty.is_empty() || self.runtime.session_persistence_in_flight.is_some() {
+            return None;
+        }
+        self.runtime.session_persistence_generation = self
+            .runtime
+            .session_persistence_generation
+            .saturating_add(1);
+        let generation = self.runtime.session_persistence_generation;
+        self.runtime.session_persistence_in_flight = Some(generation);
+        self.acknowledge_session_persistence(dirty);
+        Some(generation)
+    }
+
+    pub(in crate::features) fn finish_session_persistence(
+        &mut self,
+        generation: u64,
+        dirty: ShellPersistenceDirty,
+        succeeded: bool,
+    ) -> bool {
+        if self.runtime.session_persistence_in_flight != Some(generation) {
+            return false;
+        }
+        self.runtime.session_persistence_in_flight = None;
+        if !succeeded {
+            self.runtime.open_tabs_persist_dirty |= dirty.open_tabs;
+            self.runtime.window_layout_persist_dirty |= dirty.window_layout;
+        }
+        true
     }
 
     pub(in crate::features) fn acknowledge_open_tabs_persistence(&mut self) {
@@ -452,6 +492,25 @@ mod tests {
         let remaining = shell.pending_session_persistence(true);
         assert!(!remaining.open_tabs());
         assert!(remaining.window_layout());
+    }
+
+    #[test]
+    fn session_persistence_failure_restores_only_the_submitted_dirty_generation() {
+        let mut shell = shell();
+        shell.mark_session_persistence_dirty();
+        let submitted = shell.pending_session_persistence(true);
+        let generation = shell
+            .begin_session_persistence(submitted)
+            .expect("first generation should start");
+        assert!(shell.pending_session_persistence(true).is_empty());
+
+        shell.mark_open_tabs_persist_dirty();
+        assert!(shell.begin_session_persistence(submitted).is_none());
+        assert!(shell.finish_session_persistence(generation, submitted, false));
+
+        let retry = shell.pending_session_persistence(true);
+        assert!(retry.open_tabs());
+        assert!(retry.window_layout());
     }
 
     #[test]

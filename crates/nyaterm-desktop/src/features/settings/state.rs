@@ -40,6 +40,9 @@ pub(in crate::features) enum SettingsPersistenceDomain {
     Transfer,
     Terminal,
     QuickCommands,
+    Appearance,
+    UiLayout,
+    Keybindings,
 }
 
 struct SettingsPersistenceSlot {
