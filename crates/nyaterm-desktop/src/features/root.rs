@@ -7,9 +7,11 @@ use gpui::{
     prelude::*, px, rgb, rgba, svg,
 };
 
+use super::NyaTermApp;
 use super::terminal::{FULL_SHELL_PAINT_COUNT, terminal_surface_paint_count};
 use super::view_widgets::full_window_input_layer;
-use super::{ActivitySide, NyaTermApp, ThemePalette};
+use crate::features::runtime_jobs::ActivitySide;
+use crate::theme::ThemePalette;
 
 const WALLPAPER_TILE_ELEMENT_LIMIT: usize = 8192;
 const WALLPAPER_TILE_MIN_SIZE: f32 = 8.;

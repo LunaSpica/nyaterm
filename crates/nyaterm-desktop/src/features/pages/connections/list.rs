@@ -10,8 +10,8 @@ use gpui::{
 use nyaterm_core::{Group, ProxyConfig, SavedConnection, natural_compare, truncate_preview};
 
 use crate::features::{
-    NyaTermApp, ORDINARY_INPUT_SHELL_PADDING_X_PX, format_last_used_ms, ordinary_input_focus_ring,
-    ordinary_input_shell_border_color,
+    NyaTermApp, formatting::format_last_used_ms, text_inputs::ORDINARY_INPUT_SHELL_PADDING_X_PX,
+    text_inputs::ordinary_input_focus_ring, text_inputs::ordinary_input_shell_border_color,
 };
 use crate::models::{
     ConnectionEditorField, ConnectionEditorSelect, ConnectionGroupEditorMode,

@@ -2,7 +2,9 @@ use gpui::prelude::*;
 use gpui::{App, ClickEvent, FontWeight, Hsla, IntoElement, Window, div, px, rgb};
 
 use super::super::common::{NetworkItemMenuConfig, network_item_overflow_menu};
-use crate::features::{tunnel_endpoint, tunnel_mode, tunnel_name};
+use crate::features::{
+    formatting::tunnel_endpoint, formatting::tunnel_mode, formatting::tunnel_name,
+};
 use crate::widgets::status_pill;
 use nyaterm_core::{TunnelConfig, truncate_preview};
 use nyaterm_transport::SshTunnelInfo;
@@ -136,7 +138,7 @@ pub(in crate::features::pages::tunnels) fn tunnel_network_row(
                 .child(
                     div()
                         .mt(px(1.))
-                        .font_family(crate::features::gpui_code_font_family())
+                        .font_family(crate::features::shell::gpui_code_font_family())
                         .text_size(px(11.))
                         .text_color(rgb(palette.text_dimmed))
                         .overflow_hidden()

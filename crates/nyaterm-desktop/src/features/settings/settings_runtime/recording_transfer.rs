@@ -2,7 +2,7 @@ use gpui::Context;
 use nyaterm_core::{ExistingFileBehavior, RecordingMode, RecordingRotationPolicy};
 use nyaterm_transport::SftpDuplicatePolicy;
 
-use crate::features::{NyaTermApp, duplicate_policy_label};
+use crate::features::{NyaTermApp, transfers::duplicate_policy_label};
 
 use super::general_interaction::SettingsSaveKind;
 

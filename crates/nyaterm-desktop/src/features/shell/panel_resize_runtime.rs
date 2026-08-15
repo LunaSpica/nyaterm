@@ -5,8 +5,8 @@ use gpui::{
 };
 
 use crate::features::{
-    NyaTermApp, horizontal_resize_handle_visual, settings::UiLayoutSettingsUpdate,
-    shell::state::RESIZE_HANDLE_HOVER_DELAY, vertical_resize_handle_visual,
+    NyaTermApp, settings::UiLayoutSettingsUpdate, shell::state::RESIZE_HANDLE_HOVER_DELAY,
+    view_widgets::horizontal_resize_handle_visual, view_widgets::vertical_resize_handle_visual,
 };
 use crate::models::{
     BottomPanelMode, NavItem, PanelResizeSide, PanelSide, panel_collapsed_from_persistence,

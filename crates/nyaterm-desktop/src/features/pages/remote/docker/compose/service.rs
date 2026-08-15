@@ -2,7 +2,7 @@ use gpui::{Context, FontWeight, IntoElement, SharedString, div, prelude::*, px, 
 use nyaterm_core::truncate_preview;
 use nyaterm_transport::DockerComposeService;
 
-use crate::features::{NyaTermApp, compact_id, gpui_code_font_family};
+use crate::features::{NyaTermApp, formatting::compact_id, shell::gpui_code_font_family};
 use crate::widgets::{small_button, status_pill, svg_icon_button};
 
 use super::super::DockerRenderContext;

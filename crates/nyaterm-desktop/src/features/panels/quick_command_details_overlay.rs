@@ -144,7 +144,7 @@ impl NyaTermApp {
                                     .border_color(rgba((palette.border << 8) | 0x66))
                                     .bg(rgba((palette.bg << 8) | 0x80))
                                     .p(px(10.))
-                                    .font_family(crate::features::gpui_code_font_family())
+                                    .font_family(crate::features::shell::gpui_code_font_family())
                                     .text_size(px(11.))
                                     .line_height(px(17.))
                                     .text_color(rgb(palette.text))

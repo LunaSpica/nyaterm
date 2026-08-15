@@ -13,7 +13,7 @@ pub(super) fn security_editor_field(
     id: &'static str,
     label: &'static str,
     value: String,
-    setup: crate::features::TextInputSetup,
+    setup: crate::features::text_inputs::TextInputSetup,
     cx: &mut gpui::Context<NyaTermApp>,
 ) -> gpui::AnyElement {
     let field_id = format!("security.editor.{id}");

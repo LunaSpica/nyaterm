@@ -2,7 +2,9 @@ use gpui::{
     App, ClickEvent, Context, FontWeight, IntoElement, Window, div, prelude::*, px, rgb, rgba, svg,
 };
 
-use crate::features::{NyaTermApp, color_icon, mono_icon, nyaterm_app_icon};
+use crate::features::{
+    NyaTermApp, view_widgets::color_icon, view_widgets::mono_icon, view_widgets::nyaterm_app_icon,
+};
 use crate::models::ConnectionImportSource;
 use crate::theme::ThemePalette;
 

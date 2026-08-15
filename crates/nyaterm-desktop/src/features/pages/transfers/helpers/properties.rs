@@ -61,7 +61,7 @@ pub(in crate::features::pages::transfers) fn property_row(
             div()
                 .min_w_0()
                 .flex_1()
-                .font_family(crate::features::gpui_code_font_family())
+                .font_family(crate::features::shell::gpui_code_font_family())
                 .text_color(rgb(palette.text))
                 .child(value.into()),
         )

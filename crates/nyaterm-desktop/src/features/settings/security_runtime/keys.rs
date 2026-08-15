@@ -5,7 +5,7 @@ use gpui::{
 use nyaterm_core::SshKey;
 use nyaterm_ui::NyaDialogWindowExt as _;
 
-use crate::features::{NyaTermApp, compact_id};
+use crate::features::{NyaTermApp, formatting::compact_id};
 use crate::models::{SecurityAuthTab, SecurityKeyEditorState};
 
 use super::jobs::{SecurityStoreLocation, load_security_catalog};

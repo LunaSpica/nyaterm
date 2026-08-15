@@ -1,7 +1,7 @@
 use gpui::{AppContext, Context};
 use nyaterm_store::StoreDomain;
 
-use crate::features::{NyaTermApp, compact_id};
+use crate::features::{NyaTermApp, formatting::compact_id};
 
 use super::super::super::ai_jobs::{ai_active_profile_drafts, ai_usage_counts};
 

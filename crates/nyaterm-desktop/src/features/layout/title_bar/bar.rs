@@ -6,8 +6,8 @@ use nyaterm_ui::NyaDropdownMenu;
 use time::{OffsetDateTime, UtcOffset, Weekday, macros::format_description};
 
 use crate::features::{
-    NyaTermApp, format_file_size, format_rate, format_uptime, logo_mark, short_id,
-    window_control_button,
+    NyaTermApp, formatting::format_rate, formatting::format_uptime, formatting::short_id,
+    transfers::format_file_size, view_widgets::logo_mark, view_widgets::window_control_button,
 };
 use crate::models::HeaderStatusMode;
 

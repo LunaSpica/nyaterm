@@ -8,7 +8,7 @@ use nyaterm_core::truncate_preview;
 
 use crate::features::NyaTermApp;
 use crate::features::formatting::session_kind_label;
-use crate::features::resolve_connection_icon;
+use crate::features::icons::resolve_connection_icon;
 use crate::features::shell::{SessionTabDragPayload, SessionTabDragPreview, SessionTabTooltip};
 use crate::features::view_widgets::themed_icon;
 

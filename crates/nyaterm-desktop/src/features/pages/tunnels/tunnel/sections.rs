@@ -5,7 +5,7 @@ use gpui::{Context, FontWeight, IntoElement, div, px, rgb, rgba, svg};
 
 use super::super::common::{NetworkItemMenuConfig, network_item_overflow_menu};
 use super::row::{TunnelNetworkRow, tunnel_network_row};
-use crate::features::{NyaTermApp, tunnel_name};
+use crate::features::{NyaTermApp, formatting::tunnel_name};
 use crate::models::NetworkTab;
 use crate::widgets::{small_button, status_pill};
 use nyaterm_core::{TunnelConfig, TunnelGroup, truncate_preview};

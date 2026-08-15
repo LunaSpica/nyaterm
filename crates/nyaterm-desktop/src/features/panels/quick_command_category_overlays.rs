@@ -3,7 +3,7 @@ use gpui::{
     prelude::FluentBuilder as _, px, rgb,
 };
 
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
 use crate::models::QuickCommandCategoryRenameState;
 
 impl NyaTermApp {

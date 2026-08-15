@@ -1,7 +1,7 @@
 use gpui::{Context, IntoElement, SharedString, div, prelude::*, px, rgb};
 use nyaterm_ui::{NyaNumberInputOptions, NyaSelectOption};
 
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
 use nyaterm_ui::NyaTooltip;
 
 use super::{

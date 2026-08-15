@@ -7,7 +7,7 @@
 use nyaterm_core::ConnectionType;
 use nyaterm_transport::SystemInfo;
 
-use crate::features::{NyaTermApp, infer_connection_icon_key_from_remote_system};
+use crate::features::{NyaTermApp, icons::infer_connection_icon_key_from_remote_system};
 
 impl NyaTermApp {
     pub(in crate::features) fn apply_auto_detected_connection_icon(

@@ -10,7 +10,9 @@ use nyaterm_core::{
 use nyaterm_store::StoreBlockingClient;
 use nyaterm_ui::NyaWindowHandle;
 
-use crate::features::{CommandPersistenceRequest, CommandPersistenceResult};
+use crate::features::{
+    runtime_jobs::CommandPersistenceRequest, runtime_jobs::CommandPersistenceResult,
+};
 use crate::models::{
     QuickCommandCategoryDeleteState, QuickCommandCategoryRenameState, QuickCommandDetailsState,
     QuickCommandEditorField, QuickCommandEditorState, QuickCommandImportPathPromptKind,

@@ -5,7 +5,7 @@ use gpui::{
 };
 
 use super::super::{send_command_hex_byte_count, send_command_hex_guide_rows};
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
 use crate::send_command::{SendCommandDataType, format_send_command_hex_display};
 use nyaterm_ui::NyaTooltip;
 
@@ -176,7 +176,7 @@ impl NyaTermApp {
                         div()
                             .flex_1()
                             .min_w_0()
-                            .font_family(crate::features::gpui_code_font_family())
+                            .font_family(crate::features::shell::gpui_code_font_family())
                             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
                                 this.handle_send_command_key_down(event, cx);
                             }))
@@ -234,7 +234,7 @@ impl NyaTermApp {
                                 .flex_1()
                                 .overflow_scroll()
                                 .scrollbar_width(px(6.))
-                                .font_family(crate::features::gpui_code_font_family())
+                                .font_family(crate::features::shell::gpui_code_font_family())
                                 .text_size(px(11.))
                                 .line_height(px(15.))
                                 .text_color(if validation_error {

@@ -5,7 +5,7 @@ use gpui::{
 use nyaterm_transport::RemoteDockerOverview;
 use nyaterm_ui::{NyaTabItem, NyaTabs};
 
-use crate::features::{NyaTermApp, gpui_code_font_family};
+use crate::features::{NyaTermApp, shell::gpui_code_font_family};
 use crate::models::DockerTab;
 use crate::theme::ThemePalette;
 

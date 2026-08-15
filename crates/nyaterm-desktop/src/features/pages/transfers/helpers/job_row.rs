@@ -5,7 +5,7 @@ use gpui::{
 };
 use nyaterm_core::truncate_preview;
 
-use crate::features::{NyaTermApp, format_file_size};
+use crate::features::{NyaTermApp, transfers::format_file_size};
 use crate::models::{TransferJobKind, TransferJobState, TransferJobStatus};
 use crate::theme::ThemePalette;
 

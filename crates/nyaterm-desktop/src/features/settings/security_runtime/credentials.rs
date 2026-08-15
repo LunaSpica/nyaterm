@@ -2,7 +2,7 @@ use gpui::{AppContext, ClipboardItem, Context, IntoElement as _, KeyDownEvent, W
 use nyaterm_core::{SavedCredential, validate_prompt_regex};
 use nyaterm_ui::NyaDialogWindowExt as _;
 
-use crate::features::{NyaTermApp, compact_id, none_if_blank};
+use crate::features::{NyaTermApp, formatting::compact_id, formatting::none_if_blank};
 use crate::models::{SecurityAuthTab, SecurityCredentialEditorState, SecurityUnlockAction};
 
 use super::jobs::{SecurityStoreLocation, load_security_catalog};

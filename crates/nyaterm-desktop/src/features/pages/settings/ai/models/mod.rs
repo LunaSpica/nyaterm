@@ -1,7 +1,7 @@
 use gpui::{Context, IntoElement, KeyDownEvent, div, prelude::*, px, rgb};
 use nyaterm_ui::NyaSearchInput;
 
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
 use crate::theme::ThemePalette;
 use crate::widgets::small_button;
 

@@ -3,7 +3,7 @@ use gpui::{
     prelude::*, px, rgb, svg,
 };
 
-use crate::features::{IconDef, file_entry_icon};
+use crate::features::{icons::IconDef, icons::file_entry_icon};
 use crate::theme::ThemePalette;
 
 /// Paint a monochrome asset from `icons/**`.

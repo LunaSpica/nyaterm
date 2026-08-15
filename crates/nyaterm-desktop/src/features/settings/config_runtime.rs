@@ -6,7 +6,7 @@ use nyaterm_store::ConnectionStore;
 use nyaterm_store::LoadBootstrap;
 use nyaterm_transport::SftpDuplicatePolicy;
 
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
 use crate::models::{
     ConfigPathPromptKind, ConfigPathPromptResult, SnapshotPasswordPromptKind,
     TranslationSecretDraft,

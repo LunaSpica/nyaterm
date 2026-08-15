@@ -16,7 +16,8 @@ use nyaterm_ui::{
     NYA_FORM_CONTROL_HEIGHT_PX, NyaSelect, NyaSelectEvent, NyaSelectOption, NyaSelectState,
 };
 
-use super::{NyaTermApp, TabMouseActionTarget};
+use super::NyaTermApp;
+use crate::features::shell::TabMouseActionTarget;
 use crate::models::{ConnectionEditorSelect, HeaderStatusMode};
 use crate::send_command::{
     SendCommandDataType, SendCommandLineEnding, SendCommandMode, SendCommandTarget,

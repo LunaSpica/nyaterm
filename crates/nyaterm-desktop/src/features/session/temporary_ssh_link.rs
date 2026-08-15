@@ -7,7 +7,7 @@ use nyaterm_transport::{
 };
 
 use super::NativeHostKeyVerifier;
-use crate::features::{NyaTermApp, SavedConnectionStartOptions};
+use crate::features::{NyaTermApp, session::SavedConnectionStartOptions};
 use crate::models::SessionLaunchConfig;
 use crate::temporary_ssh_link::{
     TemporaryLinkProtocol, TemporarySerialLinkConfig, TemporarySshLinkConfig,

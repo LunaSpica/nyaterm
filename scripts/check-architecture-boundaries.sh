@@ -155,6 +155,14 @@ check_no_matches \
   "features/mod.rs must not become a shared domain-constant bucket" \
   '^[[:space:]]*(pub([[:space:]]|\([^)]*\))[[:space:]]+)?const[[:space:]]' \
   crates/nyaterm-desktop/src/features/mod.rs
+if rg -n '^pub(\([^)]*\))?[[:space:]]+use[[:space:]]' \
+  crates/nyaterm-desktop/src/features/mod.rs \
+  | rg -v ':pub use app_state::NyaTermApp;$' \
+  >/tmp/nyaterm-feature-facade.$$; then
+  fail "features/mod.rs must export only NyaTermApp"
+  sed 's/^/  /' /tmp/nyaterm-feature-facade.$$ >&2
+fi
+rm -f /tmp/nyaterm-feature-facade.$$
 
 for retired_root_adapter in \
   connection_editor_window.rs \

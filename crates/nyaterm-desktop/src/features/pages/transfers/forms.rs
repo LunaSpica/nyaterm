@@ -1,7 +1,7 @@
 use gpui::{AnyElement, Context, IntoElement, ParentElement as _, Styled as _, div, px, rgb};
 use nyaterm_ui::NyaCheckbox;
 
-use crate::features::{NyaTermApp, TextInputSetup, gpui_code_font_family};
+use crate::features::{NyaTermApp, shell::gpui_code_font_family, text_inputs::TextInputSetup};
 use crate::models::{
     TransferNewFileState, TransferNewFolderState, TransferNewSymlinkState,
     TransferPermissionTarget, TransferSymlinkField,

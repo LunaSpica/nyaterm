@@ -2,7 +2,7 @@ use gpui::{AppContext, ClipboardItem, Context, IntoElement as _, KeyDownEvent, W
 use nyaterm_core::SavedPassword;
 use nyaterm_ui::NyaDialogWindowExt as _;
 
-use crate::features::{NyaTermApp, compact_id};
+use crate::features::{NyaTermApp, formatting::compact_id};
 use crate::models::{SecurityAuthTab, SecurityPasswordEditorState, SecurityUnlockAction};
 
 use super::jobs::{SecurityStoreLocation, load_security_catalog};

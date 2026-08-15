@@ -2,7 +2,8 @@ use gpui::{Context, IntoElement, div, prelude::*, px, rgb, svg};
 use nyaterm_core::{QuickCommand, QuickCommandCategory};
 
 use crate::features::{
-    NyaTermApp, TextInputSetup, quick_command_category_label, quick_command_icon,
+    NyaTermApp, commands::quick_command_category_label, icons::quick_command_icon,
+    text_inputs::TextInputSetup,
 };
 use crate::models::{QuickCommandEditorField, QuickCommandSortMode};
 use crate::send_command::parse_send_command_hex;
@@ -224,7 +225,7 @@ pub(in crate::features::panels) fn quick_command_icon_mark(
     color_tag: Option<&str>,
 ) -> impl IntoElement {
     match icon_tag.and_then(quick_command_icon) {
-        Some(def) => crate::features::mono_icon(
+        Some(def) => crate::features::view_widgets::mono_icon(
             def.path,
             rgb(def.tint(palette).unwrap_or(palette.text)).into(),
             16.,

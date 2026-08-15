@@ -65,7 +65,11 @@ impl Render for ConnectionDragPreview {
                     .border_color(rgb(0x388bfd))
                     .bg(rgba(0x0d1117ee))
                     .shadow_lg()
-                    .child(crate::features::mono_icon(icon, accent.into(), 13.))
+                    .child(crate::features::view_widgets::mono_icon(
+                        icon,
+                        accent.into(),
+                        13.,
+                    ))
                     .child(
                         div()
                             .min_w_0()

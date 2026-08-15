@@ -8,7 +8,10 @@ use nyaterm_transport::{SftpFileEntry, SftpFileType};
 
 use std::collections::HashSet;
 
-use crate::features::{NyaTermApp, format_file_size, gpui_code_font_family, transfer_entry_icon};
+use crate::features::{
+    NyaTermApp, shell::gpui_code_font_family, transfers::format_file_size,
+    view_widgets::transfer_entry_icon,
+};
 use crate::models::{TransferBrowserColumnWidths, TransferRenameState};
 use crate::theme::ThemePalette;
 

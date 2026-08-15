@@ -10,7 +10,7 @@ use nyaterm_transport::{
     SessionKind, SshSessionConfig, SshTunnelMode, TelnetEnterMode, safe_recording_name,
 };
 
-use crate::features::AiAgentStepStatus;
+use crate::features::runtime_jobs::AiAgentStepStatus;
 use crate::theme::ThemePalette;
 
 pub(in crate::features) fn ai_agent_step_status_style(

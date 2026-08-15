@@ -2,7 +2,7 @@ use gpui::{Context, KeyDownEvent, Window};
 use nyaterm_core::QuickCommandsConfig;
 use nyaterm_store::{StoreDomain, store_request};
 
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
 use crate::models::{NavItem, QuickCommandSortMode, QuickCommandViewMode};
 
 use super::helpers::{quick_command_sort_mode_setting, quick_command_view_mode_setting};

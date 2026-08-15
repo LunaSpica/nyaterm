@@ -5,8 +5,9 @@ use gpui::{
     rgb, svg,
 };
 
-use super::super::super::{NyaTermApp, short_id};
+use super::super::super::NyaTermApp;
 use super::PaneBorderEdges;
+use crate::features::formatting::short_id;
 use crate::models::{WorkspacePaneNode, WorkspaceSplitDirection};
 use crate::widgets::small_button;
 use nyaterm_core::truncate_preview;

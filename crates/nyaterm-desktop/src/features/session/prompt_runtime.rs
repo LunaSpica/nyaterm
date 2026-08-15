@@ -11,7 +11,9 @@ use super::{
     CredentialPromptRequest, CredentialPromptState, HostKeyPromptChoice,
     KeyboardInteractivePromptState, unix_seconds_now,
 };
-use crate::features::{NyaTermApp, TextInputSetup, duplicate_decision_label};
+use crate::features::{
+    NyaTermApp, text_inputs::TextInputSetup, transfers::duplicate_decision_label,
+};
 
 impl NyaTermApp {
     pub(in crate::features) fn resolve_agent_prompt(

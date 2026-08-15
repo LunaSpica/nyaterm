@@ -1,7 +1,7 @@
 use gpui::{Context, FontWeight, IntoElement, SharedString, div, prelude::*, px, rgb};
 use nyaterm_ui::{NyaNumberInputOptions, NyaSelectOption};
 
-use crate::features::{NyaTermApp, TAB_MOUSE_ACTIONS, TextInputSetup};
+use crate::features::{NyaTermApp, shell::TAB_MOUSE_ACTIONS, text_inputs::TextInputSetup};
 use crate::theme::ThemePalette;
 
 use super::super::{settings_form_row, settings_form_section, settings_switch};

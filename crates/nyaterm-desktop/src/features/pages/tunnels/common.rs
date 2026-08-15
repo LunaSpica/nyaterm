@@ -2,7 +2,7 @@ use gpui::prelude::*;
 use gpui::{App, ClickEvent, Context, IntoElement, Window, div, px, rgb};
 use nyaterm_ui::{NyaDropdownMenu, NyaMenuItem};
 
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
 use crate::models::NetworkGroupEditorState;
 
 pub(super) struct NetworkItemMenuConfig {

@@ -9,7 +9,7 @@ use gpui::{
     fill, point, prelude::*, px, relative, rgb, rgba, size,
 };
 
-use crate::features::{NyaTermApp, gpui_code_font_family};
+use crate::features::{NyaTermApp, shell::gpui_code_font_family};
 use crate::models::{TransferEditorField, TransferEditorState};
 
 const UNDO_LIMIT: usize = 64;

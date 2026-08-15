@@ -7,7 +7,7 @@ use gpui::{
 };
 use nyaterm_ui::{NyaSwitch, NyaTabItem, NyaTabs};
 
-use crate::features::{ConnectionEditorToggle, NyaTermApp};
+use crate::features::{NyaTermApp, connections::ConnectionEditorToggle};
 use crate::models::{
     ConnectionEditorField, ConnectionEditorPasswordSource, ConnectionEditorRdpTab,
     ConnectionEditorSelect,

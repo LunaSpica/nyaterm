@@ -5,7 +5,7 @@ use gpui::{
 use nyaterm_core::truncate_preview;
 use nyaterm_transport::{DockerImage, DockerNetwork, DockerVolume};
 
-use crate::features::{NyaTermApp, compact_id, gpui_code_font_family};
+use crate::features::{NyaTermApp, formatting::compact_id, shell::gpui_code_font_family};
 use crate::models::{DockerConfirmAction, DockerConfirmState};
 use crate::theme::ThemePalette;
 use crate::widgets::{empty_panel, svg_icon_button};

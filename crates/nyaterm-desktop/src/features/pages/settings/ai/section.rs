@@ -2,7 +2,7 @@ use gpui::{AnyElement, Context, IntoElement, SharedString, div, prelude::*, px, 
 use nyaterm_core::RiskLevel;
 use nyaterm_ui::{NyaNumberInputOptions, NyaSelectOption};
 
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
 use crate::models::AiInputField;
 use crate::theme::ThemePalette;
 

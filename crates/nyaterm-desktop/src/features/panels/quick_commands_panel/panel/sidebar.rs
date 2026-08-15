@@ -2,7 +2,9 @@ use gpui::{AppContext as _, Context, FontWeight, SharedString, div, prelude::*, 
 use nyaterm_ui::{NyaContextMenu, NyaMenuItem};
 
 use super::super::super::QuickCommandCategoryOption;
-use crate::features::{NyaTermApp, QuickCommandDropPosition, QuickCommandDropTarget};
+use crate::features::{
+    NyaTermApp, commands::QuickCommandDropPosition, commands::QuickCommandDropTarget,
+};
 
 use super::{QuickCommandDragKind, QuickCommandDragPayload, QuickCommandDragPreview};
 

@@ -2,7 +2,8 @@ use gpui::Context;
 use nyaterm_core::{AiCommandCard, truncate_preview};
 
 use crate::features::{
-    AiAgentStepStatus, CommandPersistencePoll, NyaTermApp, is_agent_command_card,
+    NyaTermApp, ai::is_agent_command_card, commands::CommandPersistencePoll,
+    runtime_jobs::AiAgentStepStatus,
 };
 
 const COMMAND_PERSISTENCE_EVENT_DRAIN_LIMIT: usize = 32;

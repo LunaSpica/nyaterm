@@ -3,14 +3,14 @@ use gpui::{
 };
 use nyaterm_core::truncate_preview;
 
-use super::super::super::{
-    NyaTermApp, SessionTabDragPayload, SessionTabDragPreview, SessionTabTooltip, ThemePalette,
-    session_kind_label, short_id,
-};
+use super::super::super::NyaTermApp;
 use super::PaneBorderEdges;
+use crate::features::formatting::{session_kind_label, short_id};
+use crate::features::shell::{SessionTabDragPayload, SessionTabDragPreview, SessionTabTooltip};
 use crate::models::{
     TabDockEdge, TabDockZone, TerminalWindowNode, WorkspacePaneNode, WorkspaceSplitDirection,
 };
+use crate::theme::ThemePalette;
 
 impl NyaTermApp {
     pub(super) fn render_terminal_window_node(

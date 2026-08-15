@@ -63,7 +63,7 @@ pub(in crate::features::pages::tunnels) fn proxy_network_row(
                 .child(
                     div()
                         .mt(px(1.))
-                        .font_family(crate::features::gpui_code_font_family())
+                        .font_family(crate::features::shell::gpui_code_font_family())
                         .text_size(px(11.))
                         .text_color(rgb(palette.text_dimmed))
                         .overflow_hidden()

@@ -3,7 +3,7 @@ use nyaterm_core::truncate_preview;
 use nyaterm_transport::{SftpFileProperties, SftpFileType};
 use nyaterm_ui::NyaCheckbox;
 
-use crate::features::{NyaTermApp, TextInputSetup, format_file_size};
+use crate::features::{NyaTermApp, text_inputs::TextInputSetup, transfers::format_file_size};
 use crate::models::{TransferPermissionTarget, TransferPropertiesState};
 use crate::theme::ThemePalette;
 

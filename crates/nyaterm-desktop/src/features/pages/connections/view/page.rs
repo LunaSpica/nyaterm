@@ -6,7 +6,9 @@ use gpui::{
 };
 use nyaterm_ui::{NyaContextMenu, NyaDropdownMenu, NyaSearchInput};
 
-use crate::features::{ConnectionDragKind, ConnectionDragPayload, NyaTermApp};
+use crate::features::{
+    NyaTermApp, connections::ConnectionDragKind, connections::ConnectionDragPayload,
+};
 use crate::models::ConnectionSortMode;
 
 use super::super::list::{

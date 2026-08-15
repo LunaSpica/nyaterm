@@ -1,7 +1,7 @@
 use gpui::prelude::*;
 use gpui::{App, ClickEvent, Context, FontWeight, IntoElement, Window, div, px, rgb};
 
-use crate::features::{NO_SELECTION_VALUE, NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, selects::NO_SELECTION_VALUE, text_inputs::TextInputSetup};
 use crate::models::{NetworkTunnelEditorField, NetworkTunnelEditorState};
 use nyaterm_core::ConnectionType;
 use nyaterm_ui::{NyaNumberInputOptions, NyaSelectOption};
@@ -216,7 +216,7 @@ pub(in crate::features::pages::tunnels) fn network_tunnel_editor_content(
                 )
                 .child(
                     div()
-                        .font_family(crate::features::gpui_code_font_family())
+                        .font_family(crate::features::shell::gpui_code_font_family())
                         .text_xs()
                         .text_color(rgb(palette.text))
                         .child(preview),

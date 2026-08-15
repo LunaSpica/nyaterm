@@ -1,7 +1,7 @@
 use gpui::{Context, Window};
 
 use crate::features::formatting::{short_id, ssh_multiplex_key};
-use crate::features::{NyaTermApp, SavedConnectionStartOptions};
+use crate::features::{NyaTermApp, session::SavedConnectionStartOptions};
 use crate::models::{SessionLaunchConfig, StartupCommandRequest};
 
 use super::session_runtime::MultiplexSshStartRequest;

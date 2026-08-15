@@ -7,7 +7,7 @@ use nyaterm_transport::{RecordingMode, SessionInfo};
 use nyaterm_ui::NyaSearchInput;
 
 use crate::features::formatting::{session_kind_label, short_id};
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
 use crate::models::RecordingPathPromptKind;
 
 impl NyaTermApp {
@@ -181,7 +181,7 @@ impl NyaTermApp {
                                         .child(
                                             div()
                                                 .font_family(
-                                                    crate::features::gpui_code_font_family(),
+                                                    crate::features::shell::gpui_code_font_family(),
                                                 )
                                                 .text_size(px(10.))
                                                 .text_color(rgb(palette.text_dimmed))

@@ -5,7 +5,7 @@ use gpui::{
 };
 use nyaterm_core::truncate_preview;
 
-use crate::features::{NyaTermApp, gpui_code_font_family};
+use crate::features::{NyaTermApp, shell::gpui_code_font_family};
 use crate::models::TransferBrowserFavoritesMenuState;
 use crate::theme::ThemePalette;
 

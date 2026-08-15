@@ -5,7 +5,7 @@ use gpui::{
 use nyaterm_core::truncate_preview;
 use nyaterm_transport::RemoteProcess;
 
-use crate::features::{NyaTermApp, format_file_size};
+use crate::features::{NyaTermApp, transfers::format_file_size};
 use crate::theme::ThemePalette;
 use crate::widgets::small_button;
 
@@ -118,7 +118,7 @@ pub(in crate::features::pages::remote) fn process_details(
                         )
                         .child(
                             div()
-                                .font_family(crate::features::gpui_code_font_family())
+                                .font_family(crate::features::shell::gpui_code_font_family())
                                 .text_size(px(10.))
                                 .text_color(rgb(palette.text_dimmed))
                                 .overflow_hidden()
@@ -167,7 +167,7 @@ pub(in crate::features::pages::remote) fn process_details(
                         .flex_1()
                         .max_h(px(command_height - 10.))
                         .overflow_hidden()
-                        .font_family(crate::features::gpui_code_font_family())
+                        .font_family(crate::features::shell::gpui_code_font_family())
                         .text_size(px(10.))
                         .line_height(px(14.))
                         .text_color(rgb(palette.text_muted))
@@ -241,7 +241,7 @@ fn process_metric(
         )
         .child(
             div()
-                .font_family(crate::features::gpui_code_font_family())
+                .font_family(crate::features::shell::gpui_code_font_family())
                 .text_size(px(11.))
                 .font_weight(FontWeight(700.))
                 .text_color(color)

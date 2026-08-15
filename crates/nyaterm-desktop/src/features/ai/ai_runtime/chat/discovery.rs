@@ -3,7 +3,7 @@ use gpui::Context;
 use crate::http::ai::discover_openai_compatible_models;
 use nyaterm_core::AiModelDiscovery;
 
-use crate::features::{AiDiscoveryJobResult, NyaTermApp};
+use crate::features::{NyaTermApp, runtime_jobs::AiDiscoveryJobResult};
 
 const AI_DISCOVERY_EVENT_DRAIN_LIMIT: usize = 8;
 

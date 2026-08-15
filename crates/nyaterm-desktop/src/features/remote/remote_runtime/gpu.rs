@@ -1,7 +1,7 @@
 use gpui::{Context, Window};
 use nyaterm_transport::{RemoteGpuOverview, RemoteGpuService, RemoteNpuOverview, RemoteNpuService};
 
-use crate::features::{GpuJobResult, NpuJobResult, NyaTermApp};
+use crate::features::{NyaTermApp, runtime_jobs::GpuJobResult, runtime_jobs::NpuJobResult};
 
 const ACCELERATOR_EVENT_DRAIN_LIMIT: usize = 8;
 

@@ -14,7 +14,9 @@ use crate::features::session::{
     unix_seconds_now,
 };
 use crate::features::view_widgets::{dialog_action_button, full_window_input_layer};
-use crate::features::{NyaTermApp, TextInputSetup, bounded_dialog_width};
+use crate::features::{
+    NyaTermApp, text_inputs::TextInputSetup, view_widgets::bounded_dialog_width,
+};
 use crate::models::{SnapshotPasswordPromptKind, SnapshotPasswordPromptState};
 use crate::widgets::small_button;
 
@@ -177,7 +179,7 @@ impl NyaTermApp {
                             .border_color(rgb(palette.border))
                             .px_2()
                             .py_1()
-                            .font_family(crate::features::gpui_code_font_family())
+                            .font_family(crate::features::shell::gpui_code_font_family())
                             .text_size(px(11.))
                             .text_color(rgb(palette.text_muted))
                             .child(prompt.request.target_path.clone()),
@@ -258,7 +260,7 @@ impl NyaTermApp {
                     div()
                         .min_w_0()
                         .flex_1()
-                        .font_family(crate::features::gpui_code_font_family())
+                        .font_family(crate::features::shell::gpui_code_font_family())
                         .text_color(rgb(palette.text))
                         .child(value),
                 )
@@ -610,7 +612,7 @@ impl NyaTermApp {
                 )
                 .child(
                     div()
-                        .font_family(crate::features::gpui_code_font_family())
+                        .font_family(crate::features::shell::gpui_code_font_family())
                         .text_size(px(18.))
                         .font_weight(FontWeight(600.))
                         .text_color(rgb(palette.text))

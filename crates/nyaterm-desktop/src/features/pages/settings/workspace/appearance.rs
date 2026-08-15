@@ -4,7 +4,7 @@ use gpui::{
 };
 use nyaterm_ui::{NyaNumberInputOptions, NyaSelectOption};
 
-use crate::features::{FOLLOW_UI_THEME_VALUE, NyaTermApp, appearance_font_stack};
+use crate::features::{NyaTermApp, selects::FOLLOW_UI_THEME_VALUE, shell::appearance_font_stack};
 use crate::theme::{APPEARANCE_THEME_IDS, ThemePalette, appearance_theme_label};
 use nyaterm_ui::NyaTooltip;
 
@@ -114,7 +114,7 @@ impl NyaTermApp {
                                         .border_1()
                                         .border_color(rgb(palette.border))
                                         .bg(rgb(palette.input))
-                                        .font_family(crate::features::gpui_code_font_family())
+                                        .font_family(crate::features::shell::gpui_code_font_family())
                                         .text_size(px(11.))
                                         .text_color(rgb(if has_image {
                                             palette.text
@@ -414,7 +414,7 @@ impl NyaTermApp {
                             .bg(rgb(palette.input))
                             .px_2()
                             .py_1()
-                            .font_family(crate::features::gpui_code_font_family())
+                            .font_family(crate::features::shell::gpui_code_font_family())
                             .text_size(px(11.))
                             .text_color(rgb(palette.text_muted))
                             .child(format!("{value}%")),

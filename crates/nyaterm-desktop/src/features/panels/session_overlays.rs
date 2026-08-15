@@ -5,7 +5,7 @@ use gpui::{
 use nyaterm_core::truncate_preview;
 use nyaterm_ui::NyaNumberInputOptions;
 
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
 use crate::widgets::{session_info_row, small_button};
 
 use super::TAB_PRESET_COLORS;

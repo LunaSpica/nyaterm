@@ -16,7 +16,7 @@ use nyaterm_core::{
 use nyaterm_store::{ConnectionStore, StoreBlockingClient, StoreDomain};
 use nyaterm_transport::RemoteCommandOutput;
 
-use crate::features::{AiChatJobOutput, AiChatWorkerEvent};
+use crate::features::{runtime_jobs::AiChatJobOutput, runtime_jobs::AiChatWorkerEvent};
 
 pub(in crate::features) fn is_agent_command_card(card: &AiCommandCard) -> bool {
     card.id.starts_with("agent-")

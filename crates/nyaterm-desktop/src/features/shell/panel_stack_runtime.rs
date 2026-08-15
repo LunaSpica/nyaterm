@@ -8,7 +8,9 @@ use gpui::{
 };
 use nyaterm_core::{AgentCommandExecutionMode, truncate_preview};
 
-use crate::features::{NyaTermApp, TextInputSetup, panel_header_with_actions};
+use crate::features::{
+    NyaTermApp, text_inputs::TextInputSetup, view_widgets::panel_header_with_actions,
+};
 use crate::models::{
     ActivityBarZone, MainMode, NavItem, NetworkTab, PanelSide, RightFocus, SecurityAuthTab,
     SettingsTab,
@@ -928,7 +930,7 @@ impl NyaTermApp {
         let hover_id = id.clone();
         let drag_id = id.clone();
         deferred(
-            crate::features::horizontal_resize_handle_visual(
+            crate::features::view_widgets::horizontal_resize_handle_visual(
                 palette,
                 self.shell
                     .panels

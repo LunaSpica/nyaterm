@@ -1,7 +1,7 @@
 use gpui::{Context, KeyDownEvent, Window};
 
 use crate::features::ai::AiSettingsMutation;
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
 
 impl NyaTermApp {
     pub(in crate::features) fn toggle_ai_model_enabled(

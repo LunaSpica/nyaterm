@@ -4,7 +4,10 @@ use nyaterm_store::{StoreDomain, store_request};
 use nyaterm_transport::{SshTunnelConfig, SshTunnelMode};
 
 use super::helpers::network_group_label;
-use crate::features::{NyaTermApp, TunnelJobOutput, TunnelJobResult, tunnel_mode, tunnel_name};
+use crate::features::{
+    NyaTermApp, formatting::tunnel_mode, formatting::tunnel_name, runtime_jobs::TunnelJobOutput,
+    runtime_jobs::TunnelJobResult,
+};
 use crate::models::NetworkTab;
 
 const TUNNEL_EVENT_DRAIN_LIMIT: usize = 32;

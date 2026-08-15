@@ -3,7 +3,7 @@ use nyaterm_core::{AiAction, AiContext};
 use nyaterm_transport::{RecordingMode, RecordingStatus};
 use nyaterm_ui::NyaMenuItem;
 
-use crate::features::{NyaTermApp, known_search_engine_icon};
+use crate::features::{NyaTermApp, icons::known_search_engine_icon};
 use crate::models::{AiPreparedRequest, NavItem, SettingsTab, TerminalSearchMode};
 
 use super::helpers::{available_translation_providers, open_external_url, search_engine_url};

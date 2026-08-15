@@ -1,6 +1,6 @@
 use gpui::{Context, KeyDownEvent, Window};
 
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
 use crate::models::{AiActionEditorField, AiActionListKind};
 use nyaterm_core::AiSettings;
 use nyaterm_store::{StoreDomain, store_request};

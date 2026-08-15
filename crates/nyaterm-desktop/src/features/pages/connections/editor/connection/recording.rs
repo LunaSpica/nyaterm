@@ -5,7 +5,7 @@ use gpui::{
 };
 use nyaterm_ui::NyaSwitch;
 
-use crate::features::{ConnectionEditorToggle, NyaTermApp};
+use crate::features::{NyaTermApp, connections::ConnectionEditorToggle};
 use crate::models::ConnectionEditorSelect;
 
 use super::super::super::list::{ConnectionEditorRenderContext, connection_editor_select};

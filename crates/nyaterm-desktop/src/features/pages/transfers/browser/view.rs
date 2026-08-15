@@ -5,7 +5,7 @@ use gpui::{
 use nyaterm_core::truncate_preview;
 use nyaterm_ui::{NyaContextMenu, NyaHorizontalScrollbar, NyaSearchInput, NyaUniformListScrollbar};
 
-use crate::features::{NyaTermApp, TextInputSetup, format_file_size};
+use crate::features::{NyaTermApp, text_inputs::TextInputSetup, transfers::format_file_size};
 use crate::models::TransferBrowserSortColumn;
 
 use super::super::browser_filter::transfer_browser_footer_stats;

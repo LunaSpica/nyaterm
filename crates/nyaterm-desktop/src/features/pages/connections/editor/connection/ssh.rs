@@ -12,7 +12,7 @@ use nyaterm_core::truncate_preview;
 use nyaterm_transport::{SshAlgorithmOption, SshAlgorithmRisk};
 use nyaterm_ui::{NyaCheckbox, NyaTabItem, NyaTabs, NyaTooltip};
 
-use crate::features::{ConnectionEditorToggle, NyaTermApp};
+use crate::features::{NyaTermApp, connections::ConnectionEditorToggle};
 use crate::models::{
     ConnectionEditorAdvancedTab, ConnectionEditorField, ConnectionEditorPasswordSource,
     ConnectionEditorSelect, ConnectionEditorSshAlgorithmTab,
@@ -204,7 +204,7 @@ fn ssh_algorithm_list(
                             div()
                                 .truncate()
                                 .text_size(px(10.))
-                                .font_family(crate::features::gpui_code_font_family())
+                                .font_family(crate::features::shell::gpui_code_font_family())
                                 .text_color(rgb(palette.text))
                                 .child(id),
                         )

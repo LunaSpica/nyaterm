@@ -3,7 +3,8 @@ use nyaterm_core::truncate_preview;
 use nyaterm_transport::{DockerContainer, DockerContainerDetails};
 
 use crate::features::{
-    NyaTermApp, compact_id, docker_state_color, gpui_code_font_family, modal_dialog_shell,
+    NyaTermApp, formatting::compact_id, formatting::docker_state_color,
+    shell::gpui_code_font_family, view_widgets::modal_dialog_shell,
 };
 use crate::theme::ThemePalette;
 use crate::widgets::{empty_panel, small_button, status_pill};

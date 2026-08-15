@@ -6,7 +6,7 @@ use nyaterm_core::OtpEntry;
 use nyaterm_ui::NyaDialogWindowExt as _;
 use std::time::Duration;
 
-use crate::features::{NyaTermApp, compact_id};
+use crate::features::{NyaTermApp, formatting::compact_id};
 use crate::models::{SecurityAuthTab, SecurityOtpEditorState};
 use nyaterm_transport::SessionKind;
 

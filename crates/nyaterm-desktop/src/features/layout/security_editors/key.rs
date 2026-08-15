@@ -1,7 +1,7 @@
 use gpui::{Context, IntoElement, KeyDownEvent, div, prelude::*, px, rgb};
 use nyaterm_ui::{NyaTabItem, NyaTabs};
 
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
 use crate::models::SecurityKeyEditorState;
 use crate::widgets::small_button;
 
@@ -69,7 +69,7 @@ impl NyaTermApp {
                     .border_1()
                     .border_color(rgb(palette.border))
                     .bg(rgb(palette.input))
-                    .font_family(crate::features::gpui_code_font_family())
+                    .font_family(crate::features::shell::gpui_code_font_family())
                     .text_size(px(11.))
                     .text_color(rgb(palette.text_muted))
                     .when_else(

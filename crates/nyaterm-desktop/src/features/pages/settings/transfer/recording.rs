@@ -2,7 +2,7 @@ use gpui::{Context, IntoElement, SharedString, div, prelude::*, px};
 use nyaterm_core::{ExistingFileBehavior, RecordingMode, RecordingRotationPolicy};
 use nyaterm_ui::{NyaNumberInputOptions, NyaSelectOption};
 
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
 use crate::widgets::small_button;
 
 use super::super::{

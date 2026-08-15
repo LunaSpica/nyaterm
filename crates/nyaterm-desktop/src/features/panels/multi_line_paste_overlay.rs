@@ -47,7 +47,7 @@ impl NyaTermApp {
             })
             .bg(rgb(palette.input))
             .p_3()
-            .font_family(crate::features::gpui_code_font_family())
+            .font_family(crate::features::shell::gpui_code_font_family())
             .text_xs()
             .line_height(px(18.))
             .whitespace_normal()

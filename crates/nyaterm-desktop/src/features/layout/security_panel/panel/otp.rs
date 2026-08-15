@@ -139,7 +139,7 @@ impl NyaTermApp {
                             .child(
                                 div()
                                     .flex_none()
-                                    .font_family(crate::features::gpui_code_font_family())
+                                    .font_family(crate::features::shell::gpui_code_font_family())
                                     .text_size(px(10.))
                                     .font_weight(FontWeight(700.))
                                     .text_color(rgb(if is_totp {
@@ -260,7 +260,7 @@ impl NyaTermApp {
                                         .child(
                                             div()
                                                 .font_family(
-                                                    crate::features::gpui_code_font_family(),
+                                                    crate::features::shell::gpui_code_font_family(),
                                                 )
                                                 .text_lg()
                                                 .font_weight(FontWeight(700.))

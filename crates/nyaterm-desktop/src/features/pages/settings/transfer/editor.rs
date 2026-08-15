@@ -1,7 +1,7 @@
 use gpui::{Context, IntoElement, SharedString, div, prelude::*};
 use nyaterm_ui::NyaSelectOption;
 
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
 use crate::widgets::small_button;
 
 use super::super::{settings_form_row, settings_input_action_control};

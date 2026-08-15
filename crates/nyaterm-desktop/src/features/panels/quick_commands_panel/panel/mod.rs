@@ -4,7 +4,7 @@ use gpui::{
 };
 
 use super::super::{filtered_quick_commands, quick_command_category_options};
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
 use crate::models::{QuickCommandSortMode, QuickCommandViewMode};
 use crate::widgets::small_button;
 use nyaterm_ui::{NyaDropdownMenu, NyaMenuItem, NyaSearchInput, NyaTooltip};

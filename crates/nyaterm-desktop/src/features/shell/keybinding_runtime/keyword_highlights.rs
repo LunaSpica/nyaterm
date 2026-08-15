@@ -2,7 +2,7 @@ use gpui::{AppContext, Context, KeyDownEvent, PathPromptOptions, SharedString, W
 use nyaterm_core::KeywordHighlightRule;
 use nyaterm_store::{StoreDomain, store_request};
 
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
 use crate::models::{KeywordHighlightEditorField, KeywordHighlightPathPromptResult};
 
 const MAX_KEYWORD_HIGHLIGHT_IMPORT_BYTES: u64 = 4 * 1024 * 1024;

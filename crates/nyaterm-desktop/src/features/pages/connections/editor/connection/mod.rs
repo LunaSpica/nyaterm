@@ -35,9 +35,10 @@ use super::super::list::{
 };
 use crate::features::selects::{NO_SELECTION_VALUE, PENDING_CONNECTION_GROUP_VALUE};
 use crate::features::{
-    CONNECTION_ICON_OPTIONS, DEFAULT_CONNECTION_ICON, NyaTermApp,
-    ORDINARY_INPUT_SHELL_PADDING_X_PX, modal_dialog_shell, ordinary_input_focus_ring,
-    ordinary_input_shell_border_color, resolve_connection_icon, themed_icon,
+    NyaTermApp, icons::CONNECTION_ICON_OPTIONS, icons::DEFAULT_CONNECTION_ICON,
+    icons::resolve_connection_icon, text_inputs::ORDINARY_INPUT_SHELL_PADDING_X_PX,
+    text_inputs::ordinary_input_focus_ring, text_inputs::ordinary_input_shell_border_color,
+    view_widgets::modal_dialog_shell, view_widgets::themed_icon,
 };
 use crate::models::{
     ConnectionEditorField, ConnectionEditorSelect, ConnectionEditorState, ConnectionKindTab,

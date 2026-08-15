@@ -1,6 +1,6 @@
 use gpui::{App, ClickEvent, IntoElement, SharedString, Window, div, prelude::*, px, rgb};
 
-use crate::features::IconDef;
+use crate::features::icons::IconDef;
 use crate::features::view_widgets::mono_icon;
 
 pub(super) fn clamp_menu_position(

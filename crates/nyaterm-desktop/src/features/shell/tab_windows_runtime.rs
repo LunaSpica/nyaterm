@@ -2,7 +2,7 @@ use gpui::Context;
 use nyaterm_store::{StoreDomain, store_request};
 
 use crate::features::terminal::{TerminalWindowDockResult, TerminalWindowReconcileResult};
-use crate::features::{NyaTermApp, short_id};
+use crate::features::{NyaTermApp, formatting::short_id};
 use crate::models::{MainMode, NavItem, SmartSplitMode, TabDockZone};
 
 impl NyaTermApp {

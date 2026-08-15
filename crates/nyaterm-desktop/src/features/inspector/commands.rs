@@ -40,7 +40,7 @@ impl NyaTermApp {
                                 this.run_history_command(run_index, cx);
                             }
                         }))
-                        .child(div().child(crate::features::mono_icon(
+                        .child(div().child(crate::features::view_widgets::mono_icon(
                             "icons/fe/forward.svg",
                             rgb(palette.text_dimmed).into(),
                             10.,
@@ -49,7 +49,7 @@ impl NyaTermApp {
                             div()
                                 .min_w_0()
                                 .flex_1()
-                                .font_family(crate::features::gpui_code_font_family())
+                                .font_family(crate::features::shell::gpui_code_font_family())
                                 .text_size(px(12.))
                                 .text_color(rgb(palette.text))
                                 .overflow_hidden()

@@ -14,7 +14,8 @@ use crate::features::shell::event_pump::helpers::{
     viewport_change_terminal_session_ids, window_geometry_churn_active,
 };
 use crate::features::{
-    NyaTermApp, TextInputSetup, credential_prompt_target, keyboard_interactive_prompt_target,
+    NyaTermApp, session::credential_prompt_target, session::keyboard_interactive_prompt_target,
+    text_inputs::TextInputSetup,
 };
 use crate::models::{HeaderStatusMode, NavItem};
 

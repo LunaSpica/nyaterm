@@ -5,7 +5,7 @@ use gpui::{
 use nyaterm_core::truncate_preview;
 use nyaterm_ui::NyaInput;
 
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
 use crate::models::TerminalSearchMode;
 use crate::theme::ThemePalette;
 
@@ -289,46 +289,49 @@ impl NyaTermApp {
                             context_parts.push(truncate_preview(&after, 120));
                         }
                         let context = context_parts.join("\n");
-                        history_rows = history_rows.child(
-                            div()
-                                .rounded_sm()
-                                .border_1()
-                                .border_color(rgb(palette.border))
-                                .bg(rgb(palette.input))
-                                .p_2()
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .font_weight(FontWeight(700.))
-                                        .text_color(rgb(palette.text_muted))
-                                        .child(format!("line {}", result.line_number)),
-                                )
-                                .child(
-                                    div()
-                                        .mt_1()
-                                        .font_family(crate::features::gpui_code_font_family())
-                                        .text_xs()
-                                        .text_color(rgb(palette.text))
-                                        .line_height(px(16.))
-                                        .child(truncate_preview(&result.preview, 96)),
-                                )
-                                .when(
-                                    !result.before.is_empty() || !result.after.is_empty(),
-                                    |this| {
-                                        this.child(
+                        history_rows =
+                            history_rows.child(
+                                div()
+                                    .rounded_sm()
+                                    .border_1()
+                                    .border_color(rgb(palette.border))
+                                    .bg(rgb(palette.input))
+                                    .p_2()
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .font_weight(FontWeight(700.))
+                                            .text_color(rgb(palette.text_muted))
+                                            .child(format!("line {}", result.line_number)),
+                                    )
+                                    .child(
+                                        div()
+                                            .mt_1()
+                                            .font_family(
+                                                crate::features::shell::gpui_code_font_family(),
+                                            )
+                                            .text_xs()
+                                            .text_color(rgb(palette.text))
+                                            .line_height(px(16.))
+                                            .child(truncate_preview(&result.preview, 96)),
+                                    )
+                                    .when(
+                                        !result.before.is_empty() || !result.after.is_empty(),
+                                        |this| {
+                                            this.child(
                                             div()
                                                 .mt_1()
                                                 .font_family(
-                                                    crate::features::gpui_code_font_family(),
+                                                    crate::features::shell::gpui_code_font_family(),
                                                 )
                                                 .text_size(px(10.))
                                                 .text_color(rgb(palette.text_dimmed))
                                                 .line_height(px(14.))
                                                 .child(context),
                                         )
-                                    },
-                                ),
-                        );
+                                        },
+                                    ),
+                            );
                     }
                 }
                 Err(error) => {

@@ -5,7 +5,7 @@ use gpui::{
 use nyaterm_transport::{PROCESS_LIST_UNSUPPORTED_ERROR, RemoteProcess};
 use nyaterm_ui::NyaNumberInputOptions;
 
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
 use crate::models::RemoteProcessSortKey;
 use crate::widgets::empty_panel;
 

@@ -7,7 +7,7 @@ use gpui::{Context, KeyDownEvent, Window};
 use crate::features::terminal::terminal_surface::{
     TerminalOverviewMarker, TerminalOverviewMarkerKind,
 };
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
 use crate::models::{
     RecordingHistorySearchKey, RecordingWriteEvent, TerminalFrameSearchKey,
     TerminalFrameSearchPurpose, TerminalSearchMode, TerminalSelection,

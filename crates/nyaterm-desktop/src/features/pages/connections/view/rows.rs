@@ -12,9 +12,11 @@ use nyaterm_core::SavedConnection;
 use nyaterm_ui::{NyaContextMenu, NyaInput};
 
 use crate::features::{
-    ConnectionDragKind, ConnectionDragPayload, ConnectionDragPreview, ConnectionDropPosition,
-    ConnectionDropTarget, NyaTermApp, ORDINARY_INPUT_SHELL_PADDING_X_PX, connection_type_icon,
-    ordinary_input_focus_ring, ordinary_input_shell_border_color, resolve_connection_icon,
+    NyaTermApp, connections::ConnectionDragKind, connections::ConnectionDragPayload,
+    connections::ConnectionDragPreview, connections::ConnectionDropPosition,
+    connections::ConnectionDropTarget, icons::resolve_connection_icon,
+    text_inputs::ORDINARY_INPUT_SHELL_PADDING_X_PX, text_inputs::ordinary_input_focus_ring,
+    text_inputs::ordinary_input_shell_border_color, view_widgets::connection_type_icon,
 };
 
 use super::super::list::{

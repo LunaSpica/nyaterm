@@ -10,8 +10,9 @@ use nyaterm_store::StoreDomain;
 use nyaterm_transport::{SessionKind, SshProcessService, run_local_command};
 
 use crate::features::{
-    AiAgentBackgroundTarget, AiAgentLoopState, AiAgentStepStatus, AiChatJobResult,
-    AiChatWorkerEvent, NyaTermApp,
+    NyaTermApp, runtime_jobs::AiAgentBackgroundTarget, runtime_jobs::AiAgentLoopState,
+    runtime_jobs::AiAgentStepStatus, runtime_jobs::AiChatJobResult,
+    runtime_jobs::AiChatWorkerEvent,
 };
 use crate::models::SessionLaunchConfig;
 

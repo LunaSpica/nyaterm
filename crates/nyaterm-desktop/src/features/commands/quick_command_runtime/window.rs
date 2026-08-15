@@ -4,7 +4,9 @@ use gpui::{
 };
 use nyaterm_ui::{NyaWindowHandle, nya_root};
 
-use crate::features::{NyaTermApp, child_window_header, child_window_titlebar};
+use crate::features::{
+    NyaTermApp, view_widgets::child_window_header, view_widgets::child_window_titlebar,
+};
 
 pub(in crate::features::commands) struct QuickCommandWindow {
     app: Entity<NyaTermApp>,

@@ -7,7 +7,7 @@ use nyaterm_ui::NyaSearchInput;
 
 use crate::features::formatting::group_ai_sessions_by_date;
 use crate::features::view_widgets::tab_menu_separator;
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
 use crate::widgets::svg_icon_button;
 
 impl NyaTermApp {

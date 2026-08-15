@@ -1,7 +1,7 @@
 use gpui::{AnyElement, Context, FontWeight, IntoElement, Window, div, prelude::*, px, rgb};
 use nyaterm_ui::{NyaButton, NyaDialogWindowExt as _};
 
-use crate::features::{NyaTermApp, nyaterm_app_icon};
+use crate::features::{NyaTermApp, view_widgets::nyaterm_app_icon};
 
 impl NyaTermApp {
     pub(in crate::features) fn open_about(&mut self, window: &mut Window, cx: &mut Context<Self>) {

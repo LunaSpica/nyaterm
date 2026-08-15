@@ -1,6 +1,6 @@
 use gpui::Rgba;
 
-use crate::features::docker_state_label;
+use crate::features::formatting::docker_state_label;
 use crate::theme::ThemePalette;
 
 #[derive(Clone, Copy)]

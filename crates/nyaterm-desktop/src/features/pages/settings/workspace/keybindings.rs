@@ -1,7 +1,7 @@
 use gpui::{Context, FontWeight, IntoElement, KeyDownEvent, div, prelude::*, px, rgb};
 use nyaterm_ui::NyaSearchInput;
 
-use crate::features::{NyaTermApp, TextInputSetup, gpui_code_font_family};
+use crate::features::{NyaTermApp, shell::gpui_code_font_family, text_inputs::TextInputSetup};
 use crate::shortcuts::{
     SHORTCUT_CATEGORIES, SHORTCUT_REGISTRY, ShortcutCategory, ShortcutDefinition,
     ShortcutNativeStatus, format_hotkey_for_display, shortcut_keys_for,

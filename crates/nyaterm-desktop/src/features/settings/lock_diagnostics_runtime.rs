@@ -5,7 +5,7 @@ use nyaterm_core::{
 use nyaterm_store::{StoreDomain, store_request};
 use nyaterm_transport::SessionKind;
 
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
 use crate::models::DiagnosticsPathPromptResult;
 use crate::models::TransferJobStatus;
 

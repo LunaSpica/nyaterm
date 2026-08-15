@@ -19,8 +19,9 @@ use nyaterm_core::{
 };
 
 use crate::features::{
-    AiAgentLoopState, AiAgentStepStatus, AiAgentStepView, AiChatJobOutput, AiChatWorkerEvent,
-    AiDiscoveryJobResult,
+    runtime_jobs::AiAgentLoopState, runtime_jobs::AiAgentStepStatus, runtime_jobs::AiAgentStepView,
+    runtime_jobs::AiChatJobOutput, runtime_jobs::AiChatWorkerEvent,
+    runtime_jobs::AiDiscoveryJobResult,
 };
 use crate::models::{
     AiActionEditorField, AiActionListKind, AiDetectedErrorState, AiInputField, AiMessageMenuState,

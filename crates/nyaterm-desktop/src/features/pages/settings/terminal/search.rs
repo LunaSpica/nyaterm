@@ -6,7 +6,8 @@ use nyaterm_core::truncate_preview;
 
 use crate::features::settings::SearchEngineMenu;
 use crate::features::{
-    NyaTermApp, SEARCH_ENGINE_ICON_IDS, TextInputSetup, mono_icon, search_engine_icon,
+    NyaTermApp, icons::SEARCH_ENGINE_ICON_IDS, icons::search_engine_icon,
+    text_inputs::TextInputSetup, view_widgets::mono_icon,
 };
 use crate::theme::ThemePalette;
 use nyaterm_ui::NyaTooltip;

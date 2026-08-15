@@ -5,7 +5,7 @@ use gpui::{
 use nyaterm_core::{AiAction, AiMode, truncate_preview};
 
 use crate::features::formatting::{session_kind_label, short_id};
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
 use crate::models::{AiDetectedErrorState, AiPreparedRequest, NavItem, SettingsTab};
 use crate::widgets::{mode_button, small_button};
 

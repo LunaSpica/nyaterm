@@ -4,7 +4,7 @@ use gpui::{AnimationExt, Context, FontWeight, IntoElement, div, prelude::*, px, 
 use nyaterm_core::truncate_preview;
 
 use crate::features::view_widgets::{empty_workspace_action, nyaterm_logo_mark};
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
 use crate::models::BottomPanelMode;
 use crate::models::NavItem;
 

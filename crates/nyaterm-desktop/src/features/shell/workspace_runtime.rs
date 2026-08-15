@@ -8,7 +8,8 @@ use nyaterm_core::uuid;
 use nyaterm_store::{StoreDomain, store_request};
 
 use crate::features::{
-    NyaTermApp, horizontal_resize_handle_visual, short_id, vertical_resize_handle_visual,
+    NyaTermApp, formatting::short_id, view_widgets::horizontal_resize_handle_visual,
+    view_widgets::vertical_resize_handle_visual,
 };
 use crate::models::{
     MainMode, NavItem, WorkspacePaneNode, WorkspaceSplitDirection, WorkspaceSplitResizeState,

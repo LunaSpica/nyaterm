@@ -13,20 +13,34 @@ use nyaterm_transport::{SessionManager, SftpDuplicatePolicy};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use super::super::settings::{SettingsFeatureFocus, SettingsFeatureInit, SettingsFeatureState};
-use super::super::{
-    AiFeatureFocus, AiFeatureInit, AiFeatureState, CloudSyncFeatureState, CommandFeatureInit,
-    CommandFeatureState, ConnectionFeatureFocus, ConnectionFeatureState, NativeOtpProvider,
-    QuickCommandFeatureFocus, RecordingFeatureState, RemoteDesktopFeatureState,
-    RemoteOpsFeatureFocus, RemoteOpsFeatureState, SecurityCatalogState, SecurityFeatureFocus,
-    SecurityFeatureState, SelectRegistry, SendCommandFeatureFocus, SendCommandFeatureState,
-    SessionFeatureFocus, SessionFeatureState, ShellFeatureInit, ShellFeatureState,
-    SyncInputFeatureState, TerminalFeatureFocus, TerminalFeatureState, TextInputRegistry,
-    TransferFeatureFocus, TransferFeatureState, TranslationFeatureState, TunnelCatalogState,
-    TunnelFeatureState, UpdateFeatureState, ai_active_profile_drafts, appearance_font_options,
+use super::NyaTermApp;
+use crate::features::ai::{
+    AiFeatureFocus, AiFeatureInit, AiFeatureState, ai_active_profile_drafts,
+};
+use crate::features::commands::{
+    CommandFeatureInit, CommandFeatureState, QuickCommandFeatureFocus,
     quick_command_sort_mode_from_setting, quick_command_view_mode_from_setting,
 };
-use super::NyaTermApp;
+use crate::features::connections::{ConnectionFeatureFocus, ConnectionFeatureState};
+use crate::features::panels::{SendCommandFeatureFocus, SendCommandFeatureState};
+use crate::features::recording::RecordingFeatureState;
+use crate::features::remote::{RemoteOpsFeatureFocus, RemoteOpsFeatureState};
+use crate::features::remote_desktop::RemoteDesktopFeatureState;
+use crate::features::selects::SelectRegistry;
+use crate::features::session::{NativeOtpProvider, SessionFeatureFocus, SessionFeatureState};
+use crate::features::settings::{
+    SecurityCatalogState, SecurityFeatureFocus, SecurityFeatureState, SettingsFeatureFocus,
+    SettingsFeatureInit, SettingsFeatureState,
+};
+use crate::features::shell::{ShellFeatureInit, ShellFeatureState, appearance_font_options};
+use crate::features::sync::CloudSyncFeatureState;
+use crate::features::sync_input::SyncInputFeatureState;
+use crate::features::terminal::{TerminalFeatureFocus, TerminalFeatureState};
+use crate::features::text_inputs::TextInputRegistry;
+use crate::features::transfers::{TransferFeatureFocus, TransferFeatureState};
+use crate::features::translation::TranslationFeatureState;
+use crate::features::tunnels::{TunnelCatalogState, TunnelFeatureState};
+use crate::features::update::UpdateFeatureState;
 use crate::models::panel_collapsed_from_persistence;
 use crate::terminal::INITIAL_TERMINAL_BANNER;
 impl NyaTermApp {

@@ -6,7 +6,7 @@ use gpui::{
 };
 use nyaterm_core::truncate_preview;
 
-use crate::features::{NyaTermApp, mono_icon, short_id};
+use crate::features::{NyaTermApp, formatting::short_id, view_widgets::mono_icon};
 
 #[derive(Clone, Debug)]
 pub(in crate::features) struct SessionTabDragPayload {

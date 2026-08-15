@@ -79,7 +79,7 @@ impl NyaTermApp {
                         .flex()
                         .items_center()
                         .justify_center()
-                        .child(crate::features::mono_icon(
+                        .child(crate::features::view_widgets::mono_icon(
                             "icons/warning.svg",
                             rgb(palette.warning).into(),
                             22.,

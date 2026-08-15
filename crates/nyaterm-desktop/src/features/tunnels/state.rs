@@ -3,7 +3,7 @@ use std::sync::{Arc, mpsc};
 use nyaterm_core::{ProxyConfig, ProxyGroup, TunnelConfig, TunnelGroup, uuid};
 use nyaterm_transport::{SshTunnelInfo, SshTunnelManager};
 
-use crate::features::TunnelJobResult;
+use crate::features::runtime_jobs::TunnelJobResult;
 
 pub(in crate::features) struct TunnelFeatureState {
     catalog: TunnelCatalogState,
@@ -383,7 +383,7 @@ impl TunnelFeatureState {
 mod tests {
     use nyaterm_core::{ProxyConfig, ProxyGroup, TunnelConfig, TunnelGroup};
 
-    use crate::features::TunnelJobResult;
+    use crate::features::runtime_jobs::TunnelJobResult;
 
     use super::{TunnelCatalogState, TunnelFeatureState};
 

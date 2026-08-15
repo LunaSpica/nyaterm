@@ -16,7 +16,9 @@ use crate::features::shell::event_pump::helpers::{
 use crate::features::terminal::terminal_runtime::{
     TERMINAL_INPUT_LATENCY_WINDOW, TERMINAL_USER_SCROLL_ACTIVE_WINDOW,
 };
-use crate::features::{NyaTermApp, full_shell_paint_count, terminal_surface_paint_count};
+use crate::features::{
+    NyaTermApp, terminal::full_shell_paint_count, terminal::terminal_surface_paint_count,
+};
 use crate::models::NavItem;
 
 impl NyaTermApp {

@@ -4,7 +4,7 @@ use gpui::{
 };
 use nyaterm_core::truncate_preview;
 
-use crate::features::{ActivitySide, NyaTermApp, mono_icon};
+use crate::features::{NyaTermApp, runtime_jobs::ActivitySide, view_widgets::mono_icon};
 use crate::models::{
     ActivityBarContextMenuState, ActivityBarEntry, ActivityBarLayoutState, ActivityBarZone,
     BottomPanelMode, MainMode, NavItem, PanelSide,

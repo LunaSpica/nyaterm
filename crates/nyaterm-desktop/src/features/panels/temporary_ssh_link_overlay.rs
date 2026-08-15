@@ -4,7 +4,7 @@ use gpui::{
 };
 use nyaterm_ui::NyaSelectOption;
 
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
 use crate::temporary_ssh_link::{
     TemporaryLinkProtocol, build_temporary_serial_link, parse_temporary_ssh_link,
     parse_temporary_telnet_link,

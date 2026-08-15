@@ -4,7 +4,7 @@ use nyaterm_transport::SessionInfo;
 use nyaterm_ui::{NyaDropdownMenu, NyaMenuItem};
 
 use crate::features::formatting::{session_kind_label, status_label};
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
 use crate::widgets::{capability_line, empty_panel, small_button, status_pill};
 
 use super::super::view_helpers::session_action_svg_button;
@@ -536,7 +536,7 @@ impl NyaTermApp {
                             )
                             .child(
                                 div()
-                                    .font_family(crate::features::gpui_code_font_family())
+                                    .font_family(crate::features::shell::gpui_code_font_family())
                                     .text_size(px(10.))
                                     .text_color(rgb(palette.text_dimmed))
                                     .overflow_hidden()

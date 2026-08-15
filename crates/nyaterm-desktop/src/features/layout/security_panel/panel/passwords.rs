@@ -99,7 +99,7 @@ impl NyaTermApp {
                                                     .min_w_0()
                                                     .flex_1()
                                                     .font_family(
-                                                        crate::features::gpui_code_font_family(),
+                                                        crate::features::shell::gpui_code_font_family(),
                                                     )
                                                     .text_size(px(11.))
                                                     .text_color(rgb(palette.text_muted))

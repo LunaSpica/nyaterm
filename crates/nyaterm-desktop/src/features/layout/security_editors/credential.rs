@@ -1,7 +1,7 @@
 use gpui::{Context, IntoElement, KeyDownEvent, div, prelude::*, px, rgb};
 use nyaterm_core::validate_prompt_regex;
 
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
 use crate::models::SecurityCredentialEditorState;
 
 use super::super::view_helpers::security_editor_field;

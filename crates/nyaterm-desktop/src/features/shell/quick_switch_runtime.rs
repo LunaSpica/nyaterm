@@ -4,7 +4,9 @@ use gpui::{Context, KeyDownEvent, Window};
 use nyaterm_core::fuzzy_search_items;
 
 use crate::entities::{OverlayStore, QuickSwitchState};
-use crate::features::{NyaTermApp, TextInputSetup, session_kind_label, short_id};
+use crate::features::{
+    NyaTermApp, formatting::session_kind_label, formatting::short_id, text_inputs::TextInputSetup,
+};
 use crate::models::QuickSwitchItem;
 
 impl NyaTermApp {

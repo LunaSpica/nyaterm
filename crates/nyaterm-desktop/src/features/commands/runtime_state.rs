@@ -5,7 +5,8 @@ use std::sync::mpsc;
 use nyaterm_store::StoreBlockingClient;
 
 use crate::features::{
-    CommandPersistenceRequest, CommandPersistenceResult, spawn_command_persistence_worker,
+    runtime_jobs::CommandPersistenceRequest, runtime_jobs::CommandPersistenceResult,
+    runtime_jobs::spawn_command_persistence_worker,
 };
 
 pub(in crate::features) struct CommandRuntimeState {
@@ -58,7 +59,9 @@ mod tests {
     use std::sync::mpsc;
 
     use super::{CommandPersistencePoll, CommandRuntimeState};
-    use crate::features::{CommandPersistenceRequest, CommandPersistenceResult};
+    use crate::features::{
+        runtime_jobs::CommandPersistenceRequest, runtime_jobs::CommandPersistenceResult,
+    };
 
     #[test]
     fn command_runtime_owns_pending_request_lifecycle() {

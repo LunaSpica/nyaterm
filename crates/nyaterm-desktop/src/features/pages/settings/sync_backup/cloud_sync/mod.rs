@@ -6,8 +6,9 @@ use nyaterm_core::{CloudConflictKind, CloudSyncSettings};
 use nyaterm_ui::{NyaNumberInputOptions, NyaSelectOption};
 
 use crate::features::{
-    NyaTermApp, compact_id, configured_cloud_sync_provider, dialog_action_button,
-    format_cloud_provider, format_history_timestamp_ms, secret_input_setup,
+    NyaTermApp, formatting::compact_id, formatting::configured_cloud_sync_provider,
+    formatting::format_cloud_provider, formatting::format_history_timestamp_ms,
+    text_inputs::secret_input_setup, view_widgets::dialog_action_button,
 };
 use crate::models::{
     CloudSyncConflictState, CloudSyncInputField, SettingsTab, SnapshotPasswordPromptKind,
@@ -710,7 +711,7 @@ fn cloud_sync_conflict_stat(
         .child(
             div()
                 .mt_2()
-                .font_family(crate::features::gpui_code_font_family())
+                .font_family(crate::features::shell::gpui_code_font_family())
                 .text_xs()
                 .text_color(rgb(palette.text))
                 .child(value),

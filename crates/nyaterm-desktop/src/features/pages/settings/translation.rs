@@ -1,7 +1,7 @@
 use gpui::{AnyElement, Context, FontWeight, IntoElement, div, prelude::*, px, rgb};
 use nyaterm_ui::NyaSelectOption;
 
-use crate::features::{NyaTermApp, TextInputSetup, secret_input_setup};
+use crate::features::{NyaTermApp, text_inputs::TextInputSetup, text_inputs::secret_input_setup};
 use crate::models::TranslateInputField;
 use crate::widgets::{small_button, status_pill};
 

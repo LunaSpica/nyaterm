@@ -4,7 +4,7 @@ use gpui::{
 use nyaterm_core::truncate_preview;
 
 use crate::features::view_widgets::dialog_action_button;
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
 use crate::models::QuickCommandVariablePromptState;
 use crate::widgets::small_button;
 
@@ -67,7 +67,7 @@ impl NyaTermApp {
                         div()
                             .min_w_0()
                             .flex_1()
-                            .font_family(crate::features::gpui_code_font_family())
+                            .font_family(crate::features::shell::gpui_code_font_family())
                             .text_xs()
                             .text_color(rgb(palette.text))
                             .child(if variable.value.is_empty() {
@@ -197,7 +197,9 @@ impl NyaTermApp {
                                     .child(
                                         div()
                                             .mt_1()
-                                            .font_family(crate::features::gpui_code_font_family())
+                                            .font_family(
+                                                crate::features::shell::gpui_code_font_family(),
+                                            )
                                             .text_xs()
                                             .line_height(px(18.))
                                             .text_color(rgb(palette.text_muted))

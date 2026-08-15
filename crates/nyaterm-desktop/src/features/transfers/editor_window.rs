@@ -7,7 +7,9 @@ use gpui::{
 use nyaterm_ui::{NyaWindowHandle, nya_root};
 
 use super::remote_text_editor::RemoteTextEditor;
-use crate::features::{NyaTermApp, child_window_header, child_window_titlebar};
+use crate::features::{
+    NyaTermApp, view_widgets::child_window_header, view_widgets::child_window_titlebar,
+};
 
 pub(super) struct RemoteFileEditorWindow {
     app: Entity<NyaTermApp>,

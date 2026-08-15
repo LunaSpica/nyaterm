@@ -6,7 +6,7 @@ use gpui::{
     px, rgb, svg,
 };
 
-use crate::features::{ConnectionEditorToggle, NyaTermApp};
+use crate::features::{NyaTermApp, connections::ConnectionEditorToggle};
 use crate::models::{
     ConnectionEditorField, ConnectionEditorPasswordSource, ConnectionEditorSelect,
     ConnectionEditorTelnetTab,

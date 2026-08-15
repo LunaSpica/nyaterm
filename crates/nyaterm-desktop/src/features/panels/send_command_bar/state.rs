@@ -2,7 +2,7 @@ use nyaterm_core::truncate_preview;
 use nyaterm_transport::SessionKind;
 
 use super::super::send_command_hex_preview;
-use crate::features::{NyaTermApp, SendCommandPresentationState};
+use crate::features::{NyaTermApp, panels::SendCommandPresentationState};
 use crate::send_command::{SendCommandDataType, SendCommandMode};
 
 pub(super) struct SendCommandBarViewState {

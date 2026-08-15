@@ -3,7 +3,7 @@ use gpui::{Context, IntoElement, div, px, rgb};
 
 use super::super::tunnel::tunnel_editor_selector;
 use super::helpers::proxy_protocol_label;
-use crate::features::{NO_SELECTION_VALUE, NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, selects::NO_SELECTION_VALUE, text_inputs::TextInputSetup};
 use crate::models::{NetworkProxyEditorField, NetworkProxyEditorState};
 use nyaterm_ui::{NyaNumberInputOptions, NyaSelectOption};
 

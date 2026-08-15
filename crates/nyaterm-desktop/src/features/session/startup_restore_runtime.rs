@@ -10,7 +10,7 @@ use nyaterm_transport::{
     parse_rdp_display_mode, parse_vnc_scale_mode, parse_vnc_security_mode,
 };
 
-use crate::features::{NyaTermApp, SavedConnectionStartOptions};
+use crate::features::{NyaTermApp, session::SavedConnectionStartOptions};
 use crate::models::{SessionLaunchConfig, WorkspacePaneNode, WorkspaceSplitDirection};
 
 impl NyaTermApp {

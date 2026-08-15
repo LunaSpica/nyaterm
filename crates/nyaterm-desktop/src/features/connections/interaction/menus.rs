@@ -1,7 +1,7 @@
 use gpui::{Context, Window};
 use nyaterm_core::SavedConnection;
 
-use crate::features::{NyaTermApp, SavedConnectionStartOptions};
+use crate::features::{NyaTermApp, session::SavedConnectionStartOptions};
 impl NyaTermApp {
     pub(in crate::features) fn prepare_connection_context_menu(
         &mut self,

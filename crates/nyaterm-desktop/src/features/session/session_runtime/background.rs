@@ -11,8 +11,9 @@ use super::super::state::{failed_session_start_display_name, pending_session_sta
 use super::{MultiplexSshStartRequest, PendingSessionStartRegistration};
 use crate::features::formatting::{session_kind_label, short_id, ssh_multiplex_key};
 use crate::features::{
-    NyaTermApp, PendingSessionStart, SavedConnectionStartOptions, SessionStartEventRequest,
-    SessionStartResult, SessionStartSuccess,
+    NyaTermApp, runtime_jobs::SessionStartResult, runtime_jobs::SessionStartSuccess,
+    session::PendingSessionStart, session::SavedConnectionStartOptions,
+    session::SessionStartEventRequest,
 };
 use crate::models::{NavItem, SessionLaunchConfig, SessionRuntimeMetadata};
 

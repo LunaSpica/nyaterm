@@ -1138,7 +1138,7 @@ impl NyaTermApp {
                     div()
                         .min_w_0()
                         .flex_1()
-                        .font_family(crate::features::gpui_code_font_family())
+                        .font_family(crate::features::shell::gpui_code_font_family())
                         .flex()
                         .items_center()
                         .overflow_hidden()

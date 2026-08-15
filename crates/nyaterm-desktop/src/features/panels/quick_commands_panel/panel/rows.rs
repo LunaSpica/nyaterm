@@ -14,7 +14,7 @@ use crate::models::QuickCommandViewMode;
 use nyaterm_ui::NyaTooltip;
 
 use super::{QuickCommandDragKind, QuickCommandDragPayload, QuickCommandDragPreview};
-use crate::features::{QuickCommandDropPosition, QuickCommandDropTarget};
+use crate::features::{commands::QuickCommandDropPosition, commands::QuickCommandDropTarget};
 
 impl NyaTermApp {
     pub(super) fn quick_command_items(
@@ -173,7 +173,9 @@ impl NyaTermApp {
                                         div()
                                             .min_w_0()
                                             .flex_1()
-                                            .font_family(crate::features::gpui_code_font_family())
+                                            .font_family(
+                                                crate::features::shell::gpui_code_font_family(),
+                                            )
                                             .text_size(px(11.))
                                             .text_color(rgb(palette.text_muted))
                                             .overflow_hidden()
@@ -292,7 +294,7 @@ impl NyaTermApp {
                                                 div()
                                                     .min_w_0()
                                                     .font_family(
-                                                        crate::features::gpui_code_font_family(),
+                                                        crate::features::shell::gpui_code_font_family(),
                                                     )
                                                     .text_size(px(11.))
                                                     .text_color(rgb(palette.text_muted))

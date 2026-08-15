@@ -6,7 +6,7 @@ use nyaterm_core::truncate_preview;
 
 use crate::features::transfers::RemoteTextEditor;
 use crate::features::view_widgets::full_window_input_layer;
-use crate::features::{NyaTermApp, dialog_action_button};
+use crate::features::{NyaTermApp, view_widgets::dialog_action_button};
 use crate::models::{
     TransferEditorField, TransferEditorState, TransferEditorWorkspaceState,
     TransferExternalSyncPromptState,
@@ -167,7 +167,7 @@ impl NyaTermApp {
                                     .bg(rgb(palette.input))
                                     .px_3()
                                     .py_2()
-                                    .font_family(crate::features::gpui_code_font_family())
+                                    .font_family(crate::features::shell::gpui_code_font_family())
                                     .text_xs()
                                     .text_color(rgb(palette.text_muted))
                                     .child(truncate_preview(&prompt.remote_path, 120)),
@@ -464,7 +464,7 @@ impl NyaTermApp {
                             .min_w_0()
                             .flex_1()
                             .overflow_hidden()
-                            .font_family(crate::features::gpui_code_font_family())
+                            .font_family(crate::features::shell::gpui_code_font_family())
                             .text_xs()
                             .child(truncate_preview(&label, 28)),
                     )
@@ -538,7 +538,7 @@ impl NyaTermApp {
                             .child(
                                 div()
                                     .overflow_hidden()
-                                    .font_family(crate::features::gpui_code_font_family())
+                                    .font_family(crate::features::shell::gpui_code_font_family())
                                     .text_xs()
                                     .text_color(rgb(palette.text))
                                     .child(truncate_preview(&label, 38)),
@@ -546,7 +546,7 @@ impl NyaTermApp {
                             .child(
                                 div()
                                     .overflow_hidden()
-                                    .font_family(crate::features::gpui_code_font_family())
+                                    .font_family(crate::features::shell::gpui_code_font_family())
                                     .text_size(px(10.))
                                     .text_color(rgb(palette.text_muted))
                                     .child(truncate_preview(&tab.remote_path, 58)),
@@ -659,7 +659,7 @@ impl NyaTermApp {
                                     .min_w_0()
                                     .flex_1()
                                     .overflow_hidden()
-                                    .font_family(crate::features::gpui_code_font_family())
+                                    .font_family(crate::features::shell::gpui_code_font_family())
                                     .text_xs()
                                     .text_color(rgb(palette.text_muted))
                                     .child(truncate_preview(&state.remote_path, 96)),
@@ -781,7 +781,7 @@ impl NyaTermApp {
                                         .px_3()
                                         .flex()
                                         .items_center()
-                                        .font_family(crate::features::gpui_code_font_family())
+                                        .font_family(crate::features::shell::gpui_code_font_family())
                                         .text_xs()
                                         .text_color(if state.search_query.is_empty() {
                                             rgb(palette.text_muted)
@@ -872,7 +872,7 @@ impl NyaTermApp {
                             })
                             .when(!has_native_editor, |this| {
                                 this.p_3()
-                                    .font_family(crate::features::gpui_code_font_family())
+                                    .font_family(crate::features::shell::gpui_code_font_family())
                                     .text_xs()
                                     .text_color(if state.loading {
                                         rgb(palette.text_muted)
@@ -907,7 +907,7 @@ impl NyaTermApp {
                                     .flex()
                                     .items_center()
                                     .gap_2()
-                                    .font_family(crate::features::gpui_code_font_family())
+                                    .font_family(crate::features::shell::gpui_code_font_family())
                                     .text_size(px(11.))
                                     .text_color(rgb(palette.text_muted))
                                     .child(format!(
@@ -917,7 +917,7 @@ impl NyaTermApp {
                             .child(
                                 div()
                                     .flex_none()
-                                    .font_family(crate::features::gpui_code_font_family())
+                                    .font_family(crate::features::shell::gpui_code_font_family())
                                     .text_size(px(11.))
                                     .text_color(rgb(palette.text_muted))
                                     .child(format!(

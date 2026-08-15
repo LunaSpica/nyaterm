@@ -1,6 +1,6 @@
 use gpui::{Context, IntoElement, KeyDownEvent, div, prelude::*, px, rgb};
 
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
 use crate::models::SecurityPasswordEditorState;
 
 use super::super::view_helpers::security_editor_field;

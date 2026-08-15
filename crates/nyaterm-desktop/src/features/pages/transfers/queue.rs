@@ -4,7 +4,9 @@ use gpui::{
 };
 use nyaterm_core::truncate_preview;
 
-use crate::features::{NyaTermApp, gpui_code_font_family, panel_header_with_actions};
+use crate::features::{
+    NyaTermApp, shell::gpui_code_font_family, view_widgets::panel_header_with_actions,
+};
 use crate::models::{TransferJobState, TransferJobStatus};
 use nyaterm_ui::NyaTooltip;
 

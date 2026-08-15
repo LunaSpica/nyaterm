@@ -9,8 +9,8 @@ use nyaterm_ui::NyaSearchInput;
 use crate::features::formatting::session_kind_label;
 use crate::features::view_widgets::{dialog_action_button, full_window_input_layer};
 use crate::features::{
-    NyaTermApp, ORDINARY_INPUT_SHELL_PADDING_X_PX, TextInputSetup, ordinary_input_focus_ring,
-    ordinary_input_shell_border_color,
+    NyaTermApp, text_inputs::ORDINARY_INPUT_SHELL_PADDING_X_PX, text_inputs::TextInputSetup,
+    text_inputs::ordinary_input_focus_ring, text_inputs::ordinary_input_shell_border_color,
 };
 use crate::widgets::{small_button, status_pill};
 

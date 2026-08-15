@@ -1,6 +1,6 @@
 use gpui::{Context, IntoElement, div, prelude::*, px, rgb};
 
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
 use crate::models::DockerTab;
 use crate::widgets::empty_panel;
 

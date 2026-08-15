@@ -3,7 +3,7 @@ use gpui::{
     Window, div, prelude::*, px, rgb, rgba, svg,
 };
 
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
 use crate::models::KeywordHighlightEditorField;
 use crate::theme::ThemePalette;
 use nyaterm_ui::NyaSwitch;
@@ -316,7 +316,7 @@ impl NyaTermApp {
                                             "settings-keyword-rule-patterns-{}",
                                             rule.id
                                         )))
-                                        .font_family(crate::features::gpui_code_font_family())
+                                        .font_family(crate::features::shell::gpui_code_font_family())
                                         .on_click(cx.listener({
                                             let rule_id = rule_id.clone();
                                             move |this, _, window, cx| {
@@ -355,7 +355,7 @@ impl NyaTermApp {
                                             rule.id
                                         )))
                                         .w(px(96.))
-                                        .font_family(crate::features::gpui_code_font_family())
+                                        .font_family(crate::features::shell::gpui_code_font_family())
                                         .on_click(cx.listener({
                                             let rule_id = rule_id.clone();
                                             move |this, _, window, cx| {
@@ -394,7 +394,7 @@ impl NyaTermApp {
                                             rule.id
                                         )))
                                         .w(px(96.))
-                                        .font_family(crate::features::gpui_code_font_family())
+                                        .font_family(crate::features::shell::gpui_code_font_family())
                                         .on_click(cx.listener({
                                             let rule_id = rule_id.clone();
                                             move |this, _, window, cx| {
@@ -775,7 +775,7 @@ fn keyword_highlight_static_input(
         .text_xs()
         .text_color(rgb(palette.text_muted))
         .when(code_font, |this| {
-            this.font_family(crate::features::gpui_code_font_family())
+            this.font_family(crate::features::shell::gpui_code_font_family())
         })
         .child(if value.is_empty() { " " } else { value }.to_string())
         .into_any_element()

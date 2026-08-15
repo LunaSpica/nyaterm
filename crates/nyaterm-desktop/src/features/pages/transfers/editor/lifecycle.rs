@@ -2,8 +2,8 @@ use gpui::{Context, Window};
 use nyaterm_transport::{RemoteFilePath, SshSessionConfig};
 
 use crate::features::{
-    NyaTermApp, TransferEditorCloseAfterSave, TransferEditorCloseOutcome,
-    TransferEditorDiscardOutcome,
+    NyaTermApp, transfers::TransferEditorCloseAfterSave, transfers::TransferEditorCloseOutcome,
+    transfers::TransferEditorDiscardOutcome,
 };
 use crate::models::{
     TransferJobEvent, TransferJobKind, TransferJobOutput, TransferJobResult, TransferJobState,

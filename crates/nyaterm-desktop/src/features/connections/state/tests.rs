@@ -27,7 +27,8 @@ use super::{
     visible_connection_ids_for_list_state,
 };
 use crate::features::{
-    ConnectionDragKind, ConnectionDropPosition, ConnectionDropTarget, ConnectionEditorToggle,
+    connections::ConnectionDragKind, connections::ConnectionDropPosition,
+    connections::ConnectionDropTarget, connections::ConnectionEditorToggle,
 };
 use crate::models::{
     ConnectionEditorAdvancedTab, ConnectionEditorField, ConnectionEditorPasswordSource,

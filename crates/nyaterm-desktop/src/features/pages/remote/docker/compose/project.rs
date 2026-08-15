@@ -4,7 +4,9 @@ use gpui::{Context, FontWeight, IntoElement, SharedString, div, prelude::*, px, 
 use nyaterm_core::truncate_preview;
 use nyaterm_transport::{DockerComposeProject, DockerComposeService};
 
-use crate::features::{NyaTermApp, docker_compose_project_key, gpui_code_font_family};
+use crate::features::{
+    NyaTermApp, formatting::docker_compose_project_key, shell::gpui_code_font_family,
+};
 use crate::widgets::{empty_panel, status_pill, svg_icon_button};
 
 use super::super::{DockerRenderContext, resources::docker_resource_static_panel};

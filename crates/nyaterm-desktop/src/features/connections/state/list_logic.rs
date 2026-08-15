@@ -2,7 +2,10 @@ use std::collections::{HashMap, HashSet};
 
 use nyaterm_core::{Group, SavedConnection, natural_compare};
 
-use crate::features::{ConnectionDragKind, ConnectionDropPosition, ConnectionDropTarget};
+use crate::features::{
+    connections::ConnectionDragKind, connections::ConnectionDropPosition,
+    connections::ConnectionDropTarget,
+};
 use crate::models::ConnectionSortMode;
 
 pub(super) fn selected_connections_for_list_state(

@@ -20,8 +20,9 @@ use super::super::NativeHostKeyVerifier;
 use super::PendingSessionStartRegistration;
 use crate::features::formatting::{non_empty_string, parse_telnet_enter_mode, split_shell_args};
 use crate::features::{
-    AgentPromptBroker, CredentialPromptBroker, HostKeyPromptBroker, NativeOtpProvider, NyaTermApp,
-    SavedConnectionStartOptions, SessionStartResult, SessionStartSuccess,
+    NyaTermApp, runtime_jobs::SessionStartResult, runtime_jobs::SessionStartSuccess,
+    session::AgentPromptBroker, session::CredentialPromptBroker, session::HostKeyPromptBroker,
+    session::NativeOtpProvider, session::SavedConnectionStartOptions,
 };
 use crate::models::SessionLaunchConfig;
 
@@ -997,7 +998,8 @@ mod tests {
         stored_connection_password_id,
     };
     use crate::features::{
-        AgentPromptBroker, CredentialPromptBroker, HostKeyPromptBroker, NativeOtpProvider,
+        session::AgentPromptBroker, session::CredentialPromptBroker, session::HostKeyPromptBroker,
+        session::NativeOtpProvider,
     };
 
     fn unique_temp_dir(name: &str) -> PathBuf {

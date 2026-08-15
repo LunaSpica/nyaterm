@@ -5,7 +5,7 @@ use gpui::{
 use nyaterm_ui::NyaInput;
 
 use crate::features::view_widgets::full_window_input_layer;
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
 use crate::widgets::small_button;
 
 impl NyaTermApp {
@@ -148,7 +148,7 @@ impl NyaTermApp {
                             .border_1()
                             .border_color(rgb(palette.link))
                             .bg(rgb(palette.input))
-                            .font_family(crate::features::gpui_code_font_family())
+                            .font_family(crate::features::shell::gpui_code_font_family())
                             .text_xs()
                             .text_color(rgb(palette.text))
                             .cursor_text()

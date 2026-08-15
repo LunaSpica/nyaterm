@@ -6,7 +6,8 @@ use nyaterm_core::truncate_preview;
 use nyaterm_transport::DockerContainer;
 
 use crate::features::{
-    NyaTermApp, compact_id, docker_state_color, docker_state_rank, gpui_code_font_family,
+    NyaTermApp, formatting::compact_id, formatting::docker_state_color,
+    formatting::docker_state_rank, shell::gpui_code_font_family,
 };
 use crate::models::{DockerConfirmAction, DockerConfirmState};
 use crate::theme::ThemePalette;

@@ -16,7 +16,8 @@ use nyaterm_transport::{
 
 use crate::features::formatting::docker_compose_project_key;
 use crate::features::{
-    DockerJobResult, GpuJobResult, NpuJobResult, ProcessJobResult, StatsJobResult,
+    runtime_jobs::DockerJobResult, runtime_jobs::GpuJobResult, runtime_jobs::NpuJobResult,
+    runtime_jobs::ProcessJobResult, runtime_jobs::StatsJobResult,
 };
 use crate::models::{DockerTab, RemoteProcessSortDirection, RemoteProcessSortKey};
 

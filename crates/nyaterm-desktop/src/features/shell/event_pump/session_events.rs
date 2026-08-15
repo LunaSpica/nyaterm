@@ -10,7 +10,7 @@ use crate::features::shell::event_pump::helpers::{
     session_event_input_wake_drain_budget, terminal_frame_backlog_active_from_counts,
     terminal_log_plain_text, terminal_output_dropped_marker,
 };
-use crate::features::{NyaTermApp, short_id};
+use crate::features::{NyaTermApp, formatting::short_id};
 
 #[derive(Clone, Copy)]
 enum SessionOutputDrainStep {

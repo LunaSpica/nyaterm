@@ -6,7 +6,7 @@ use nyaterm_core::truncate_preview;
 use nyaterm_transport::SftpFileEntry;
 use nyaterm_ui::NyaInput;
 
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
 use crate::models::{
     TransferBrowserBreadcrumbSegment, TransferBrowserChildrenMenuStatus,
     TransferBrowserPathMenuKind, TransferBrowserPathMenuState,
@@ -105,7 +105,7 @@ impl NyaTermApp {
                                 .min_w_0()
                                 .flex()
                                 .items_center()
-                                .font_family(crate::features::gpui_code_font_family())
+                                .font_family(crate::features::shell::gpui_code_font_family())
                                 .text_size(px(10.))
                                 .on_key_down(cx.listener(
                                     |this, event: &KeyDownEvent, window, cx| {
@@ -548,7 +548,7 @@ fn transfer_browser_breadcrumb_row(
         .flex()
         .items_center()
         .overflow_hidden()
-        .font_family(crate::features::gpui_code_font_family())
+        .font_family(crate::features::shell::gpui_code_font_family())
         .text_size(px(10.))
         .tooltip(move |window, cx| {
             nyaterm_ui::NyaTooltip::new(display_path.clone()).build(window, cx)
@@ -872,7 +872,7 @@ fn transfer_browser_path_history_list(
                 .px_2()
                 .flex()
                 .items_center()
-                .font_family(crate::features::gpui_code_font_family())
+                .font_family(crate::features::shell::gpui_code_font_family())
                 .text_size(px(10.))
                 .text_color(if is_current {
                     rgb(palette.link)

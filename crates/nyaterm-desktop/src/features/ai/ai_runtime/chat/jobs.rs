@@ -3,8 +3,8 @@ use nyaterm_core::{AiAction, AiChatRequest, AiContext, AiMode};
 use nyaterm_transport::SessionInfo;
 
 use crate::features::{
-    AiChatJobResult, AiChatWorkerEvent, NyaTermApp, compact_id, recent_terminal_output,
-    session_kind_label,
+    NyaTermApp, formatting::compact_id, formatting::recent_terminal_output,
+    formatting::session_kind_label, runtime_jobs::AiChatJobResult, runtime_jobs::AiChatWorkerEvent,
 };
 use crate::models::SessionLaunchConfig;
 

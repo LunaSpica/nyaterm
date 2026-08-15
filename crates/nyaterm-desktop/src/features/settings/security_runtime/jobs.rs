@@ -4,7 +4,7 @@ use nyaterm_core::{
 };
 use nyaterm_store::{StoreBlockingClient, StoreClientError, StoreDomain};
 
-use crate::features::SecurityCatalogState;
+use crate::features::settings::SecurityCatalogState;
 
 pub(super) struct SecurityStoreLocation {
     store: StoreBlockingClient,

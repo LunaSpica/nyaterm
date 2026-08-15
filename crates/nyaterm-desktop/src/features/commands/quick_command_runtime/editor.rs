@@ -2,7 +2,7 @@ use gpui::{Context, KeyDownEvent, Window};
 use nyaterm_core::{QuickCommand, QuickCommandCategory, uuid};
 use nyaterm_store::{StoreDomain, store_request};
 
-use crate::features::{NyaTermApp, non_empty_string};
+use crate::features::{NyaTermApp, formatting::non_empty_string};
 use crate::models::QuickCommandEditorField;
 
 use super::helpers::unix_millis_now;

@@ -3,7 +3,7 @@ use nyaterm_transport::{SftpFileEntry, SftpFileType};
 
 use std::collections::HashSet;
 
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
 use crate::models::TransferBrowserSortColumn;
 
 use super::helpers::{compare_transfer_browser_entries, transfer_browser_search_status};

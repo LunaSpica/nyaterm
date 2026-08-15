@@ -4,7 +4,7 @@ use gpui::{
 };
 use nyaterm_ui::{NyaNumberInputOptions, NyaSelectOption};
 
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
 use crate::theme::ThemePalette;
 
 use super::super::{
@@ -577,7 +577,7 @@ fn terminal_action_matcher_row(
                                 .py(px(1.))
                                 .rounded_sm()
                                 .bg(rgb(palette.surface_elevated))
-                                .font_family(crate::features::gpui_code_font_family())
+                                .font_family(crate::features::shell::gpui_code_font_family())
                                 .text_size(px(10.))
                                 .text_color(rgb(palette.text_muted))
                                 .child(example),

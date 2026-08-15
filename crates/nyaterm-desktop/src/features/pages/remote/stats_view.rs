@@ -9,8 +9,8 @@ use nyaterm_transport::{
 
 use crate::features::remote::{GpuPresentationState, NpuPresentationState};
 use crate::features::{
-    NyaTermApp, TextInputSetup, format_file_size, format_rate, format_uptime,
-    gpui_code_font_family, stats_progress_bar,
+    NyaTermApp, formatting::format_rate, formatting::format_uptime, shell::gpui_code_font_family,
+    text_inputs::TextInputSetup, transfers::format_file_size, view_widgets::stats_progress_bar,
 };
 use crate::widgets::empty_panel;
 
@@ -212,7 +212,7 @@ impl NyaTermApp {
                                                 div()
                                                     .text_right()
                                                     .font_family(
-                                                        crate::features::gpui_code_font_family(),
+                                                        crate::features::shell::gpui_code_font_family(),
                                                     )
                                                     .text_size(px(10.))
                                                     .text_color(rgb(palette.text_dimmed))
@@ -290,7 +290,7 @@ impl NyaTermApp {
                                                     .child(
                                                         div()
                                                             .font_family(
-                                                                crate::features::gpui_code_font_family(),
+                                                                crate::features::shell::gpui_code_font_family(),
                                                             )
                                                             .text_size(px(13.))
                                                             .font_weight(FontWeight(700.))
@@ -308,7 +308,7 @@ impl NyaTermApp {
                                             .child(
                                                 div()
                                                     .font_family(
-                                                        crate::features::gpui_code_font_family(),
+                                                        crate::features::shell::gpui_code_font_family(),
                                                     )
                                                     .text_size(px(10.))
                                                     .text_color(rgb(palette.text_muted))
@@ -1558,7 +1558,7 @@ fn resource_info_cell(
         )
         .child(
             div()
-                .font_family(crate::features::gpui_code_font_family())
+                .font_family(crate::features::shell::gpui_code_font_family())
                 .text_size(px(12.))
                 .font_weight(FontWeight(600.))
                 .text_color(rgb(palette.text))
@@ -1610,7 +1610,7 @@ fn resource_ring_gauge(
         )
         .child(
             div()
-                .font_family(crate::features::gpui_code_font_family())
+                .font_family(crate::features::shell::gpui_code_font_family())
                 .text_size(px(12.))
                 .font_weight(FontWeight(700.))
                 .text_color(usage_color(palette, ratio))
@@ -1658,7 +1658,7 @@ fn resource_load_badge(
         .text_center()
         .child(
             div()
-                .font_family(crate::features::gpui_code_font_family())
+                .font_family(crate::features::shell::gpui_code_font_family())
                 .text_size(px(12.))
                 .font_weight(FontWeight(700.))
                 .text_color(rgb(palette.text))
@@ -1692,7 +1692,7 @@ fn resource_metric_chip(
         )
         .child(
             div()
-                .font_family(crate::features::gpui_code_font_family())
+                .font_family(crate::features::shell::gpui_code_font_family())
                 .text_size(px(11.))
                 .text_color(rgb(palette.text_muted))
                 .child(value),
@@ -1719,7 +1719,7 @@ fn resource_network_row(
             div()
                 .min_w_0()
                 .flex_1()
-                .font_family(crate::features::gpui_code_font_family())
+                .font_family(crate::features::shell::gpui_code_font_family())
                 .text_size(px(12.))
                 .font_weight(FontWeight(600.))
                 .text_color(rgb(palette.text))
@@ -1777,7 +1777,7 @@ fn resource_disk_row(
                     div()
                         .min_w_0()
                         .flex_1()
-                        .font_family(crate::features::gpui_code_font_family())
+                        .font_family(crate::features::shell::gpui_code_font_family())
                         .text_size(px(12.))
                         .font_weight(FontWeight(600.))
                         .text_color(rgb(palette.text))
@@ -1786,7 +1786,7 @@ fn resource_disk_row(
                 )
                 .child(
                     div()
-                        .font_family(crate::features::gpui_code_font_family())
+                        .font_family(crate::features::shell::gpui_code_font_family())
                         .text_size(px(12.))
                         .font_weight(FontWeight(700.))
                         .text_color(usage_color(palette, ratio))
@@ -1802,7 +1802,7 @@ fn resource_disk_row(
                 .gap_y_1()
                 .child(
                     div()
-                        .font_family(crate::features::gpui_code_font_family())
+                        .font_family(crate::features::shell::gpui_code_font_family())
                         .text_size(px(10.))
                         .text_color(rgb(palette.text_dimmed))
                         .child(format_file_size(Some(total))),
@@ -1825,10 +1825,10 @@ fn rate_value(
         .flex()
         .items_center()
         .gap_1()
-        .font_family(crate::features::gpui_code_font_family())
+        .font_family(crate::features::shell::gpui_code_font_family())
         .text_size(px(11.))
         .text_color(rgb(palette.text_muted))
-        .child(crate::features::mono_icon(arrow, color, 11.))
+        .child(crate::features::view_widgets::mono_icon(arrow, color, 11.))
         .child(format_rate(value))
 }
 
@@ -1907,7 +1907,7 @@ fn cpu_core_row(palette: crate::theme::ThemePalette, index: usize, usage: f64) -
             div()
                 .w(px(24.))
                 .text_right()
-                .font_family(crate::features::gpui_code_font_family())
+                .font_family(crate::features::shell::gpui_code_font_family())
                 .text_size(px(10.))
                 .text_color(rgb(palette.text_muted))
                 .child(index.to_string()),
@@ -1923,7 +1923,7 @@ fn cpu_core_row(palette: crate::theme::ThemePalette, index: usize, usage: f64) -
             div()
                 .w(px(44.))
                 .text_right()
-                .font_family(crate::features::gpui_code_font_family())
+                .font_family(crate::features::shell::gpui_code_font_family())
                 .text_size(px(10.))
                 .text_color(rgb(palette.text_muted))
                 .child(format!("{usage:.1}%")),

@@ -1,7 +1,7 @@
 use gpui::{AppContext, Context, KeyDownEvent, Window};
 use nyaterm_ui::NyaDialogWindowExt as _;
 
-use crate::features::{NyaTermApp, TextInputSetup};
+use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
 use crate::models::{NavItem, SecurityAuthTab, SecurityUnlockAction, SettingsTab};
 
 use super::jobs::{SecurityStoreLocation, load_security_catalog};
