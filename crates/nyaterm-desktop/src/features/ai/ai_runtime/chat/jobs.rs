@@ -88,8 +88,7 @@ impl NyaTermApp {
             context,
             options: Default::default(),
         };
-        let config_dir = self.runtime.config_dir().to_path_buf();
-        let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
+        let store = self.store_blocking_client();
         let launch =
             self.ai
                 .begin_chat_request(request_prompt, mode.clone(), source_label.as_deref());
@@ -98,15 +97,7 @@ impl NyaTermApp {
         let cancel = launch.cancel;
         let tx = launch.tx;
         std::thread::spawn(move || {
-            let result = run_ai_ask_job(
-                config_dir,
-                portable_key_path,
-                settings,
-                request,
-                Some(tx.clone()),
-                cancel,
-                job_id,
-            );
+            let result = run_ai_ask_job(store, settings, request, Some(tx.clone()), cancel, job_id);
             let _ = tx.send(AiChatWorkerEvent::Finished(AiChatJobResult {
                 job_id,
                 session_id,

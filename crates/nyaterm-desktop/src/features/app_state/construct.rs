@@ -149,8 +149,7 @@ impl NyaTermApp {
 
         let connections_filter_placeholder =
             crate::i18n::text(&settings.language, "savedConnections.filter");
-        let command_config_dir = runtime.config_dir().to_path_buf();
-        let command_portable_key_path = runtime.portable_key_path().map(ToOwned::to_owned);
+        let command_store = store_blocking.clone();
 
         Self {
             stores,
@@ -178,8 +177,7 @@ impl NyaTermApp {
                     details: cx.focus_handle(),
                     variable: cx.focus_handle(),
                 },
-                config_dir: command_config_dir,
-                portable_key_path: command_portable_key_path,
+                store: command_store,
             }),
             send_command: SendCommandFeatureState::new(SendCommandFeatureFocus {
                 editor: cx.focus_handle(),

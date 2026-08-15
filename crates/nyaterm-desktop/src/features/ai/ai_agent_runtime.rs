@@ -6,7 +6,7 @@ use nyaterm_core::{
     AppendAiAuditRequest, CommandObservation, build_agent_capture_command,
     build_observation_message, truncate_preview, uuid,
 };
-use nyaterm_store::ConnectionStore;
+use nyaterm_store::StoreDomain;
 use nyaterm_transport::{SessionKind, SshProcessService, run_local_command};
 
 use crate::features::{
@@ -57,8 +57,7 @@ impl NyaTermApp {
         inserted_to_terminal: bool,
         cx: &mut Context<Self>,
     ) {
-        let config_dir = self.runtime.config_dir().to_path_buf();
-        let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
+        let store = self.store_blocking_client();
         let write_lock = self.ai.history_audit_write_lock();
         let request = AppendAiAuditRequest {
             connection_id: self.ai_effective_target_session_id(),
@@ -78,8 +77,10 @@ impl NyaTermApp {
             let _guard = write_lock
                 .lock()
                 .map_err(|_| "AI audit write lock poisoned".to_string())?;
-            ConnectionStore::open_with_portable_key_path(config_dir, portable_key_path)
-                .and_then(|store| store.append_ai_audit(request))
+            store
+                .request_fn(StoreDomain::Ai, move |database| {
+                    database.append_ai_audit(request)
+                })
                 .map(|_| ())
                 .map_err(|error| error.to_string())
         });
@@ -485,22 +486,13 @@ impl NyaTermApp {
             context: self.ai_terminal_context_for_session(Some(&terminal_session_id)),
             options: Default::default(),
         };
-        let config_dir = self.runtime.config_dir().to_path_buf();
-        let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
+        let store = self.store_blocking_client();
         let tx = launch.tx;
         let session_id = launch.session_id;
         let job_id = launch.job_id;
         let cancel = launch.cancel;
         std::thread::spawn(move || {
-            let result = run_ai_ask_job(
-                config_dir,
-                portable_key_path,
-                settings,
-                request,
-                Some(tx.clone()),
-                cancel,
-                job_id,
-            );
+            let result = run_ai_ask_job(store, settings, request, Some(tx.clone()), cancel, job_id);
             let _ = tx.send(AiChatWorkerEvent::Finished(AiChatJobResult {
                 job_id,
                 session_id,

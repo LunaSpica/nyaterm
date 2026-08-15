@@ -1,5 +1,5 @@
 use gpui::{AppContext, Context, IntoElement, PathPromptOptions, SharedString, Window};
-use nyaterm_store::ConnectionStore;
+use nyaterm_store::StoreDomain;
 use nyaterm_ui::NyaDialogWindowExt as _;
 use zeroize::Zeroize as _;
 
@@ -115,8 +115,7 @@ impl NyaTermApp {
             multiple: false,
             prompt: Some(SharedString::from(source.prompt_label())),
         });
-        let config_dir = self.runtime.config_dir().to_path_buf();
-        let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
+        let store = self.store_blocking_client();
         self.connection_state.begin_import_path_prompt(source);
         self.shell.set_status(source.selecting_status().to_string());
 
@@ -125,26 +124,20 @@ impl NyaTermApp {
                 Ok(Ok(Some(paths))) => match paths.into_iter().next() {
                     Some(path) => {
                         cx.background_spawn(async move {
-                            match ConnectionStore::open_with_portable_key_path(
-                                &config_dir,
-                                portable_key_path,
-                            ) {
-                                Ok(store) => match import_connection_source(
-                                    &store,
-                                    source,
-                                    Some(path.as_path()),
-                                ) {
-                                    Ok(count) => ConnectionImportResult::Imported(count),
-                                    Err(error) => ConnectionImportResult::Failed {
-                                        source,
-                                        auto_termius: false,
-                                        error,
-                                    },
+                            match prepare_connection_source(source, Some(path.as_path())).and_then(
+                                |prepared| {
+                                    store
+                                        .request_fn(StoreDomain::Connections, move |database| {
+                                            database.commit_session_import(prepared)
+                                        })
+                                        .map_err(|error| error.to_string())
                                 },
+                            ) {
+                                Ok(count) => ConnectionImportResult::Imported(count),
                                 Err(error) => ConnectionImportResult::Failed {
                                     source,
                                     auto_termius: false,
-                                    error: error.to_string(),
+                                    error,
                                 },
                             }
                         })
@@ -181,8 +174,7 @@ impl NyaTermApp {
             return;
         }
 
-        let config_dir = self.runtime.config_dir().to_path_buf();
-        let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
+        let store = self.store_blocking_client();
         self.connection_state
             .begin_import_path_prompt(ConnectionImportSource::Termius);
         self.shell.set_status(if auto_termius {
@@ -194,26 +186,22 @@ impl NyaTermApp {
         cx.spawn(async move |this, cx| {
             let result = cx
                 .background_spawn(async move {
-                    match ConnectionStore::open_with_portable_key_path(
-                        &config_dir,
-                        portable_key_path,
-                    ) {
-                        Ok(store) => match import_connection_source(
-                            &store,
-                            ConnectionImportSource::Termius,
-                            indexed_db_path.as_deref(),
-                        ) {
-                            Ok(count) => ConnectionImportResult::Imported(count),
-                            Err(error) => ConnectionImportResult::Failed {
-                                source: ConnectionImportSource::Termius,
-                                auto_termius,
-                                error,
-                            },
-                        },
+                    match prepare_connection_source(
+                        ConnectionImportSource::Termius,
+                        indexed_db_path.as_deref(),
+                    )
+                    .and_then(|prepared| {
+                        store
+                            .request_fn(StoreDomain::Connections, move |database| {
+                                database.commit_session_import(prepared)
+                            })
+                            .map_err(|error| error.to_string())
+                    }) {
+                        Ok(count) => ConnectionImportResult::Imported(count),
                         Err(error) => ConnectionImportResult::Failed {
                             source: ConnectionImportSource::Termius,
                             auto_termius,
-                            error: error.to_string(),
+                            error,
                         },
                     }
                 })
@@ -275,31 +263,21 @@ impl NyaTermApp {
     }
 }
 
-fn import_connection_source(
-    store: &ConnectionStore,
+fn prepare_connection_source(
     source: ConnectionImportSource,
     path: Option<&std::path::Path>,
-) -> Result<usize, String> {
+) -> Result<nyaterm_core::PreparedSessionImport, String> {
     match source {
         ConnectionImportSource::Termius => {
             let mut local_key = load_termius_local_key_secret()?;
             let result = nyaterm_core::prepare_termius_session_import(path, &local_key)
-                .map_err(|error| error.to_string())
-                .and_then(|prepared| {
-                    store
-                        .commit_session_import(prepared)
-                        .map_err(|error| error.to_string())
-                });
+                .map_err(|error| error.to_string());
             local_key.zeroize();
             result
         }
         _ => {
             let path = path.ok_or_else(|| "connection import path was not selected".to_string())?;
-            let prepared =
-                nyaterm_core::prepare_session_import(path).map_err(|error| error.to_string())?;
-            store
-                .commit_session_import(prepared)
-                .map_err(|error| error.to_string())
+            nyaterm_core::prepare_session_import(path).map_err(|error| error.to_string())
         }
     }
 }

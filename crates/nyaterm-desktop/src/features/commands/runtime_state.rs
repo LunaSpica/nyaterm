@@ -1,7 +1,8 @@
 //! Background runtime ownership shared by command history and quick commands.
 
-use std::path::PathBuf;
 use std::sync::mpsc;
+
+use nyaterm_store::StoreBlockingClient;
 
 use crate::features::{
     CommandPersistenceRequest, CommandPersistenceResult, spawn_command_persistence_worker,
@@ -20,11 +21,8 @@ pub(in crate::features) enum CommandPersistencePoll {
 }
 
 impl CommandRuntimeState {
-    pub(in crate::features) fn new(
-        config_dir: PathBuf,
-        portable_key_path: Option<PathBuf>,
-    ) -> Self {
-        let (tx, rx) = spawn_command_persistence_worker(config_dir, portable_key_path);
+    pub(in crate::features) fn new(store: StoreBlockingClient) -> Self {
+        let (tx, rx) = spawn_command_persistence_worker(store);
         Self { tx, rx, pending: 0 }
     }
 

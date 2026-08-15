@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -14,7 +13,7 @@ use nyaterm_core::{
     parse_agent_model_output, parse_agent_tool_call, parse_model_output, redact_context,
     redact_sensitive_text, truncate_preview, uuid,
 };
-use nyaterm_store::ConnectionStore;
+use nyaterm_store::{ConnectionStore, StoreBlockingClient, StoreDomain};
 use nyaterm_transport::RemoteCommandOutput;
 
 use crate::features::{AiChatJobOutput, AiChatWorkerEvent};
@@ -28,8 +27,7 @@ pub(in crate::features) fn is_agent_command_card(card: &AiCommandCard) -> bool {
 }
 
 pub(in crate::features) fn run_ai_ask_job(
-    config_dir: PathBuf,
-    portable_key_path: Option<PathBuf>,
+    store: StoreBlockingClient,
     settings: AiSettings,
     mut request: AiChatRequest,
     stream_tx: Option<mpsc::Sender<AiChatWorkerEvent>>,
@@ -50,16 +48,17 @@ pub(in crate::features) fn run_ai_ask_job(
         .unwrap_or_else(|| format!("ai-session-{}", uuid()));
     request.session_id = Some(session_id.clone());
 
-    let store = ConnectionStore::open_with_portable_key_path(&config_dir, portable_key_path)
+    let history = store
+        .request_fn(StoreDomain::Ai, |database| database.load_ai_history())
         .map_err(|error| error.to_string())?;
-    let history = store.load_ai_history().map_err(|error| error.to_string())?;
     if settings.record_history {
+        let user_session_id = session_id.clone();
+        let connection_id = request.connection_id.clone();
+        let user_input = request.user_input.clone();
         store
-            .append_ai_user_message(
-                &session_id,
-                request.connection_id.clone(),
-                request.user_input.clone(),
-            )
+            .request_fn(StoreDomain::Ai, move |database| {
+                database.append_ai_user_message(&user_session_id, connection_id, user_input)
+            })
             .map_err(|error| error.to_string())?;
     }
     if ai_job_cancelled(&cancel) {
@@ -134,15 +133,18 @@ pub(in crate::features) fn run_ai_ask_job(
         }
     };
     if settings.record_history {
+        let message = AiMessage {
+            id: format!("msg-{}", uuid()),
+            session_id,
+            role: AiMessageRole::Assistant,
+            content: output.text.clone(),
+            created_at: now_rfc3339(),
+            reasoning_content: output.reasoning.clone(),
+            command_cards: output.command_cards.clone(),
+        };
         store
-            .append_ai_message(AiMessage {
-                id: format!("msg-{}", uuid()),
-                session_id,
-                role: AiMessageRole::Assistant,
-                content: output.text.clone(),
-                created_at: now_rfc3339(),
-                reasoning_content: output.reasoning.clone(),
-                command_cards: output.command_cards.clone(),
+            .request_fn(StoreDomain::Ai, move |database| {
+                database.append_ai_message(message)
             })
             .map_err(|error| error.to_string())?;
     }

@@ -5,7 +5,7 @@ use std::time::Instant;
 use nyaterm_core::{
     AiCommandCard, AiMode, AiModelDiscovery, CommandHistoryEntry, CommandObservation,
 };
-use nyaterm_store::ConnectionStore;
+use nyaterm_store::{StoreBlockingClient, StoreDomain};
 use nyaterm_transport::{
     DockerComposeService, DockerContainerDetails, RemoteDockerOverview, RemoteGpuOverview,
     RemoteNpuOverview, RemoteProcess, RemoteStats, SessionInfo, SessionKind, SshMultiplexHandle,
@@ -241,8 +241,7 @@ pub(in crate::features) enum ActivitySide {
 }
 
 pub(in crate::features) fn spawn_command_persistence_worker(
-    config_dir: PathBuf,
-    portable_key_path: Option<PathBuf>,
+    store: StoreBlockingClient,
 ) -> (
     mpsc::Sender<CommandPersistenceRequest>,
     mpsc::Receiver<CommandPersistenceResult>,
@@ -256,26 +255,23 @@ pub(in crate::features) fn spawn_command_persistence_worker(
                 let result = match request {
                     CommandPersistenceRequest::AppendHistory(commands) => {
                         CommandPersistenceResult::History(
-                            ConnectionStore::open_with_portable_key_path(
-                                &config_dir,
-                                portable_key_path.clone(),
-                            )
-                            .and_then(|store| {
-                                for command in commands {
-                                    store.append_command_history(&command)?;
-                                }
-                                store.list_command_history(64)
-                            })
-                            .map_err(|error| error.to_string()),
+                            store
+                                .request_fn(StoreDomain::Commands, move |database| {
+                                    for command in commands {
+                                        database.append_command_history(&command)?;
+                                    }
+                                    database.list_command_history(64)
+                                })
+                                .map_err(|error| error.to_string()),
                         )
                     }
                     CommandPersistenceRequest::IncrementQuickCommand(command_id) => {
-                        let result = ConnectionStore::open_with_portable_key_path(
-                            &config_dir,
-                            portable_key_path.clone(),
-                        )
-                        .and_then(|store| store.increment_quick_command_use_count(&command_id))
-                        .map_err(|error| error.to_string());
+                        let persisted_id = command_id.clone();
+                        let result = store
+                            .request_fn(StoreDomain::Commands, move |database| {
+                                database.increment_quick_command_use_count(&persisted_id)
+                            })
+                            .map_err(|error| error.to_string());
                         CommandPersistenceResult::QuickCommandUseCount { command_id, result }
                     }
                 };

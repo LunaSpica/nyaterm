@@ -1,6 +1,5 @@
 //! Authoritative command catalog, history, runtime and quick-command UI state.
 
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use gpui::FocusHandle;
@@ -8,6 +7,7 @@ use nyaterm_core::{
     CommandHistoryEntry, QuickCommand, QuickCommandCategory, QuickCommandCategoryPosition,
     QuickCommandRelativePosition, QuickCommandsConfig,
 };
+use nyaterm_store::StoreBlockingClient;
 use nyaterm_ui::NyaWindowHandle;
 
 use crate::features::{CommandPersistenceRequest, CommandPersistenceResult};
@@ -33,8 +33,7 @@ pub(in crate::features) struct CommandFeatureInit {
     pub sort_mode: QuickCommandSortMode,
     pub view_mode: QuickCommandViewMode,
     pub focus: QuickCommandFeatureFocus,
-    pub config_dir: PathBuf,
-    pub portable_key_path: Option<PathBuf>,
+    pub store: StoreBlockingClient,
 }
 
 struct CommandCatalogState {
@@ -56,7 +55,7 @@ impl CommandFeatureState {
             catalog: CommandCatalogState::new(init.commands, init.categories),
             quick: QuickCommandFeatureState::new(init.sort_mode, init.view_mode, init.focus),
             history: Arc::from(init.history),
-            runtime: CommandRuntimeState::new(init.config_dir, init.portable_key_path),
+            runtime: CommandRuntimeState::new(init.store),
         }
     }
 
@@ -841,10 +840,9 @@ impl QuickCommandFeatureState {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-
     use gpui::TestAppContext;
     use nyaterm_core::{QuickCommand, QuickCommandCategory};
+    use nyaterm_store::{StoreConfig, StoreRuntime};
 
     use crate::models::{
         QuickCommandEditorState, QuickCommandImportPathPromptKind, QuickCommandSortMode,
@@ -878,6 +876,17 @@ mod tests {
     fn command_state() -> CommandFeatureState {
         let cx = TestAppContext::single();
         let focus = || cx.update(|cx| cx.focus_handle());
+        let config_dir = std::env::temp_dir().join(format!(
+            "nyaterm-command-state-test-{}-{}",
+            std::process::id(),
+            nyaterm_core::uuid()
+        ));
+        let store = StoreRuntime::spawn(StoreConfig {
+            config_dir,
+            portable_key_path: None,
+        })
+        .expect("spawn test store")
+        .blocking_client();
         CommandFeatureState::new(CommandFeatureInit {
             commands: Vec::new(),
             categories: Vec::new(),
@@ -889,8 +898,7 @@ mod tests {
                 details: focus(),
                 variable: focus(),
             },
-            config_dir: PathBuf::new(),
-            portable_key_path: None,
+            store,
         })
     }
 

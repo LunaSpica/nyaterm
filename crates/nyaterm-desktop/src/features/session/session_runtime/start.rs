@@ -905,6 +905,7 @@ mod tests {
         AiExecutionProfile, ConnectionAuth, ConnectionType, SavedConnection, SftpCwdFollowMode,
         SftpSettings, SshAlgorithmMode, SshAlgorithmPreferences, SshProfile, SshTerminalType, uuid,
     };
+    use nyaterm_store::ConnectionStore;
     use nyaterm_transport::SshSessionProfile;
 
     use super::{

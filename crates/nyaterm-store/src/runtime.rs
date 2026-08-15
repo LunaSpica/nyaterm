@@ -671,11 +671,14 @@ mod tests {
 
         let error = runtime
             .blocking_client()
-            .request_fn(StoreDomain::Settings, |_| -> Result<(), crate::StorageError> {
-                Err(crate::StorageError::InvalidData(
-                    "invalid settings".to_string(),
-                ))
-            })
+            .request_fn(
+                StoreDomain::Settings,
+                |_| -> Result<(), crate::StorageError> {
+                    Err(crate::StorageError::InvalidData(
+                        "invalid settings".to_string(),
+                    ))
+                },
+            )
             .expect_err("operation should fail");
         assert_eq!(error.category(), "invalid_data");
 
