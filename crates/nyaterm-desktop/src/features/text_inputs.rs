@@ -173,10 +173,9 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<I> {
         let id = id.into();
-        let palette = self.theme_palette();
         let multi_line = setup.multi_line;
         let field = self.text_input(id.clone(), seed, setup, cx);
-        let shell = NyaInputShell::new(id, &field, palette);
+        let shell = NyaInputShell::new(id, &field);
         if multi_line {
             shell.multi_line()
         } else {
@@ -193,7 +192,7 @@ impl NyaTermApp {
     ) -> impl IntoElement + use<I> {
         let id = id.into();
         let field = self.text_input(id.clone(), seed, setup, cx);
-        NyaSearchInput::new(id, &field, self.theme_palette())
+        NyaSearchInput::new(id, &field)
     }
 
     /// A caption above the input for `id`.

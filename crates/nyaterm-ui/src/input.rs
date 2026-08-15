@@ -1,18 +1,14 @@
 use gpui::{
-    Action as _, AnyElement, App, AppContext, BoxShadow, Context, Entity, EventEmitter,
-    FocusHandle, Focusable, InteractiveElement as _, IntoElement, KeyDownEvent, ParentElement as _,
-    Pixels, Render, RenderOnce, SharedString, StatefulInteractiveElement as _, Styled as _,
-    Subscription, Window, div, prelude::FluentBuilder as _, px, rgb,
+    Action as _, AnyElement, App, AppContext, Context, Entity, EventEmitter, FocusHandle,
+    Focusable, InteractiveElement as _, IntoElement, KeyDownEvent, ParentElement as _, Render,
+    RenderOnce, SharedString, Styled as _, Subscription, Window, div, prelude::FluentBuilder as _,
+    px,
 };
-use gpui_component::Sizable;
 use gpui_component::input::SelectAll;
 use gpui_component::input::{Input, InputEvent, InputState};
+use gpui_component::{Icon, IconName, Sizable, Size};
 
 use crate::input_focus::{preserve_nya_input_focus_on_pointer_down, register_nya_input_focus};
-use crate::{NYA_FORM_CONTROL_HEIGHT_PX, ThemePalette};
-
-const NYA_COMPACT_SEARCH_HEIGHT_PX: f32 = 28.;
-const NYA_INPUT_SHELL_PADDING_X_PX: f32 = 4.;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NyaInputEvent {
@@ -259,7 +255,7 @@ impl Render for NyaInputState {
             state.update(cx, |state, cx| state.focus(window, cx));
         }
         self.focused = self.focus.is_focused(window) || component_focus.is_focused(window);
-        let input = Input::new(&state).small().disabled(self.disabled);
+        let input = Input::new(&state).disabled(self.disabled);
         if self.multi_line {
             input.h_full()
         } else {
@@ -283,29 +279,7 @@ impl NyaInput {
 
 impl RenderOnce for NyaInput {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let input_state = self.state.clone();
-        let (state, disabled, multi_line, focused) = input_state.update(cx, |input, cx| {
-            let state = input.ensure_component(window, cx);
-            if !input.multi_line && input.applied_masked != input.masked {
-                let masked = input.masked;
-                state.update(cx, |component, cx| component.set_masked(masked, window, cx));
-                input.applied_masked = masked;
-            }
-            (
-                state,
-                input.disabled,
-                input.multi_line,
-                input.focus.is_focused(window),
-            )
-        });
-        if focused {
-            state.update(cx, |state, cx| state.focus(window, cx));
-        }
-        input_state.update(cx, |input_state, cx| {
-            let component_focus = state.read(cx).focus_handle(cx);
-            input_state.focused =
-                input_state.focus.is_focused(window) || component_focus.is_focused(window);
-        });
+        let (state, disabled, multi_line) = prepare_input_component(&self.state, window, cx);
         let input = Input::new(&state)
             .xsmall()
             .appearance(false)
@@ -314,6 +288,7 @@ impl RenderOnce for NyaInput {
             .disabled(disabled);
         div()
             .size_full()
+            .when(!multi_line, |this| this.flex().items_center())
             .capture_any_mouse_down(|_, _, cx| {
                 preserve_nya_input_focus_on_pointer_down(cx);
             })
@@ -327,45 +302,65 @@ impl RenderOnce for NyaInput {
 
 type KeyDownHandler = Box<dyn Fn(&KeyDownEvent, &mut Window, &mut App) + 'static>;
 
+fn prepare_input_component(
+    input_state: &Entity<NyaInputState>,
+    window: &mut Window,
+    cx: &mut App,
+) -> (Entity<InputState>, bool, bool) {
+    let (state, disabled, multi_line, focused) = input_state.update(cx, |input, cx| {
+        let state = input.ensure_component(window, cx);
+        if !input.multi_line && input.applied_masked != input.masked {
+            let masked = input.masked;
+            state.update(cx, |component, cx| component.set_masked(masked, window, cx));
+            input.applied_masked = masked;
+        }
+        (
+            state,
+            input.disabled,
+            input.multi_line,
+            input.focus.is_focused(window),
+        )
+    });
+    if focused {
+        state.update(cx, |state, cx| state.focus(window, cx));
+    }
+    input_state.update(cx, |input_state, cx| {
+        let component_focus = state.read(cx).focus_handle(cx);
+        input_state.focused =
+            input_state.focus.is_focused(window) || component_focus.is_focused(window);
+    });
+    (state, disabled, multi_line)
+}
+
 #[derive(IntoElement)]
 pub struct NyaInputShell {
     id: SharedString,
     state: Entity<NyaInputState>,
-    palette: ThemePalette,
-    height: Pixels,
-    padding_y: Pixels,
-    leading_icon: Option<&'static str>,
+    multi_line: bool,
+    search: bool,
     trailing: Vec<AnyElement>,
     on_key_down: Option<KeyDownHandler>,
 }
 
 impl NyaInputShell {
-    pub fn new(
-        id: impl Into<SharedString>,
-        state: &Entity<NyaInputState>,
-        palette: ThemePalette,
-    ) -> Self {
+    pub fn new(id: impl Into<SharedString>, state: &Entity<NyaInputState>) -> Self {
         Self {
             id: id.into(),
             state: state.clone(),
-            palette,
-            height: px(NYA_FORM_CONTROL_HEIGHT_PX),
-            padding_y: px(0.),
-            leading_icon: None,
+            multi_line: false,
+            search: false,
             trailing: Vec::new(),
             on_key_down: None,
         }
     }
 
     pub fn multi_line(mut self) -> Self {
-        self.height = px(88.);
-        self.padding_y = px(8.);
+        self.multi_line = true;
         self
     }
 
-    pub fn compact_search(mut self) -> Self {
-        self.height = px(NYA_COMPACT_SEARCH_HEIGHT_PX);
-        self.leading_icon = Some("icons/fe/search.svg");
+    fn search(mut self) -> Self {
+        self.search = true;
         self
     }
 
@@ -384,71 +379,41 @@ impl NyaInputShell {
 }
 
 impl RenderOnce for NyaInputShell {
-    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let focus = self.state.read(cx).focus_handle();
-        let component_focus = self.state.read(cx).component_focus_handle(cx);
-        let focused = self.state.read(cx).has_focus();
-        let palette = self.palette;
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let (state, disabled, state_multi_line) = prepare_input_component(&self.state, window, cx);
         let debug_selector = self.id.to_string();
-        let mut shell = div()
+        let prefix_debug_selector = format!("{}-prefix", self.id);
+        let mut input = Input::new(&state)
+            .with_size(Size::Medium)
+            .disabled(disabled);
+        if self.multi_line || state_multi_line {
+            input = input.h(px(88.));
+        }
+        if self.search {
+            input = input.prefix(
+                div()
+                    .debug_selector(move || prefix_debug_selector.clone())
+                    .flex()
+                    .items_center()
+                    .child(Icon::new(IconName::Search).small()),
+            );
+        }
+        if !self.trailing.is_empty() {
+            input = input.suffix(div().flex().items_center().gap_1().children(self.trailing));
+        }
+
+        let mut container = div()
             .id(self.id)
             .debug_selector(move || debug_selector.clone())
             .w_full()
-            .h(self.height)
             .min_w_0()
-            .py(self.padding_y)
-            .px(px(NYA_INPUT_SHELL_PADDING_X_PX))
-            .flex()
-            .items_center()
-            .gap_2()
-            .rounded_sm()
-            .border_1()
-            .border_color(rgb(if focused {
-                palette.focus_ring
-            } else {
-                palette.border
-            }))
-            .when(focused, |this| {
-                this.shadow(vec![
-                    BoxShadow::new(px(0.), px(0.), rgb(palette.focus_ring).alpha(0.32).into())
-                        .spread_radius(px(2.)),
-                ])
-            })
-            .bg(rgb(palette.input))
-            .text_size(px(12.))
-            .text_color(rgb(palette.text))
-            .cursor_text()
             .capture_any_mouse_down(|_, _, cx| {
                 preserve_nya_input_focus_on_pointer_down(cx);
-            })
-            .on_click(|_, _, cx| cx.stop_propagation())
-            .on_mouse_down(gpui::MouseButton::Left, move |_, window, cx| {
-                preserve_nya_input_focus_on_pointer_down(cx);
-                if !focus.is_focused(window) && !component_focus.is_focused(window) {
-                    window.focus(&component_focus, cx);
-                }
             });
         if let Some(handler) = self.on_key_down {
-            shell = shell.on_key_down(handler);
+            container = container.on_key_down(handler);
         }
-        shell
-            .when_some(self.leading_icon, |this, icon| {
-                this.child(
-                    gpui::svg()
-                        .size(px(14.))
-                        .flex_none()
-                        .path(icon)
-                        .text_color(rgb(palette.text_muted)),
-                )
-            })
-            .child(
-                div()
-                    .min_w_0()
-                    .flex_1()
-                    .size_full()
-                    .child(NyaInput::new(&self.state)),
-            )
-            .children(self.trailing)
+        container.child(input)
     }
 }
 
@@ -458,13 +423,9 @@ pub struct NyaSearchInput {
 }
 
 impl NyaSearchInput {
-    pub fn new(
-        id: impl Into<SharedString>,
-        state: &Entity<NyaInputState>,
-        palette: ThemePalette,
-    ) -> Self {
+    pub fn new(id: impl Into<SharedString>, state: &Entity<NyaInputState>) -> Self {
         Self {
-            shell: NyaInputShell::new(id, state, palette).compact_search(),
+            shell: NyaInputShell::new(id, state).search(),
         }
     }
 

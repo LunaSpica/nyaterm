@@ -133,14 +133,23 @@ impl NyaTermApp {
             .items_center()
             .justify_center()
             .track_focus(self.commands.quick_variable_focus())
-            .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(this.commands.quick_variable_focus(), cx);
-                cx.notify();
-            }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
                 cx.stop_propagation();
                 this.handle_quick_command_variable_key_down(event, cx);
             }))
+            .child(
+                div()
+                    .id("quick-command-variable-backdrop")
+                    .absolute()
+                    .top_0()
+                    .bottom_0()
+                    .left_0()
+                    .right_0()
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        window.focus(this.commands.quick_variable_focus(), cx);
+                        cx.notify();
+                    })),
+            )
             .child(
                 div()
                     .id(SharedString::from("quick-command-variable-dialog"))

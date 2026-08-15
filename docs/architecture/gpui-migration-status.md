@@ -328,15 +328,15 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   dedicated editor surface, not a registry form field. None of these
   should be replaced mechanically with a single-line registry field.
 
-  The ordinary-input wrapper now also owns its complete field shell and compact
-  search presentation. `NyaInputShell` provides the standard form boundary,
-  while `NyaSearchInput` fixes ordinary search/filter fields at a shared 28px
-  height with one icon, spacing, border and focus-ring treatment. `NyaRoot`
-  coordinates primary-button outside clicks across normal content and dialog
-  layers: text and number inputs retain focus for clicks inside their full
-  shell and blur when the click lands elsewhere. Terminal input, terminal
-  search, quick switch and full editor surfaces retain their dedicated focus
-  paths.
+  Ordinary input appearance and internal layout belong to `gpui-component`.
+  `NyaInputShell` adapts normal form fields to its native 32px Medium input,
+  while `NyaSearchInput` adds the component's native search prefix and suffix
+  handling without painting a second field shell. The NyaTerm wrappers retain
+  state/event translation and `NyaRoot` coordinates primary-button outside
+  clicks across normal content and dialog layers: text and number inputs retain
+  focus for clicks inside their full bounds and blur when the click lands
+  elsewhere. Terminal input, terminal search, quick switch and full editor
+  surfaces retain their dedicated focus paths.
 
   Four GPUI behaviours make this migration go wrong in ways that are invisible
   until you drive the UI:

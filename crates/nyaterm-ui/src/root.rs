@@ -64,8 +64,8 @@ mod tests {
     };
 
     use crate::{
-        NyaDialogFooter, NyaDialogWindowExt as _, NyaInputEvent, NyaInputState, NyaNumberInput,
-        NyaNumberInputOptions, NyaNumberInputState, NyaSearchInput, nya_root, theme_palette,
+        NyaDialogFooter, NyaDialogWindowExt as _, NyaInputEvent, NyaInputShell, NyaInputState,
+        NyaNumberInput, NyaNumberInputOptions, NyaNumberInputState, NyaSearchInput, nya_root,
     };
 
     struct RootContentFixture;
@@ -87,7 +87,10 @@ mod tests {
     struct InputFocusFixture {
         first: gpui::Entity<NyaInputState>,
         second: gpui::Entity<NyaInputState>,
+        ordinary: gpui::Entity<NyaInputState>,
+        masked: gpui::Entity<NyaInputState>,
         number: gpui::Entity<NyaNumberInputState>,
+        suffix_clicks: Arc<AtomicUsize>,
         first_blurs: usize,
         second_blurs: usize,
         _subscriptions: Vec<gpui::Subscription>,
@@ -96,13 +99,22 @@ mod tests {
     impl InputFocusFixture {
         fn new(cx: &mut Context<Self>) -> Self {
             let first = cx.new(|cx| NyaInputState::new(cx, "").placeholder("First"));
-            let second = cx.new(|cx| NyaInputState::new(cx, "").placeholder("Second"));
+            let second = cx.new(|cx| NyaInputState::new(cx, "").placeholder("第二个搜索框"));
+            let ordinary = cx.new(|cx| NyaInputState::new(cx, "Default value"));
+            let masked = cx.new(|cx| {
+                NyaInputState::new(cx, "secret")
+                    .placeholder("密码")
+                    .masked(true)
+            });
             let number =
                 cx.new(|cx| NyaNumberInputState::new(cx, "1", NyaNumberInputOptions::default()));
             Self {
                 first,
                 second,
+                ordinary,
+                masked,
                 number,
+                suffix_clicks: Arc::new(AtomicUsize::new(0)),
                 first_blurs: 0,
                 second_blurs: 0,
                 _subscriptions: Vec::new(),
@@ -127,27 +139,45 @@ mod tests {
 
     impl Render for InputFocusFixture {
         fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-            let palette = theme_palette("github-dark");
+            let suffix_clicks = self.suffix_clicks.clone();
             div()
                 .size_full()
                 .flex()
                 .flex_col()
                 .gap_3()
                 .p_4()
-                .child(div().w(px(220.)).child(NyaSearchInput::new(
-                    "focus-first",
-                    &self.first,
-                    palette,
-                )))
-                .child(div().w(px(220.)).child(NyaSearchInput::new(
-                    "focus-second",
-                    &self.second,
-                    palette,
-                )))
+                .child(
+                    div().w(px(220.)).child(
+                        NyaSearchInput::new("focus-first", &self.first).trailing(
+                            div()
+                                .id("focus-first-suffix-action")
+                                .debug_selector(|| "focus-first-suffix".to_string())
+                                .size(px(18.))
+                                .on_click(move |_, _, _| {
+                                    suffix_clicks.fetch_add(1, Ordering::SeqCst);
+                                }),
+                        ),
+                    ),
+                )
+                .child(
+                    div()
+                        .w(px(220.))
+                        .child(NyaSearchInput::new("focus-second", &self.second)),
+                )
+                .child(
+                    div()
+                        .w(px(220.))
+                        .child(NyaInputShell::new("focus-ordinary", &self.ordinary)),
+                )
+                .child(
+                    div()
+                        .w(px(220.))
+                        .child(NyaInputShell::new("focus-masked", &self.masked)),
+                )
                 .child(
                     div()
                         .w(px(160.))
-                        .h(px(34.))
+                        .h(px(32.))
                         .debug_selector(|| "focus-number".to_string())
                         .child(NyaNumberInput::new(&self.number)),
                 )
@@ -304,16 +334,31 @@ mod tests {
         let second = cx
             .debug_bounds("focus-second")
             .expect("second input renders");
+        let prefix = cx
+            .debug_bounds("focus-first-prefix")
+            .expect("search prefix renders");
+        let suffix = cx
+            .debug_bounds("focus-first-suffix")
+            .expect("search suffix renders");
+        let ordinary = cx
+            .debug_bounds("focus-ordinary")
+            .expect("ordinary input renders");
+        let masked = cx
+            .debug_bounds("focus-masked")
+            .expect("masked input renders");
         let number = cx
             .debug_bounds("focus-number")
             .expect("number input renders");
         let outside = cx
             .debug_bounds("focus-outside")
             .expect("outside target renders");
-        assert_eq!(first.size.height, px(28.));
-        assert_eq!(second.size.height, px(28.));
+        assert_eq!(first.size.height, px(32.));
+        assert_eq!(second.size.height, px(32.));
+        assert_eq!(ordinary.size.height, px(32.));
+        assert_eq!(masked.size.height, px(32.));
+        assert_eq!(number.size.height, px(32.));
 
-        cx.simulate_click(first.center(), Modifiers::default());
+        cx.simulate_click(prefix.center(), Modifiers::default());
         draw(cx);
         cx.run_until_parked();
         cx.update(|window, cx| {
@@ -327,6 +372,15 @@ mod tests {
                     .is_focused(window)
             );
             assert!(window.focused(cx).is_some());
+        });
+
+        cx.simulate_click(suffix.center(), Modifiers::default());
+        draw(cx);
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            assert!(fixture.read(cx).first.read(cx).has_focus());
+            assert!(window.focused(cx).is_some());
+            assert_eq!(fixture.read(cx).suffix_clicks.load(Ordering::SeqCst), 1);
         });
 
         cx.simulate_click(first.center(), Modifiers::default());
@@ -343,6 +397,14 @@ mod tests {
         cx.update(|window, cx| {
             assert!(!fixture.read(cx).first.read(cx).has_focus());
             assert!(fixture.read(cx).second.read(cx).has_focus());
+            assert!(window.focused(cx).is_some());
+        });
+
+        cx.simulate_click(ordinary.center(), Modifiers::default());
+        draw(cx);
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            assert!(fixture.read(cx).ordinary.read(cx).has_focus());
             assert!(window.focused(cx).is_some());
         });
 

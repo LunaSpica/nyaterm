@@ -261,12 +261,10 @@ impl NyaTermApp {
             .min_width(px(180.))
             .items(self.connection_more_menu_items(cx))
             .on_trigger(|_, _, cx| cx.stop_propagation());
-        let mut search_input =
-            NyaSearchInput::new("connection-search-input", &search_field, palette).on_key_down(
-                cx.listener(|this, event: &KeyDownEvent, window, cx| {
-                    this.handle_connection_search_key_down(event, window, cx);
-                }),
-            );
+        let mut search_input = NyaSearchInput::new("connection-search-input", &search_field)
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                this.handle_connection_search_key_down(event, window, cx);
+            }));
         if !search_empty {
             search_input = search_input.trailing(
                 div()

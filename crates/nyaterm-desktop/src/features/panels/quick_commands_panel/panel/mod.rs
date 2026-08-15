@@ -313,24 +313,24 @@ impl NyaTermApp {
                                 }),
                             )
                             .child(
-                                NyaSearchInput::new(
-                                    "quick-command-search-input",
-                                    &search_field,
-                                    palette,
-                                )
-                                .on_key_down(cx.listener(
-                                    |this, event: &KeyDownEvent, _, cx| {
-                                        if event.keystroke.key == "escape" {
-                                            cx.stop_propagation();
-                                            this.commands.clear_quick_filters();
-                                            this.reset_text_input("quick-command.search", "", cx);
-                                            this.shell.set_status(
-                                                "quick command filters cleared".to_string(),
-                                            );
-                                            cx.notify();
-                                        }
-                                    },
-                                )),
+                                NyaSearchInput::new("quick-command-search-input", &search_field)
+                                    .on_key_down(cx.listener(
+                                        |this, event: &KeyDownEvent, _, cx| {
+                                            if event.keystroke.key == "escape" {
+                                                cx.stop_propagation();
+                                                this.commands.clear_quick_filters();
+                                                this.reset_text_input(
+                                                    "quick-command.search",
+                                                    "",
+                                                    cx,
+                                                );
+                                                this.shell.set_status(
+                                                    "quick command filters cleared".to_string(),
+                                                );
+                                                cx.notify();
+                                            }
+                                        },
+                                    )),
                             ),
                     )
                     .child(quick_command_toolbar_divider(palette))

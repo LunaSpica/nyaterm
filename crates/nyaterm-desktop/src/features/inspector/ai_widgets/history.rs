@@ -326,15 +326,16 @@ impl NyaTermApp {
         let filtered_count = filtered.len();
         let history_actions_disabled = self.ai.history_actions_are_disabled();
         let grouped = group_ai_sessions_by_date(&filtered);
-        let mut search_input = NyaSearchInput::new("ai-history-search", &search_field, palette)
-            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+        let mut search_input = NyaSearchInput::new("ai-history-search", &search_field).on_key_down(
+            cx.listener(|this, event: &KeyDownEvent, _, cx| {
                 if event.keystroke.key == "escape" {
                     cx.stop_propagation();
                     this.ai.close_history();
                     this.forget_text_inputs("ai.history-search");
                     cx.notify();
                 }
-            }));
+            }),
+        );
         if !history_query.is_empty() {
             search_input = search_input.trailing(
                 div()

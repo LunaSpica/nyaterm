@@ -328,21 +328,20 @@ impl NyaTermApp {
                     .flex()
                     .items_center()
                     .gap_2()
-                    .child(
-                        div().relative().flex_1().min_w_0().child(
-                            NyaSearchInput::new("recording-session-search", &search_field, palette)
-                                .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                                    if event.keystroke.key == "escape" {
-                                        cx.stop_propagation();
-                                        this.recording.clear_search_draft();
-                                        this.reset_text_input("recording.search", "", cx);
-                                        this.shell
-                                            .set_status("recording search cleared".to_string());
-                                        cx.notify();
-                                    }
-                                })),
+                    .child(div().relative().flex_1().min_w_0().child(
+                        NyaSearchInput::new("recording-session-search", &search_field).on_key_down(
+                            cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                                if event.keystroke.key == "escape" {
+                                    cx.stop_propagation();
+                                    this.recording.clear_search_draft();
+                                    this.reset_text_input("recording.search", "", cx);
+                                    this.shell
+                                        .set_status("recording search cleared".to_string());
+                                    cx.notify();
+                                }
+                            }),
                         ),
-                    ),
+                    )),
             )
             .child(
                 div()

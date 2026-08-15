@@ -148,7 +148,7 @@ impl NyaTermApp {
                 .flex()
                 .items_center()
                 .child(
-                    NyaSearchInput::new("transfer-browser-search", &field, palette).on_key_down(
+                    NyaSearchInput::new("transfer-browser-search", &field).on_key_down(
                         cx.listener(|this, event: &KeyDownEvent, window, cx| {
                             if event.keystroke.key == "escape" {
                                 cx.stop_propagation();

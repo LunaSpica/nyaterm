@@ -74,25 +74,21 @@ impl NyaTermApp {
                             .gap_2()
                             .child(
                                 div().min_w_0().flex_1().child(
-                                    NyaSearchInput::new(
-                                        "ai-settings-model-search",
-                                        &search_field,
-                                        palette,
-                                    )
-                                    .on_key_down(cx.listener(
-                                        |this, event: &KeyDownEvent, _, cx| {
-                                            if event.keystroke.key == "escape" {
-                                                cx.stop_propagation();
-                                                this.ai.clear_settings_model_query();
-                                                this.reset_text_input(
-                                                    "ai.settings.model-search",
-                                                    "",
-                                                    cx,
-                                                );
-                                                cx.notify();
-                                            }
-                                        },
-                                    )),
+                                    NyaSearchInput::new("ai-settings-model-search", &search_field)
+                                        .on_key_down(cx.listener(
+                                            |this, event: &KeyDownEvent, _, cx| {
+                                                if event.keystroke.key == "escape" {
+                                                    cx.stop_propagation();
+                                                    this.ai.clear_settings_model_query();
+                                                    this.reset_text_input(
+                                                        "ai.settings.model-search",
+                                                        "",
+                                                        cx,
+                                                    );
+                                                    cx.notify();
+                                                }
+                                            },
+                                        )),
                                 ),
                             )
                             .child(

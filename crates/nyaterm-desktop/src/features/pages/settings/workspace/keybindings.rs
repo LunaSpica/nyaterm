@@ -35,10 +35,6 @@ impl NyaTermApp {
             .flex_col()
             .gap_3()
             .track_focus(self.settings.keybinding_focus())
-            .on_click(cx.listener(|this, _, window, cx| {
-                window.focus(this.settings.keybinding_focus(), cx);
-                cx.notify();
-            }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
                 this.handle_keybinding_key_down(event, cx);
             }))
@@ -49,13 +45,8 @@ impl NyaTermApp {
                     .gap_3()
                     .child(
                         div().min_w_0().flex_1().child(
-                            NyaSearchInput::new(
-                                "settings-keybindings-search",
-                                &search_field,
-                                palette,
-                            )
-                            .on_key_down(cx.listener(
-                                |this, event: &KeyDownEvent, _, cx| {
+                            NyaSearchInput::new("settings-keybindings-search", &search_field)
+                                .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
                                     if event.keystroke.key == "escape" {
                                         cx.stop_propagation();
                                         this.settings.clear_keybinding_search();
@@ -66,8 +57,7 @@ impl NyaTermApp {
                                         );
                                         cx.notify();
                                     }
-                                },
-                            )),
+                                })),
                         ),
                     )
                     .when(overrides > 0, |this| {
