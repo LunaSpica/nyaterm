@@ -267,11 +267,11 @@ child-module boundary:
 | `crates/nyaterm-desktop/src/features/session/state.rs` | 2465 | 954 | The 19 restore, prompt, dialog and start-lifecycle owner tests live in `state/tests.rs`. |
 | `crates/nyaterm-terminal/src/lib.rs` | 2274 | 1268 | The 80 terminal state-machine and snapshot tests live in `src/tests.rs` with explicit imports. |
 | `crates/nyaterm-terminal/src/graphics.rs` | 1647 | 1307 | The 36 ingress, Kitty, iTerm2 and Sixel tests live in `graphics/tests.rs`; parser and graphics-state behavior remain in the production module. |
-| `crates/nyaterm-core/src/cloud_sync.rs` | 2168 | 1469 | Transactional protocol and conservative retention logic live in the normal `cloud_sync/protocol.rs` and `cloud_sync/gc.rs` child modules; remote, history, provider, conflict, compatibility, recovery and failure-path tests remain in `cloud_sync/tests.rs`. |
+| `crates/nyaterm-core/src/cloud_sync/mod.rs` | 2168 | 1469 | Transactional protocol and conservative retention logic live in the normal `cloud_sync/protocol.rs` and `cloud_sync/gc.rs` child modules; remote, history, provider, conflict, compatibility, recovery and failure-path tests remain in `cloud_sync/tests.rs`. |
 | `crates/nyaterm-terminal-gpui/src/element.rs` | 1875 | 1377 | The 48 layout, shaping, row-cache and decoration tests live in `element/layout_cache_tests.rs`; GPUI layout and paint implementation remain together. |
 | `crates/nyaterm-transport/src/trzsz.rs` | 1925 | 1214 | The 42 detector, protocol, download and upload engine tests live in `trzsz/tests.rs` with explicit imports. |
 
-`core/ai.rs` was on this list at 4,032 lines; it is now 1,547 after being split
+`core/ai/mod.rs` was on this list at 4,032 lines; it is now 1,547 after being split
 into `providers`, `agent`, `risk` and `settings`.
 
 Other files currently over 2,000 lines include terminal runtime/view modules,
@@ -912,7 +912,7 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   that had no caller left outside it — that is the sign a seam is in the right
   place. Table names, key layouts, record shapes, document keys and the
   hashed-host matching rules are unchanged.
-- `core/ai.rs` follows the same cut: `providers` (the three provider HTTP
+- `core/ai/mod.rs` follows the same cut: `providers` (the three provider HTTP
   surfaces), `agent` (tool schemas, reply parsing, execution policy), `risk`
   (command risk classification) and `settings` (defaults, legacy migration,
   secret masking). `risk` is deliberately small and separate: it decides
@@ -2542,7 +2542,7 @@ Items 1 through 8 are done for the current convergence boundary. Items 9 and
    SSH/SFTP/X11 protocol paths remain unchanged. No Rust source file now
    exceeds 3,000 lines; further splits remain staged candidates only when a
    cohesive ownership, rendering or protocol boundary is found.
-   `core/ai.rs` is done too, down from 4,032 to 1,547.
+   `core/ai/mod.rs` is done too, down from 4,032 to 1,547.
 6. Done. The final explicit-import pass removed `features/prelude.rs`; a
    crate-wide guard prevents a replacement shared feature prelude.
 7. Done. The migration capability/service models had no consumer outside the
