@@ -87,6 +87,40 @@ fn pending_settings_preserve_masked_secret_until_a_new_draft_exists() {
 }
 
 #[test]
+fn ai_settings_persistence_ignores_old_completion_and_retries_latest_snapshot() {
+    let cx = TestAppContext::single();
+    let mut state = state(&cx);
+    let first_snapshot = state.settings_config_cloned();
+    let (first_generation, _) = state
+        .queue_settings_persistence(first_snapshot)
+        .expect("first save should start");
+    state.toggle_settings_enabled();
+    let latest_snapshot = state.settings_config_cloned();
+    assert!(
+        state
+            .queue_settings_persistence(latest_snapshot.clone())
+            .is_none()
+    );
+
+    let first = state.finish_settings_persistence(first_generation, true);
+    assert!(!first.apply_result);
+    let (latest_generation, queued) = first.next.expect("latest snapshot should follow");
+    assert_eq!(queued.enabled, latest_snapshot.enabled);
+
+    let failed = state.finish_settings_persistence(latest_generation, false);
+    assert!(failed.report_result);
+    assert!(state.settings_persistence_is_dirty());
+
+    let retry_snapshot = state.settings_config_cloned();
+    let (retry_generation, _) = state
+        .queue_settings_persistence(retry_snapshot)
+        .expect("retry should submit");
+    let retried = state.finish_settings_persistence(retry_generation, true);
+    assert!(retried.apply_result);
+    assert!(!state.settings_persistence_is_dirty());
+}
+
+#[test]
 fn model_catalog_mutations_keep_default_model_valid() {
     let cx = TestAppContext::single();
     let mut state = state(&cx);

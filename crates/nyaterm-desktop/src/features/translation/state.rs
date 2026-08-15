@@ -58,6 +58,16 @@ pub(in crate::features) struct TranslationFeatureState {
     status: String,
     pending: bool,
     focused_field: TranslateInputField,
+    persistence_generation: u64,
+    persistence_in_flight: Option<u64>,
+    persistence_pending: Option<TranslationSettings>,
+    persistence_dirty: bool,
+}
+
+pub(super) struct TranslationPersistenceCompletion {
+    pub(super) apply_result: bool,
+    pub(super) report_result: bool,
+    pub(super) next: Option<(u64, TranslationSettings)>,
 }
 
 impl TranslationFeatureState {
@@ -75,6 +85,10 @@ impl TranslationFeatureState {
             status: "Google translation ready".to_string(),
             pending: false,
             focused_field: TranslateInputField::Text,
+            persistence_generation: 0,
+            persistence_in_flight: None,
+            persistence_pending: None,
+            persistence_dirty: false,
         }
     }
 
@@ -187,6 +201,53 @@ impl TranslationFeatureState {
 
     pub(super) fn settings_save_failed(&mut self, error: impl std::fmt::Display) {
         self.status = format!("translation settings save failed: {error}");
+    }
+
+    pub(super) fn queue_settings_persistence(&mut self) -> Option<(u64, TranslationSettings)> {
+        self.persistence_generation = self.persistence_generation.saturating_add(1);
+        self.persistence_dirty = true;
+        let snapshot = self.pending_settings();
+        if self.persistence_in_flight.is_some() {
+            self.persistence_pending = Some(snapshot);
+            None
+        } else {
+            self.persistence_in_flight = Some(self.persistence_generation);
+            Some((self.persistence_generation, snapshot))
+        }
+    }
+
+    pub(super) fn finish_settings_persistence(
+        &mut self,
+        generation: u64,
+        succeeded: bool,
+    ) -> TranslationPersistenceCompletion {
+        if self.persistence_in_flight != Some(generation) {
+            return TranslationPersistenceCompletion {
+                apply_result: false,
+                report_result: false,
+                next: None,
+            };
+        }
+        self.persistence_in_flight = None;
+        let next = self.persistence_pending.take().map(|snapshot| {
+            let generation = self.persistence_generation;
+            self.persistence_in_flight = Some(generation);
+            (generation, snapshot)
+        });
+        let report_result = generation == self.persistence_generation && next.is_none();
+        let apply_result = succeeded && report_result;
+        if apply_result {
+            self.persistence_dirty = false;
+        }
+        TranslationPersistenceCompletion {
+            apply_result,
+            report_result,
+            next,
+        }
+    }
+
+    pub(in crate::features) fn settings_persistence_is_dirty(&self) -> bool {
+        self.persistence_dirty
     }
 
     pub(super) fn clear_secret(&mut self, provider: &str) {
@@ -406,6 +467,34 @@ mod tests {
 
         state.select_target_language("ja");
         assert!(!state.settings_draft_matches(&settings, &secret_draft));
+    }
+
+    #[test]
+    fn translation_settings_persistence_coalesces_latest_snapshot_and_keeps_failed_dirty() {
+        let mut state = TranslationFeatureState::new(TranslationSettings::default());
+        let (first_generation, _) = state
+            .queue_settings_persistence()
+            .expect("first save should start");
+        state.select_target_language("ja");
+        assert!(state.queue_settings_persistence().is_none());
+
+        let first = state.finish_settings_persistence(first_generation, true);
+        assert!(!first.apply_result);
+        assert!(!first.report_result);
+        let (latest_generation, latest) = first.next.expect("latest snapshot should follow");
+        assert_eq!(latest.target_language, "ja");
+
+        let failed = state.finish_settings_persistence(latest_generation, false);
+        assert!(failed.report_result);
+        assert!(!failed.apply_result);
+        assert!(state.settings_persistence_is_dirty());
+
+        let (retry_generation, _) = state
+            .queue_settings_persistence()
+            .expect("retry should submit latest snapshot");
+        let retried = state.finish_settings_persistence(retry_generation, true);
+        assert!(retried.apply_result);
+        assert!(!state.settings_persistence_is_dirty());
     }
 
     #[test]

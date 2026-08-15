@@ -3,7 +3,7 @@ use gpui::{Context, KeyDownEvent, Window};
 use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::{AiActionEditorField, AiActionListKind};
 use nyaterm_core::AiSettings;
-use nyaterm_store::ConnectionStore;
+use nyaterm_store::{StoreDomain, store_request};
 
 impl NyaTermApp {
     pub(in crate::features) fn pending_ai_settings(&self) -> AiSettings {
@@ -16,30 +16,65 @@ impl NyaTermApp {
             self.ai.set_panel_status("AI settings staged".to_string());
             return;
         }
-        let next = self.ai.settings_config_cloned();
-        match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .and_then(|store| store.save_ai_settings(next))
-        {
-            Ok(saved) => {
-                self.ai.accept_saved_settings(saved);
-                self.refresh_ai_usage_counts(cx);
-                if self.ai.panel_status().trim().is_empty() {
-                    self.ai.set_panel_status("AI settings saved".to_string());
-                }
-                self.settings
-                    .update_store_status(self.ai.panel_status().to_string(), true);
-            }
-            Err(error) => {
-                self.ai
-                    .set_panel_status(format!("AI settings save failed: {error}"));
-                self.settings
-                    .update_store_status(self.ai.panel_status().to_string(), false);
-            }
+        let snapshot = self.ai.settings_config_cloned();
+        if let Some((generation, snapshot)) = self.ai.queue_settings_persistence(snapshot) {
+            self.submit_ai_settings_save(generation, snapshot, cx);
         }
         cx.notify();
+    }
+
+    fn submit_ai_settings_save(
+        &mut self,
+        generation: u64,
+        snapshot: AiSettings,
+        cx: &mut Context<Self>,
+    ) {
+        let request = store_request(StoreDomain::Ai, move |store| {
+            store.save_ai_settings(snapshot)
+        });
+        let task = match self.store_ui.try_submit(generation, request) {
+            Ok(task) => task,
+            Err(error) => {
+                self.ai.finish_settings_persistence(generation, false);
+                self.ai
+                    .set_panel_status(format!("AI settings save was not queued: {error}"));
+                self.settings
+                    .update_store_status(self.ai.panel_status().to_string(), false);
+                cx.notify();
+                return;
+            }
+        };
+        cx.spawn(async move |this, cx| {
+            let event = task.await;
+            let _ = this.update(cx, |this, cx| {
+                let completion = this
+                    .ai
+                    .finish_settings_persistence(event.generation, event.outcome.is_ok());
+                if completion.apply_result
+                    && let Ok(saved) = event.outcome.as_ref()
+                {
+                    this.ai.accept_saved_settings(saved.clone());
+                    this.refresh_ai_usage_counts(cx);
+                }
+                if completion.report_result {
+                    match event.outcome {
+                        Ok(_) => this.ai.set_panel_status("AI settings saved".to_string()),
+                        Err(error) => this
+                            .ai
+                            .set_panel_status(format!("AI settings save failed: {error}")),
+                    }
+                    this.settings.update_store_status(
+                        this.ai.panel_status().to_string(),
+                        completion.apply_result,
+                    );
+                }
+                if let Some((generation, snapshot)) = completion.next {
+                    this.submit_ai_settings_save(generation, snapshot, cx);
+                }
+                cx.notify();
+            });
+        })
+        .detach();
     }
 
     pub(in crate::features) fn focus_ai_action_field(

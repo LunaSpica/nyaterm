@@ -292,6 +292,56 @@ impl AiFeatureState {
         self.settings.config = saved;
     }
 
+    pub(in crate::features) fn queue_settings_persistence(
+        &mut self,
+        snapshot: AiSettings,
+    ) -> Option<(u64, AiSettings)> {
+        self.settings.persistence_generation =
+            self.settings.persistence_generation.saturating_add(1);
+        self.settings.persistence_dirty = true;
+        if self.settings.persistence_in_flight.is_some() {
+            self.settings.persistence_pending = Some(snapshot);
+            None
+        } else {
+            self.settings.persistence_in_flight = Some(self.settings.persistence_generation);
+            Some((self.settings.persistence_generation, snapshot))
+        }
+    }
+
+    pub(in crate::features) fn finish_settings_persistence(
+        &mut self,
+        generation: u64,
+        succeeded: bool,
+    ) -> super::AiSettingsPersistenceCompletion {
+        if self.settings.persistence_in_flight != Some(generation) {
+            return super::AiSettingsPersistenceCompletion {
+                apply_result: false,
+                report_result: false,
+                next: None,
+            };
+        }
+        self.settings.persistence_in_flight = None;
+        let next = self.settings.persistence_pending.take().map(|snapshot| {
+            let generation = self.settings.persistence_generation;
+            self.settings.persistence_in_flight = Some(generation);
+            (generation, snapshot)
+        });
+        let report_result = generation == self.settings.persistence_generation && next.is_none();
+        let apply_result = succeeded && report_result;
+        if apply_result {
+            self.settings.persistence_dirty = false;
+        }
+        super::AiSettingsPersistenceCompletion {
+            apply_result,
+            report_result,
+            next,
+        }
+    }
+
+    pub(in crate::features) fn settings_persistence_is_dirty(&self) -> bool {
+        self.settings.persistence_dirty
+    }
+
     pub(in crate::features) fn toggle_settings_enabled(&mut self) {
         self.settings.config.enabled = !self.settings.config.enabled;
         self.panel.status = if self.settings.config.enabled {

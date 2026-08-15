@@ -70,6 +70,16 @@ struct AiSettingsState {
     credential_focus: FocusHandle,
     action_edit: Option<(AiActionListKind, String, AiActionEditorField)>,
     action_focus: FocusHandle,
+    persistence_generation: u64,
+    persistence_in_flight: Option<u64>,
+    persistence_pending: Option<AiSettings>,
+    persistence_dirty: bool,
+}
+
+pub(in crate::features) struct AiSettingsPersistenceCompletion {
+    pub(in crate::features) apply_result: bool,
+    pub(in crate::features) report_result: bool,
+    pub(in crate::features) next: Option<(u64, AiSettings)>,
 }
 
 /// Composer, in-flight request and the visible transcript.
@@ -203,6 +213,10 @@ impl AiFeatureState {
                 credential_focus: focus.credential,
                 action_edit: None,
                 action_focus: focus.action,
+                persistence_generation: 0,
+                persistence_in_flight: None,
+                persistence_pending: None,
+                persistence_dirty: false,
             },
             chat: AiChatState {
                 tx: chat_tx,

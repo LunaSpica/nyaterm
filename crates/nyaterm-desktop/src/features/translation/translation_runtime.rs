@@ -1,5 +1,6 @@
 use gpui::{ClipboardItem, Context, IntoElement, SharedString, Window, div, prelude::*, px, rgb};
-use nyaterm_store::ConnectionStore;
+use nyaterm_core::TranslationSettings;
+use nyaterm_store::{StoreDomain, store_request};
 use nyaterm_ui::NyaDialogWindowExt as _;
 
 use crate::features::NyaTermApp;
@@ -33,25 +34,60 @@ impl NyaTermApp {
             self.translation.settings_staged(next);
             return;
         }
+        if let Some((generation, snapshot)) = self.translation.queue_settings_persistence() {
+            self.submit_translation_settings_save(generation, snapshot, cx);
+        }
+        cx.notify();
+    }
 
-        match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .and_then(|store| store.save_translation_settings(next))
-        {
-            Ok(saved) => {
-                self.translation.settings_saved(saved);
-                self.settings
-                    .update_store_status("translation settings saved", true);
-            }
+    fn submit_translation_settings_save(
+        &mut self,
+        generation: u64,
+        snapshot: TranslationSettings,
+        cx: &mut Context<Self>,
+    ) {
+        let request = store_request(StoreDomain::Settings, move |store| {
+            store.save_translation_settings(snapshot)
+        });
+        let task = match self.store_ui.try_submit(generation, request) {
+            Ok(task) => task,
             Err(error) => {
+                self.translation
+                    .finish_settings_persistence(generation, false);
                 self.translation.settings_save_failed(error);
                 self.settings
                     .update_store_status(self.translation.status().to_string(), false);
+                cx.notify();
+                return;
             }
-        }
-        cx.notify();
+        };
+        cx.spawn(async move |this, cx| {
+            let event = task.await;
+            let _ = this.update(cx, |this, cx| {
+                let completion = this
+                    .translation
+                    .finish_settings_persistence(event.generation, event.outcome.is_ok());
+                if completion.apply_result
+                    && let Ok(saved) = event.outcome.as_ref()
+                {
+                    this.translation.settings_saved(saved.clone());
+                }
+                if completion.report_result {
+                    if let Err(error) = event.outcome {
+                        this.translation.settings_save_failed(error);
+                    }
+                    this.settings.update_store_status(
+                        this.translation.status().to_string(),
+                        completion.apply_result,
+                    );
+                }
+                if let Some((generation, snapshot)) = completion.next {
+                    this.submit_translation_settings_save(generation, snapshot, cx);
+                }
+                cx.notify();
+            });
+        })
+        .detach();
     }
 
     pub(in crate::features) fn clear_translation_secret(
