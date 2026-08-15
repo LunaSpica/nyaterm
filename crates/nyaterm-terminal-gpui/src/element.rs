@@ -386,7 +386,7 @@ pub struct NyaTerminalPaintPlan {
     placeholders_under: Vec<PaintQuad>,
     /// Search match + selection washes (over under-text images, under glyphs).
     decoration_backgrounds: Vec<PaintQuad>,
-    /// Active-search gutter + OSC 133 command marks (under glyphs).
+    /// Active-search gutter marks (under glyphs).
     active_markers: Vec<PaintQuad>,
     rows: Vec<TerminalPaintRow>,
     /// Terminal underline decorations painted with current scroll geometry.
@@ -1342,29 +1342,6 @@ impl Element for NyaTerminalElement {
                         rgb(self.palette.warning),
                     ));
                 }
-                // OSC 133 command marks: left gutter bar (under glyphs, with other marks).
-                if let Some(mark) = decorations.command_mark {
-                    use nyaterm_terminal::ShellCommandMark;
-                    let color = match mark {
-                        ShellCommandMark::Prompt => self.palette.accent,
-                        ShellCommandMark::Output => self.palette.text_muted,
-                        ShellCommandMark::Finished {
-                            exit_code: Some(code),
-                        } if code != 0 => self.palette.danger,
-                        ShellCommandMark::Finished { .. } => self.palette.success,
-                    };
-                    // Offset 1px when active-search mark is also present so both remain visible.
-                    let x = if decorations.active_search_ranges.is_empty() {
-                        bounds.left()
-                    } else {
-                        px(f32::from(bounds.left()) + 2.)
-                    };
-                    plan.active_markers.push(fill(
-                        Bounds::new(point(x, y), size(px(2.), px(cell_h))),
-                        rgb(color),
-                    ));
-                }
-
                 push_dynamic_decoration_backgrounds(
                     row,
                     decorations,
