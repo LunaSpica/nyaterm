@@ -276,6 +276,17 @@ pub struct StoreBlockingClient {
 }
 
 impl StoreBlockingClient {
+    pub fn request_fn<F, T>(&self, domain: StoreDomain, operation: F) -> Result<T, StoreClientError>
+    where
+        F: FnOnce(&ConnectionStore) -> Result<T, StorageError> + Send + 'static,
+        T: Send + 'static,
+    {
+        self.request(0, store_request(domain, operation))
+            .map_err(StoreClientError::Submit)?
+            .outcome
+            .map_err(StoreClientError::Operation)
+    }
+
     pub fn request<R: StoreRequest>(
         &self,
         generation: u64,
@@ -304,6 +315,42 @@ impl StoreBlockingClient {
         receiver.recv().map_err(|_| StoreSubmitError::Disconnected)
     }
 }
+
+pub enum StoreClientError {
+    Submit(StoreSubmitError),
+    Operation(StoreOperationError),
+}
+
+impl fmt::Debug for StoreClientError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("StoreClientError")
+            .field("category", &self.category())
+            .field("message", &"<redacted>")
+            .finish()
+    }
+}
+
+impl StoreClientError {
+    pub fn category(&self) -> &'static str {
+        match self {
+            Self::Submit(StoreSubmitError::QueueFull) => "queue_full",
+            Self::Submit(StoreSubmitError::Disconnected) => "unavailable",
+            Self::Operation(error) => error.category(),
+        }
+    }
+}
+
+impl fmt::Display for StoreClientError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Submit(error) => error.fmt(formatter),
+            Self::Operation(error) => error.fmt(formatter),
+        }
+    }
+}
+
+impl std::error::Error for StoreClientError {}
 
 pub struct StoreRuntime {
     ui_client: StoreUiClient,
@@ -536,7 +583,10 @@ impl StoreRequest for FlushBarrier {
 mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    use super::{FlushBarrier, LoadBootstrap, StoreConfig, StoreRuntime};
+    use super::{
+        FlushBarrier, LoadBootstrap, StoreClientError, StoreConfig, StoreDomain,
+        StoreOperationError, StoreRuntime,
+    };
 
     fn temp_dir(label: &str) -> PathBuf {
         std::env::temp_dir().join(format!(
@@ -592,6 +642,43 @@ mod tests {
             .request(0, FlushBarrier)
             .expect("second request");
         assert!(second.request_id > first.request_id);
+        drop(runtime);
+        std::fs::remove_dir_all(config_dir).ok();
+    }
+
+    #[test]
+    fn blocking_client_error_debug_redacts_operation_details() {
+        let error = StoreClientError::Operation(StoreOperationError {
+            category: "storage",
+            message: "secret-token-value".to_string(),
+        });
+
+        let debug = format!("{error:?}");
+        assert!(debug.contains("storage"));
+        assert!(debug.contains("<redacted>"));
+        assert!(!debug.contains("secret-token-value"));
+        assert_eq!(error.category(), "storage");
+    }
+
+    #[test]
+    fn request_fn_returns_typed_operation_failures() {
+        let config_dir = temp_dir("request-fn");
+        let runtime = StoreRuntime::spawn(StoreConfig {
+            config_dir: config_dir.clone(),
+            portable_key_path: None,
+        })
+        .expect("spawn runtime");
+
+        let error = runtime
+            .blocking_client()
+            .request_fn(StoreDomain::Settings, |_| -> Result<(), crate::StorageError> {
+                Err(crate::StorageError::InvalidData(
+                    "invalid settings".to_string(),
+                ))
+            })
+            .expect_err("operation should fail");
+        assert_eq!(error.category(), "invalid_data");
+
         drop(runtime);
         std::fs::remove_dir_all(config_dir).ok();
     }

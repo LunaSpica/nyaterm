@@ -1,5 +1,5 @@
 use gpui::{AppContext, Context};
-use nyaterm_store::ConnectionStore;
+use nyaterm_store::StoreDomain;
 
 use crate::features::{NyaTermApp, compact_id};
 
@@ -15,11 +15,10 @@ impl NyaTermApp {
         let Some(job_id) = self.begin_ai_history_operation("loading AI history", cx) else {
             return;
         };
-        let config_dir = self.runtime.config_dir().to_path_buf();
-        let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
+        let store = self.store_blocking_client();
         let task = cx.background_spawn(async move {
-            ConnectionStore::open_with_portable_key_path(config_dir, portable_key_path)
-                .and_then(|store| store.list_ai_sessions())
+            store
+                .request_fn(StoreDomain::Ai, |store| store.list_ai_sessions())
                 .map_err(|error| error.to_string())
         });
         cx.spawn(async move |this, cx| {
@@ -49,12 +48,13 @@ impl NyaTermApp {
             return;
         };
         let source_session_id = self.ai.chat_session_id().to_string();
-        let config_dir = self.runtime.config_dir().to_path_buf();
-        let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
+        let store = self.store_blocking_client();
         let job_session_id = session_id.clone();
         let task = cx.background_spawn(async move {
-            ConnectionStore::open_with_portable_key_path(config_dir, portable_key_path)
-                .and_then(|store| store.list_ai_messages(&job_session_id))
+            store
+                .request_fn(StoreDomain::Ai, move |store| {
+                    store.list_ai_messages(&job_session_id)
+                })
                 .map_err(|error| error.to_string())
         });
         cx.spawn(async move |this, cx| {
@@ -83,12 +83,13 @@ impl NyaTermApp {
         let Some(job_id) = self.begin_ai_history_operation("deleting AI session", cx) else {
             return;
         };
-        let config_dir = self.runtime.config_dir().to_path_buf();
-        let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
+        let store = self.store_blocking_client();
         let job_session_id = session_id.clone();
         let task = cx.background_spawn(async move {
-            ConnectionStore::open_with_portable_key_path(config_dir, portable_key_path)
-                .and_then(|store| store.delete_ai_session(&job_session_id))
+            store
+                .request_fn(StoreDomain::Ai, move |store| {
+                    store.delete_ai_session(&job_session_id)
+                })
                 .map_err(|error| error.to_string())
         });
         cx.spawn(async move |this, cx| {
@@ -113,11 +114,10 @@ impl NyaTermApp {
             return;
         };
         let source_session_id = self.ai.chat_session_id().to_string();
-        let config_dir = self.runtime.config_dir().to_path_buf();
-        let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
+        let store = self.store_blocking_client();
         let task = cx.background_spawn(async move {
-            ConnectionStore::open_with_portable_key_path(config_dir, portable_key_path)
-                .and_then(|store| store.clear_ai_history())
+            store
+                .request_fn(StoreDomain::Ai, |store| store.clear_ai_history())
                 .map_err(|error| error.to_string())
         });
         cx.spawn(async move |this, cx| {
@@ -148,11 +148,10 @@ impl NyaTermApp {
 
     pub(in crate::features) fn refresh_ai_usage_counts(&mut self, cx: &mut Context<Self>) {
         let job_id = self.ai.begin_history_usage_count_job();
-        let config_dir = self.runtime.config_dir().to_path_buf();
-        let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
+        let store = self.store_blocking_client();
         let task = cx.background_spawn(async move {
-            ConnectionStore::open_with_portable_key_path(config_dir, portable_key_path)
-                .map(|store| ai_usage_counts(&store))
+            store
+                .request_fn(StoreDomain::Ai, |store| Ok(ai_usage_counts(store)))
                 .map_err(|error| error.to_string())
         });
         cx.spawn(async move |this, cx| {

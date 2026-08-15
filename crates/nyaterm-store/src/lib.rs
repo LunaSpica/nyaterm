@@ -5,9 +5,9 @@ mod runtime;
 mod storage;
 
 pub use runtime::{
-    BootstrapSnapshot, FlushBarrier, LoadBootstrap, RequestId, StoreBlockingClient, StoreConfig,
-    StoreDomain, StoreEvent, StoreFnRequest, StoreOperationError, StoreRequest, StoreRuntime,
-    StoreSubmitError, StoreTask, StoreUiClient, store_request,
+    BootstrapSnapshot, FlushBarrier, LoadBootstrap, RequestId, StoreBlockingClient,
+    StoreClientError, StoreConfig, StoreDomain, StoreEvent, StoreFnRequest, StoreOperationError,
+    StoreRequest, StoreRuntime, StoreSubmitError, StoreTask, StoreUiClient, store_request,
 };
 
 pub use storage::{
