@@ -50,10 +50,7 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        let location = SecurityStoreLocation::new(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        );
+        let location = SecurityStoreLocation::new(self.store_blocking_client());
         let request_item_id = id.clone();
         let request_id = self.security.begin_delete_request(id.clone());
         cx.spawn_in(window, async move |this, cx| {

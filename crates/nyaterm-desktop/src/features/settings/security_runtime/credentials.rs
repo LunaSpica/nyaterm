@@ -174,10 +174,7 @@ impl NyaTermApp {
         };
         let mut next = entry;
         next.enabled = !next.enabled;
-        let location = SecurityStoreLocation::new(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        );
+        let location = SecurityStoreLocation::new(self.store_blocking_client());
         let request_id = self
             .security
             .begin_credential_request(credential_id.clone());
@@ -298,10 +295,7 @@ impl NyaTermApp {
         let Some(request_id) = self.security.begin_editor_request() else {
             return;
         };
-        let location = SecurityStoreLocation::new(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        );
+        let location = SecurityStoreLocation::new(self.store_blocking_client());
         cx.spawn_in(window, async move |this, cx| {
             let result = cx
                 .background_spawn(async move {
@@ -400,10 +394,7 @@ impl NyaTermApp {
         let request_id = self
             .security
             .begin_credential_request(credential_id.clone());
-        let location = SecurityStoreLocation::new(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        );
+        let location = SecurityStoreLocation::new(self.store_blocking_client());
         cx.spawn(async move |this, cx| {
             let result = cx
                 .background_spawn(async move {
@@ -495,10 +486,7 @@ impl NyaTermApp {
             .iter()
             .map(|entry| (entry.id.clone(), entry.sort_order))
             .collect::<Vec<_>>();
-        let location = SecurityStoreLocation::new(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        );
+        let location = SecurityStoreLocation::new(self.store_blocking_client());
         let request_id = self.security.begin_reorder_request();
         cx.spawn(async move |this, cx| {
             let result = cx
@@ -539,10 +527,7 @@ impl NyaTermApp {
         let Some(request_id) = self.security.begin_editor_request() else {
             return;
         };
-        let location = SecurityStoreLocation::new(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        );
+        let location = SecurityStoreLocation::new(self.store_blocking_client());
         cx.spawn(async move |this, cx| {
             let result = cx
                 .background_spawn(async move {

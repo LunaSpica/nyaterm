@@ -3,7 +3,6 @@ use gpui::{
     SharedString, Window,
 };
 use nyaterm_core::SshKey;
-use nyaterm_store::ConnectionStore;
 use nyaterm_ui::NyaDialogWindowExt as _;
 
 use crate::features::{NyaTermApp, compact_id};
@@ -261,10 +260,7 @@ impl NyaTermApp {
         let Some(request_id) = self.security.begin_editor_request() else {
             return;
         };
-        let location = SecurityStoreLocation::new(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        );
+        let location = SecurityStoreLocation::new(self.store_blocking_client());
         cx.spawn_in(window, async move |this, cx| {
             let result = cx
                 .background_spawn(async move {
@@ -416,16 +412,14 @@ impl NyaTermApp {
             cx,
         );
 
-        let config_dir = self.runtime.config_dir().to_path_buf();
-        let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
+        let location = SecurityStoreLocation::new(self.store_blocking_client());
         cx.spawn(async move |this, cx| {
             let result = cx
                 .background_spawn(async move {
-                    let store = ConnectionStore::open_with_portable_key_path(
-                        config_dir,
-                        portable_key_path,
-                    )?;
-                    store.load_decrypted_ssh_key_by_id(&key_id)
+                    let store = location.open()?;
+                    store
+                        .load_decrypted_ssh_key_by_id(&key_id)
+                        .map_err(|error| error.to_string())
                 })
                 .await;
             let _ = this.update(cx, |this, cx| {
@@ -468,10 +462,7 @@ impl NyaTermApp {
         let Some(request_id) = self.security.begin_editor_request() else {
             return;
         };
-        let location = SecurityStoreLocation::new(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        );
+        let location = SecurityStoreLocation::new(self.store_blocking_client());
         cx.spawn(async move |this, cx| {
             let result = cx
                 .background_spawn(async move {

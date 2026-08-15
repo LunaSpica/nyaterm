@@ -91,10 +91,7 @@ impl NyaTermApp {
         let Some((request_id, password)) = self.security.begin_unlock_request() else {
             return;
         };
-        let location = SecurityStoreLocation::new(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        );
+        let location = SecurityStoreLocation::new(self.store_blocking_client());
         cx.spawn_in(window, async move |this, cx| {
             let result = cx
                 .background_spawn(async move {
@@ -213,10 +210,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn refresh_security_catalog(&mut self, cx: &mut Context<Self>) {
-        let location = SecurityStoreLocation::new(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        );
+        let location = SecurityStoreLocation::new(self.store_blocking_client());
         cx.spawn(async move |this, cx| {
             let result = cx
                 .background_spawn(async move {
