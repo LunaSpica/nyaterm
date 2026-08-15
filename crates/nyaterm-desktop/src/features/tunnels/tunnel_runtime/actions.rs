@@ -1,5 +1,6 @@
 use gpui::{Context, Window};
-use nyaterm_core::{ConnectionStore, TunnelConfig};
+use nyaterm_core::TunnelConfig;
+use nyaterm_store::{StoreDomain, store_request};
 use nyaterm_transport::{SshTunnelConfig, SshTunnelMode};
 
 use super::helpers::network_group_label;
@@ -52,27 +53,32 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .and_then(|store| store.replace_tunnels(&next_tunnels))
-        {
-            Ok(()) => {
-                self.tunnel_state.commit_tunnels(next_tunnels);
-                self.connection_state.close_network_move_picker();
-                self.shell.set_status(format!("tunnel moved to {label}"));
-                self.settings
-                    .update_store_status("tunnel group saved", true);
-            }
-            Err(error) => {
-                self.shell
-                    .set_status(format!("failed to move tunnel: {error}"));
-                self.settings
-                    .update_store_status(self.shell.status().to_string(), false);
-            }
-        }
-        cx.notify();
+        let persisted = next_tunnels.clone();
+        self.submit_store_request(
+            0,
+            store_request(StoreDomain::Tunnels, move |store| {
+                store.replace_tunnels(&persisted)
+            }),
+            move |this, event, cx| {
+                match event.outcome {
+                    Ok(()) => {
+                        this.tunnel_state.commit_tunnels(next_tunnels);
+                        this.connection_state.close_network_move_picker();
+                        this.shell.set_status(format!("tunnel moved to {label}"));
+                        this.settings
+                            .update_store_status("tunnel group saved", true);
+                    }
+                    Err(error) => {
+                        this.shell
+                            .set_status(format!("failed to move tunnel: {error}"));
+                        this.settings
+                            .update_store_status(this.shell.status().to_string(), false);
+                    }
+                }
+                cx.notify();
+            },
+            cx,
+        );
     }
 
     pub(in crate::features) fn move_proxy_to_group(
@@ -102,26 +108,31 @@ impl NyaTermApp {
             cx.notify();
             return;
         };
-        match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .and_then(|store| store.replace_proxies(&next_proxies))
-        {
-            Ok(()) => {
-                self.tunnel_state.commit_proxies(next_proxies);
-                self.connection_state.close_network_move_picker();
-                self.shell.set_status(format!("proxy moved to {label}"));
-                self.settings.update_store_status("proxy group saved", true);
-            }
-            Err(error) => {
-                self.shell
-                    .set_status(format!("failed to move proxy: {error}"));
-                self.settings
-                    .update_store_status(self.shell.status().to_string(), false);
-            }
-        }
-        cx.notify();
+        let persisted = next_proxies.clone();
+        self.submit_store_request(
+            0,
+            store_request(StoreDomain::Tunnels, move |store| {
+                store.replace_proxies(&persisted)
+            }),
+            move |this, event, cx| {
+                match event.outcome {
+                    Ok(()) => {
+                        this.tunnel_state.commit_proxies(next_proxies);
+                        this.connection_state.close_network_move_picker();
+                        this.shell.set_status(format!("proxy moved to {label}"));
+                        this.settings.update_store_status("proxy group saved", true);
+                    }
+                    Err(error) => {
+                        this.shell
+                            .set_status(format!("failed to move proxy: {error}"));
+                        this.settings
+                            .update_store_status(this.shell.status().to_string(), false);
+                    }
+                }
+                cx.notify();
+            },
+            cx,
+        );
     }
 
     pub(in crate::features) fn open_network_delete_confirm(
@@ -178,33 +189,38 @@ impl NyaTermApp {
         }
 
         let (next_tunnels, deleted) = self.tunnel_state.tunnels_without(&tunnel_id);
-        match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .and_then(|store| store.replace_tunnels(&next_tunnels))
-        {
-            Ok(()) => {
-                self.tunnel_state.commit_tunnels(next_tunnels);
-                self.tunnel_state.finish_job(&tunnel_id);
-                self.connection_state
-                    .remove_network_item_references(NetworkTab::Tunnels, &tunnel_id);
-                self.shell.set_status(if deleted {
-                    format!("tunnel '{label}' deleted")
-                } else {
-                    format!("tunnel '{label}' was already deleted")
-                });
-                self.settings
-                    .update_store_status(self.shell.status().to_string(), deleted);
-            }
-            Err(error) => {
-                self.shell
-                    .set_status(format!("failed to delete tunnel: {error}"));
-                self.settings
-                    .update_store_status(self.shell.status().to_string(), false);
-            }
-        }
-        cx.notify();
+        let persisted = next_tunnels.clone();
+        self.submit_store_request(
+            0,
+            store_request(StoreDomain::Tunnels, move |store| {
+                store.replace_tunnels(&persisted)
+            }),
+            move |this, event, cx| {
+                match event.outcome {
+                    Ok(()) => {
+                        this.tunnel_state.commit_tunnels(next_tunnels);
+                        this.tunnel_state.finish_job(&tunnel_id);
+                        this.connection_state
+                            .remove_network_item_references(NetworkTab::Tunnels, &tunnel_id);
+                        this.shell.set_status(if deleted {
+                            format!("tunnel '{label}' deleted")
+                        } else {
+                            format!("tunnel '{label}' was already deleted")
+                        });
+                        this.settings
+                            .update_store_status(this.shell.status().to_string(), deleted);
+                    }
+                    Err(error) => {
+                        this.shell
+                            .set_status(format!("failed to delete tunnel: {error}"));
+                        this.settings
+                            .update_store_status(this.shell.status().to_string(), false);
+                    }
+                }
+                cx.notify();
+            },
+            cx,
+        );
     }
 
     pub(in crate::features) fn delete_proxy_profile(
@@ -214,32 +230,37 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let (next_proxies, deleted) = self.tunnel_state.proxies_without(&proxy_id);
-        match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .and_then(|store| store.replace_proxies(&next_proxies))
-        {
-            Ok(()) => {
-                self.tunnel_state.commit_proxies(next_proxies);
-                self.connection_state
-                    .remove_network_item_references(NetworkTab::Proxies, &proxy_id);
-                self.shell.set_status(if deleted {
-                    format!("proxy '{label}' deleted")
-                } else {
-                    format!("proxy '{label}' was already deleted")
-                });
-                self.settings
-                    .update_store_status(self.shell.status().to_string(), deleted);
-            }
-            Err(error) => {
-                self.shell
-                    .set_status(format!("failed to delete proxy: {error}"));
-                self.settings
-                    .update_store_status(self.shell.status().to_string(), false);
-            }
-        }
-        cx.notify();
+        let persisted = next_proxies.clone();
+        self.submit_store_request(
+            0,
+            store_request(StoreDomain::Tunnels, move |store| {
+                store.replace_proxies(&persisted)
+            }),
+            move |this, event, cx| {
+                match event.outcome {
+                    Ok(()) => {
+                        this.tunnel_state.commit_proxies(next_proxies);
+                        this.connection_state
+                            .remove_network_item_references(NetworkTab::Proxies, &proxy_id);
+                        this.shell.set_status(if deleted {
+                            format!("proxy '{label}' deleted")
+                        } else {
+                            format!("proxy '{label}' was already deleted")
+                        });
+                        this.settings
+                            .update_store_status(this.shell.status().to_string(), deleted);
+                    }
+                    Err(error) => {
+                        this.shell
+                            .set_status(format!("failed to delete proxy: {error}"));
+                        this.settings
+                            .update_store_status(this.shell.status().to_string(), false);
+                    }
+                }
+                cx.notify();
+            },
+            cx,
+        );
     }
 
     pub(in crate::features) fn start_tunnel_job(

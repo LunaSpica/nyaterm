@@ -132,7 +132,8 @@ impl NyaTermApp {
         label: String,
         cx: &mut Context<Self>,
     ) {
-        match self.with_connection_store(|store| store.delete_connection(&connection_id)) {
+        let persisted_id = connection_id.clone();
+        match self.with_connection_store(move |store| store.delete_connection(&persisted_id)) {
             Ok(()) => {
                 self.connection_state
                     .remove_list_connection_references(&connection_id);
@@ -206,7 +207,8 @@ impl NyaTermApp {
         label: String,
         cx: &mut Context<Self>,
     ) {
-        match self.with_connection_store(|store| store.delete_group(&group_id)) {
+        let persisted_id = group_id.clone();
+        match self.with_connection_store(move |store| store.delete_group(&persisted_id)) {
             Ok(()) => {
                 self.connection_state
                     .remove_list_group_references(&group_id);
@@ -397,8 +399,9 @@ impl NyaTermApp {
         selected: Vec<nyaterm_core::SavedConnection>,
         cx: &mut Context<Self>,
     ) {
-        match self.with_connection_store(|store| {
-            for connection in &selected {
+        let persisted = selected.clone();
+        match self.with_connection_store(move |store| {
+            for connection in &persisted {
                 store.delete_connection(&connection.id)?;
             }
             Ok(())

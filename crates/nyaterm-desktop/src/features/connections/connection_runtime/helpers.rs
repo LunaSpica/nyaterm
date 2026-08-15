@@ -1,11 +1,12 @@
 use gpui::Context;
 use nyaterm_core::{
-    AiExecutionProfile, ConnectionAuth, ConnectionNetwork, ConnectionPostLogin, ConnectionStore,
-    ConnectionType, Group, RdpClipboardSettings, RdpDisplaySettings, RdpReconnectSettings,
-    RdpSecuritySettings, SavedConnection, SftpCwdFollowMode, SftpSettings, SshAlgorithmMode,
-    SshAlgorithmPreferences, StorageError, TelnetAutoLoginConfig, VncClipboardSettings,
-    VncDisplaySettings, VncReconnectSettings, VncSecuritySettings, uuid,
+    AiExecutionProfile, ConnectionAuth, ConnectionNetwork, ConnectionPostLogin, ConnectionType,
+    Group, RdpClipboardSettings, RdpDisplaySettings, RdpReconnectSettings, RdpSecuritySettings,
+    SavedConnection, SftpCwdFollowMode, SftpSettings, SshAlgorithmMode, SshAlgorithmPreferences,
+    StorageError, TelnetAutoLoginConfig, VncClipboardSettings, VncDisplaySettings,
+    VncReconnectSettings, VncSecuritySettings, uuid,
 };
+use nyaterm_store::{StoreDomain, store_request};
 
 use crate::features::NyaTermApp;
 use crate::models::{
@@ -1299,11 +1300,13 @@ impl NyaTermApp {
         connection: SavedConnection,
         group: Option<&Group>,
     ) -> Result<SavedConnection, String> {
-        self.with_connection_store(|store| {
-            if let Some(group) = group {
-                store.save_group_and_connection(group, &connection)?;
+        let persisted_connection = connection.clone();
+        let group = group.cloned();
+        self.with_connection_store(move |store| {
+            if let Some(group) = &group {
+                store.save_group_and_connection(group, &persisted_connection)?;
             } else {
-                store.save_connection(&connection)?;
+                store.save_connection(&persisted_connection)?;
             }
             Ok(())
         })?;
@@ -1318,27 +1321,29 @@ impl NyaTermApp {
 
     pub(in crate::features) fn with_connection_store<T>(
         &self,
-        f: impl FnOnce(&ConnectionStore) -> Result<T, StorageError>,
-    ) -> Result<T, String> {
-        let store = ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .map_err(|error| error.to_string())?;
-        f(&store).map_err(|error| error.to_string())
+        f: impl FnOnce(&nyaterm_store::ConnectionStore) -> Result<T, StorageError> + Send + 'static,
+    ) -> Result<T, String>
+    where
+        T: Send + 'static,
+    {
+        self.store_blocking
+            .request(0, store_request(StoreDomain::Connections, f))
+            .map_err(|error| error.to_string())?
+            .outcome
+            .map_err(|error| error.to_string())
     }
 
     pub(in crate::features) fn refresh_connection_auth_catalog(&mut self) {
-        if let Ok(store) = ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        ) {
-            self.security.replace_catalog(
-                store.list_ssh_keys().unwrap_or_default(),
-                store.list_otp_entries().unwrap_or_default(),
-                store.list_passwords().unwrap_or_default(),
-                store.list_credentials().unwrap_or_default(),
-            );
+        if let Ok(catalog) = self.with_connection_store(|store| {
+            Ok((
+                store.list_ssh_keys()?,
+                store.list_otp_entries()?,
+                store.list_passwords()?,
+                store.list_credentials()?,
+            ))
+        }) {
+            self.security
+                .replace_catalog(catalog.0, catalog.1, catalog.2, catalog.3);
         }
         self.refresh_connection_serial_ports();
     }

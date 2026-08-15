@@ -4,11 +4,10 @@ use crate::models::{
 };
 use crate::terminal::initial_terminal_screen;
 use gpui::Context;
-use nyaterm_core::{
-    AiSettings, AppRuntime, AppSettingsSummary, CLOUD_SYNC_HISTORY_LIMIT, CloudSyncSettings,
-    CloudSyncState, ConnectionStore, KeywordHighlightConfig, TranslationSettings,
-    read_cloud_sync_history, uuid,
-};
+use nyaterm_core::{AppRuntime, CLOUD_SYNC_HISTORY_LIMIT, read_cloud_sync_history, uuid};
+use nyaterm_store::{BootstrapSnapshot, StoreBlockingClient, StoreUiClient};
+#[cfg(test)]
+use nyaterm_store::{LoadBootstrap, StoreConfig, StoreRuntime};
 use nyaterm_terminal::TerminalOutputDecoder;
 use nyaterm_transport::{SessionManager, SftpDuplicatePolicy};
 use std::collections::HashMap;
@@ -24,37 +23,39 @@ use super::super::{
     SessionFeatureFocus, SessionFeatureState, ShellFeatureInit, ShellFeatureState,
     SyncInputFeatureState, TerminalFeatureFocus, TerminalFeatureState, TextInputRegistry,
     TransferFeatureFocus, TransferFeatureState, TranslationFeatureState, TunnelCatalogState,
-    TunnelFeatureState, UpdateFeatureState, ai_active_profile_drafts, ai_usage_counts,
-    appearance_font_options, quick_command_sort_mode_from_setting,
-    quick_command_view_mode_from_setting,
+    TunnelFeatureState, UpdateFeatureState, ai_active_profile_drafts, appearance_font_options,
+    quick_command_sort_mode_from_setting, quick_command_view_mode_from_setting,
 };
 use super::NyaTermApp;
 use crate::models::panel_collapsed_from_persistence;
 use crate::terminal::INITIAL_TERMINAL_BANNER;
 impl NyaTermApp {
-    pub fn new(
+    pub fn from_bootstrap(
         runtime: AppRuntime,
         stores: crate::entities::UiStoreHandles,
+        bootstrap: BootstrapSnapshot,
+        store_ui: StoreUiClient,
+        store_blocking: StoreBlockingClient,
         cx: &mut Context<Self>,
     ) -> Self {
         nyaterm_core::warm_terminal_input_tracker();
-        let (
+        let BootstrapSnapshot {
+            database_path,
             connections,
             connection_groups,
-            connection_ssh_keys,
-            connection_otp_entries,
-            connection_saved_passwords,
-            connection_saved_credentials,
+            ssh_keys: connection_ssh_keys,
+            otp_entries: connection_otp_entries,
+            saved_passwords: connection_saved_passwords,
+            saved_credentials: connection_saved_credentials,
             tunnels,
             tunnel_groups,
             proxies,
             proxy_groups,
             quick_commands,
-            quick_command_categories,
+            quick_command_categories: quick_command_categories,
             command_history,
             keyword_highlights,
             settings,
-            store_status,
             cloud_sync_settings,
             cloud_sync_state,
             translation_settings,
@@ -62,128 +63,12 @@ impl NyaTermApp {
             ai_session_count,
             ai_message_count,
             ai_audit_count,
-        ) = match ConnectionStore::open_with_portable_key_path(
-            runtime.config_dir(),
-            runtime.portable_key_path().map(ToOwned::to_owned),
-        ) {
-            Ok(store) => {
-                let path = store.db_path().display().to_string();
-                match store.load_sessions() {
-                    Ok(config) => {
-                        let settings = store.load_app_settings_summary().unwrap_or_default();
-                        let connection_groups = config.groups.clone();
-                        let connection_ssh_keys = store.list_ssh_keys().unwrap_or_default();
-                        let connection_otp_entries = store.list_otp_entries().unwrap_or_default();
-                        let connection_saved_passwords = store.list_passwords().unwrap_or_default();
-                        let connection_saved_credentials =
-                            store.list_credentials().unwrap_or_default();
-                        let tunnels = store.list_tunnels().unwrap_or_default();
-                        let tunnel_groups = store.list_tunnel_groups().unwrap_or_default();
-                        let proxies = store.list_proxies().unwrap_or_default();
-                        let proxy_groups = store.list_proxy_groups().unwrap_or_default();
-                        let cloud_sync_settings =
-                            store.load_cloud_sync_settings().unwrap_or_default();
-                        let cloud_sync_state = store.load_cloud_sync_state().unwrap_or_default();
-                        let translation_settings = store
-                            .load_translation_settings()
-                            .unwrap_or_else(|_| TranslationSettings {
-                                target_language: settings.language.clone(),
-                                ..TranslationSettings::default()
-                            });
-                        let quick_commands = store.load_quick_commands().unwrap_or_default();
-                        let command_history = store.list_command_history(64).unwrap_or_default();
-                        let keyword_highlights =
-                            store.load_keyword_highlights().unwrap_or_default();
-                        let ai_settings = store.load_ai_settings().unwrap_or_default();
-                        let (ai_session_count, ai_message_count, ai_audit_count) =
-                            ai_usage_counts(&store);
-                        (
-                            config.connections,
-                            connection_groups,
-                            connection_ssh_keys,
-                            connection_otp_entries,
-                            connection_saved_passwords,
-                            connection_saved_credentials,
-                            tunnels,
-                            tunnel_groups,
-                            proxies,
-                            proxy_groups,
-                            quick_commands.commands,
-                            quick_commands.categories,
-                            command_history,
-                            keyword_highlights,
-                            settings,
-                            (path, "redb connection store online".to_string(), true),
-                            cloud_sync_settings,
-                            cloud_sync_state,
-                            translation_settings,
-                            ai_settings,
-                            ai_session_count,
-                            ai_message_count,
-                            ai_audit_count,
-                        )
-                    }
-                    Err(error) => (
-                        Vec::new(),
-                        Vec::new(),
-                        Vec::new(),
-                        Vec::new(),
-                        Vec::new(),
-                        Vec::new(),
-                        Vec::new(),
-                        Vec::new(),
-                        Vec::new(),
-                        Vec::new(),
-                        Vec::new(),
-                        Vec::new(),
-                        Vec::new(),
-                        KeywordHighlightConfig::default(),
-                        AppSettingsSummary::default(),
-                        (path, format!("failed to load sessions: {error}"), false),
-                        CloudSyncSettings::default(),
-                        CloudSyncState::default(),
-                        TranslationSettings::default(),
-                        AiSettings::default(),
-                        0,
-                        0,
-                        0,
-                    ),
-                }
-            }
-            Err(error) => (
-                Vec::new(),
-                Vec::new(),
-                Vec::new(),
-                Vec::new(),
-                Vec::new(),
-                Vec::new(),
-                Vec::new(),
-                Vec::new(),
-                Vec::new(),
-                Vec::new(),
-                Vec::new(),
-                Vec::new(),
-                Vec::new(),
-                KeywordHighlightConfig::default(),
-                AppSettingsSummary::default(),
-                (
-                    runtime
-                        .config_dir()
-                        .join("nyaterm.redb")
-                        .display()
-                        .to_string(),
-                    format!("failed to open store: {error}"),
-                    false,
-                ),
-                CloudSyncSettings::default(),
-                CloudSyncState::default(),
-                TranslationSettings::default(),
-                AiSettings::default(),
-                0,
-                0,
-                0,
-            ),
-        };
+        } = bootstrap;
+        let store_status = (
+            database_path.display().to_string(),
+            "redb connection store online".to_string(),
+            true,
+        );
         let (appearance_ui_font_options, appearance_terminal_font_options) =
             appearance_font_options(cx);
         let otp_provider = Arc::new(NativeOtpProvider::new(
@@ -269,6 +154,8 @@ impl NyaTermApp {
 
         Self {
             stores,
+            store_ui,
+            store_blocking,
             runtime,
             connection_state: ConnectionFeatureState::new(
                 connections,
@@ -427,5 +314,26 @@ impl NyaTermApp {
                 proxy_groups,
             )),
         }
+    }
+
+    #[cfg(test)]
+    pub fn new(
+        runtime: AppRuntime,
+        stores: crate::entities::UiStoreHandles,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let store_runtime = StoreRuntime::spawn(StoreConfig {
+            config_dir: runtime.config_dir().to_path_buf(),
+            portable_key_path: runtime.portable_key_path().map(ToOwned::to_owned),
+        })
+        .expect("spawn test store runtime");
+        let store_ui = store_runtime.ui_client();
+        let store_blocking = store_runtime.blocking_client();
+        let bootstrap = store_blocking
+            .request(0, LoadBootstrap)
+            .expect("receive test bootstrap")
+            .outcome
+            .expect("load test bootstrap");
+        Self::from_bootstrap(runtime, stores, bootstrap, store_ui, store_blocking, cx)
     }
 }

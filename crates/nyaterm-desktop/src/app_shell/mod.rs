@@ -1,13 +1,19 @@
 //! Root GPUI shell boundary.
 
 use gpui::{
-    AppContext, Context, Entity, InteractiveElement, IntoElement, Menu, MenuItem, OsAction,
-    ParentElement, Render, Styled, Subscription, SystemMenuType, WeakEntity, Window, actions, div,
-    px,
+    AnyElement, AppContext, Context, Entity, InteractiveElement, IntoElement, Menu, MenuItem,
+    OsAction, ParentElement, Render, Styled, Subscription, SystemMenuType, WeakEntity, Window,
+    actions, div, prelude::FluentBuilder, px, rgb,
 };
-use nyaterm_core::AppRuntime;
+use nyaterm_core::{
+    AppRuntime, DiagnosticsExportOptions, DiagnosticsRuntimeSnapshot, export_diagnostics_archive,
+};
+use nyaterm_store::{
+    FlushBarrier, LoadBootstrap, StoreConfig, StoreOperationError, StoreRuntime, StoreTask,
+};
 use nyaterm_ui::{
-    NyaAppMenu, NyaAppMenuBar, NyaCopy, NyaCut, NyaPaste, NyaRedo, NyaSelectAll, NyaUndo,
+    NyaAppMenu, NyaAppMenuBar, NyaButton, NyaButtonVariant, NyaCopy, NyaCut, NyaPaste, NyaRedo,
+    NyaSelectAll, NyaUndo,
 };
 
 use crate::{
@@ -66,24 +72,35 @@ pub(crate) enum NativeMenuCommand {
 
 #[allow(dead_code)]
 pub struct AppShell {
-    app: Entity<NyaTermApp>,
+    runtime: AppRuntime,
+    lifecycle: AppShellLifecycle,
+    app: Option<Entity<NyaTermApp>>,
+    store_runtime: Option<StoreRuntime>,
+    pending_bootstrap: Option<StoreTask<nyaterm_store::BootstrapSnapshot>>,
     window_runtime: Entity<WindowRuntimeStore>,
     startup_restore: Entity<StartupRestoreStore>,
     overlays: Entity<OverlayStore>,
     _subscriptions: Vec<Subscription>,
 }
 
+enum AppShellLifecycle {
+    Loading,
+    Recovery(RecoveryState),
+    Ready,
+    Flushing,
+    FlushFailed(String),
+}
+
+struct RecoveryState {
+    category: String,
+    message: String,
+    diagnostics_status: Option<String>,
+}
+
 impl AppShell {
     pub fn new(runtime: AppRuntime, cx: &mut Context<Self>) -> Self {
         let startup_restore = cx.new(|_| StartupRestoreStore::default());
         let overlays = cx.new(|_| OverlayStore::default());
-        let stores = UiStoreHandles {
-            startup_restore: startup_restore.clone(),
-            overlays: overlays.clone(),
-        };
-        let app = cx.new(|cx| NyaTermApp::new(runtime, stores, cx));
-        let title_menu_bar = build_title_menu_bar(app.downgrade(), cx);
-        app.update(cx, |app, _| app.set_title_menu_bar(title_menu_bar));
         install_native_app_menus(cx);
         // Do not observe UI stores for parent notify: AppShell only hosts the
         // NyaTermApp entity, and NyaTermApp already cx.notify()s on visual dirty.
@@ -91,16 +108,124 @@ impl AppShell {
         // into an extra shell paint (connect bursts, sideband heartbeats, drag).
         let subscriptions = Vec::new();
 
-        Self {
-            app,
+        let mut shell = Self {
+            runtime,
+            lifecycle: AppShellLifecycle::Loading,
+            app: None,
+            store_runtime: None,
+            pending_bootstrap: None,
             window_runtime: cx.new(|_| WindowRuntimeStore::default()),
             startup_restore,
             overlays,
             _subscriptions: subscriptions,
-        }
+        };
+        shell.begin_bootstrap();
+        shell
     }
 
     pub fn start_after_window_open(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.launch_pending_bootstrap(window, cx);
+    }
+
+    fn begin_bootstrap(&mut self) {
+        self.app = None;
+        self.lifecycle = AppShellLifecycle::Loading;
+        let store_runtime = match StoreRuntime::spawn(StoreConfig {
+            config_dir: self.runtime.config_dir().to_path_buf(),
+            portable_key_path: self.runtime.portable_key_path().map(ToOwned::to_owned),
+        }) {
+            Ok(runtime) => runtime,
+            Err(error) => {
+                self.lifecycle = AppShellLifecycle::Recovery(RecoveryState {
+                    category: "worker_start".to_string(),
+                    message: error.to_string(),
+                    diagnostics_status: None,
+                });
+                return;
+            }
+        };
+        match store_runtime.ui_client().try_submit(0, LoadBootstrap) {
+            Ok(task) => {
+                self.pending_bootstrap = Some(task);
+                self.store_runtime = Some(store_runtime);
+            }
+            Err(error) => {
+                self.lifecycle = AppShellLifecycle::Recovery(RecoveryState {
+                    category: "request_submit".to_string(),
+                    message: error.to_string(),
+                    diagnostics_status: None,
+                });
+            }
+        }
+    }
+
+    fn launch_pending_bootstrap(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(task) = self.pending_bootstrap.take() else {
+            return;
+        };
+        cx.spawn_in(window, async move |this, cx| {
+            let event = task.await;
+            let _ = cx.update(|window, cx| {
+                this.update(cx, |this, cx| match event.outcome {
+                    Ok(bootstrap) => this.complete_bootstrap(bootstrap, window, cx),
+                    Err(error) => this.enter_recovery(error, cx),
+                })
+            });
+        })
+        .detach();
+    }
+
+    fn complete_bootstrap(
+        &mut self,
+        bootstrap: nyaterm_store::BootstrapSnapshot,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(store_runtime) = &self.store_runtime else {
+            self.lifecycle = AppShellLifecycle::Recovery(RecoveryState {
+                category: "runtime_missing".to_string(),
+                message: "storage runtime disappeared during bootstrap".to_string(),
+                diagnostics_status: None,
+            });
+            cx.notify();
+            return;
+        };
+        let stores = UiStoreHandles {
+            startup_restore: self.startup_restore.clone(),
+            overlays: self.overlays.clone(),
+        };
+        let app = cx.new(|cx| {
+            NyaTermApp::from_bootstrap(
+                self.runtime.clone(),
+                stores,
+                bootstrap,
+                store_runtime.ui_client(),
+                store_runtime.blocking_client(),
+                cx,
+            )
+        });
+        let title_menu_bar = build_title_menu_bar(app.downgrade(), cx);
+        app.update(cx, |app, _| app.set_title_menu_bar(title_menu_bar));
+        self.app = Some(app);
+        self.lifecycle = AppShellLifecycle::Ready;
+        self.start_ready_app(window, cx);
+        cx.notify();
+    }
+
+    fn enter_recovery(&mut self, error: StoreOperationError, cx: &mut Context<Self>) {
+        self.store_runtime = None;
+        self.lifecycle = AppShellLifecycle::Recovery(RecoveryState {
+            category: error.category().to_string(),
+            message: error.user_message().to_string(),
+            diagnostics_status: None,
+        });
+        cx.notify();
+    }
+
+    fn start_ready_app(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(app) = self.app.clone() else {
+            return;
+        };
         let should_start_restore = self.startup_restore.update(cx, |store, cx| {
             if store.mark_started_after_window_open() {
                 cx.notify();
@@ -110,13 +235,13 @@ impl AppShell {
             }
         });
         if should_start_restore {
-            self.app.update(cx, |app, cx| {
+            app.update(cx, |app, cx| {
                 app.start_after_window_open(window, cx);
             });
         }
 
         self.window_runtime.update(cx, |store, cx| {
-            if store.ensure_started(window, cx, self.app.clone()) {
+            if store.ensure_started(window, cx, app) {
                 cx.notify();
             }
         });
@@ -128,9 +253,254 @@ impl AppShell {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.app.update(cx, |app, cx| {
-            app.perform_native_menu_command(command, window, cx);
-        });
+        if let Some(app) = &self.app {
+            app.update(cx, |app, cx| {
+                app.perform_native_menu_command(command, window, cx);
+            });
+        }
+    }
+
+    fn update_app(
+        &self,
+        cx: &mut Context<Self>,
+        update: impl FnOnce(&mut NyaTermApp, &mut Context<NyaTermApp>),
+    ) {
+        if let Some(app) = &self.app {
+            app.update(cx, update);
+        }
+    }
+
+    fn retry_bootstrap(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.begin_bootstrap();
+        self.launch_pending_bootstrap(window, cx);
+        cx.notify();
+    }
+
+    fn export_recovery_diagnostics(&mut self, cx: &mut Context<Self>) {
+        let output_path = self
+            .runtime
+            .log_dir()
+            .join("nyaterm-recovery-diagnostics.zip");
+        let runtime = self.runtime.clone();
+        let options = DiagnosticsExportOptions {
+            app_version: env!("CARGO_PKG_VERSION").to_string(),
+            language: "unknown".to_string(),
+            log_level: "configured".to_string(),
+            retention_days: 7,
+            runtime_snapshot: DiagnosticsRuntimeSnapshot {
+                active_sessions: 0,
+                local_sessions: 0,
+                ssh_sessions: 0,
+                telnet_sessions: 0,
+                raw_tcp_sessions: 0,
+                serial_sessions: 0,
+                open_tunnels: 0,
+                pending_tunnels: 0,
+                saved_connections: 0,
+                saved_tunnels: 0,
+                running_transfers: 0,
+                paused_transfers: 0,
+                completed_transfers: 0,
+                failed_transfers: 0,
+            },
+        };
+        if let AppShellLifecycle::Recovery(state) = &mut self.lifecycle {
+            state.diagnostics_status = Some("Exporting diagnostics...".to_string());
+        }
+        cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_spawn(async move {
+                    export_diagnostics_archive(&runtime, &options, &output_path)
+                        .map(|info| {
+                            format!("Diagnostics exported to {}", info.output_path.display())
+                        })
+                        .unwrap_or_else(|error| format!("Diagnostics export failed: {error}"))
+                })
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                if let AppShellLifecycle::Recovery(state) = &mut this.lifecycle {
+                    state.diagnostics_status = Some(result);
+                }
+                cx.notify();
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
+    pub fn request_close(&mut self, cx: &mut Context<Self>) {
+        match self.lifecycle {
+            AppShellLifecycle::Ready | AppShellLifecycle::FlushFailed(_) => self.begin_shutdown(cx),
+            AppShellLifecycle::Flushing => {}
+            AppShellLifecycle::Loading | AppShellLifecycle::Recovery(_) => cx.quit(),
+        }
+    }
+
+    fn begin_shutdown(&mut self, cx: &mut Context<Self>) {
+        let Some(store_runtime) = &self.store_runtime else {
+            self.lifecycle = AppShellLifecycle::FlushFailed(
+                "The storage runtime is unavailable; pending changes cannot be verified."
+                    .to_string(),
+            );
+            cx.notify();
+            return;
+        };
+        let task = match store_runtime.ui_client().try_submit(u64::MAX, FlushBarrier) {
+            Ok(task) => task,
+            Err(error) => {
+                self.lifecycle = AppShellLifecycle::FlushFailed(error.to_string());
+                cx.notify();
+                return;
+            }
+        };
+        self.lifecycle = AppShellLifecycle::Flushing;
+        cx.spawn(async move |this, cx| {
+            let event = task.await;
+            let _ = this.update(cx, |this, cx| match event.outcome {
+                Ok(()) => cx.quit(),
+                Err(error) => {
+                    this.lifecycle = AppShellLifecycle::FlushFailed(error.to_string());
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
+        cx.notify();
+    }
+
+    fn lifecycle_view(&self, cx: &mut Context<Self>) -> AnyElement {
+        match &self.lifecycle {
+            AppShellLifecycle::Loading => div()
+                .size_full()
+                .flex()
+                .items_center()
+                .justify_center()
+                .bg(rgb(0x101214))
+                .text_color(rgb(0xe7e9ea))
+                .child("Loading NyaTerm data...")
+                .into_any_element(),
+            AppShellLifecycle::Recovery(state) => {
+                let status = state.diagnostics_status.clone();
+                div()
+                    .size_full()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .bg(rgb(0x101214))
+                    .text_color(rgb(0xe7e9ea))
+                    .child(
+                        div()
+                            .w(px(560.))
+                            .max_w_full()
+                            .p_6()
+                            .flex()
+                            .flex_col()
+                            .gap_3()
+                            .child(div().text_xl().child("NyaTerm could not load its data"))
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .text_color(rgb(0xaeb4b8))
+                                    .child(format!("{}: {}", state.category, state.message)),
+                            )
+                            .when_some(status, |view, status| {
+                                view.child(div().text_sm().child(status))
+                            })
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_wrap()
+                                    .gap_2()
+                                    .child(
+                                        NyaButton::new("recovery-retry", "Retry")
+                                            .variant(NyaButtonVariant::Primary)
+                                            .on_click(cx.listener(|this, _, window, cx| {
+                                                this.retry_bootstrap(window, cx);
+                                            })),
+                                    )
+                                    .child(
+                                        NyaButton::new(
+                                            "recovery-open-config",
+                                            "Open Config Directory",
+                                        )
+                                        .on_click(
+                                            cx.listener(|this, _, _, cx| {
+                                                cx.reveal_path(this.runtime.config_dir());
+                                            }),
+                                        ),
+                                    )
+                                    .child(
+                                        NyaButton::new(
+                                            "recovery-export-diagnostics",
+                                            "Export Diagnostics",
+                                        )
+                                        .on_click(
+                                            cx.listener(|this, _, _, cx| {
+                                                this.export_recovery_diagnostics(cx);
+                                            }),
+                                        ),
+                                    )
+                                    .child(
+                                        NyaButton::new("recovery-quit", "Quit")
+                                            .variant(NyaButtonVariant::Danger)
+                                            .on_click(|_, _, cx| cx.quit()),
+                                    ),
+                            ),
+                    )
+                    .into_any_element()
+            }
+            AppShellLifecycle::Flushing => div()
+                .size_full()
+                .flex()
+                .items_center()
+                .justify_center()
+                .bg(rgb(0x101214))
+                .text_color(rgb(0xe7e9ea))
+                .child("Saving changes before closing...")
+                .into_any_element(),
+            AppShellLifecycle::FlushFailed(message) => div()
+                .size_full()
+                .flex()
+                .items_center()
+                .justify_center()
+                .bg(rgb(0x101214))
+                .text_color(rgb(0xe7e9ea))
+                .child(
+                    div()
+                        .w(px(560.))
+                        .max_w_full()
+                        .p_6()
+                        .flex()
+                        .flex_col()
+                        .gap_3()
+                        .child(div().text_xl().child("NyaTerm could not save all changes"))
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(rgb(0xaeb4b8))
+                                .child(message.clone()),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .gap_2()
+                                .child(
+                                    NyaButton::new("shutdown-retry", "Retry")
+                                        .variant(NyaButtonVariant::Primary)
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.begin_shutdown(cx);
+                                        })),
+                                )
+                                .child(
+                                    NyaButton::new("shutdown-force", "Force Quit")
+                                        .variant(NyaButtonVariant::Danger)
+                                        .on_click(|_, _, cx| cx.quit()),
+                                ),
+                        ),
+                )
+                .into_any_element(),
+            AppShellLifecycle::Ready => div().size_full().into_any_element(),
+        }
     }
 }
 
@@ -239,6 +609,7 @@ fn build_title_menu_bar(
 
 impl Render for AppShell {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let show_app = matches!(self.lifecycle, AppShellLifecycle::Ready);
         div()
             .size_full()
             .on_action(cx.listener(|this, _: &NativeNewSession, window, cx| {
@@ -254,34 +625,34 @@ impl Render for AppShell {
                 cx.unhide_other_apps();
             })
             .on_action(cx.listener(|this, _: &NativeImportConfig, window, cx| {
-                this.app.update(cx, |app, cx| {
+                this.update_app(cx, |app, cx| {
                     app.open_connection_import_dialog_for_menu(window, cx);
                 });
             }))
             .on_action(cx.listener(|this, _: &NativeExportConfig, window, cx| {
-                this.app.update(cx, |app, cx| {
+                this.update_app(cx, |app, cx| {
                     app.prompt_encrypted_portable_snapshot_export_for_menu(window, cx);
                 });
             }))
             .on_action(
                 cx.listener(|this, _: &NativeOpenDocumentation, _window, cx| {
-                    this.app.update(cx, |app, cx| {
+                    this.update_app(cx, |app, cx| {
                         app.open_documentation_for_menu(cx);
                     });
                 }),
             )
             .on_action(cx.listener(|this, _: &NativeCheckUpdates, window, cx| {
-                this.app.update(cx, |app, cx| {
+                this.update_app(cx, |app, cx| {
                     app.open_update_dialog_for_menu(window, cx);
                 });
             }))
             .on_action(cx.listener(|this, _: &NativeViewLogs, _window, cx| {
-                this.app.update(cx, |app, cx| {
+                this.update_app(cx, |app, cx| {
                     app.reveal_log_dir_for_menu(cx);
                 });
             }))
             .on_action(cx.listener(|this, _: &NativeAbout, window, cx| {
-                this.app.update(cx, |app, cx| {
+                this.update_app(cx, |app, cx| {
                     app.open_about_for_menu(window, cx);
                 });
             }))
@@ -328,7 +699,7 @@ impl Render for AppShell {
                 this.perform_native_menu_command(NativeMenuCommand::TerminalSelectAll, window, cx);
             }))
             .on_action(cx.listener(|this, _: &NativeRefitTerminals, _window, cx| {
-                this.app.update(cx, |app, cx| {
+                this.update_app(cx, |app, cx| {
                     app.resize_all_known_terminal_surfaces_for_menu(cx);
                 });
             }))
@@ -356,10 +727,13 @@ impl Render for AppShell {
             .on_action(cx.listener(|this, _: &NativeManageSyncGroups, window, cx| {
                 this.perform_native_menu_command(NativeMenuCommand::ManageSyncGroups, window, cx);
             }))
-            .on_action(|_: &NativeQuit, _window, cx| {
-                cx.quit();
+            .on_action(cx.listener(|this, _: &NativeQuit, _window, cx| {
+                this.request_close(cx);
+            }))
+            .when_some(self.app.clone().filter(|_| show_app), |root, app| {
+                root.child(app)
             })
-            .child(self.app.clone())
+            .when(!show_app, |root| root.child(self.lifecycle_view(cx)))
     }
 }
 

@@ -371,7 +371,8 @@ impl NyaTermApp {
         &mut self,
         ordered: &[SavedConnection],
     ) -> Result<(), String> {
-        self.with_connection_store(|store| {
+        let ordered = ordered.to_vec();
+        self.with_connection_store(move |store| {
             for (index, connection) in ordered.iter().enumerate() {
                 let mut updated = connection.clone();
                 updated.sort_order = index as i32;
@@ -385,7 +386,8 @@ impl NyaTermApp {
         &mut self,
         ordered: &[Group],
     ) -> Result<(), String> {
-        self.with_connection_store(|store| {
+        let ordered = ordered.to_vec();
+        self.with_connection_store(move |store| {
             for (index, group) in ordered.iter().enumerate() {
                 let mut updated = group.clone();
                 updated.sort_order = index as i32;

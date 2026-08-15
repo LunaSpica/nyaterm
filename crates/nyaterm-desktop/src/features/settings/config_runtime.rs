@@ -2,9 +2,8 @@ use gpui::{
     AnyElement, AppContext, Context, FontWeight, KeyDownEvent, PathPromptOptions, SharedString,
     Window, div, prelude::*, rgb,
 };
-use nyaterm_core::{
-    AppSettingsSummary, ConnectionStore, KeywordHighlightConfig, TranslationSettings,
-};
+use nyaterm_core::ConnectionStore;
+use nyaterm_store::LoadBootstrap;
 use nyaterm_transport::SftpDuplicatePolicy;
 
 use crate::features::{NyaTermApp, TextInputSetup};
@@ -612,117 +611,64 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn refresh_store_from_runtime(&mut self) {
-        match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        ) {
-            Ok(store) => {
-                let path = store.db_path().display().to_string();
-                match store.load_sessions() {
-                    Ok(config) => {
-                        self.connection_state
-                            .replace_loaded(config.connections, config.groups);
-                        self.security.replace_catalog(
-                            store.list_ssh_keys().unwrap_or_default(),
-                            store.list_otp_entries().unwrap_or_default(),
-                            store.list_passwords().unwrap_or_default(),
-                            store.list_credentials().unwrap_or_default(),
-                        );
-                        self.tunnel_state.replace_loaded_catalog(
-                            store.list_tunnels().unwrap_or_default(),
-                            store.list_tunnel_groups().unwrap_or_default(),
-                            store.list_proxies().unwrap_or_default(),
-                            store.list_proxy_groups().unwrap_or_default(),
-                        );
-                        let quick_commands = store.load_quick_commands().unwrap_or_default();
-                        self.commands.replace_loaded(
-                            quick_commands.commands,
-                            quick_commands.categories,
-                            store.list_command_history(64).unwrap_or_default(),
-                        );
-                        self.settings.replace_keyword_config(
-                            store.load_keyword_highlights().unwrap_or_default(),
-                        );
-                        self.apply_gpui_settings(
-                            store.load_app_settings_summary().unwrap_or_default(),
-                        );
-                        self.apply_ui_layout_from_settings();
-                        let translation_settings = store
-                            .load_translation_settings()
-                            .unwrap_or_else(|_| TranslationSettings {
-                                target_language: self.settings.summary().language.clone(),
-                                ..TranslationSettings::default()
-                            });
-                        self.translation.replace_settings(
-                            translation_settings,
-                            TranslationSecretDraft::default(),
-                        );
-                        self.recording.set_memory_limit(
-                            self.settings.summary().recording_memory_limit_bytes as usize,
-                        );
-                        let cloud_sync_settings = store
-                            .load_cloud_sync_settings()
-                            .unwrap_or_else(|_| self.cloud_sync.settings().clone());
-                        let ai_settings = store
-                            .load_ai_settings()
-                            .unwrap_or_else(|_| self.ai.settings_config().clone());
-                        self.ai.replace_settings_config(ai_settings, true);
-                        self.sync_ai_drafts_from_active_profile();
-                        self.settings.rebase_master_password();
-                        let cloud_sync_state = store
-                            .load_cloud_sync_state()
-                            .unwrap_or_else(|_| self.cloud_sync.state().clone());
-                        self.cloud_sync
-                            .replace_loaded(cloud_sync_settings, cloud_sync_state);
-                        self.transfer
-                            .set_duplicate_policy(SftpDuplicatePolicy::from_legacy_value(
-                                &self.settings.summary().transfer_duplicate_strategy,
-                            ));
-                        self.settings.replace_store_status(
-                            path,
-                            "redb connection store online".to_string(),
-                            true,
-                        );
-                    }
-                    Err(error) => {
-                        self.connection_state.clear_loaded();
-                        self.security.clear_catalog();
-                        self.tunnel_state.clear_catalog();
-                        self.commands.clear_loaded();
-                        self.settings
-                            .replace_keyword_config(KeywordHighlightConfig::default());
-                        self.apply_gpui_settings(AppSettingsSummary::default());
-                        self.translation.replace_settings(
-                            TranslationSettings::default(),
-                            TranslationSecretDraft::default(),
-                        );
-                        self.settings.replace_store_status(
-                            path,
-                            format!("failed to load sessions: {error}"),
-                            false,
-                        );
-                    }
-                }
-            }
+        let event = match self.store_blocking.request(0, LoadBootstrap) {
+            Ok(event) => event,
             Err(error) => {
-                self.connection_state.clear_connections();
-                self.tunnel_state.clear_catalog();
-                self.commands.clear_loaded();
-                self.apply_gpui_settings(AppSettingsSummary::default());
-                self.translation.replace_settings(
-                    TranslationSettings::default(),
-                    TranslationSecretDraft::default(),
-                );
-                self.settings.replace_store_status(
-                    self.runtime
-                        .config_dir()
-                        .join("nyaterm.redb")
-                        .display()
-                        .to_string(),
-                    format!("failed to open store: {error}"),
-                    false,
-                );
+                self.settings
+                    .update_store_status(format!("store refresh request failed: {error}"), false);
+                return;
             }
-        }
+        };
+        let snapshot = match event.outcome {
+            Ok(snapshot) => snapshot,
+            Err(error) => {
+                self.settings
+                    .update_store_status(format!("store refresh failed: {error}"), false);
+                return;
+            }
+        };
+        self.connection_state
+            .replace_loaded(snapshot.connections, snapshot.connection_groups);
+        self.security.replace_catalog(
+            snapshot.ssh_keys,
+            snapshot.otp_entries,
+            snapshot.saved_passwords,
+            snapshot.saved_credentials,
+        );
+        self.tunnel_state.replace_loaded_catalog(
+            snapshot.tunnels,
+            snapshot.tunnel_groups,
+            snapshot.proxies,
+            snapshot.proxy_groups,
+        );
+        self.commands.replace_loaded(
+            snapshot.quick_commands,
+            snapshot.quick_command_categories,
+            snapshot.command_history,
+        );
+        self.settings
+            .replace_keyword_config(snapshot.keyword_highlights);
+        self.apply_gpui_settings(snapshot.settings);
+        self.apply_ui_layout_from_settings();
+        self.translation.replace_settings(
+            snapshot.translation_settings,
+            TranslationSecretDraft::default(),
+        );
+        self.recording
+            .set_memory_limit(self.settings.summary().recording_memory_limit_bytes as usize);
+        self.ai.replace_settings_config(snapshot.ai_settings, true);
+        self.sync_ai_drafts_from_active_profile();
+        self.settings.rebase_master_password();
+        self.cloud_sync
+            .replace_loaded(snapshot.cloud_sync_settings, snapshot.cloud_sync_state);
+        self.transfer
+            .set_duplicate_policy(SftpDuplicatePolicy::from_legacy_value(
+                &self.settings.summary().transfer_duplicate_strategy,
+            ));
+        self.settings.replace_store_status(
+            snapshot.database_path.display().to_string(),
+            "redb connection store online".to_string(),
+            true,
+        );
     }
 }

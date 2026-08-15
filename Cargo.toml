@@ -60,6 +60,7 @@ nyaterm-core = { path = "crates/nyaterm-core" }
 nyaterm-desktop = { path = "crates/nyaterm-desktop" }
 nyaterm-otp = { path = "crates/nyaterm-otp" }
 nyaterm-remote-desktop = { path = "crates/nyaterm-remote-desktop" }
+nyaterm-store = { path = "crates/nyaterm-store" }
 nyaterm-terminal = { path = "crates/nyaterm-terminal" }
 nyaterm-terminal-gpui = { path = "crates/nyaterm-terminal-gpui" }
 nyaterm-transport = { path = "crates/nyaterm-transport" }

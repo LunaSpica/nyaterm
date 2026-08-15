@@ -1,10 +1,12 @@
-use gpui::{AppContext as _, Context, KeyDownEvent, Window};
-use nyaterm_core::{ConnectionStore, QuickCommandsConfig};
+use gpui::{Context, KeyDownEvent, Window};
+use nyaterm_core::QuickCommandsConfig;
+use nyaterm_store::{StoreDomain, store_request};
 
 use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::{NavItem, QuickCommandSortMode, QuickCommandViewMode};
 
 use super::helpers::{quick_command_sort_mode_setting, quick_command_view_mode_setting};
+use crate::features::settings::SettingsSaveKind;
 
 impl NyaTermApp {
     pub(in crate::features) fn finish_quick_command_reorder(
@@ -22,26 +24,17 @@ impl NyaTermApp {
         self.settings
             .set_quick_command_sort_mode("custom".to_string());
         let settings = self.settings.summary().clone();
-        let config_dir = self.runtime.config_dir().to_path_buf();
-        let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
         self.shell
             .set_status("saving custom quick command order".to_string());
-        let task = cx.background_spawn(async move {
-            let store =
-                ConnectionStore::open_with_portable_key_path(&config_dir, portable_key_path)
-                    .map_err(|error| error.to_string())?;
-            store
-                .save_quick_commands(config)
-                .map_err(|error| error.to_string())?;
-            store
-                .save_quick_command_ui_settings(&settings)
-                .map_err(|error| error.to_string())?;
-            Ok::<(), String>(())
-        });
-        cx.spawn(async move |this, cx| {
-            let result = task.await;
-            let _ = this.update(cx, |this, cx| {
-                match result {
+        self.submit_store_request(
+            0,
+            store_request(StoreDomain::Commands, move |store| {
+                store.save_quick_commands(config)?;
+                store.save_quick_command_ui_settings(&settings)?;
+                Ok(())
+            }),
+            |this, event, cx| {
+                match event.outcome {
                     Ok(()) => {
                         this.settings
                             .update_store_status("custom quick command order saved", true);
@@ -55,36 +48,37 @@ impl NyaTermApp {
                         );
                         this.shell
                             .set_status(this.settings.store_status().message.to_string());
-                        this.refresh_quick_commands();
+                        this.refresh_quick_commands(cx);
                     }
                 }
                 cx.notify();
-            });
-        })
-        .detach();
-        cx.notify();
+            },
+            cx,
+        );
     }
 
     pub(in crate::features) fn close_quick_command_toolbar_popovers(&mut self) {
         self.commands.close_quick_toolbar_popovers();
     }
 
-    pub(in crate::features) fn refresh_quick_commands(&mut self) {
-        match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .and_then(|store| store.load_quick_commands())
-        {
-            Ok(config) => {
-                self.commands
-                    .replace_quick_command_catalog(config.commands, config.categories);
-            }
-            Err(error) => {
-                self.settings
-                    .update_store_status(format!("quick command refresh failed: {error}"), false);
-            }
-        }
+    pub(in crate::features) fn refresh_quick_commands(&mut self, cx: &mut Context<Self>) {
+        self.submit_store_request(
+            0,
+            store_request(StoreDomain::Commands, |store| store.load_quick_commands()),
+            |this, event, cx| {
+                match event.outcome {
+                    Ok(config) => this
+                        .commands
+                        .replace_quick_command_catalog(config.commands, config.categories),
+                    Err(error) => this.settings.update_store_status(
+                        format!("quick command refresh failed: {error}"),
+                        false,
+                    ),
+                }
+                cx.notify();
+            },
+            cx,
+        );
     }
 
     pub(in crate::features) fn set_quick_command_view_mode(
@@ -110,29 +104,7 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn save_quick_command_ui_settings(&mut self, cx: &mut Context<Self>) {
-        match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .and_then(|store| store.save_quick_command_ui_settings(self.settings.summary()))
-        {
-            Ok(settings) => {
-                self.apply_gpui_settings(settings);
-                self.settings
-                    .update_store_status("quick command UI settings saved", true);
-                self.shell
-                    .set_status("quick command UI settings saved".to_string());
-            }
-            Err(error) => {
-                self.settings.update_store_status(
-                    format!("quick command UI settings save failed: {error}"),
-                    false,
-                );
-                self.shell
-                    .set_status(self.settings.store_status().message.to_string());
-            }
-        }
-        cx.notify();
+        self.queue_settings_save(SettingsSaveKind::QuickCommands, cx);
     }
 
     pub(in crate::features) fn apply_quick_command_search(

@@ -1,8 +1,12 @@
-//! Persistent-store compatibility boundary.
-//!
-//! The legacy redb/settings/snapshot implementations still live in `nyaterm-core`
-//! during the first GPUI restructuring pass. Re-exporting them here establishes the
-//! intended crate boundary without changing on-disk data formats.
+//! Persistent-store boundary and single-owner runtime.
+
+mod runtime;
+
+pub use runtime::{
+    BootstrapSnapshot, FlushBarrier, LoadBootstrap, RequestId, StoreBlockingClient, StoreConfig,
+    StoreDomain, StoreEvent, StoreFnRequest, StoreOperationError, StoreRequest, StoreRuntime,
+    StoreSubmitError, StoreTask, StoreUiClient, store_request,
+};
 
 pub use nyaterm_core::{
     ConfigBackupInfo, ConnectionStore, DiagnosticsError, DiagnosticsExportInfo,

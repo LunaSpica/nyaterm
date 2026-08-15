@@ -1,8 +1,10 @@
 use gpui::Context;
-use nyaterm_core::{ConnectionStore, ExistingFileBehavior, RecordingMode, RecordingRotationPolicy};
+use nyaterm_core::{ExistingFileBehavior, RecordingMode, RecordingRotationPolicy};
 use nyaterm_transport::SftpDuplicatePolicy;
 
 use crate::features::{NyaTermApp, duplicate_policy_label};
+
+use super::general_interaction::SettingsSaveKind;
 
 impl NyaTermApp {
     pub(in crate::features) fn update_host_key_policy(
@@ -16,26 +18,7 @@ impl NyaTermApp {
                 .set_status(format!("host key policy staged as {policy}"));
             return;
         }
-        match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .and_then(|store| store.save_host_key_policy(policy))
-        {
-            Ok(settings) => {
-                self.apply_gpui_settings(settings);
-                self.shell
-                    .set_status(format!("host key policy set to {policy}"));
-                self.settings.update_store_status("settings saved", true);
-            }
-            Err(error) => {
-                self.shell
-                    .set_status(format!("failed to save host key policy: {error}"));
-                self.settings
-                    .update_store_status(format!("settings save failed: {error}"), false);
-            }
-        }
-        cx.notify();
+        self.queue_settings_save(SettingsSaveKind::HostKey, cx);
     }
 
     pub(in crate::features) fn toggle_recording_auto_start(&mut self, cx: &mut Context<Self>) {
@@ -129,29 +112,7 @@ impl NyaTermApp {
         if self.defer_settings_persistence(cx) {
             return;
         }
-        match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .and_then(|store| store.save_recording_settings(self.settings.summary()))
-        {
-            Ok(settings) => {
-                self.apply_gpui_settings(settings);
-                self.recording.set_memory_limit(
-                    self.settings.summary().recording_memory_limit_bytes as usize,
-                );
-                self.settings
-                    .update_store_status("recording settings saved", true);
-                self.shell
-                    .set_status("recording settings saved".to_string());
-            }
-            Err(error) => {
-                let message = format!("recording settings save failed: {error}");
-                self.settings.update_store_status(message.clone(), false);
-                self.shell.set_status(message);
-            }
-        }
-        cx.notify();
+        self.queue_settings_save(SettingsSaveKind::Recording, cx);
     }
 
     pub(in crate::features) fn update_transfer_duplicate_policy(
@@ -248,29 +209,8 @@ impl NyaTermApp {
         if self.defer_settings_persistence(cx) {
             return;
         }
-        match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .and_then(|store| store.save_transfer_settings(self.settings.summary()))
-        {
-            Ok(settings) => {
-                self.apply_gpui_settings(settings);
-                self.transfer
-                    .set_duplicate_policy(SftpDuplicatePolicy::from_legacy_value(
-                        &self.settings.summary().transfer_duplicate_strategy,
-                    ));
-                self.settings
-                    .update_store_status("transfer settings saved", true);
-                self.shell.set_status(success_status.to_string());
-            }
-            Err(error) => {
-                let message = format!("transfer settings save failed: {error}");
-                self.settings.update_store_status(message.clone(), false);
-                self.shell.set_status(message);
-            }
-        }
-        cx.notify();
+        let _ = success_status;
+        self.queue_settings_save(SettingsSaveKind::Transfer, cx);
     }
 
     /// Apply an edit from the default editor command box.

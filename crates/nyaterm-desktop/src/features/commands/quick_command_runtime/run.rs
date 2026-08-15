@@ -1,7 +1,6 @@
 use gpui::Context;
-use nyaterm_core::{
-    AiCommandCard, AppendAiAuditRequest, ConnectionStore, QuickCommand, QuickCommandCategory, uuid,
-};
+use nyaterm_core::{AiCommandCard, AppendAiAuditRequest, QuickCommand, QuickCommandCategory, uuid};
+use nyaterm_store::{StoreDomain, store_request};
 
 use crate::features::NyaTermApp;
 use crate::models::QuickCommandVariablePromptState;
@@ -43,110 +42,114 @@ impl NyaTermApp {
         card: AiCommandCard,
         cx: &mut Context<Self>,
     ) {
-        let command_text = card.command.trim();
+        let command_text = card.command.trim().to_string();
         if command_text.is_empty() {
             self.ai.set_panel_status("AI command card has no command");
             cx.notify();
             return;
         }
 
-        let result = ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .and_then(|store| {
-            let config = store.load_quick_commands()?;
-            let category_name = ai_command_card_category_name(&card);
-            let existing_category = config
-                .categories
-                .iter()
-                .find(|category| category.name == category_name)
-                .cloned();
-            let (category_id, new_category) = match existing_category {
-                Some(category) => (category.id, None),
-                None => {
-                    let id = unique_quick_command_category_id(&config.categories, &category_name);
-                    (
-                        id.clone(),
-                        Some(QuickCommandCategory {
-                            id,
-                            name: category_name,
-                            parent_id: None,
-                            sort_order: config
-                                .categories
-                                .iter()
-                                .filter(|category| category.parent_id.is_none())
-                                .map(|category| category.sort_order)
-                                .max()
-                                .unwrap_or(-1)
-                                .saturating_add(1),
-                        }),
-                    )
+        let connection_id = self.session.active_id_owned();
+        let response_preview = self.ai.chat_response_preview().to_string();
+        self.submit_store_request(
+            0,
+            store_request(StoreDomain::Commands, move |store| {
+                let config = store.load_quick_commands()?;
+                let category_name = ai_command_card_category_name(&card);
+                let existing_category = config
+                    .categories
+                    .iter()
+                    .find(|category| category.name == category_name)
+                    .cloned();
+                let (category_id, new_category) = match existing_category {
+                    Some(category) => (category.id, None),
+                    None => {
+                        let id =
+                            unique_quick_command_category_id(&config.categories, &category_name);
+                        (
+                            id.clone(),
+                            Some(QuickCommandCategory {
+                                id,
+                                name: category_name,
+                                parent_id: None,
+                                sort_order: config
+                                    .categories
+                                    .iter()
+                                    .filter(|category| category.parent_id.is_none())
+                                    .map(|category| category.sort_order)
+                                    .max()
+                                    .unwrap_or(-1)
+                                    .saturating_add(1),
+                            }),
+                        )
+                    }
+                };
+                let label = if card.title.trim().is_empty() {
+                    "AI Command".to_string()
+                } else {
+                    card.title.trim().to_string()
+                };
+                let description = if card.explanation.trim().is_empty() {
+                    None
+                } else {
+                    Some(card.explanation.trim().to_string())
+                };
+                store.upsert_quick_command(
+                    QuickCommand {
+                        id: format!("ai-{}", uuid()),
+                        label: label.clone(),
+                        command: command_text,
+                        category_id: Some(category_id),
+                        description,
+                        color_tag: Some("blue".to_string()),
+                        icon_tag: Some("terminal".to_string()),
+                        pinned: Some(false),
+                        execution_mode: Some("append".to_string()),
+                        source: Some("ai".to_string()),
+                        risk_level: card.risk_level.clone(),
+                        updated_at: None,
+                        created_at: None,
+                        use_count: None,
+                        sort_order: None,
+                    },
+                    new_category,
+                )?;
+                store
+                    .append_ai_audit(AppendAiAuditRequest {
+                        connection_id,
+                        action: "ai.save_quick_command".to_string(),
+                        user_input: Some(response_preview),
+                        generated_command: Some(card.command.clone()),
+                        risk_level: card.risk_level.clone(),
+                        inserted_to_terminal: false,
+                        executed: false,
+                        blocked: false,
+                    })
+                    .map(|_| label)
+            }),
+            |this, event, cx| {
+                match event.outcome {
+                    Ok(label) => {
+                        this.refresh_ai_usage_counts(cx);
+                        this.refresh_quick_commands(cx);
+                        this.ai.set_panel_status(format!(
+                            "Saved AI command card '{}' to Quick Commands",
+                            label
+                        ));
+                        this.settings
+                            .update_store_status(this.ai.panel_status().to_string(), true);
+                    }
+                    Err(error) => {
+                        this.ai
+                            .set_panel_status(format!("Quick command save failed: {error}"));
+                        this.settings
+                            .update_store_status(this.ai.panel_status().to_string(), false);
+                    }
                 }
-            };
-            let label = if card.title.trim().is_empty() {
-                "AI Command".to_string()
-            } else {
-                card.title.trim().to_string()
-            };
-            let description = if card.explanation.trim().is_empty() {
-                None
-            } else {
-                Some(card.explanation.trim().to_string())
-            };
-            store.upsert_quick_command(
-                QuickCommand {
-                    id: format!("ai-{}", uuid()),
-                    label: label.clone(),
-                    command: command_text.to_string(),
-                    category_id: Some(category_id),
-                    description,
-                    color_tag: Some("blue".to_string()),
-                    icon_tag: Some("terminal".to_string()),
-                    pinned: Some(false),
-                    execution_mode: Some("append".to_string()),
-                    source: Some("ai".to_string()),
-                    risk_level: card.risk_level.clone(),
-                    updated_at: None,
-                    created_at: None,
-                    use_count: None,
-                    sort_order: None,
-                },
-                new_category,
-            )?;
-            store
-                .append_ai_audit(AppendAiAuditRequest {
-                    connection_id: self.session.active_id_owned(),
-                    action: "ai.save_quick_command".to_string(),
-                    user_input: Some(self.ai.chat_response_preview().to_string()),
-                    generated_command: Some(card.command.clone()),
-                    risk_level: card.risk_level.clone(),
-                    inserted_to_terminal: false,
-                    executed: false,
-                    blocked: false,
-                })
-                .map(|_| label)
-        });
-
-        match result {
-            Ok(label) => {
-                self.refresh_ai_usage_counts(cx);
-                self.refresh_quick_commands();
-                self.ai.set_panel_status(format!(
-                    "Saved AI command card '{}' to Quick Commands",
-                    label
-                ));
-                self.settings
-                    .update_store_status(self.ai.panel_status().to_string(), true);
-            }
-            Err(error) => {
-                self.ai
-                    .set_panel_status(format!("Quick command save failed: {error}"));
-                self.settings
-                    .update_store_status(self.ai.panel_status().to_string(), false);
-            }
-        }
-        cx.notify();
+                cx.notify();
+            },
+            cx,
+        );
     }
 
     pub(in crate::features) fn run_quick_command_by_id(

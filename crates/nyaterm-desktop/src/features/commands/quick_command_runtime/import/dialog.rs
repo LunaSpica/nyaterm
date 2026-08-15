@@ -160,7 +160,7 @@ impl NyaTermApp {
                 Err(_) => QuickCommandImportPathPromptResult::Closed,
             };
             let _ = this.update(cx, |this, cx| {
-                this.apply_quick_command_import_result(result);
+                this.apply_quick_command_import_result(result, cx);
                 cx.notify();
             });
         })
@@ -168,7 +168,11 @@ impl NyaTermApp {
         cx.notify();
     }
 
-    fn apply_quick_command_import_result(&mut self, result: QuickCommandImportPathPromptResult) {
+    fn apply_quick_command_import_result(
+        &mut self,
+        result: QuickCommandImportPathPromptResult,
+        cx: &mut Context<Self>,
+    ) {
         self.commands.finish_quick_import_path();
         match result {
             QuickCommandImportPathPromptResult::Imported {
@@ -178,7 +182,7 @@ impl NyaTermApp {
                 total_commands,
                 total_categories,
             } => {
-                self.refresh_quick_commands();
+                self.refresh_quick_commands(cx);
                 self.shell.set_status(format!(
                     "imported {imported_commands} quick command(s), updated {updated_commands}, categories +{imported_categories}, total {total_commands}/{total_categories}"
                 ));

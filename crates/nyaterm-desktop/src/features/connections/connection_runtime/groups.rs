@@ -150,7 +150,8 @@ impl NyaTermApp {
             }
         };
 
-        match self.with_connection_store(|store| store.save_group(&group)) {
+        let persisted = group.clone();
+        match self.with_connection_store(move |store| store.save_group(&persisted)) {
             Ok(()) => {
                 if let Some(parent_id) = group.parent_id.clone() {
                     self.connection_state.expand_list_group(parent_id);

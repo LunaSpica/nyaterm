@@ -30,6 +30,11 @@ fn main() -> anyhow::Result<()> {
                 },
                 move |window, cx| {
                     let shell = cx.new(|cx| AppShell::new(app_runtime, cx));
+                    let close_shell = shell.clone();
+                    window.on_window_should_close(cx, move |_, cx| {
+                        close_shell.update(cx, |shell, cx| shell.request_close(cx));
+                        false
+                    });
                     shell.update(cx, |shell, cx| {
                         shell.start_after_window_open(window, cx);
                     });

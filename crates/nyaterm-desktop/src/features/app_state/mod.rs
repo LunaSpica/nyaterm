@@ -1,4 +1,5 @@
 use nyaterm_core::AppRuntime;
+use nyaterm_store::{StoreBlockingClient, StoreUiClient};
 
 use super::ai::AiFeatureState;
 use super::commands::CommandFeatureState;
@@ -21,12 +22,15 @@ use super::tunnels::TunnelFeatureState;
 use super::update::UpdateFeatureState;
 
 mod construct;
+mod store_runtime;
 mod types;
 
 pub(in crate::features) use types::SettingsDraftSnapshot;
 
 pub struct NyaTermApp {
     pub(in crate::features) stores: crate::entities::UiStoreHandles,
+    pub(in crate::features) store_ui: StoreUiClient,
+    pub(in crate::features) store_blocking: StoreBlockingClient,
     pub(in crate::features) runtime: AppRuntime,
     pub(in crate::features) connection_state: ConnectionFeatureState,
     /// Real text inputs for the panels that have not been given their own,

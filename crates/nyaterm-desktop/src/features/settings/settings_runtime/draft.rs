@@ -1,5 +1,5 @@
 use gpui::Context;
-use nyaterm_core::ConnectionStore;
+use nyaterm_store::{StoreDomain, store_request};
 use nyaterm_transport::SftpDuplicatePolicy;
 
 use crate::features::NyaTermApp;
@@ -231,104 +231,100 @@ impl NyaTermApp {
         } else {
             Some(Some(master_password.draft.to_string()))
         };
-        let result = ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .and_then(|store| {
-            if let Some(next_password) = master_password_update.as_ref() {
-                store.save_master_password(next_password.as_deref())?;
-            }
-            store.save_appearance_settings(&settings)?;
-            store.save_terminal_settings(&settings)?;
-            store.save_interaction_settings(&settings)?;
-            store.save_general_settings(&settings)?;
-            store.save_diagnostics_settings(&settings)?;
-            store.save_screen_lock_settings(&settings)?;
-            store.save_recording_settings(&settings)?;
-            store.save_transfer_settings(&settings)?;
-            store.save_host_key_policy(&settings.host_key_policy)?;
-            store.save_keybindings(&settings.keybindings)?;
-            let saved_keyword_highlights = store.save_keyword_highlights(&keyword_highlights)?;
-            let saved_translation_settings =
-                store.save_translation_settings(translation_settings.clone())?;
-            let saved_cloud_sync_settings =
-                store.save_cloud_sync_settings(cloud_sync_settings.clone())?;
-            let saved_ai_settings = store.save_ai_settings(ai_settings.clone())?;
-            Ok((
-                store.load_app_settings_summary()?,
-                saved_keyword_highlights,
-                saved_translation_settings,
-                saved_cloud_sync_settings,
-                saved_ai_settings,
-            ))
-        });
-
-        match result {
-            Ok((
-                saved_settings,
-                saved_keyword_highlights,
-                saved_translation_settings,
-                saved_cloud_sync_settings,
-                saved_ai_settings,
-            )) => {
-                self.apply_gpui_settings(saved_settings);
-                self.settings.rebase_master_password();
-                self.ai.replace_settings_config(saved_ai_settings, true);
-                self.cloud_sync
-                    .replace_settings(saved_cloud_sync_settings, Default::default());
-                self.translation.replace_settings(
+        self.settings
+            .update_store_status("applying settings", false);
+        self.submit_store_request(
+            0,
+            store_request(StoreDomain::Settings, move |store| {
+                if let Some(next_password) = master_password_update.as_ref() {
+                    store.save_master_password(next_password.as_deref())?;
+                }
+                store.save_appearance_settings(&settings)?;
+                store.save_terminal_settings(&settings)?;
+                store.save_interaction_settings(&settings)?;
+                store.save_general_settings(&settings)?;
+                store.save_diagnostics_settings(&settings)?;
+                store.save_screen_lock_settings(&settings)?;
+                store.save_recording_settings(&settings)?;
+                store.save_transfer_settings(&settings)?;
+                store.save_host_key_policy(&settings.host_key_policy)?;
+                store.save_keybindings(&settings.keybindings)?;
+                let saved_keyword_highlights =
+                    store.save_keyword_highlights(&keyword_highlights)?;
+                let saved_translation_settings =
+                    store.save_translation_settings(translation_settings)?;
+                let saved_cloud_sync_settings =
+                    store.save_cloud_sync_settings(cloud_sync_settings)?;
+                let saved_ai_settings = store.save_ai_settings(ai_settings)?;
+                if !settings.startup_restore_window_layout {
+                    store.save_terminal_window_layout(None)?;
+                    store.save_workspace_pane_layout(None)?;
+                }
+                Ok((
+                    store.load_app_settings_summary()?,
+                    saved_keyword_highlights,
                     saved_translation_settings,
-                    TranslationSecretDraft::default(),
-                );
-                self.settings
-                    .replace_keyword_config(saved_keyword_highlights);
-                self.sync_ai_drafts_from_active_profile();
-                self.recording.set_memory_limit(
-                    self.settings.summary().recording_memory_limit_bytes as usize,
-                );
-                self.transfer
-                    .set_duplicate_policy(SftpDuplicatePolicy::from_legacy_value(
-                        &self.settings.summary().transfer_duplicate_strategy,
-                    ));
-                self.sync_terminal_encodings_from_settings();
-                self.enforce_terminal_scrollback_limit();
-                if !self
-                    .settings
-                    .summary()
-                    .interaction_command_suggestions_enabled
-                {
-                    self.terminal.clear_command_tracking();
+                    saved_cloud_sync_settings,
+                    saved_ai_settings,
+                ))
+            }),
+            move |this, event, cx| match event.outcome {
+                Ok((
+                    saved_settings,
+                    saved_keyword_highlights,
+                    saved_translation_settings,
+                    saved_cloud_sync_settings,
+                    saved_ai_settings,
+                )) => {
+                    this.apply_gpui_settings(saved_settings);
+                    this.settings.rebase_master_password();
+                    this.ai.replace_settings_config(saved_ai_settings, true);
+                    this.cloud_sync
+                        .replace_settings(saved_cloud_sync_settings, Default::default());
+                    this.translation.replace_settings(
+                        saved_translation_settings,
+                        TranslationSecretDraft::default(),
+                    );
+                    this.settings
+                        .replace_keyword_config(saved_keyword_highlights);
+                    this.sync_ai_drafts_from_active_profile();
+                    this.recording.set_memory_limit(
+                        this.settings.summary().recording_memory_limit_bytes as usize,
+                    );
+                    this.transfer
+                        .set_duplicate_policy(SftpDuplicatePolicy::from_legacy_value(
+                            &this.settings.summary().transfer_duplicate_strategy,
+                        ));
+                    this.sync_terminal_encodings_from_settings();
+                    this.enforce_terminal_scrollback_limit();
+                    if !this
+                        .settings
+                        .summary()
+                        .interaction_command_suggestions_enabled
+                    {
+                        this.terminal.clear_command_tracking();
+                    }
+                    this.invalidate_terminal_cell_metrics(cx);
+                    this.refresh_visible_terminal_surfaces(cx);
+                    this.shell.clear_settings_draft_snapshot();
+                    this.settings.update_store_status("settings applied", true);
+                    this.shell.set_status("settings applied".to_string());
+                    if close_after_apply {
+                        this.finish_settings_page(cx);
+                    } else {
+                        this.begin_settings_draft();
+                        cx.notify();
+                    }
                 }
-                self.invalidate_terminal_cell_metrics(cx);
-                self.refresh_visible_terminal_surfaces(cx);
-                if !self.settings.summary().startup_restore_window_layout {
-                    let _ = ConnectionStore::open_with_portable_key_path(
-                        self.runtime.config_dir(),
-                        self.runtime.portable_key_path().map(ToOwned::to_owned),
-                    )
-                    .and_then(|store| {
-                        store.save_terminal_window_layout(None)?;
-                        store.save_workspace_pane_layout(None)
-                    });
-                }
-                self.shell.clear_settings_draft_snapshot();
-                self.settings.update_store_status("settings applied", true);
-                self.shell.set_status("settings applied".to_string());
-                if close_after_apply {
-                    self.finish_settings_page(cx);
-                } else {
-                    self.begin_settings_draft();
+                Err(error) => {
+                    let message = format!("settings apply failed: {error}");
+                    this.settings.update_store_status(message.clone(), false);
+                    this.shell.set_status(message);
                     cx.notify();
                 }
-            }
-            Err(error) => {
-                let message = format!("settings apply failed: {error}");
-                self.settings.update_store_status(message.clone(), false);
-                self.shell.set_status(message);
-                cx.notify();
-            }
-        }
+            },
+            cx,
+        );
     }
 
     pub(in crate::features) fn cancel_settings(&mut self, cx: &mut Context<Self>) {

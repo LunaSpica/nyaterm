@@ -1,7 +1,8 @@
 use gpui::Context;
-use nyaterm_core::ConnectionStore;
 
 use crate::features::NyaTermApp;
+
+use super::general_interaction::SettingsSaveKind;
 
 impl NyaTermApp {
     /// Apply an edit from the X11 display box.
@@ -194,25 +195,7 @@ impl NyaTermApp {
         if self.defer_settings_persistence(cx) {
             return;
         }
-        match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .and_then(|store| store.save_terminal_settings(self.settings.summary()))
-        {
-            Ok(settings) => {
-                self.apply_gpui_settings(settings);
-                self.enforce_terminal_scrollback_limit();
-                self.settings
-                    .update_store_status("terminal settings saved", true);
-                self.shell.set_status("terminal settings saved".to_string());
-            }
-            Err(error) => {
-                let message = format!("terminal settings save failed: {error}");
-                self.settings.update_store_status(message.clone(), false);
-                self.shell.set_status(message);
-            }
-        }
-        cx.notify();
+        self.enforce_terminal_scrollback_limit();
+        self.queue_settings_save(SettingsSaveKind::Terminal, cx);
     }
 }

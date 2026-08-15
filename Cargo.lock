@@ -5429,6 +5429,7 @@ dependencies = [
  "nyaterm-core",
  "nyaterm-otp",
  "nyaterm-remote-desktop",
+ "nyaterm-store",
  "nyaterm-terminal",
  "nyaterm-terminal-gpui",
  "nyaterm-transport",
@@ -5489,6 +5490,7 @@ dependencies = [
 name = "nyaterm-store"
 version = "2.0.0"
 dependencies = [
+ "futures",
  "nyaterm-core",
 ]
 
@@ -5553,8 +5555,6 @@ version = "2.0.0"
 dependencies = [
  "gpui",
  "gpui-component",
- "nyaterm-core",
- "nyaterm-terminal",
 ]
 
 [[package]]

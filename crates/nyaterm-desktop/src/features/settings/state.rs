@@ -26,6 +26,33 @@ pub(in crate::features) struct SettingsFeatureState {
     appearance: AppearanceSettingsState,
     keybindings: KeybindingSettingsState,
     prompts: SettingsPromptState,
+    persistence: HashMap<SettingsPersistenceDomain, SettingsPersistenceSlot>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(in crate::features) enum SettingsPersistenceDomain {
+    Diagnostics,
+    General,
+    Interaction,
+    ScreenLock,
+    HostKey,
+    Recording,
+    Transfer,
+    Terminal,
+    QuickCommands,
+}
+
+struct SettingsPersistenceSlot {
+    latest_generation: u64,
+    in_flight_generation: Option<u64>,
+    pending: Option<AppSettingsSummary>,
+    dirty: bool,
+}
+
+pub(in crate::features) struct SettingsPersistenceCompletion {
+    pub apply_result: bool,
+    pub report_result: bool,
+    pub next: Option<(u64, AppSettingsSummary)>,
 }
 
 #[derive(Default)]
@@ -187,7 +214,75 @@ impl SettingsFeatureState {
                 focus: focus.keybindings,
             },
             prompts: SettingsPromptState::default(),
+            persistence: HashMap::new(),
         }
+    }
+
+    pub(in crate::features) fn queue_persistence(
+        &mut self,
+        domain: SettingsPersistenceDomain,
+    ) -> Option<(u64, AppSettingsSummary)> {
+        let slot = self
+            .persistence
+            .entry(domain)
+            .or_insert_with(|| SettingsPersistenceSlot {
+                latest_generation: 0,
+                in_flight_generation: None,
+                pending: None,
+                dirty: false,
+            });
+        slot.latest_generation = slot.latest_generation.saturating_add(1);
+        slot.dirty = true;
+        let snapshot = self.summary.clone();
+        if slot.in_flight_generation.is_some() {
+            slot.pending = Some(snapshot);
+            None
+        } else {
+            slot.in_flight_generation = Some(slot.latest_generation);
+            Some((slot.latest_generation, snapshot))
+        }
+    }
+
+    pub(in crate::features) fn finish_persistence(
+        &mut self,
+        domain: SettingsPersistenceDomain,
+        generation: u64,
+        succeeded: bool,
+    ) -> SettingsPersistenceCompletion {
+        let Some(slot) = self.persistence.get_mut(&domain) else {
+            return SettingsPersistenceCompletion {
+                apply_result: false,
+                report_result: false,
+                next: None,
+            };
+        };
+        if slot.in_flight_generation != Some(generation) {
+            return SettingsPersistenceCompletion {
+                apply_result: false,
+                report_result: false,
+                next: None,
+            };
+        }
+        slot.in_flight_generation = None;
+        let next = slot.pending.take().map(|snapshot| {
+            let generation = slot.latest_generation;
+            slot.in_flight_generation = Some(generation);
+            (generation, snapshot)
+        });
+        let report_result = generation == slot.latest_generation && next.is_none();
+        let apply_result = succeeded && report_result;
+        if apply_result {
+            slot.dirty = false;
+        }
+        SettingsPersistenceCompletion {
+            apply_result,
+            report_result,
+            next,
+        }
+    }
+
+    pub(in crate::features) fn persistence_is_dirty(&self) -> bool {
+        self.persistence.values().any(|slot| slot.dirty)
     }
 
     pub(in crate::features) fn rebase_master_password(&mut self) {
@@ -1271,7 +1366,7 @@ mod tests {
 
     use super::{
         SearchEngineMenu, SettingsFeatureFocus, SettingsFeatureInit, SettingsFeatureState,
-        UiLayoutSettingsUpdate,
+        SettingsPersistenceDomain, UiLayoutSettingsUpdate,
     };
     use crate::models::{
         ConfigPathPromptKind, KeywordHighlightEditorField, SnapshotPasswordPromptKind,
@@ -1630,5 +1725,49 @@ mod tests {
         let view = state.master_password();
         assert!(!view.enabled);
         assert!(view.draft.is_empty());
+    }
+
+    #[test]
+    fn settings_persistence_coalesces_to_the_latest_snapshot() {
+        let mut state = settings_state();
+        let (first_generation, first) = state
+            .queue_persistence(SettingsPersistenceDomain::General)
+            .expect("first request");
+        assert_eq!(first_generation, 1);
+        assert_eq!(first.language, state.summary().language);
+
+        state.set_language("zh-CN");
+        assert!(
+            state
+                .queue_persistence(SettingsPersistenceDomain::General)
+                .is_none()
+        );
+        state.set_language("en-US");
+        assert!(
+            state
+                .queue_persistence(SettingsPersistenceDomain::General)
+                .is_none()
+        );
+
+        let completion =
+            state.finish_persistence(SettingsPersistenceDomain::General, first_generation, true);
+        assert!(!completion.apply_result);
+        assert!(!completion.report_result);
+        let (latest_generation, latest) = completion.next.expect("latest request");
+        assert_eq!(latest_generation, 3);
+        assert_eq!(latest.language, "en-US");
+    }
+
+    #[test]
+    fn failed_latest_settings_persistence_stays_dirty() {
+        let mut state = settings_state();
+        let (generation, _) = state
+            .queue_persistence(SettingsPersistenceDomain::Interaction)
+            .expect("request");
+        let completion =
+            state.finish_persistence(SettingsPersistenceDomain::Interaction, generation, false);
+        assert!(completion.report_result);
+        assert!(!completion.apply_result);
+        assert!(state.persistence_is_dirty());
     }
 }
