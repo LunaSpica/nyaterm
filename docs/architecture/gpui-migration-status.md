@@ -303,6 +303,9 @@ these as staged extraction candidates, not as formatting-only refactor targets.
 - SSH/SFTP/Telnet/Serial/RDP/VNC connection contracts now live in
   `nyaterm-core::models::connection`; terminal profiles, protocol defaults and
   serde compatibility tags are unchanged.
+- The compatibility tests for the model façade now live in
+  `nyaterm-core/src/models/tests.rs` with explicit imports, leaving
+  `models/mod.rs` focused on default-value and compatibility helper functions.
 - `gpui-component` infrastructure and ordinary-control migration are in place.
   The workspace uses vendored `gpui-component` `0.5.2` at
   `e1570bdc8fd2dc17d38cab09e74b1783bdf3b24b` and vendored Zed GPUI at
