@@ -280,6 +280,11 @@ these as staged extraction candidates, not as formatting-only refactor targets.
 
 ## Completed
 
+- Composite Rust domains now consistently use directory roots (`mod.rs`) when
+  they own child modules, and `nyaterm-core::models::workspace` owns the
+  restorable pane, tab and window-layout contracts. The `models` facade keeps
+  the existing root and `nyaterm_core::models::*` paths, while serde tags,
+  defaults and sparse compatibility fields remain unchanged.
 - `gpui-component` infrastructure and ordinary-control migration are in place.
   The workspace uses vendored `gpui-component` `0.5.2` at
   `e1570bdc8fd2dc17d38cab09e74b1783bdf3b24b` and vendored Zed GPUI at
