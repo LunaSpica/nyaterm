@@ -434,7 +434,7 @@ fn encrypted_portable_snapshot_requires_master_password() {
     )
     .expect("export encrypted snapshot");
     assert!(
-        nyaterm_core::portable_snapshot::decode_raw_portable_snapshot(
+        crate::decode_raw_portable_snapshot(
             &std::fs::read(&snapshot_path).expect("read encrypted snapshot")
         )
         .is_err()

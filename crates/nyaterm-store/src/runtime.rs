@@ -339,6 +339,40 @@ impl StoreRuntime {
 }
 
 impl nyaterm_core::CloudLocalStore for StoreBlockingClient {
+    fn encode_sync_snapshot(
+        &self,
+        snapshot: &nyaterm_core::RawPortableSnapshot,
+        master_password: &str,
+    ) -> Result<Vec<u8>, nyaterm_core::CloudSyncError> {
+        crate::encode_encrypted_raw_portable_snapshot(snapshot, master_password)
+            .map_err(nyaterm_core::CloudSyncError::PortableSnapshot)
+    }
+
+    fn decode_sync_snapshot(
+        &self,
+        bytes: &[u8],
+        master_password: &str,
+    ) -> Result<nyaterm_core::RawPortableSnapshot, nyaterm_core::CloudSyncError> {
+        crate::decode_encrypted_raw_portable_snapshot(bytes, master_password)
+            .map_err(nyaterm_core::CloudSyncError::PortableSnapshot)
+    }
+
+    fn encode_sync_pointer(
+        &self,
+        pointer: &nyaterm_core::RemoteSyncPointer,
+    ) -> Result<Vec<u8>, nyaterm_core::CloudSyncError> {
+        crate::portable_codec::encode_sync_pointer(pointer)
+            .map_err(nyaterm_core::CloudSyncError::PortableSnapshot)
+    }
+
+    fn decode_sync_pointer(
+        &self,
+        bytes: &[u8],
+    ) -> Result<nyaterm_core::RemoteSyncPointer, nyaterm_core::CloudSyncError> {
+        crate::portable_codec::decode_sync_pointer(bytes)
+            .map_err(nyaterm_core::CloudSyncError::PortableSnapshot)
+    }
+
     fn build_sync_snapshot(
         &self,
         options: &nyaterm_core::LocalCloudSyncOptions,

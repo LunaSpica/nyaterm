@@ -25,12 +25,14 @@ impl NyaTermApp {
             return;
         }
         let settings = self.cloud_sync.settings().clone();
+        let local_store = self.store_blocking_client();
         let provider = configured_cloud_sync_provider(&settings);
         self.cloud_sync
             .set_status(format!("testing provider connection via {provider}"));
         self.shell
             .set_status("provider cloud sync connection test started".to_string());
-        let task = cx.background_spawn(async move { test_provider_connection(&settings) });
+        let task =
+            cx.background_spawn(async move { test_provider_connection(&local_store, &settings) });
         cx.spawn(async move |this, cx| {
             let result = task.await;
             let _ = this.update(cx, |this, cx| {
@@ -79,6 +81,7 @@ impl NyaTermApp {
                 match result {
                     Ok(result) => {
                         schedule_cloud_sync_cleanup(
+                            this.store_blocking_client(),
                             None,
                             cleanup_options,
                             result.pointer.clone(),
@@ -169,6 +172,7 @@ impl NyaTermApp {
                 match result {
                     Ok(result) => {
                         schedule_cloud_sync_cleanup(
+                            this.store_blocking_client(),
                             None,
                             cleanup_options,
                             result.pointer.clone(),
@@ -265,6 +269,7 @@ impl NyaTermApp {
                 match result {
                     Ok(result) => {
                         schedule_cloud_sync_cleanup(
+                            this.store_blocking_client(),
                             Some(cleanup_settings),
                             cleanup_options,
                             result.pointer.clone(),
@@ -360,6 +365,7 @@ impl NyaTermApp {
                 match result {
                     Ok(result) => {
                         schedule_cloud_sync_cleanup(
+                            this.store_blocking_client(),
                             Some(cleanup_settings),
                             cleanup_options,
                             result.pointer.clone(),
@@ -472,6 +478,7 @@ impl NyaTermApp {
                 match result {
                     Ok(result) => {
                         schedule_cloud_sync_cleanup(
+                            this.store_blocking_client(),
                             provider_action.then_some(cleanup_settings),
                             cleanup_options,
                             result.pointer.clone(),
@@ -561,6 +568,7 @@ impl NyaTermApp {
 }
 
 fn schedule_cloud_sync_cleanup(
+    local_store: nyaterm_store::StoreBlockingClient,
     settings: Option<CloudSyncSettings>,
     options: LocalCloudSyncOptions,
     latest: Option<RemoteSyncPointer>,
@@ -572,10 +580,10 @@ fn schedule_cloud_sync_cleanup(
         .unwrap_or_else(|| "local_directory".to_string());
     let task = cx.background_spawn(async move {
         if let Some(settings) = settings {
-            cleanup_provider_snapshots(&settings, &options, latest.as_ref())
+            cleanup_provider_snapshots(&local_store, &settings, &options, latest.as_ref())
         } else {
             let remote = LocalDirectoryRemote::new(options.remote_dir.clone());
-            cleanup_sync_snapshots_with_remote(&options, &remote, latest.as_ref())
+            cleanup_sync_snapshots_with_remote(&local_store, &options, &remote, latest.as_ref())
         }
     });
     cx.spawn(async move |_, _| {

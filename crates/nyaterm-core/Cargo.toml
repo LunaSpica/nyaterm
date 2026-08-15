@@ -17,7 +17,6 @@ hmac.workspace = true
 md5.workspace = true
 quick-xml.workspace = true
 rand.workspace = true
-redb.workspace = true
 regex.workspace = true
 rusty-leveldb.workspace = true
 serde.workspace = true

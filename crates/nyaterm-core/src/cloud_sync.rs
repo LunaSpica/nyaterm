@@ -8,7 +8,6 @@ use base64::{
     engine::general_purpose::{STANDARD as BASE64_STANDARD, URL_SAFE_NO_PAD},
 };
 use hmac::{Hmac, Mac, digest::KeyInit as HmacKeyInit};
-use redb::{Database, ReadableDatabase, TableDefinition};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
@@ -33,9 +32,6 @@ pub const CLOUD_SYNC_HISTORY_DOMAIN: &str = "cloud_sync.history";
 pub const CLOUD_SYNC_HISTORY_EVENT: &str = "entry";
 pub const CLOUD_SYNC_HISTORY_LIMIT: usize = 100;
 pub const REMOTE_SYNC_POINTER_SCHEMA_VERSION: u32 = 2;
-
-const REMOTE_SYNC_POINTER_TABLE: TableDefinition<&str, &str> = TableDefinition::new("sync_pointer");
-const REMOTE_SYNC_POINTER_KEY: &str = "latest";
 
 #[derive(Debug, Error)]
 pub enum CloudSyncError {
@@ -94,16 +90,6 @@ pub enum CloudSyncError {
     LocalStore(String),
     #[error("portable snapshot error: {0}")]
     PortableSnapshot(#[from] PortableSnapshotError),
-    #[error("redb database error: {0}")]
-    RedbDatabase(#[from] redb::DatabaseError),
-    #[error("redb transaction error: {0}")]
-    RedbTransaction(#[from] redb::TransactionError),
-    #[error("redb table error: {0}")]
-    RedbTable(#[from] redb::TableError),
-    #[error("redb storage error: {0}")]
-    RedbStorage(#[from] redb::StorageError),
-    #[error("redb commit error: {0}")]
-    RedbCommit(#[from] redb::CommitError),
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
     #[error("base64 error: {0}")]
@@ -601,6 +587,22 @@ pub trait CloudSyncRemote {
 }
 
 pub trait CloudLocalStore: Send + Sync {
+    fn encode_sync_snapshot(
+        &self,
+        snapshot: &RawPortableSnapshot,
+        master_password: &str,
+    ) -> Result<Vec<u8>, CloudSyncError>;
+
+    fn decode_sync_snapshot(
+        &self,
+        bytes: &[u8],
+        master_password: &str,
+    ) -> Result<RawPortableSnapshot, CloudSyncError>;
+
+    fn encode_sync_pointer(&self, pointer: &RemoteSyncPointer) -> Result<Vec<u8>, CloudSyncError>;
+
+    fn decode_sync_pointer(&self, bytes: &[u8]) -> Result<RemoteSyncPointer, CloudSyncError>;
+
     fn build_sync_snapshot(
         &self,
         options: &LocalCloudSyncOptions,
@@ -1571,12 +1573,12 @@ pub fn push_snapshot_with_remote(
     let mut snapshot = local_store.build_sync_snapshot(options)?;
     snapshot.recalculate_hash()?;
     let local_hash = snapshot.meta.payload_hash.clone();
-    let latest = load_sync_pointer_from_remote(remote, &options.remote_root)?;
+    let latest = load_sync_pointer_from_remote(local_store, remote, &options.remote_root)?;
 
     if let Some(remote_pointer) = &latest
         && remote_pointer.payload_hash == local_hash
     {
-        match protocol::resolve_remote_snapshot(remote, options, remote_pointer)? {
+        match protocol::resolve_remote_snapshot(local_store, remote, options, remote_pointer)? {
             protocol::RemoteSnapshotResolution::Current(_)
             | protocol::RemoteSnapshotResolution::LegacyMigrated(_) => {}
             protocol::RemoteSnapshotResolution::Inconsistent {
@@ -1630,14 +1632,19 @@ pub fn push_snapshot_with_remote(
         return Err(CloudSyncError::RemoteNewer);
     }
 
-    protocol::upload_sync_snapshot(remote, options, &snapshot)?;
+    protocol::upload_sync_snapshot(local_store, remote, options, &snapshot)?;
     let pointer = protocol::pointer_from_snapshot(&snapshot);
-    protocol::read_snapshot_for_pointer(remote, options, &pointer)?;
+    protocol::read_snapshot_for_pointer(local_store, remote, options, &pointer)?;
     if !force {
-        protocol::ensure_remote_head_unchanged(remote, &options.remote_root, latest.as_ref())?;
+        protocol::ensure_remote_head_unchanged(
+            local_store,
+            remote,
+            &options.remote_root,
+            latest.as_ref(),
+        )?;
     }
-    write_sync_pointer(remote, &options.remote_root, &pointer)?;
-    let _ = protocol::write_current_sync_snapshot_compat(remote, options, &snapshot);
+    write_sync_pointer(local_store, remote, &options.remote_root, &pointer)?;
+    let _ = protocol::write_current_sync_snapshot_compat(local_store, remote, options, &snapshot);
     next_state.last_synced_payload_hash = Some(pointer.payload_hash.clone());
     next_state.last_applied_remote_revision = Some(pointer.revision_id.clone());
     next_state.last_synced_at_ms = Some(current_time_ms());
@@ -1674,28 +1681,29 @@ pub fn pull_snapshot_with_remote(
 ) -> Result<CloudSyncResult, CloudSyncError> {
     ensure_enabled(options)?;
     ensure_remote_layout(remote, &options.remote_root)?;
-    let latest = load_sync_pointer_from_remote(remote, &options.remote_root)?
+    let latest = load_sync_pointer_from_remote(local_store, remote, &options.remote_root)?
         .ok_or(CloudSyncError::NoRemoteSnapshot)?;
     let mut next_state = normalized_state(state, &options.device_id);
     let mut local_snapshot = local_store.build_sync_snapshot(options)?;
     local_snapshot.recalculate_hash()?;
-    let remote_snapshot = match protocol::resolve_remote_snapshot(remote, options, &latest)? {
-        protocol::RemoteSnapshotResolution::Current(snapshot)
-        | protocol::RemoteSnapshotResolution::LegacyMigrated(snapshot) => snapshot,
-        protocol::RemoteSnapshotResolution::Inconsistent {
-            pointer,
-            recovery_candidate,
-        } => {
-            return Err(CloudSyncError::Conflict(Box::new(
-                remote_inconsistent_preview(
-                    remote.provider(),
-                    &local_snapshot.meta.payload_hash,
-                    &pointer,
-                    &recovery_candidate,
-                ),
-            )));
-        }
-    };
+    let remote_snapshot =
+        match protocol::resolve_remote_snapshot(local_store, remote, options, &latest)? {
+            protocol::RemoteSnapshotResolution::Current(snapshot)
+            | protocol::RemoteSnapshotResolution::LegacyMigrated(snapshot) => snapshot,
+            protocol::RemoteSnapshotResolution::Inconsistent {
+                pointer,
+                recovery_candidate,
+            } => {
+                return Err(CloudSyncError::Conflict(Box::new(
+                    remote_inconsistent_preview(
+                        remote.provider(),
+                        &local_snapshot.meta.payload_hash,
+                        &pointer,
+                        &recovery_candidate,
+                    ),
+                )));
+            }
+        };
 
     if latest.payload_hash == local_snapshot.meta.payload_hash {
         next_state.last_synced_payload_hash = Some(latest.payload_hash.clone());
@@ -1738,7 +1746,7 @@ pub fn pull_snapshot_with_remote(
 
     let snapshot = remote_snapshot;
     let backup = local_store.apply_sync_snapshot(options, &snapshot)?;
-    let _ = protocol::write_current_sync_snapshot_compat(remote, options, &snapshot);
+    let _ = protocol::write_current_sync_snapshot_compat(local_store, remote, options, &snapshot);
     next_state.last_synced_payload_hash = Some(snapshot.meta.payload_hash.clone());
     next_state.last_applied_remote_revision = Some(snapshot.meta.revision_id.clone());
     next_state.last_synced_at_ms = Some(current_time_ms());
@@ -1771,7 +1779,7 @@ pub fn recover_current_snapshot_with_remote(
 ) -> Result<CloudSyncResult, CloudSyncError> {
     ensure_enabled(options)?;
     ensure_remote_layout(remote, &options.remote_root)?;
-    let snapshot = protocol::recover_current_remote_snapshot(remote, options)?;
+    let snapshot = protocol::recover_current_remote_snapshot(local_store, remote, options)?;
     let backup = local_store.apply_sync_snapshot(options, &snapshot)?;
     let pointer = protocol::pointer_from_snapshot(&snapshot);
     let now = current_time_ms();
@@ -1796,13 +1804,15 @@ pub fn recover_current_snapshot_with_remote(
 }
 
 pub fn load_sync_pointer(
+    local_store: &dyn CloudLocalStore,
     options: &LocalCloudSyncOptions,
 ) -> Result<Option<RemoteSyncPointer>, CloudSyncError> {
     let remote = LocalDirectoryRemote::new(options.remote_dir.clone());
-    load_sync_pointer_from_remote(&remote, &options.remote_root)
+    load_sync_pointer_from_remote(local_store, &remote, &options.remote_root)
 }
 
 pub fn load_sync_pointer_from_remote(
+    local_store: &dyn CloudLocalStore,
     remote: &dyn CloudSyncRemote,
     remote_root: &str,
 ) -> Result<Option<RemoteSyncPointer>, CloudSyncError> {
@@ -1810,7 +1820,7 @@ pub fn load_sync_pointer_from_remote(
     let Some(bytes) = remote.read_if_exists(&path)? else {
         return Ok(None);
     };
-    decode_redb_json_doc(bytes.as_slice()).map(Some)
+    local_store.decode_sync_pointer(bytes.as_slice()).map(Some)
 }
 
 fn ensure_enabled(options: &LocalCloudSyncOptions) -> Result<(), CloudSyncError> {
@@ -1832,41 +1842,13 @@ fn ensure_remote_layout(
 }
 
 fn write_sync_pointer(
+    local_store: &dyn CloudLocalStore,
     remote: &dyn CloudSyncRemote,
     remote_root: &str,
     pointer: &RemoteSyncPointer,
 ) -> Result<(), CloudSyncError> {
-    let bytes = encode_redb_json_doc(pointer)?;
+    let bytes = local_store.encode_sync_pointer(pointer)?;
     remote.write(&remote_path(remote_root, SYNC_LATEST_FILE), &bytes)
-}
-
-fn encode_redb_json_doc(pointer: &RemoteSyncPointer) -> Result<Vec<u8>, CloudSyncError> {
-    let temp = TempRedbFile::new("cloud-meta-encode");
-    {
-        let db = Database::create(temp.path())?;
-        let txn = db.begin_write()?;
-        {
-            let mut docs = txn.open_table(REMOTE_SYNC_POINTER_TABLE)?;
-            let content = serde_json::to_string(pointer)?;
-            docs.insert(REMOTE_SYNC_POINTER_KEY, content.as_str())?;
-        }
-        txn.commit()?;
-    }
-    Ok(std::fs::read(temp.path())?)
-}
-
-fn decode_redb_json_doc(bytes: &[u8]) -> Result<RemoteSyncPointer, CloudSyncError> {
-    let temp = TempRedbFile::new("cloud-meta-decode");
-    std::fs::write(temp.path(), bytes)?;
-    let db = Database::open(temp.path())?;
-    let read = db.begin_read()?;
-    let docs = read.open_table(REMOTE_SYNC_POINTER_TABLE)?;
-    let content = docs
-        .get(REMOTE_SYNC_POINTER_KEY)?
-        .ok_or(CloudSyncError::NoRemoteSnapshot)?
-        .value()
-        .to_string();
-    Ok(serde_json::from_str(&content)?)
 }
 
 fn conflict_preview(
@@ -2086,32 +2068,6 @@ fn current_time_ms() -> u64 {
 
 fn uuid_v4() -> String {
     uuid::Uuid::new_v4().to_string()
-}
-
-struct TempRedbFile {
-    path: PathBuf,
-}
-
-impl TempRedbFile {
-    fn new(prefix: &str) -> Self {
-        let path = std::env::temp_dir().join(format!(
-            "nyaterm-{prefix}-{}-{}.redb",
-            std::process::id(),
-            uuid::Uuid::new_v4()
-        ));
-        let _ = std::fs::remove_file(&path);
-        Self { path }
-    }
-
-    fn path(&self) -> &Path {
-        &self.path
-    }
-}
-
-impl Drop for TempRedbFile {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.path);
-    }
 }
 
 #[cfg(test)]

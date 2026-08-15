@@ -103,8 +103,7 @@ pub use models::*;
 pub use natural_order::natural_compare;
 pub use portable_snapshot::{
     PortableSnapshotError, PortableSnapshotKind, PortableSnapshotMeta, RawPortableSnapshot,
-    decode_encrypted_raw_portable_snapshot, decode_raw_portable_snapshot,
-    encode_encrypted_raw_portable_snapshot, encode_raw_portable_snapshot,
+    decrypt_snapshot_bytes, encrypt_snapshot_bytes,
 };
 pub use runtime::{AppRuntime, RuntimeMode};
 pub use session_import::{

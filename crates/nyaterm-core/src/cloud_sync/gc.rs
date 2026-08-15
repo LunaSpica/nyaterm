@@ -1,11 +1,9 @@
 use std::collections::HashSet;
 use std::time::Duration;
 
-use crate::decode_encrypted_raw_portable_snapshot;
-
 use super::{
-    CloudSyncError, CloudSyncRemote, LocalCloudSyncOptions, RemoteSyncPointer, SYNC_SNAPSHOTS_DIR,
-    current_time_ms, remote_path,
+    CloudLocalStore, CloudSyncError, CloudSyncRemote, LocalCloudSyncOptions, RemoteSyncPointer,
+    SYNC_SNAPSHOTS_DIR, current_time_ms, remote_path,
 };
 
 pub const SYNC_SNAPSHOT_KEEP_RECENT: usize = 5;
@@ -20,6 +18,7 @@ struct SnapshotGcEntry {
 }
 
 pub fn cleanup_sync_snapshots_with_remote(
+    local_store: &dyn CloudLocalStore,
     options: &LocalCloudSyncOptions,
     remote: &dyn CloudSyncRemote,
     latest: Option<&RemoteSyncPointer>,
@@ -32,7 +31,7 @@ pub fn cleanup_sync_snapshots_with_remote(
         };
         let entry = match remote.read_if_exists(&path) {
             Ok(Some(bytes)) => {
-                match decode_encrypted_raw_portable_snapshot(&bytes, &options.master_password) {
+                match local_store.decode_sync_snapshot(&bytes, &options.master_password) {
                     Ok(snapshot) if snapshot.meta.revision_id == revision_id => SnapshotGcEntry {
                         path,
                         revision_id,

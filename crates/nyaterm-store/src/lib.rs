@@ -1,5 +1,6 @@
 //! Persistent-store boundary and single-owner runtime.
 
+mod portable_codec;
 mod runtime;
 mod storage;
 
@@ -17,9 +18,11 @@ pub use storage::{
 pub use nyaterm_core::{
     DiagnosticsError, DiagnosticsExportInfo, DiagnosticsExportOptions, DiagnosticsRuntimeSnapshot,
     PortableSnapshotError, PortableSnapshotKind, PortableSnapshotMeta, RawPortableSnapshot,
+    export_diagnostics_archive,
+};
+pub use portable_codec::{
     decode_encrypted_raw_portable_snapshot, decode_raw_portable_snapshot,
     encode_encrypted_raw_portable_snapshot, encode_raw_portable_snapshot,
-    export_diagnostics_archive,
 };
 
 #[cfg(test)]
@@ -38,10 +41,28 @@ mod tests {
         snapshot.recalculate_hash().expect("hash snapshot");
 
         let encoded = encode_raw_portable_snapshot(&snapshot).expect("encode snapshot");
+        assert!(encoded.starts_with(b"PK\x03\x04"));
         let decoded = decode_raw_portable_snapshot(&encoded).expect("decode snapshot");
 
         assert_eq!(decoded.meta.snapshot_kind, PortableSnapshotKind::Backup);
         assert_eq!(decoded.meta.device_id, "test-device");
         assert_eq!(decoded.entities, snapshot.entities);
+    }
+
+    #[test]
+    fn sync_pointer_round_trips_through_legacy_redb_document() {
+        let pointer = nyaterm_core::RemoteSyncPointer {
+            schema_version: 2,
+            revision_id: "revision-1".to_string(),
+            created_at_ms: 123,
+            payload_hash: "hash".to_string(),
+            device_id: "device-1".to_string(),
+            app_version: "2.0.0".to_string(),
+        };
+
+        let encoded = crate::portable_codec::encode_sync_pointer(&pointer).expect("encode pointer");
+        let decoded = crate::portable_codec::decode_sync_pointer(&encoded).expect("decode pointer");
+
+        assert_eq!(decoded, pointer);
     }
 }

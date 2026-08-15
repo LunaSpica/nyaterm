@@ -130,6 +130,33 @@ impl ConnectionStore {
 struct TestLocalStore;
 
 impl CloudLocalStore for TestLocalStore {
+    fn encode_sync_snapshot(
+        &self,
+        snapshot: &RawPortableSnapshot,
+        master_password: &str,
+    ) -> Result<Vec<u8>, CloudSyncError> {
+        let bytes = serde_json::to_vec(snapshot)?;
+        crate::encrypt_snapshot_bytes(master_password, &bytes)
+            .map_err(CloudSyncError::PortableSnapshot)
+    }
+
+    fn decode_sync_snapshot(
+        &self,
+        bytes: &[u8],
+        master_password: &str,
+    ) -> Result<RawPortableSnapshot, CloudSyncError> {
+        let bytes = crate::decrypt_snapshot_bytes(master_password, bytes)?;
+        Ok(serde_json::from_slice(&bytes)?)
+    }
+
+    fn encode_sync_pointer(&self, pointer: &RemoteSyncPointer) -> Result<Vec<u8>, CloudSyncError> {
+        Ok(serde_json::to_vec(pointer)?)
+    }
+
+    fn decode_sync_pointer(&self, bytes: &[u8]) -> Result<RemoteSyncPointer, CloudSyncError> {
+        Ok(serde_json::from_slice(bytes)?)
+    }
+
     fn build_sync_snapshot(
         &self,
         options: &LocalCloudSyncOptions,
@@ -178,6 +205,30 @@ impl CloudLocalStore for TestLocalStore {
 struct OptionsTestLocalStore<'a>(&'a LocalCloudSyncOptions);
 
 impl CloudLocalStore for OptionsTestLocalStore<'_> {
+    fn encode_sync_snapshot(
+        &self,
+        snapshot: &RawPortableSnapshot,
+        master_password: &str,
+    ) -> Result<Vec<u8>, CloudSyncError> {
+        TestLocalStore.encode_sync_snapshot(snapshot, master_password)
+    }
+
+    fn decode_sync_snapshot(
+        &self,
+        bytes: &[u8],
+        master_password: &str,
+    ) -> Result<RawPortableSnapshot, CloudSyncError> {
+        TestLocalStore.decode_sync_snapshot(bytes, master_password)
+    }
+
+    fn encode_sync_pointer(&self, pointer: &RemoteSyncPointer) -> Result<Vec<u8>, CloudSyncError> {
+        TestLocalStore.encode_sync_pointer(pointer)
+    }
+
+    fn decode_sync_pointer(&self, bytes: &[u8]) -> Result<RemoteSyncPointer, CloudSyncError> {
+        TestLocalStore.decode_sync_pointer(bytes)
+    }
+
     fn build_sync_snapshot(
         &self,
         options: &LocalCloudSyncOptions,
@@ -848,9 +899,13 @@ fn snapshot_upload_failure_does_not_commit_latest_pointer() {
 
     assert!(matches!(error, CloudSyncError::Remote(_)));
     assert!(
-        super::load_sync_pointer_from_remote(&remote, &source_options.remote_root)
-            .expect("load latest")
-            .is_none()
+        super::load_sync_pointer_from_remote(
+            &OptionsTestLocalStore(&source_options),
+            &remote,
+            &source_options.remote_root,
+        )
+        .expect("load latest")
+        .is_none()
     );
     std::fs::remove_dir_all(source_dir).ok();
     std::fs::remove_dir_all(unused_remote).ok();
@@ -886,15 +941,24 @@ fn pointer_commit_failure_keeps_previous_head_readable() {
         .expect_err("pointer commit must fail");
 
     assert!(matches!(error, CloudSyncError::Remote(_)));
-    let latest = super::load_sync_pointer_from_remote(&remote, &source_options.remote_root)
-        .expect("load latest")
-        .expect("previous latest");
+    let latest = super::load_sync_pointer_from_remote(
+        &OptionsTestLocalStore(&source_options),
+        &remote,
+        &source_options.remote_root,
+    )
+    .expect("load latest")
+    .expect("previous latest");
     assert_eq!(
         latest.revision_id,
         first.pointer.expect("first pointer").revision_id
     );
-    super::protocol::read_snapshot_for_pointer(&remote, &source_options, &latest)
-        .expect("previous snapshot remains readable");
+    super::protocol::read_snapshot_for_pointer(
+        &OptionsTestLocalStore(&source_options),
+        &remote,
+        &source_options,
+        &latest,
+    )
+    .expect("previous snapshot remains readable");
     std::fs::remove_dir_all(source_dir).ok();
     std::fs::remove_dir_all(unused_remote).ok();
 }
@@ -912,12 +976,21 @@ fn compatibility_snapshot_failure_does_not_reverse_committed_push() {
             .expect("committed push");
 
     let pointer = pushed.pointer.expect("pointer");
-    let latest = super::load_sync_pointer_from_remote(&remote, &source_options.remote_root)
-        .expect("load latest")
-        .expect("latest");
+    let latest = super::load_sync_pointer_from_remote(
+        &OptionsTestLocalStore(&source_options),
+        &remote,
+        &source_options.remote_root,
+    )
+    .expect("load latest")
+    .expect("latest");
     assert_eq!(latest.revision_id, pointer.revision_id);
-    super::protocol::read_snapshot_for_pointer(&remote, &source_options, &pointer)
-        .expect("immutable snapshot");
+    super::protocol::read_snapshot_for_pointer(
+        &OptionsTestLocalStore(&source_options),
+        &remote,
+        &source_options,
+        &pointer,
+    )
+    .expect("immutable snapshot");
     assert!(
         remote
             .read_if_exists(&remote_path(
@@ -957,16 +1030,22 @@ fn concurrent_pointer_update_is_rejected_before_commit() {
         .expect("seed second");
     let competitor = remote_pointer("competitor", "competing-hash");
     remote.replace_latest_on_second_read(
-        super::encode_redb_json_doc(&competitor).expect("encode competing pointer"),
+        TestLocalStore
+            .encode_sync_pointer(&competitor)
+            .expect("encode competing pointer"),
     );
 
     let error = push_snapshot_with_remote(&source_options, &remote, &first.state, false)
         .expect_err("concurrent update");
 
     assert!(matches!(error, CloudSyncError::ConcurrentUpdate { .. }));
-    let latest = super::load_sync_pointer_from_remote(&remote, &source_options.remote_root)
-        .expect("load latest")
-        .expect("latest");
+    let latest = super::load_sync_pointer_from_remote(
+        &OptionsTestLocalStore(&source_options),
+        &remote,
+        &source_options.remote_root,
+    )
+    .expect("load latest")
+    .expect("latest");
     assert_eq!(latest.revision_id, competitor.revision_id);
     std::fs::remove_dir_all(source_dir).ok();
     std::fs::remove_dir_all(unused_remote).ok();
@@ -998,7 +1077,9 @@ fn pull_rejects_hash_revision_and_corrupted_snapshot_data() {
     remote
         .write(
             &remote_path(&source_options.remote_root, super::SYNC_LATEST_FILE),
-            &super::encode_redb_json_doc(&wrong_hash).expect("encode wrong hash pointer"),
+            &TestLocalStore
+                .encode_sync_pointer(&wrong_hash)
+                .expect("encode wrong hash pointer"),
         )
         .expect("write wrong hash pointer");
     assert!(matches!(
@@ -1020,7 +1101,9 @@ fn pull_rejects_hash_revision_and_corrupted_snapshot_data() {
     remote
         .write(
             &remote_path(&source_options.remote_root, super::SYNC_LATEST_FILE),
-            &super::encode_redb_json_doc(&wrong_revision).expect("encode wrong revision pointer"),
+            &TestLocalStore
+                .encode_sync_pointer(&wrong_revision)
+                .expect("encode wrong revision pointer"),
         )
         .expect("write wrong revision pointer");
     assert!(matches!(
@@ -1031,7 +1114,9 @@ fn pull_rejects_hash_revision_and_corrupted_snapshot_data() {
     remote
         .write(
             &remote_path(&source_options.remote_root, super::SYNC_LATEST_FILE),
-            &super::encode_redb_json_doc(&pointer).expect("encode pointer"),
+            &TestLocalStore
+                .encode_sync_pointer(&pointer)
+                .expect("encode pointer"),
         )
         .expect("restore pointer");
     remote

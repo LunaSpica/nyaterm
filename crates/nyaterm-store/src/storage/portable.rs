@@ -20,9 +20,13 @@ use super::{
     set_nested_json_value, validate_config_backup_file, validate_config_backup_source,
     write_json_in_txn, write_portable_snapshot_file,
 };
+use crate::{
+    decode_encrypted_raw_portable_snapshot, decode_raw_portable_snapshot,
+    encode_encrypted_raw_portable_snapshot, encode_raw_portable_snapshot,
+};
 use nyaterm_core::{
     CommandHistoryEntry, ConnectionType, PortableSnapshotKind, RawPortableSnapshot, SessionsConfig,
-    SshAgentEndpoint, TunnelGroup, encode_raw_portable_snapshot,
+    SshAgentEndpoint, TunnelGroup,
 };
 
 impl ConnectionStore {
@@ -159,7 +163,7 @@ impl ConnectionStore {
             app_version,
         )?;
         snapshot.recalculate_hash()?;
-        let encoded = nyaterm_core::portable_snapshot::encode_raw_portable_snapshot(&snapshot)?;
+        let encoded = encode_raw_portable_snapshot(&snapshot)?;
 
         let backup_path = output_path.as_ref().to_path_buf();
         ensure_parent_dir(&backup_path)?;
@@ -194,10 +198,7 @@ impl ConnectionStore {
             app_version,
         )?;
         snapshot.recalculate_hash()?;
-        let encoded = nyaterm_core::portable_snapshot::encode_encrypted_raw_portable_snapshot(
-            &snapshot,
-            master_password,
-        )?;
+        let encoded = encode_encrypted_raw_portable_snapshot(&snapshot, master_password)?;
         write_portable_snapshot_file(database_path, output_path, &encoded)
     }
     pub fn import_portable_snapshot(
@@ -218,7 +219,7 @@ impl ConnectionStore {
                 to: config_dir.join(DATABASE_FILE),
                 source,
             })?;
-        let snapshot = nyaterm_core::portable_snapshot::decode_raw_portable_snapshot(&bytes)?;
+        let snapshot = decode_raw_portable_snapshot(&bytes)?;
 
         let database_path = config_dir.join(DATABASE_FILE);
         let safety_backup_path = if database_path.exists() {
@@ -269,10 +270,7 @@ impl ConnectionStore {
                 to: config_dir.join(DATABASE_FILE),
                 source,
             })?;
-        let snapshot = nyaterm_core::portable_snapshot::decode_encrypted_raw_portable_snapshot(
-            &bytes,
-            master_password,
-        )?;
+        let snapshot = decode_encrypted_raw_portable_snapshot(&bytes, master_password)?;
         Self::apply_portable_snapshot_to_config_dir(
             config_dir,
             portable_key_path,

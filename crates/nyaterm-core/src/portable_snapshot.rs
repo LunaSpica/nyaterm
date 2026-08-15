@@ -1,13 +1,10 @@
 use std::collections::BTreeMap;
 use std::io::{Cursor, Read, Write};
-use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use aes_gcm::aead::Aead;
 use aes_gcm::{Aes256Gcm, Key, KeyInit};
 use rand::RngExt;
-use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use sha2::{Digest, Sha256};
@@ -15,15 +12,11 @@ use thiserror::Error;
 use zip::write::SimpleFileOptions;
 
 const PORTABLE_SNAPSHOT_SCHEMA_VERSION: u32 = 3;
-const SNAPSHOT_META_KEY: &str = "meta";
 const SNAPSHOT_ZIP_MANIFEST_NAME: &str = "manifest.json";
 const SNAPSHOT_ZIP_PAYLOAD_NAME: &str = "snapshot.redb";
 const MAX_COMPRESSED_SNAPSHOT_PAYLOAD_BYTES: u64 = 50 * 1024 * 1024;
 const CLOUD_SNAPSHOT_KEY_PREFIX: &[u8] = b"nyaterm-cloud-snapshot-v1:";
 const LEGACY_CLOUD_SNAPSHOT_KEY_PREFIX: &[u8] = b"dragonfly-cloud-snapshot-v1:";
-
-const SNAPSHOT_META_TABLE: TableDefinition<&str, &str> = TableDefinition::new("snapshot_meta");
-const SNAPSHOT_ENTITIES_TABLE: TableDefinition<&str, &str> = TableDefinition::new("entity_docs");
 
 #[derive(Debug, Error)]
 pub enum PortableSnapshotError {
@@ -50,20 +43,12 @@ pub enum PortableSnapshotError {
     UnsupportedVersion(u32),
     #[error("portable snapshot payload hash mismatch")]
     PayloadHashMismatch,
+    #[error("portable snapshot codec error: {0}")]
+    Codec(String),
     #[error("zip snapshot error: {0}")]
     Zip(#[from] zip::result::ZipError),
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
-    #[error("redb database error: {0}")]
-    RedbDatabase(#[from] redb::DatabaseError),
-    #[error("redb transaction error: {0}")]
-    RedbTransaction(#[from] redb::TransactionError),
-    #[error("redb table error: {0}")]
-    RedbTable(#[from] redb::TableError),
-    #[error("redb storage error: {0}")]
-    RedbStorage(#[from] redb::StorageError),
-    #[error("redb commit error: {0}")]
-    RedbCommit(#[from] redb::CommitError),
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
 }
@@ -86,7 +71,7 @@ pub struct PortableSnapshotMeta {
     pub app_version: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RawPortableSnapshot {
     pub meta: PortableSnapshotMeta,
     pub entities: BTreeMap<String, String>,
@@ -177,98 +162,8 @@ pub fn decrypt_snapshot_bytes(
     }
 }
 
-pub fn encode_raw_portable_snapshot(
-    snapshot: &RawPortableSnapshot,
-) -> Result<Vec<u8>, PortableSnapshotError> {
-    validate_raw_snapshot(snapshot)?;
-    let redb_payload = encode_raw_snapshot_redb(snapshot)?;
-    encode_compressed_snapshot_payload(&redb_payload)
-}
-
-pub fn decode_raw_portable_snapshot(
-    bytes: &[u8],
-) -> Result<RawPortableSnapshot, PortableSnapshotError> {
-    let payload = if is_zip_snapshot_payload(bytes) {
-        decode_compressed_snapshot_payload(bytes)?
-    } else {
-        bytes.to_vec()
-    };
-    let snapshot = decode_raw_snapshot_redb(&payload)?;
-    validate_raw_snapshot(&snapshot)?;
-    Ok(snapshot)
-}
-
-pub fn encode_encrypted_raw_portable_snapshot(
-    snapshot: &RawPortableSnapshot,
-    master_password: &str,
-) -> Result<Vec<u8>, PortableSnapshotError> {
-    let encoded = encode_raw_portable_snapshot(snapshot)?;
-    encrypt_snapshot_bytes(master_password, &encoded)
-}
-
-pub fn decode_encrypted_raw_portable_snapshot(
-    ciphertext: &[u8],
-    master_password: &str,
-) -> Result<RawPortableSnapshot, PortableSnapshotError> {
-    let decoded = decrypt_snapshot_bytes(master_password, ciphertext)?;
-    decode_raw_portable_snapshot(&decoded)
-}
-
-fn encode_raw_snapshot_redb(
-    snapshot: &RawPortableSnapshot,
-) -> Result<Vec<u8>, PortableSnapshotError> {
-    let temp = TempRedbFile::new("portable-snapshot-encode");
-    {
-        let db = Database::create(temp.path())?;
-        let txn = db.begin_write()?;
-        {
-            let mut meta = txn.open_table(SNAPSHOT_META_TABLE)?;
-            let meta_content = serde_json::to_string(&snapshot.meta)?;
-            meta.insert(SNAPSHOT_META_KEY, meta_content.as_str())?;
-        }
-        {
-            let mut entities = txn.open_table(SNAPSHOT_ENTITIES_TABLE)?;
-            for (key, value) in &snapshot.entities {
-                entities.insert(key.as_str(), value.as_str())?;
-            }
-        }
-        txn.commit()?;
-    }
-    Ok(std::fs::read(temp.path())?)
-}
-
-fn decode_raw_snapshot_redb(bytes: &[u8]) -> Result<RawPortableSnapshot, PortableSnapshotError> {
-    catch_unwind(AssertUnwindSafe(
-        || -> Result<RawPortableSnapshot, PortableSnapshotError> {
-            let temp = TempRedbFile::new("portable-snapshot-decode");
-            std::fs::write(temp.path(), bytes)?;
-            let db = Database::open(temp.path())?;
-            let read = db.begin_read()?;
-            let meta_table = read.open_table(SNAPSHOT_META_TABLE)?;
-            let meta_raw = meta_table
-                .get(SNAPSHOT_META_KEY)?
-                .ok_or(PortableSnapshotError::MissingMetadata)?
-                .value()
-                .to_string();
-            let meta: PortableSnapshotMeta = serde_json::from_str(&meta_raw)?;
-            if meta.schema_version != PORTABLE_SNAPSHOT_SCHEMA_VERSION {
-                return Err(PortableSnapshotError::UnsupportedVersion(
-                    meta.schema_version,
-                ));
-            }
-            let entity_table = read.open_table(SNAPSHOT_ENTITIES_TABLE)?;
-            let mut entities = BTreeMap::new();
-            for entry in entity_table.iter()? {
-                let (key, value) = entry?;
-                entities.insert(key.value().to_string(), value.value().to_string());
-            }
-            Ok(RawPortableSnapshot { meta, entities })
-        },
-    ))
-    .unwrap_or(Err(PortableSnapshotError::CorruptPayload))
-}
-
-fn encode_compressed_snapshot_payload(
+#[doc(hidden)]
+pub fn encode_compressed_snapshot_payload(
     redb_payload: &[u8],
 ) -> Result<Vec<u8>, PortableSnapshotError> {
     let cursor = Cursor::new(Vec::new());
@@ -286,7 +181,8 @@ fn encode_compressed_snapshot_payload(
     Ok(cursor.into_inner())
 }
 
-fn decode_compressed_snapshot_payload(bytes: &[u8]) -> Result<Vec<u8>, PortableSnapshotError> {
+#[doc(hidden)]
+pub fn decode_compressed_snapshot_payload(bytes: &[u8]) -> Result<Vec<u8>, PortableSnapshotError> {
     let cursor = Cursor::new(bytes);
     let mut archive = zip::ZipArchive::new(cursor)?;
     let mut entry = archive.by_name(SNAPSHOT_ZIP_PAYLOAD_NAME)?;
@@ -313,7 +209,8 @@ fn decode_compressed_snapshot_payload(bytes: &[u8]) -> Result<Vec<u8>, PortableS
     Ok(payload)
 }
 
-fn validate_raw_snapshot(snapshot: &RawPortableSnapshot) -> Result<(), PortableSnapshotError> {
+#[doc(hidden)]
+pub fn validate_raw_snapshot(snapshot: &RawPortableSnapshot) -> Result<(), PortableSnapshotError> {
     if snapshot.meta.schema_version != PORTABLE_SNAPSHOT_SCHEMA_VERSION {
         return Err(PortableSnapshotError::UnsupportedVersion(
             snapshot.meta.schema_version,
@@ -461,7 +358,8 @@ fn default_portable_settings_json() -> String {
     .to_string()
 }
 
-fn is_zip_snapshot_payload(bytes: &[u8]) -> bool {
+#[doc(hidden)]
+pub fn is_zip_snapshot_payload(bytes: &[u8]) -> bool {
     bytes.starts_with(b"PK\x03\x04")
 }
 
@@ -507,33 +405,6 @@ fn current_time_ms() -> u64 {
         .unwrap_or(u64::MAX)
 }
 
-struct TempRedbFile {
-    path: PathBuf,
-}
-
-impl TempRedbFile {
-    fn new(prefix: &str) -> Self {
-        let path = std::env::temp_dir().join(format!(
-            "nyaterm-{prefix}-{}-{}-{}.redb",
-            std::process::id(),
-            current_time_ms(),
-            uuid::Uuid::new_v4()
-        ));
-        let _ = std::fs::remove_file(&path);
-        Self { path }
-    }
-
-    fn path(&self) -> &Path {
-        &self.path
-    }
-}
-
-impl Drop for TempRedbFile {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.path);
-    }
-}
-
 #[derive(Serialize)]
 struct SnapshotRawHashInput<'a> {
     settings: &'a RawValue,
@@ -573,44 +444,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn raw_snapshot_round_trips_through_zip_redb_payload() {
-        let mut snapshot = RawPortableSnapshot::backup("device-1", "test");
-        snapshot.entities.insert(
-            "known_hosts".to_string(),
-            "\"example ssh-ed25519 AAAA\"".to_string(),
-        );
-        snapshot.recalculate_hash().expect("hash");
-
-        let encoded = encode_raw_portable_snapshot(&snapshot).expect("encode");
-        assert!(encoded.starts_with(b"PK\x03\x04"));
-        let decoded = decode_raw_portable_snapshot(&encoded).expect("decode");
-
-        assert_eq!(decoded.meta.payload_hash, snapshot.meta.payload_hash);
-        assert_eq!(
-            decoded.entities.get("known_hosts").map(String::as_str),
-            Some("\"example ssh-ed25519 AAAA\"")
-        );
-    }
-
-    #[test]
-    fn encrypted_raw_snapshot_uses_password_and_legacy_fallback() {
-        let mut snapshot = RawPortableSnapshot::backup("device-1", "test");
-        snapshot.recalculate_hash().expect("hash");
-
-        let encrypted =
-            encode_encrypted_raw_portable_snapshot(&snapshot, "secret").expect("encrypt");
-        assert!(
-            decode_encrypted_raw_portable_snapshot(&encrypted, "wrong")
-                .expect_err("wrong password")
-                .to_string()
-                .contains("cloud snapshot decryption failed")
-        );
-        let decoded =
-            decode_encrypted_raw_portable_snapshot(&encrypted, "secret").expect("decrypt");
-        assert_eq!(decoded.meta.payload_hash, snapshot.meta.payload_hash);
-    }
-
-    #[test]
     fn detects_payload_hash_mismatch() {
         let mut snapshot = RawPortableSnapshot::backup("device-1", "test");
         snapshot.recalculate_hash().expect("hash");
@@ -619,7 +452,7 @@ mod tests {
             .insert("history".to_string(), "[{\"changed\":true}]".to_string());
 
         assert!(matches!(
-            encode_raw_portable_snapshot(&snapshot),
+            validate_raw_snapshot(&snapshot),
             Err(PortableSnapshotError::PayloadHashMismatch)
         ));
     }

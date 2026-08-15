@@ -56,29 +56,30 @@ macro_rules! with_provider_remote {
 }
 
 pub(in crate::features) fn test_provider_connection(
+    local_store: &nyaterm_store::StoreBlockingClient,
     settings: &CloudSyncSettings,
 ) -> Result<(), CloudSyncError> {
     let remote_root = settings.remote_root.as_str();
     match settings.provider.as_str() {
         "webdav" => {
             let remote = NativeWebdavRemote::new(&settings.webdav)?;
-            nyaterm_core::load_sync_pointer_from_remote(&remote, remote_root)?;
+            nyaterm_core::load_sync_pointer_from_remote(local_store, &remote, remote_root)?;
         }
         "s3" => {
             let remote = NativeS3Remote::new(&settings.s3)?;
-            nyaterm_core::load_sync_pointer_from_remote(&remote, remote_root)?;
+            nyaterm_core::load_sync_pointer_from_remote(local_store, &remote, remote_root)?;
         }
         "google_drive" => {
             let remote = NativeGoogleDriveRemote::new(&settings.google_drive)?;
-            nyaterm_core::load_sync_pointer_from_remote(&remote, remote_root)?;
+            nyaterm_core::load_sync_pointer_from_remote(local_store, &remote, remote_root)?;
         }
         "onedrive" => {
             let remote = NativeOneDriveRemote::new(&settings.onedrive)?;
-            nyaterm_core::load_sync_pointer_from_remote(&remote, remote_root)?;
+            nyaterm_core::load_sync_pointer_from_remote(local_store, &remote, remote_root)?;
         }
         "aliyun_drive" => {
             let remote = NativeAliyunDriveRemote::new(&settings.aliyun_drive)?;
-            nyaterm_core::load_sync_pointer_from_remote(&remote, remote_root)?;
+            nyaterm_core::load_sync_pointer_from_remote(local_store, &remote, remote_root)?;
         }
         "gitee_snippet" => {
             let backend = GiteeSnippetHttpBackend::new(
@@ -86,13 +87,13 @@ pub(in crate::features) fn test_provider_connection(
                 NativeSnippetHttpClient::new()?,
             )?;
             let remote = SnippetRemote::new("gitee_snippet", backend);
-            nyaterm_core::load_sync_pointer_from_remote(&remote, remote_root)?;
+            nyaterm_core::load_sync_pointer_from_remote(local_store, &remote, remote_root)?;
         }
         "github_gist" => {
             let backend =
                 GithubGistHttpBackend::new(&settings.github_gist, NativeSnippetHttpClient::new()?)?;
             let remote = SnippetRemote::new("github_gist", backend);
-            nyaterm_core::load_sync_pointer_from_remote(&remote, remote_root)?;
+            nyaterm_core::load_sync_pointer_from_remote(local_store, &remote, remote_root)?;
         }
         provider => {
             return Err(CloudSyncError::Remote(format!(
@@ -212,11 +213,12 @@ pub(in crate::features) fn recover_provider_snapshot(
 }
 
 pub(in crate::features) fn cleanup_provider_snapshots(
+    local_store: &nyaterm_store::StoreBlockingClient,
     settings: &CloudSyncSettings,
     options: &LocalCloudSyncOptions,
     latest: Option<&RemoteSyncPointer>,
 ) -> Result<(), CloudSyncError> {
     with_provider_remote!(settings, remote, {
-        cleanup_sync_snapshots_with_remote(options, &remote, latest)
+        cleanup_sync_snapshots_with_remote(local_store, options, &remote, latest)
     })
 }
