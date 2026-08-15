@@ -300,6 +300,9 @@ these as staged extraction candidates, not as formatting-only refactor targets.
 - Saved connections, post-login/recording overrides, groups and session
   catalogs now live in `nyaterm-core::models::sessions`; their flattened
   connection JSON and legacy `sessions` alias remain unchanged.
+- SSH/SFTP/Telnet/Serial/RDP/VNC connection contracts now live in
+  `nyaterm-core::models::connection`; terminal profiles, protocol defaults and
+  serde compatibility tags are unchanged.
 - `gpui-component` infrastructure and ordinary-control migration are in place.
   The workspace uses vendored `gpui-component` `0.5.2` at
   `e1570bdc8fd2dc17d38cab09e74b1783bdf3b24b` and vendored Zed GPUI at
