@@ -1,6 +1,6 @@
 use gpui::{Context, Window};
 use nyaterm_core::{ProxyConfig, uuid};
-use nyaterm_store::ConnectionStore;
+use nyaterm_store::{StoreDomain, store_request};
 
 use super::helpers::parse_port;
 use crate::features::NyaTermApp;
@@ -224,29 +224,34 @@ impl NyaTermApp {
         };
         let next_proxies = self.tunnel_state.proxies_with_upsert(proxy);
 
-        match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .and_then(|store| store.replace_proxies(&next_proxies))
-        {
-            Ok(()) => {
-                self.tunnel_state.commit_proxies(next_proxies);
-                self.connection_state.close_network_proxy_editor();
-                self.shell.set_status(format!("proxy '{name}' saved"));
-                self.settings
-                    .update_store_status(self.shell.status().to_string(), true);
-            }
-            Err(error) => {
-                self.shell
-                    .set_status(format!("failed to save proxy: {error}"));
-                self.settings
-                    .update_store_status(self.shell.status().to_string(), false);
-                self.connection_state
-                    .set_network_proxy_editor_error(self.shell.status().to_string());
-            }
-        }
-        cx.notify();
+        let persisted = next_proxies.clone();
+        self.submit_store_request(
+            0,
+            store_request(StoreDomain::Tunnels, move |store| {
+                store.replace_proxies(&persisted)
+            }),
+            move |this, event, cx| {
+                match event.outcome {
+                    Ok(()) => {
+                        this.tunnel_state.commit_proxies(next_proxies);
+                        this.connection_state.close_network_proxy_editor();
+                        this.shell.set_status(format!("proxy '{name}' saved"));
+                        this.settings
+                            .update_store_status(this.shell.status().to_string(), true);
+                    }
+                    Err(error) => {
+                        this.shell
+                            .set_status(format!("failed to save proxy: {error}"));
+                        this.settings
+                            .update_store_status(this.shell.status().to_string(), false);
+                        this.connection_state
+                            .set_network_proxy_editor_error(this.shell.status().to_string());
+                    }
+                }
+                cx.notify();
+            },
+            cx,
+        );
     }
 
     pub(in crate::features) fn set_network_proxy_editor_error(

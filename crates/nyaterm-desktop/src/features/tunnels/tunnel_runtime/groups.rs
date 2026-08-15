@@ -1,5 +1,5 @@
 use gpui::{Context, Window};
-use nyaterm_store::ConnectionStore;
+use nyaterm_store::{StoreDomain, store_request};
 
 use crate::features::NyaTermApp;
 use crate::models::{NetworkGroupEditorState, NetworkTab};
@@ -129,28 +129,33 @@ impl NyaTermApp {
             return;
         };
 
-        match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .and_then(|store| store.replace_tunnel_groups(&groups))
-        {
-            Ok(()) => {
-                self.tunnel_state.commit_tunnel_groups(groups);
-                self.connection_state.close_network_group_editor();
-                self.shell
-                    .set_status(format!("tunnel group '{name}' saved"));
-                self.settings
-                    .update_store_status(self.shell.status().to_string(), true);
-            }
-            Err(error) => {
-                self.shell
-                    .set_status(format!("failed to save tunnel group: {error}"));
-                self.settings
-                    .update_store_status(self.shell.status().to_string(), false);
-            }
-        }
-        cx.notify();
+        let persisted = groups.clone();
+        self.submit_store_request(
+            0,
+            store_request(StoreDomain::Tunnels, move |store| {
+                store.replace_tunnel_groups(&persisted)
+            }),
+            move |this, event, cx| {
+                match event.outcome {
+                    Ok(()) => {
+                        this.tunnel_state.commit_tunnel_groups(groups);
+                        this.connection_state.close_network_group_editor();
+                        this.shell
+                            .set_status(format!("tunnel group '{name}' saved"));
+                        this.settings
+                            .update_store_status(this.shell.status().to_string(), true);
+                    }
+                    Err(error) => {
+                        this.shell
+                            .set_status(format!("failed to save tunnel group: {error}"));
+                        this.settings
+                            .update_store_status(this.shell.status().to_string(), false);
+                    }
+                }
+                cx.notify();
+            },
+            cx,
+        );
     }
 
     pub(in crate::features) fn save_proxy_group(
@@ -169,27 +174,32 @@ impl NyaTermApp {
             return;
         };
 
-        match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .and_then(|store| store.replace_proxy_groups(&groups))
-        {
-            Ok(()) => {
-                self.tunnel_state.commit_proxy_groups(groups);
-                self.connection_state.close_network_group_editor();
-                self.shell.set_status(format!("proxy group '{name}' saved"));
-                self.settings
-                    .update_store_status(self.shell.status().to_string(), true);
-            }
-            Err(error) => {
-                self.shell
-                    .set_status(format!("failed to save proxy group: {error}"));
-                self.settings
-                    .update_store_status(self.shell.status().to_string(), false);
-            }
-        }
-        cx.notify();
+        let persisted = groups.clone();
+        self.submit_store_request(
+            0,
+            store_request(StoreDomain::Tunnels, move |store| {
+                store.replace_proxy_groups(&persisted)
+            }),
+            move |this, event, cx| {
+                match event.outcome {
+                    Ok(()) => {
+                        this.tunnel_state.commit_proxy_groups(groups);
+                        this.connection_state.close_network_group_editor();
+                        this.shell.set_status(format!("proxy group '{name}' saved"));
+                        this.settings
+                            .update_store_status(this.shell.status().to_string(), true);
+                    }
+                    Err(error) => {
+                        this.shell
+                            .set_status(format!("failed to save proxy group: {error}"));
+                        this.settings
+                            .update_store_status(this.shell.status().to_string(), false);
+                    }
+                }
+                cx.notify();
+            },
+            cx,
+        );
     }
 
     pub(in crate::features) fn open_network_group_delete_confirm(
@@ -237,35 +247,40 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let removal = self.tunnel_state.without_tunnel_group(&group_id);
-
-        match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .and_then(|store| {
-            store.replace_tunnel_groups(removal.groups())?;
-            store.replace_tunnels(removal.tunnels())
-        }) {
-            Ok(()) => {
-                let deleted_tunnel_ids = self.tunnel_state.commit_tunnel_group_removal(removal);
-                self.connection_state.remove_network_group_references(
-                    NetworkTab::Tunnels,
-                    &group_id,
-                    &deleted_tunnel_ids,
-                );
-                self.shell
-                    .set_status(format!("tunnel group '{label}' deleted"));
-                self.settings
-                    .update_store_status(self.shell.status().to_string(), true);
-            }
-            Err(error) => {
-                self.shell
-                    .set_status(format!("failed to delete tunnel group: {error}"));
-                self.settings
-                    .update_store_status(self.shell.status().to_string(), false);
-            }
-        }
-        cx.notify();
+        let groups = removal.groups().to_vec();
+        let tunnels = removal.tunnels().to_vec();
+        self.submit_store_request(
+            0,
+            store_request(StoreDomain::Tunnels, move |store| {
+                store.replace_tunnel_groups(&groups)?;
+                store.replace_tunnels(&tunnels)
+            }),
+            move |this, event, cx| {
+                match event.outcome {
+                    Ok(()) => {
+                        let deleted_tunnel_ids =
+                            this.tunnel_state.commit_tunnel_group_removal(removal);
+                        this.connection_state.remove_network_group_references(
+                            NetworkTab::Tunnels,
+                            &group_id,
+                            &deleted_tunnel_ids,
+                        );
+                        this.shell
+                            .set_status(format!("tunnel group '{label}' deleted"));
+                        this.settings
+                            .update_store_status(this.shell.status().to_string(), true);
+                    }
+                    Err(error) => {
+                        this.shell
+                            .set_status(format!("failed to delete tunnel group: {error}"));
+                        this.settings
+                            .update_store_status(this.shell.status().to_string(), false);
+                    }
+                }
+                cx.notify();
+            },
+            cx,
+        );
     }
 
     pub(in crate::features) fn delete_proxy_group(
@@ -275,34 +290,39 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         let removal = self.tunnel_state.without_proxy_group(&group_id);
-
-        match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .and_then(|store| {
-            store.replace_proxy_groups(removal.groups())?;
-            store.replace_proxies(removal.proxies())
-        }) {
-            Ok(()) => {
-                let deleted_proxy_ids = self.tunnel_state.commit_proxy_group_removal(removal);
-                self.connection_state.remove_network_group_references(
-                    NetworkTab::Proxies,
-                    &group_id,
-                    &deleted_proxy_ids,
-                );
-                self.shell
-                    .set_status(format!("proxy group '{label}' deleted"));
-                self.settings
-                    .update_store_status(self.shell.status().to_string(), true);
-            }
-            Err(error) => {
-                self.shell
-                    .set_status(format!("failed to delete proxy group: {error}"));
-                self.settings
-                    .update_store_status(self.shell.status().to_string(), false);
-            }
-        }
-        cx.notify();
+        let groups = removal.groups().to_vec();
+        let proxies = removal.proxies().to_vec();
+        self.submit_store_request(
+            0,
+            store_request(StoreDomain::Tunnels, move |store| {
+                store.replace_proxy_groups(&groups)?;
+                store.replace_proxies(&proxies)
+            }),
+            move |this, event, cx| {
+                match event.outcome {
+                    Ok(()) => {
+                        let deleted_proxy_ids =
+                            this.tunnel_state.commit_proxy_group_removal(removal);
+                        this.connection_state.remove_network_group_references(
+                            NetworkTab::Proxies,
+                            &group_id,
+                            &deleted_proxy_ids,
+                        );
+                        this.shell
+                            .set_status(format!("proxy group '{label}' deleted"));
+                        this.settings
+                            .update_store_status(this.shell.status().to_string(), true);
+                    }
+                    Err(error) => {
+                        this.shell
+                            .set_status(format!("failed to delete proxy group: {error}"));
+                        this.settings
+                            .update_store_status(this.shell.status().to_string(), false);
+                    }
+                }
+                cx.notify();
+            },
+            cx,
+        );
     }
 }

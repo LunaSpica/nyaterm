@@ -1,6 +1,6 @@
 use gpui::{Context, Window};
 use nyaterm_core::{TunnelConfig, uuid};
-use nyaterm_store::ConnectionStore;
+use nyaterm_store::{StoreDomain, store_request};
 
 use super::helpers::{network_section_key, parse_port};
 use crate::features::NyaTermApp;
@@ -285,29 +285,34 @@ impl NyaTermApp {
         };
         let next_tunnels = self.tunnel_state.tunnels_with_upsert(tunnel);
 
-        match ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .and_then(|store| store.replace_tunnels(&next_tunnels))
-        {
-            Ok(()) => {
-                self.tunnel_state.commit_tunnels(next_tunnels);
-                self.connection_state.close_network_tunnel_editor();
-                self.shell.set_status(format!("tunnel '{name}' saved"));
-                self.settings
-                    .update_store_status(self.shell.status().to_string(), true);
-            }
-            Err(error) => {
-                self.shell
-                    .set_status(format!("failed to save tunnel: {error}"));
-                self.settings
-                    .update_store_status(self.shell.status().to_string(), false);
-                self.connection_state
-                    .set_network_tunnel_editor_error(self.shell.status().to_string());
-            }
-        }
-        cx.notify();
+        let persisted = next_tunnels.clone();
+        self.submit_store_request(
+            0,
+            store_request(StoreDomain::Tunnels, move |store| {
+                store.replace_tunnels(&persisted)
+            }),
+            move |this, event, cx| {
+                match event.outcome {
+                    Ok(()) => {
+                        this.tunnel_state.commit_tunnels(next_tunnels);
+                        this.connection_state.close_network_tunnel_editor();
+                        this.shell.set_status(format!("tunnel '{name}' saved"));
+                        this.settings
+                            .update_store_status(this.shell.status().to_string(), true);
+                    }
+                    Err(error) => {
+                        this.shell
+                            .set_status(format!("failed to save tunnel: {error}"));
+                        this.settings
+                            .update_store_status(this.shell.status().to_string(), false);
+                        this.connection_state
+                            .set_network_tunnel_editor_error(this.shell.status().to_string());
+                    }
+                }
+                cx.notify();
+            },
+            cx,
+        );
     }
 
     pub(in crate::features) fn set_network_tunnel_editor_error(
