@@ -12,12 +12,25 @@ pub mod natural_order;
 pub mod portable_snapshot;
 pub mod runtime;
 pub mod session_import;
-pub mod terminal_file_drop;
-pub mod terminal_input_fanout;
-pub mod terminal_input_tracker;
-pub mod terminal_mouse;
-pub mod terminal_resize;
-pub mod terminal_wire_write;
+pub mod terminal;
+pub mod terminal_file_drop {
+    pub use super::terminal::file_drop::*;
+}
+pub mod terminal_input_fanout {
+    pub use super::terminal::input_fanout::*;
+}
+pub mod terminal_input_tracker {
+    pub use super::terminal::input_tracker::*;
+}
+pub mod terminal_mouse {
+    pub use super::terminal::mouse::*;
+}
+pub mod terminal_resize {
+    pub use super::terminal::resize::*;
+}
+pub mod terminal_wire_write {
+    pub use super::terminal::wire_write::*;
+}
 pub mod text_edit;
 pub mod translation;
 pub mod updater;
@@ -110,11 +123,11 @@ pub use session_import::{
     PreparedSessionConnection, PreparedSessionImport, SessionImportError, prepare_session_import,
     prepare_termius_session_import,
 };
-pub use terminal_file_drop::{
+pub use terminal::file_drop::{
     format_local_terminal_drop_input, quote_local_path, terminal_drop_overlay_copy,
 };
-pub use terminal_input_fanout::terminal_input_fanout_status;
-pub use terminal_input_tracker::{
+pub use terminal::input_fanout::terminal_input_fanout_status;
+pub use terminal::input_tracker::{
     InputSelectionRange, TerminalInputState, apply_terminal_input_data,
     apply_terminal_input_data_in_place, build_move_input_cursor_data, byte_index_to_char,
     can_register_command_from_tracker, can_suggest_from_tracked_command, can_suggest_from_tracker,
@@ -123,14 +136,14 @@ pub use terminal_input_tracker::{
     strip_terminal_command_prompt, terminal_input_tracker_below_min_chars,
     warm_terminal_input_tracker,
 };
-pub use terminal_mouse::{TerminalMouseReportEligibility, terminal_mouse_report_should_send};
-pub use terminal_resize::{
+pub use terminal::mouse::{TerminalMouseReportEligibility, terminal_mouse_report_should_send};
+pub use terminal::resize::{
     TerminalBackendResize, TerminalResizeGeometry, TerminalViewportInsets,
     terminal_backend_resize_changed, terminal_resize_geometry_for_size,
     terminal_resize_geometry_for_size_with_insets,
     terminal_resize_geometry_for_size_with_insets_and_scale, terminal_snapped_cell_height,
 };
-pub use terminal_wire_write::{
+pub use terminal::wire_write::{
     TerminalWireWriteDisposition, TerminalWireWriteKind, terminal_wire_write_disposition,
 };
 pub use text_edit::{CursorMotion, TextEdit};
