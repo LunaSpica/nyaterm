@@ -1,10 +1,18 @@
 use gpui::{
-    Action as _, App, AppContext, Context, Entity, EventEmitter, FocusHandle, Focusable,
-    IntoElement, Render, RenderOnce, SharedString, Subscription, Window,
+    Action as _, AnyElement, App, AppContext, BoxShadow, Context, Entity, EventEmitter,
+    FocusHandle, Focusable, InteractiveElement as _, IntoElement, KeyDownEvent, ParentElement as _,
+    Pixels, Render, RenderOnce, SharedString, StatefulInteractiveElement as _, Styled as _,
+    Subscription, Window, div, prelude::FluentBuilder as _, px, rgb,
 };
 use gpui_component::Sizable;
 use gpui_component::input::SelectAll;
 use gpui_component::input::{Input, InputEvent, InputState};
+
+use crate::input_focus::{preserve_nya_input_focus_on_pointer_down, register_nya_input_focus};
+use crate::{NYA_FORM_CONTROL_HEIGHT_PX, ThemePalette};
+
+const NYA_COMPACT_SEARCH_HEIGHT_PX: f32 = 28.;
+const NYA_INPUT_SHELL_PADDING_X_PX: f32 = 4.;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NyaInputEvent {
@@ -183,6 +191,7 @@ impl NyaInputState {
             }
             input
         });
+        register_nya_input_focus(&state.read(cx).focus_handle(cx), cx);
         let subscription =
             cx.subscribe(&state, |this, input, event: &InputEvent, cx| match event {
                 InputEvent::Change => {
@@ -303,7 +312,179 @@ impl RenderOnce for NyaInput {
             .bordered(false)
             .focus_bordered(false)
             .disabled(disabled);
-        if multi_line { input.h_full() } else { input }
+        div()
+            .size_full()
+            .capture_any_mouse_down(|_, _, cx| {
+                preserve_nya_input_focus_on_pointer_down(cx);
+            })
+            .child(if multi_line {
+                input.h_full().into_any_element()
+            } else {
+                input.into_any_element()
+            })
+    }
+}
+
+type KeyDownHandler = Box<dyn Fn(&KeyDownEvent, &mut Window, &mut App) + 'static>;
+
+#[derive(IntoElement)]
+pub struct NyaInputShell {
+    id: SharedString,
+    state: Entity<NyaInputState>,
+    palette: ThemePalette,
+    height: Pixels,
+    padding_y: Pixels,
+    leading_icon: Option<&'static str>,
+    trailing: Vec<AnyElement>,
+    on_key_down: Option<KeyDownHandler>,
+}
+
+impl NyaInputShell {
+    pub fn new(
+        id: impl Into<SharedString>,
+        state: &Entity<NyaInputState>,
+        palette: ThemePalette,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            state: state.clone(),
+            palette,
+            height: px(NYA_FORM_CONTROL_HEIGHT_PX),
+            padding_y: px(0.),
+            leading_icon: None,
+            trailing: Vec::new(),
+            on_key_down: None,
+        }
+    }
+
+    pub fn multi_line(mut self) -> Self {
+        self.height = px(88.);
+        self.padding_y = px(8.);
+        self
+    }
+
+    pub fn compact_search(mut self) -> Self {
+        self.height = px(NYA_COMPACT_SEARCH_HEIGHT_PX);
+        self.leading_icon = Some("icons/fe/search.svg");
+        self
+    }
+
+    pub fn trailing(mut self, child: impl IntoElement) -> Self {
+        self.trailing.push(child.into_any_element());
+        self
+    }
+
+    pub fn on_key_down(
+        mut self,
+        handler: impl Fn(&KeyDownEvent, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_key_down = Some(Box::new(handler));
+        self
+    }
+}
+
+impl RenderOnce for NyaInputShell {
+    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let focus = self.state.read(cx).focus_handle();
+        let component_focus = self.state.read(cx).component_focus_handle(cx);
+        let focused = self.state.read(cx).has_focus();
+        let palette = self.palette;
+        let debug_selector = self.id.to_string();
+        let mut shell = div()
+            .id(self.id)
+            .debug_selector(move || debug_selector.clone())
+            .w_full()
+            .h(self.height)
+            .min_w_0()
+            .py(self.padding_y)
+            .px(px(NYA_INPUT_SHELL_PADDING_X_PX))
+            .flex()
+            .items_center()
+            .gap_2()
+            .rounded_sm()
+            .border_1()
+            .border_color(rgb(if focused {
+                palette.focus_ring
+            } else {
+                palette.border
+            }))
+            .when(focused, |this| {
+                this.shadow(vec![
+                    BoxShadow::new(px(0.), px(0.), rgb(palette.focus_ring).alpha(0.32).into())
+                        .spread_radius(px(2.)),
+                ])
+            })
+            .bg(rgb(palette.input))
+            .text_size(px(12.))
+            .text_color(rgb(palette.text))
+            .cursor_text()
+            .capture_any_mouse_down(|_, _, cx| {
+                preserve_nya_input_focus_on_pointer_down(cx);
+            })
+            .on_click(|_, _, cx| cx.stop_propagation())
+            .on_mouse_down(gpui::MouseButton::Left, move |_, window, cx| {
+                preserve_nya_input_focus_on_pointer_down(cx);
+                if !focus.is_focused(window) && !component_focus.is_focused(window) {
+                    window.focus(&component_focus, cx);
+                }
+            });
+        if let Some(handler) = self.on_key_down {
+            shell = shell.on_key_down(handler);
+        }
+        shell
+            .when_some(self.leading_icon, |this, icon| {
+                this.child(
+                    gpui::svg()
+                        .size(px(14.))
+                        .flex_none()
+                        .path(icon)
+                        .text_color(rgb(palette.text_muted)),
+                )
+            })
+            .child(
+                div()
+                    .min_w_0()
+                    .flex_1()
+                    .size_full()
+                    .child(NyaInput::new(&self.state)),
+            )
+            .children(self.trailing)
+    }
+}
+
+#[derive(IntoElement)]
+pub struct NyaSearchInput {
+    shell: NyaInputShell,
+}
+
+impl NyaSearchInput {
+    pub fn new(
+        id: impl Into<SharedString>,
+        state: &Entity<NyaInputState>,
+        palette: ThemePalette,
+    ) -> Self {
+        Self {
+            shell: NyaInputShell::new(id, state, palette).compact_search(),
+        }
+    }
+
+    pub fn trailing(mut self, child: impl IntoElement) -> Self {
+        self.shell = self.shell.trailing(child);
+        self
+    }
+
+    pub fn on_key_down(
+        mut self,
+        handler: impl Fn(&KeyDownEvent, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.shell = self.shell.on_key_down(handler);
+        self
+    }
+}
+
+impl RenderOnce for NyaSearchInput {
+    fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
+        self.shell
     }
 }
 

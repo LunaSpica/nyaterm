@@ -3,14 +3,11 @@ use gpui::{
     prelude::*, px, rgb, rgba, svg,
 };
 use nyaterm_core::{AgentCommandExecutionMode, truncate_preview};
-use nyaterm_ui::NyaInput;
+use nyaterm_ui::NyaSearchInput;
 
 use crate::features::formatting::group_ai_sessions_by_date;
 use crate::features::view_widgets::tab_menu_separator;
-use crate::features::{
-    NyaTermApp, ORDINARY_INPUT_SHELL_PADDING_X_PX, TextInputSetup, ordinary_input_focus_ring,
-    ordinary_input_shell_border_color,
-};
+use crate::features::{NyaTermApp, TextInputSetup};
 use crate::widgets::svg_icon_button;
 
 impl NyaTermApp {
@@ -312,8 +309,6 @@ impl NyaTermApp {
             TextInputSetup::placeholder("Search history..."),
             cx,
         );
-        let search_focus = search_field.read(cx).focus_handle();
-        let search_focused = search_field.read(cx).has_focus();
         // Tauri AIAssistantPanel history card: search + Clear All + date-grouped sessions.
         let query = history_query.trim().to_ascii_lowercase();
         let filtered: Vec<_> = history_sessions
@@ -331,6 +326,44 @@ impl NyaTermApp {
         let filtered_count = filtered.len();
         let history_actions_disabled = self.ai.history_actions_are_disabled();
         let grouped = group_ai_sessions_by_date(&filtered);
+        let mut search_input = NyaSearchInput::new("ai-history-search", &search_field, palette)
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                if event.keystroke.key == "escape" {
+                    cx.stop_propagation();
+                    this.ai.close_history();
+                    this.forget_text_inputs("ai.history-search");
+                    cx.notify();
+                }
+            }));
+        if !history_query.is_empty() {
+            search_input = search_input.trailing(
+                div()
+                    .id(SharedString::from("ai-history-search-clear"))
+                    .size(px(18.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded_sm()
+                    .text_size(px(10.))
+                    .text_color(rgb(palette.text_muted))
+                    .cursor_pointer()
+                    .hover(|this| {
+                        this.bg(rgb(palette.surface_elevated))
+                            .text_color(rgb(palette.text))
+                    })
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.ai.clear_history_query();
+                        this.reset_text_input("ai.history-search", "", cx);
+                        cx.notify();
+                    }))
+                    .child(
+                        svg()
+                            .size(px(13.))
+                            .path("icons/window/close.svg")
+                            .text_color(rgb(palette.text_muted)),
+                    ),
+            );
+        }
         let mut rows = div().flex().flex_col().gap_1().p_2();
         if filtered_count == 0 {
             rows = rows.child(
@@ -432,81 +465,7 @@ impl NyaTermApp {
                     .p_2()
                     .border_b_1()
                     .border_color(rgb(palette.border))
-                    .child(
-                        div()
-                            .id(SharedString::from("ai-history-search"))
-                            .h(px(28.))
-                            .px(px(ORDINARY_INPUT_SHELL_PADDING_X_PX))
-                            .rounded_md()
-                            .border_1()
-                            .border_color(ordinary_input_shell_border_color(
-                                palette,
-                                search_focused,
-                            ))
-                            .when(search_focused, |this| {
-                                this.shadow(ordinary_input_focus_ring(palette))
-                            })
-                            .bg(rgb(palette.bg))
-                            .flex()
-                            .items_center()
-                            .gap_2()
-                            .cursor_text()
-                            .on_click(move |_, window, cx| {
-                                window.focus(&search_focus, cx);
-                            })
-                            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                                if event.keystroke.key == "escape" {
-                                    cx.stop_propagation();
-                                    this.ai.close_history();
-                                    this.forget_text_inputs("ai.history-search");
-                                    cx.notify();
-                                }
-                            }))
-                            .child(
-                                svg()
-                                    .size(px(14.))
-                                    .flex_none()
-                                    .path("icons/ai/search.svg")
-                                    .text_color(rgb(palette.text_dimmed)),
-                            )
-                            .child(
-                                div()
-                                    .min_w_0()
-                                    .flex_1()
-                                    .text_size(px(12.))
-                                    .text_color(rgb(palette.text))
-                                    .child(NyaInput::new(&search_field)),
-                            )
-                            .when(!history_query.is_empty(), |this| {
-                                this.child(
-                                    div()
-                                        .id(SharedString::from("ai-history-search-clear"))
-                                        .size(px(18.))
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .rounded_sm()
-                                        .text_size(px(10.))
-                                        .text_color(rgb(palette.text_muted))
-                                        .cursor_pointer()
-                                        .hover(|this| {
-                                            this.bg(rgb(palette.surface_elevated))
-                                                .text_color(rgb(palette.text))
-                                        })
-                                        .on_click(cx.listener(|this, _, _, cx| {
-                                            this.ai.clear_history_query();
-                                            this.reset_text_input("ai.history-search", "", cx);
-                                            cx.notify();
-                                        }))
-                                        .child(
-                                            svg()
-                                                .size(px(13.))
-                                                .path("icons/window/close.svg")
-                                                .text_color(rgb(palette.text_muted)),
-                                        ),
-                                )
-                            }),
-                    ),
+                    .child(search_input),
             )
             .child(
                 div()

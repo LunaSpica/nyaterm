@@ -347,7 +347,7 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let gpu_state = self.remote_ops.gpu_presentation();
         let gpu_search_input = self
-            .text_input_box(
+            .search_input_box(
                 "remote.gpu.filter",
                 &gpu_state.search_draft.clone(),
                 TextInputSetup::placeholder(self.tr("gpuMonitor.search")),
@@ -388,7 +388,7 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let npu_state = self.remote_ops.npu_presentation();
         let npu_search_input = self
-            .text_input_box(
+            .search_input_box(
                 "remote.npu.filter",
                 &npu_state.search_draft.clone(),
                 TextInputSetup::placeholder(self.tr("ascendNpuMonitor.search")),

@@ -1,10 +1,7 @@
 use gpui::{Context, FontWeight, IntoElement, KeyDownEvent, div, prelude::*, px, rgb};
-use nyaterm_ui::NyaInput;
+use nyaterm_ui::NyaSearchInput;
 
-use crate::features::{
-    NyaTermApp, ORDINARY_INPUT_SHELL_PADDING_X_PX, TextInputSetup, gpui_code_font_family,
-    ordinary_input_focus_ring, ordinary_input_shell_border_color,
-};
+use crate::features::{NyaTermApp, TextInputSetup, gpui_code_font_family};
 use crate::shortcuts::{
     SHORTCUT_CATEGORIES, SHORTCUT_REGISTRY, ShortcutCategory, ShortcutDefinition,
     ShortcutNativeStatus, format_hotkey_for_display, shortcut_keys_for,
@@ -27,8 +24,6 @@ impl NyaTermApp {
             TextInputSetup::placeholder(self.tr("settings.keybindingsSearch")),
             cx,
         );
-        let search_focus = search_field.read(cx).focus_handle();
-        let search_focused = search_field.read(cx).has_focus();
         let mut groups = div().flex().flex_col().gap_3();
         for category in SHORTCUT_CATEGORIES {
             groups = groups.child(self.shortcut_category_group(category, &search, cx));
@@ -53,40 +48,27 @@ impl NyaTermApp {
                     .items_center()
                     .gap_3()
                     .child(
-                        div()
-                            .id("settings-keybindings-search")
-                            .min_w_0()
-                            .flex_1()
-                            .h(px(36.))
-                            .px(px(ORDINARY_INPUT_SHELL_PADDING_X_PX))
-                            .rounded_sm()
-                            .border_1()
-                            .border_color(ordinary_input_shell_border_color(
+                        div().min_w_0().flex_1().child(
+                            NyaSearchInput::new(
+                                "settings-keybindings-search",
+                                &search_field,
                                 palette,
-                                search_focused,
-                            ))
-                            .when(search_focused, |this| {
-                                this.shadow(ordinary_input_focus_ring(palette))
-                            })
-                            .bg(rgb(palette.input))
-                            .flex()
-                            .items_center()
-                            .text_size(px(12.))
-                            .text_color(rgb(palette.text))
-                            .cursor_text()
-                            .on_click(move |_, window, cx| {
-                                window.focus(&search_focus, cx);
-                            })
-                            .on_click(|_, _, cx| cx.stop_propagation())
-                            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                                if event.keystroke.key == "escape" {
-                                    cx.stop_propagation();
-                                    this.settings.clear_keybinding_search();
-                                    this.reset_text_input("settings.keybindings.search", "", cx);
-                                    cx.notify();
-                                }
-                            }))
-                            .child(NyaInput::new(&search_field)),
+                            )
+                            .on_key_down(cx.listener(
+                                |this, event: &KeyDownEvent, _, cx| {
+                                    if event.keystroke.key == "escape" {
+                                        cx.stop_propagation();
+                                        this.settings.clear_keybinding_search();
+                                        this.reset_text_input(
+                                            "settings.keybindings.search",
+                                            "",
+                                            cx,
+                                        );
+                                        cx.notify();
+                                    }
+                                },
+                            )),
+                        ),
                     )
                     .when(overrides > 0, |this| {
                         this.child(small_button(

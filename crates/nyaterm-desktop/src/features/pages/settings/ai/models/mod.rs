@@ -1,10 +1,7 @@
 use gpui::{Context, IntoElement, KeyDownEvent, div, prelude::*, px, rgb};
-use nyaterm_ui::NyaInput;
+use nyaterm_ui::NyaSearchInput;
 
-use crate::features::{
-    NyaTermApp, ORDINARY_INPUT_SHELL_PADDING_X_PX, TextInputSetup, ordinary_input_focus_ring,
-    ordinary_input_shell_border_color,
-};
+use crate::features::{NyaTermApp, TextInputSetup};
 use crate::theme::ThemePalette;
 use crate::widgets::small_button;
 
@@ -27,8 +24,6 @@ impl NyaTermApp {
             TextInputSetup::placeholder(query_placeholder),
             cx,
         );
-        let search_focus = search_field.read(cx).focus_handle();
-        let search_focused = search_field.read(cx).has_focus();
         let has_enabled_custom_credential = self
             .ai
             .settings_config()
@@ -78,31 +73,12 @@ impl NyaTermApp {
                             .items_center()
                             .gap_2()
                             .child(
-                                div()
-                                    .id("ai-settings-model-search")
-                                    .h(px(34.))
-                                    .min_w_0()
-                                    .flex_1()
-                                    .px(px(ORDINARY_INPUT_SHELL_PADDING_X_PX))
-                                    .rounded_sm()
-                                    .border_1()
-                                    .border_color(ordinary_input_shell_border_color(
+                                div().min_w_0().flex_1().child(
+                                    NyaSearchInput::new(
+                                        "ai-settings-model-search",
+                                        &search_field,
                                         palette,
-                                        search_focused,
-                                    ))
-                                    .when(search_focused, |this| {
-                                        this.shadow(ordinary_input_focus_ring(palette))
-                                    })
-                                    .bg(rgb(palette.input))
-                                    .flex()
-                                    .items_center()
-                                    .font_family(crate::features::gpui_code_font_family())
-                                    .text_size(px(12.))
-                                    .text_color(rgb(palette.text))
-                                    .cursor_text()
-                                    .on_click(move |_, window, cx| {
-                                        window.focus(&search_focus, cx);
-                                    })
+                                    )
                                     .on_key_down(cx.listener(
                                         |this, event: &KeyDownEvent, _, cx| {
                                             if event.keystroke.key == "escape" {
@@ -116,8 +92,8 @@ impl NyaTermApp {
                                                 cx.notify();
                                             }
                                         },
-                                    ))
-                                    .child(NyaInput::new(&search_field)),
+                                    )),
+                                ),
                             )
                             .child(
                                 div()

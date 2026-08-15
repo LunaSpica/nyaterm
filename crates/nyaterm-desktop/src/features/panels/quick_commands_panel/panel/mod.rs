@@ -4,13 +4,10 @@ use gpui::{
 };
 
 use super::super::{filtered_quick_commands, quick_command_category_options};
-use crate::features::{
-    NyaTermApp, ORDINARY_INPUT_SHELL_PADDING_X_PX, TextInputSetup, ordinary_input_focus_ring,
-    ordinary_input_shell_border_color,
-};
+use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::{QuickCommandSortMode, QuickCommandViewMode};
 use crate::widgets::small_button;
-use nyaterm_ui::{NyaDropdownMenu, NyaInput, NyaMenuItem, NyaTooltip};
+use nyaterm_ui::{NyaDropdownMenu, NyaMenuItem, NyaSearchInput, NyaTooltip};
 
 mod rows;
 use rows::quick_command_tile_column_count;
@@ -133,7 +130,6 @@ impl NyaTermApp {
             palette,
             popover_bg,
         };
-        let input_bg = self.shell_surface_color(palette.bg);
         let search_draft = self.commands.quick_search_draft().to_string();
         let ai_prompt_draft = self.commands.quick_ai_prompt_draft().to_string();
         let search_field = self.text_input(
@@ -142,8 +138,6 @@ impl NyaTermApp {
             TextInputSetup::placeholder(self.tr("quickCommands.search")),
             cx,
         );
-        let search_focus = search_field.read(cx).focus_handle();
-        let search_focused = search_field.read(cx).has_focus();
         let ai_prompt_input = self
             .text_input_box(
                 "quick-command.ai-prompt",
@@ -310,60 +304,33 @@ impl NyaTermApp {
                     .child(div().flex_1())
                     .child(
                         div()
-                            .id(SharedString::from("quick-command-search-input"))
-                            .h(px(26.))
                             .w(px(144.))
-                            .rounded_md()
-                            .border_1()
-                            .border_color(ordinary_input_shell_border_color(
-                                palette,
-                                search_focused,
-                            ))
-                            .when(search_focused, |this| {
-                                this.shadow(ordinary_input_focus_ring(palette))
-                            })
-                            .bg(input_bg)
-                            .px(px(ORDINARY_INPUT_SHELL_PADDING_X_PX))
-                            .flex()
-                            .items_center()
-                            .gap_1()
-                            .cursor_text()
                             .on_mouse_down(
                                 MouseButton::Left,
-                                cx.listener(move |this, _, window, cx| {
+                                cx.listener(|this, _, _, cx| {
                                     this.close_quick_command_toolbar_popovers();
-                                    window.focus(&search_focus, cx);
                                     cx.notify();
                                 }),
                             )
-                            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
-                                if event.keystroke.key == "escape" {
-                                    cx.stop_propagation();
-                                    this.commands.clear_quick_filters();
-                                    this.reset_text_input("quick-command.search", "", cx);
-                                    this.shell
-                                        .set_status("quick command filters cleared".to_string());
-                                    cx.notify();
-                                }
-                            }))
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.close_quick_command_toolbar_popovers();
-                                cx.notify();
-                            }))
                             .child(
-                                svg()
-                                    .size(px(14.))
-                                    .flex_none()
-                                    .path("icons/fe/search.svg")
-                                    .text_color(rgb(palette.text_muted)),
-                            )
-                            .child(
-                                div()
-                                    .min_w_0()
-                                    .flex_1()
-                                    .text_size(px(11.))
-                                    .text_color(rgb(palette.text))
-                                    .child(NyaInput::new(&search_field)),
+                                NyaSearchInput::new(
+                                    "quick-command-search-input",
+                                    &search_field,
+                                    palette,
+                                )
+                                .on_key_down(cx.listener(
+                                    |this, event: &KeyDownEvent, _, cx| {
+                                        if event.keystroke.key == "escape" {
+                                            cx.stop_propagation();
+                                            this.commands.clear_quick_filters();
+                                            this.reset_text_input("quick-command.search", "", cx);
+                                            this.shell.set_status(
+                                                "quick command filters cleared".to_string(),
+                                            );
+                                            cx.notify();
+                                        }
+                                    },
+                                )),
                             ),
                     )
                     .child(quick_command_toolbar_divider(palette))

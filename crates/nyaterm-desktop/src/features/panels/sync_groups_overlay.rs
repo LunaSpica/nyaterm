@@ -4,7 +4,7 @@ use gpui::{
     Context, FontWeight, IntoElement, KeyDownEvent, SharedString, div, prelude::*, px, rgb, rgba,
 };
 use nyaterm_core::truncate_preview;
-use nyaterm_ui::NyaInput;
+use nyaterm_ui::NyaSearchInput;
 
 use crate::features::formatting::session_kind_label;
 use crate::features::view_widgets::{dialog_action_button, full_window_input_layer};
@@ -47,8 +47,6 @@ impl NyaTermApp {
             TextInputSetup::placeholder(self.tr("syncGroup.searchPlaceholder")),
             cx,
         );
-        let search_focus = search_input.read(cx).focus_handle();
-        let search_focused = search_input.read(cx).has_focus();
         let pending_delete_name = self
             .sync_input
             .pending_delete_group()
@@ -532,40 +530,13 @@ impl NyaTermApp {
                                                     )
                                                     .child(
                                                         div()
-                                                            .id(SharedString::from(
-                                                                "sync-group-search-input",
-                                                            ))
                                                             .flex_1()
                                                             .min_w(px(140.))
-                                                            .h(px(30.))
-                                                            .px(px(
-                                                                ORDINARY_INPUT_SHELL_PADDING_X_PX,
-                                                            ))
-                                                            .flex()
-                                                            .items_center()
-                                                            .rounded_sm()
-                                                            .border_1()
-                                                            .border_color(
-                                                                ordinary_input_shell_border_color(
-                                                                    palette,
-                                                                    search_focused,
-                                                                ),
-                                                            )
-                                                            .when(search_focused, |this| {
-                                                                this.shadow(
-                                                                    ordinary_input_focus_ring(
-                                                                        palette,
-                                                                    ),
-                                                                )
-                                                            })
-                                                            .bg(rgb(palette.input))
-                                                            .text_xs()
-                                                            .text_color(rgb(palette.text))
-                                                            .cursor_text()
-                                                            .on_click(move |_, window, cx| {
-                                                                window.focus(&search_focus, cx);
-                                                            })
-                                                            .child(NyaInput::new(&search_input)),
+                                                            .child(NyaSearchInput::new(
+                                                                "sync-group-search-input",
+                                                                &search_input,
+                                                                palette,
+                                                            )),
                                                     ),
                                             )
                                             .child(

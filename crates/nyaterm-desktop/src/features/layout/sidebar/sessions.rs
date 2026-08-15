@@ -60,7 +60,7 @@ impl NyaTermApp {
         // box needs it mutably.
         let search_draft = self.session.active_search_draft().to_string();
         let search_input = self
-            .text_input_box(
+            .search_input_box(
                 "sessions.filter",
                 &search_draft,
                 TextInputSetup::placeholder(self.tr("activeSessions.searchPlaceholder")),
@@ -164,7 +164,7 @@ impl NyaTermApp {
         // box needs it mutably.
         let search_draft = self.session.active_search_draft().to_string();
         let sessions_search_input = self
-            .text_input_box(
+            .search_input_box(
                 "sessions.filter",
                 &search_draft,
                 TextInputSetup::placeholder("Search sessions"),

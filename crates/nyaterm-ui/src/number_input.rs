@@ -1,7 +1,7 @@
 use gpui::{
-    App, AppContext as _, Context, Entity, EventEmitter, FocusHandle, Focusable, IntoElement,
-    ParentElement, Render, RenderOnce, SharedString, Styled as _, Subscription, Window, div,
-    prelude::FluentBuilder as _,
+    App, AppContext as _, Context, Entity, EventEmitter, FocusHandle, Focusable,
+    InteractiveElement as _, IntoElement, ParentElement, Render, RenderOnce, SharedString,
+    Styled as _, Subscription, Window, div, prelude::FluentBuilder as _,
 };
 use gpui_component::Disableable;
 use gpui_component::Sizable;
@@ -9,6 +9,7 @@ use gpui_component::input::{
     InputEvent, InputState, MaskPattern, NumberInput, NumberInputEvent, StepAction,
 };
 
+use crate::input_focus::{preserve_nya_input_focus_on_pointer_down, register_nya_input_focus};
 use crate::sizing::{form_control_height, form_control_size};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -195,6 +196,7 @@ impl NyaNumberInputState {
                 state
             }
         });
+        register_nya_input_focus(&state.read(cx).focus_handle(cx), cx);
         self.subscriptions = vec![
             cx.subscribe_in(
                 &state,
@@ -307,17 +309,29 @@ impl RenderOnce for NyaNumberInput {
         if focused {
             state.update(cx, |state, cx| state.focus(window, cx));
         }
-        NumberInput::new(&state)
-            .with_size(form_control_size())
-            .h(form_control_height())
-            .appearance(self.appearance)
-            .disabled(options.disabled)
-            .when_some(options.prefix, |this, prefix| {
-                this.prefix(text_affix(prefix).into_any_element())
+        self.state.update(cx, |input_state, cx| {
+            let component_focus = state.read(cx).focus_handle(cx);
+            input_state.focused =
+                input_state.focus.is_focused(window) || component_focus.is_focused(window);
+        });
+        div()
+            .size_full()
+            .capture_any_mouse_down(|_, _, cx| {
+                preserve_nya_input_focus_on_pointer_down(cx);
             })
-            .when_some(options.suffix, |this, suffix| {
-                this.suffix(text_affix(suffix).into_any_element())
-            })
+            .child(
+                NumberInput::new(&state)
+                    .with_size(form_control_size())
+                    .h(form_control_height())
+                    .appearance(self.appearance)
+                    .disabled(options.disabled)
+                    .when_some(options.prefix, |this, prefix| {
+                        this.prefix(text_affix(prefix).into_any_element())
+                    })
+                    .when_some(options.suffix, |this, suffix| {
+                        this.suffix(text_affix(suffix).into_any_element())
+                    }),
+            )
     }
 }
 

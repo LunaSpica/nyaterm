@@ -1,17 +1,12 @@
 use gpui::{
     Context, IntoElement, KeyDownEvent, ListHorizontalSizingBehavior, MouseButton, SharedString,
     div,
-    prelude::{
-        FluentBuilder, InteractiveElement, ParentElement, StatefulInteractiveElement, Styled,
-    },
+    prelude::{InteractiveElement, ParentElement, StatefulInteractiveElement, Styled},
     px, rgb, svg, uniform_list,
 };
-use nyaterm_ui::{NyaContextMenu, NyaDropdownMenu, NyaInput};
+use nyaterm_ui::{NyaContextMenu, NyaDropdownMenu, NyaSearchInput};
 
-use crate::features::{
-    ConnectionDragKind, ConnectionDragPayload, NyaTermApp, ORDINARY_INPUT_SHELL_PADDING_X_PX,
-    ordinary_input_focus_ring, ordinary_input_shell_border_color,
-};
+use crate::features::{ConnectionDragKind, ConnectionDragPayload, NyaTermApp};
 use crate::models::ConnectionSortMode;
 
 use super::super::list::{
@@ -243,8 +238,6 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let search_empty = self.connection_state.list_search_is_empty();
         let search_field = self.connection_state.list_search_field();
-        let search_focus = search_field.read(cx).focus_handle();
-        let search_focused = search_field.read(cx).has_focus();
         // Tauri swaps the glyph, flips it for Z-A and tints it while a name sort is
         // active, so the current mode is readable without hovering for the tooltip.
         let sort_mode = self.connection_state.list_sort_mode();
@@ -268,6 +261,39 @@ impl NyaTermApp {
             .min_width(px(180.))
             .items(self.connection_more_menu_items(cx))
             .on_trigger(|_, _, cx| cx.stop_propagation());
+        let mut search_input =
+            NyaSearchInput::new("connection-search-input", &search_field, palette).on_key_down(
+                cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                    this.handle_connection_search_key_down(event, window, cx);
+                }),
+            );
+        if !search_empty {
+            search_input = search_input.trailing(
+                div()
+                    .id(SharedString::from("connection-search-clear"))
+                    .size(px(18.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded_sm()
+                    .text_size(px(10.))
+                    .text_color(rgb(palette.text_muted))
+                    .cursor_pointer()
+                    .hover(move |this| {
+                        this.bg(rgb(palette.surface_elevated))
+                            .text_color(rgb(palette.text))
+                    })
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.clear_connection_search(window, cx);
+                    }))
+                    .child(
+                        svg()
+                            .size(px(13.))
+                            .path("icons/window/close.svg")
+                            .text_color(rgb(palette.text_muted)),
+                    ),
+            );
+        }
 
         // Tauri search strip: px-2 py-1.5, input h-7.
         div()
@@ -279,81 +305,7 @@ impl NyaTermApp {
             .border_b_1()
             .border_color(rgb(palette.border))
             .bg(self.shell_transparent_color(palette.section_header))
-            .child(
-                div()
-                    .id(SharedString::from("connection-search-input"))
-                    .h(px(28.))
-                    .flex_1()
-                    .min_w_0()
-                    .relative()
-                    .rounded_md()
-                    .border_1()
-                    // Tauri gives the focused field a primary ring; without it the
-                    // box looked identical whether or not it had focus.
-                    .border_color(ordinary_input_shell_border_color(palette, search_focused))
-                    .when(search_focused, |this| {
-                        this.shadow(ordinary_input_focus_ring(palette))
-                    })
-                    .bg(rgb(palette.hover))
-                    .px(px(ORDINARY_INPUT_SHELL_PADDING_X_PX))
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .cursor_text()
-                    .on_mouse_down(
-                        MouseButton::Left,
-                        cx.listener(move |_, _, window, cx| {
-                            window.focus(&search_focus, cx);
-                            cx.notify();
-                        }),
-                    )
-                    // Result navigation stays here: the field leaves the arrows
-                    // and enter unconsumed precisely so the list can claim them.
-                    .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
-                        this.handle_connection_search_key_down(event, window, cx);
-                    }))
-                    .child(
-                        svg()
-                            .size(px(14.))
-                            .flex_none()
-                            .path("icons/fe/search.svg")
-                            .text_color(rgb(palette.text_dimmed)),
-                    )
-                    .child(
-                        div()
-                            .min_w_0()
-                            .flex_1()
-                            .text_size(px(12.))
-                            .child(NyaInput::new(&search_field)),
-                    )
-                    .when(!search_empty, |this| {
-                        this.child(
-                            div()
-                                .id(SharedString::from("connection-search-clear"))
-                                .size(px(18.))
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .rounded_sm()
-                                .text_size(px(10.))
-                                .text_color(rgb(palette.text_muted))
-                                .cursor_pointer()
-                                .hover(move |this| {
-                                    this.bg(rgb(palette.surface_elevated))
-                                        .text_color(rgb(palette.text))
-                                })
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.clear_connection_search(window, cx);
-                                }))
-                                .child(
-                                    svg()
-                                        .size(px(13.))
-                                        .path("icons/window/close.svg")
-                                        .text_color(rgb(palette.text_muted)),
-                                ),
-                        )
-                    }),
-            )
+            .child(div().flex_1().min_w_0().child(search_input))
             // Count lives in PanelHeader (Tauri).
             .child(icon_action_button_styled(
                 palette,

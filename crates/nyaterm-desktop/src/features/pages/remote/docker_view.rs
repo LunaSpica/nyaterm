@@ -82,7 +82,7 @@ impl NyaTermApp {
         // Built before the view, which reads `self` throughout: creating the
         // box needs it mutably.
         let docker_search_input = self
-            .text_input_box(
+            .search_input_box(
                 "remote.docker.filter",
                 &docker.search_draft.clone(),
                 TextInputSetup::placeholder(labels.search),

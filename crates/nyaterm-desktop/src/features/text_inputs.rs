@@ -15,12 +15,12 @@ use std::collections::HashMap;
 
 use gpui::{
     AppContext, BoxShadow, Context, Entity, InteractiveElement as _, IntoElement,
-    ParentElement as _, Rgba, SharedString, StatefulInteractiveElement as _, Styled as _,
-    Subscription, Window, div, prelude::FluentBuilder as _, px, rgb,
+    ParentElement as _, Rgba, SharedString, Styled as _, Subscription, Window, div,
+    prelude::FluentBuilder as _, px, rgb,
 };
 use nyaterm_ui::{
-    NYA_FORM_CONTROL_HEIGHT_PX, NyaInput, NyaInputEvent, NyaInputState, NyaNumberInput,
-    NyaNumberInputEvent, NyaNumberInputOptions, NyaNumberInputState,
+    NYA_FORM_CONTROL_HEIGHT_PX, NyaInputEvent, NyaInputShell, NyaInputState, NyaNumberInput,
+    NyaNumberInputEvent, NyaNumberInputOptions, NyaNumberInputState, NyaSearchInput,
 };
 
 use super::NyaTermApp;
@@ -176,41 +176,24 @@ impl NyaTermApp {
         let palette = self.theme_palette();
         let multi_line = setup.multi_line;
         let field = self.text_input(id.clone(), seed, setup, cx);
-        let handle = field.read(cx).focus_handle();
-        let focused = field.read(cx).has_focus();
-        div()
-            .id(id)
-            // A wrapped field asks for its parent's height, so the box needs a
-            // definite one and has to stretch the row that holds it: against an
-            // indefinite height the percentage resolves to zero and the field
-            // disappears, hit-testing and all.
-            .when_else(
-                multi_line,
-                |this| this.h(px(88.)).py_2(),
-                |this| this.h(px(NYA_FORM_CONTROL_HEIGHT_PX)).items_center(),
-            )
-            .min_w_0()
-            .px(px(ORDINARY_INPUT_SHELL_PADDING_X_PX))
-            .flex()
-            .rounded_sm()
-            .border_1()
-            .border_color(ordinary_input_shell_border_color(palette, focused))
-            .when(focused, |this| {
-                this.shadow(ordinary_input_focus_ring(palette))
-            })
-            .bg(rgb(palette.input))
-            .cursor_text()
-            .on_click(move |_, window, cx| {
-                window.focus(&handle, cx);
-            })
-            .child(
-                div()
-                    .min_w_0()
-                    .flex_1()
-                    .text_xs()
-                    .text_color(rgb(palette.text))
-                    .child(NyaInput::new(&field)),
-            )
+        let shell = NyaInputShell::new(id, &field, palette);
+        if multi_line {
+            shell.multi_line()
+        } else {
+            shell
+        }
+    }
+
+    pub(in crate::features) fn search_input_box<I: Into<SharedString>>(
+        &mut self,
+        id: I,
+        seed: &str,
+        setup: TextInputSetup,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement + use<I> {
+        let id = id.into();
+        let field = self.text_input(id.clone(), seed, setup, cx);
+        NyaSearchInput::new(id, &field, self.theme_palette())
     }
 
     /// A caption above the input for `id`.

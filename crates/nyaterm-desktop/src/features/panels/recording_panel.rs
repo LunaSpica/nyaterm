@@ -4,13 +4,10 @@ use gpui::{
 };
 use nyaterm_core::truncate_preview;
 use nyaterm_transport::{RecordingMode, SessionInfo};
-use nyaterm_ui::NyaInput;
+use nyaterm_ui::NyaSearchInput;
 
 use crate::features::formatting::{session_kind_label, short_id};
-use crate::features::{
-    NyaTermApp, ORDINARY_INPUT_SHELL_PADDING_X_PX, TextInputSetup, ordinary_input_focus_ring,
-    ordinary_input_shell_border_color,
-};
+use crate::features::{NyaTermApp, TextInputSetup};
 use crate::models::RecordingPathPromptKind;
 
 impl NyaTermApp {
@@ -60,8 +57,6 @@ impl NyaTermApp {
             TextInputSetup::placeholder(search_placeholder),
             cx,
         );
-        let search_focus = search_field.read(cx).focus_handle();
-        let search_focused = search_field.read(cx).has_focus();
 
         let mut session_rows = div().flex().flex_col().gap_1().p_2();
         let mut visible_count = 0usize;
@@ -335,27 +330,7 @@ impl NyaTermApp {
                     .gap_2()
                     .child(
                         div().relative().flex_1().min_w_0().child(
-                            div()
-                                .id(SharedString::from("recording-session-search"))
-                                .h(px(28.))
-                                .rounded_md()
-                                .border_1()
-                                .border_color(ordinary_input_shell_border_color(
-                                    palette,
-                                    search_focused,
-                                ))
-                                .when(search_focused, |this| {
-                                    this.shadow(ordinary_input_focus_ring(palette))
-                                })
-                                .bg(self.shell_surface_color(palette.hover))
-                                .px(px(ORDINARY_INPUT_SHELL_PADDING_X_PX))
-                                .flex()
-                                .items_center()
-                                .gap_1()
-                                .cursor_text()
-                                .on_click(move |_, window, cx| {
-                                    window.focus(&search_focus, cx);
-                                })
+                            NyaSearchInput::new("recording-session-search", &search_field, palette)
                                 .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
                                     if event.keystroke.key == "escape" {
                                         cx.stop_propagation();
@@ -365,22 +340,7 @@ impl NyaTermApp {
                                             .set_status("recording search cleared".to_string());
                                         cx.notify();
                                     }
-                                }))
-                                .child(
-                                    svg()
-                                        .size(px(14.))
-                                        .flex_none()
-                                        .path("icons/fe/search.svg")
-                                        .text_color(rgb(palette.text_muted)),
-                                )
-                                .child(
-                                    div()
-                                        .min_w_0()
-                                        .flex_1()
-                                        .text_size(px(12.))
-                                        .text_color(rgb(palette.text))
-                                        .child(NyaInput::new(&search_field)),
-                                ),
+                                })),
                         ),
                     ),
             )

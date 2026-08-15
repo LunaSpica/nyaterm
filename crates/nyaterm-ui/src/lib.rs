@@ -4,6 +4,7 @@ mod app_menu_bar;
 mod button;
 mod dialog;
 mod input;
+mod input_focus;
 mod menu;
 mod number_input;
 mod popover;
@@ -25,7 +26,9 @@ pub use gpui_component::input::{
     Copy as NyaCopy, Cut as NyaCut, Paste as NyaPaste, Redo as NyaRedo, SelectAll as NyaSelectAll,
     Undo as NyaUndo,
 };
-pub use input::{NyaInput, NyaInputEvent, NyaInputState, NyaTextArea};
+pub use input::{
+    NyaInput, NyaInputEvent, NyaInputShell, NyaInputState, NyaSearchInput, NyaTextArea,
+};
 pub use menu::{NyaContextMenu, NyaDropdownMenu, NyaMenuAnchor, NyaMenuItem};
 pub use number_input::{
     NyaNumberInput, NyaNumberInputEvent, NyaNumberInputOptions, NyaNumberInputState, NyaNumberStep,

@@ -221,7 +221,7 @@ impl NyaTermApp {
             )
             .into_any_element();
         let model_search_input = self
-            .text_input_box(
+            .search_input_box(
                 "ai.model-search",
                 &model_query,
                 TextInputSetup::placeholder("Search models"),

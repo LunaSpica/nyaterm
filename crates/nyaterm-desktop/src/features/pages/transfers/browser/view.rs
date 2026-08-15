@@ -3,7 +3,7 @@ use gpui::{
     MouseDownEvent, SharedString, div, prelude::*, px, rgb, rgba, svg, uniform_list,
 };
 use nyaterm_core::truncate_preview;
-use nyaterm_ui::{NyaContextMenu, NyaHorizontalScrollbar, NyaInput, NyaUniformListScrollbar};
+use nyaterm_ui::{NyaContextMenu, NyaHorizontalScrollbar, NyaSearchInput, NyaUniformListScrollbar};
 
 use crate::features::{NyaTermApp, TextInputSetup, format_file_size};
 use crate::models::TransferBrowserSortColumn;
@@ -140,33 +140,22 @@ impl NyaTermApp {
                 TextInputSetup::placeholder(self.tr("fileExplorer.searchPlaceholder")),
                 cx,
             );
-            let focus = field.read(cx).focus_handle();
             div()
-                .id(SharedString::from("transfer-browser-search"))
                 .h_full()
                 .flex_1()
                 .min_w_0()
                 .px_1()
                 .flex()
                 .items_center()
-                .cursor_text()
-                .on_click(move |_, window, cx| {
-                    window.focus(&focus, cx);
-                })
-                .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
-                    if event.keystroke.key == "escape" {
-                        cx.stop_propagation();
-                        this.clear_or_close_transfer_browser_search(window, cx);
-                    }
-                }))
                 .child(
-                    div()
-                        .min_w_0()
-                        .flex_1()
-                        .font_family(crate::features::gpui_code_font_family())
-                        .text_size(px(12.))
-                        .text_color(rgb(palette.text))
-                        .child(NyaInput::new(&field)),
+                    NyaSearchInput::new("transfer-browser-search", &field, palette).on_key_down(
+                        cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                            if event.keystroke.key == "escape" {
+                                cx.stop_propagation();
+                                this.clear_or_close_transfer_browser_search(window, cx);
+                            }
+                        }),
+                    ),
                 )
                 .into_any_element()
         });
