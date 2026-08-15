@@ -37,53 +37,6 @@ impl ThemePalette {
         self.terminal_ansi[usize::from(index.min(15))]
     }
 
-    pub fn resolve_cell_fg(self, style: nyaterm_terminal::CellStyle) -> u32 {
-        if style.reverse {
-            if let Some(rgb) = style.bg_rgb {
-                return rgb;
-            }
-            if let Some(idx) = style.bg {
-                return self.terminal_ansi_color(idx);
-            }
-            // Reverse with default bg uses terminal background as "fg".
-            return self.terminal_bg;
-        }
-        if let Some(rgb) = style.fg_rgb {
-            return rgb;
-        }
-        match style.fg {
-            Some(idx) => {
-                let mut color = self.terminal_ansi_color(idx);
-                // Bold on normal 0..=7 maps to bright 8..=15 when available.
-                if style.bold && idx < 8 {
-                    color = self.terminal_ansi_color(idx + 8);
-                }
-                color
-            }
-            None => self.terminal_fg,
-        }
-    }
-
-    pub fn resolve_cell_bg(self, style: nyaterm_terminal::CellStyle) -> Option<u32> {
-        if style.reverse {
-            if let Some(rgb) = style.fg_rgb {
-                return Some(rgb);
-            }
-            if let Some(idx) = style.fg {
-                let mut color = self.terminal_ansi_color(idx);
-                if style.bold && idx < 8 {
-                    color = self.terminal_ansi_color(idx + 8);
-                }
-                return Some(color);
-            }
-            return Some(self.terminal_fg);
-        }
-        if let Some(rgb) = style.bg_rgb {
-            return Some(rgb);
-        }
-        style.bg.map(|idx| self.terminal_ansi_color(idx))
-    }
-
     /// Boost terminal fg/ANSI contrast against terminal background (Tauri minimum_contrast_ratio).
     pub fn apply_minimum_contrast_ratio(&mut self, ratio: f32) {
         if ratio <= 1.01 {

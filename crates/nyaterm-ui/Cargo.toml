@@ -9,8 +9,6 @@ repository.workspace = true
 [dependencies]
 gpui.workspace = true
 gpui-component.workspace = true
-nyaterm-core.workspace = true
-nyaterm-terminal.workspace = true
 
 [dev-dependencies]
 gpui = { workspace = true, features = ["test-support"] }

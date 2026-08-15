@@ -422,11 +422,11 @@ fn terminal_base_style_runs(
         if end <= start {
             continue;
         }
-        let bg = palette.resolve_cell_bg(span.style);
+        let bg = crate::resolve_cell_bg(palette, span.style);
         let color = if span.style.hidden {
             bg.unwrap_or(palette.terminal_bg)
         } else {
-            palette.resolve_cell_fg(span.style)
+            crate::resolve_cell_fg(palette, span.style)
         };
         let style = TerminalSpanStyle {
             color: Some(color),

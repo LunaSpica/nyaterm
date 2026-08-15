@@ -9,6 +9,45 @@ mod input;
 mod keywords;
 mod paint;
 
+fn resolve_cell_fg(palette: nyaterm_ui::ThemePalette, style: nyaterm_terminal::CellStyle) -> u32 {
+    if style.reverse {
+        if let Some(rgb) = style.bg_rgb {
+            return rgb;
+        }
+        return style
+            .bg
+            .map(|index| palette.terminal_ansi_color(index))
+            .unwrap_or(palette.terminal_bg);
+    }
+    if let Some(rgb) = style.fg_rgb {
+        return rgb;
+    }
+    match style.fg {
+        Some(index) if style.bold && index < 8 => palette.terminal_ansi_color(index + 8),
+        Some(index) => palette.terminal_ansi_color(index),
+        None => palette.terminal_fg,
+    }
+}
+
+fn resolve_cell_bg(
+    palette: nyaterm_ui::ThemePalette,
+    style: nyaterm_terminal::CellStyle,
+) -> Option<u32> {
+    if style.reverse {
+        if let Some(rgb) = style.fg_rgb {
+            return Some(rgb);
+        }
+        return Some(match style.fg {
+            Some(index) if style.bold && index < 8 => palette.terminal_ansi_color(index + 8),
+            Some(index) => palette.terminal_ansi_color(index),
+            None => palette.terminal_fg,
+        });
+    }
+    style
+        .bg_rgb
+        .or_else(|| style.bg.map(|index| palette.terminal_ansi_color(index)))
+}
+
 pub use element::{
     NyaTerminalElement, NyaTerminalLayoutCache, TerminalBufferMatch, TerminalGridSelection,
     TerminalLineDecorations, TerminalSearchFlags,

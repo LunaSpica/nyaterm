@@ -1,5 +1,6 @@
 use crate::keywords::{CompiledKeywordRule, keyword_highlight_spans_compiled};
 use crate::types::TerminalHighlightSpan;
+use crate::{resolve_cell_bg, resolve_cell_fg};
 
 pub(super) fn ansi_to_highlight_spans_compiled(
     ansi: &[nyaterm_terminal::StyledSpan],
@@ -15,8 +16,8 @@ pub(super) fn ansi_to_highlight_spans_compiled(
             .filter(|s| !s.text.is_empty())
             .map(|s| TerminalHighlightSpan {
                 text: s.text.clone(),
-                color: Some(palette.resolve_cell_fg(s.style)),
-                bg: palette.resolve_cell_bg(s.style),
+                color: Some(resolve_cell_fg(palette, s.style)),
+                bg: resolve_cell_bg(palette, s.style),
                 keyword: false,
                 underline: s.style.underline,
                 strikeout: s.style.strikeout,
@@ -48,8 +49,8 @@ pub(super) fn ansi_to_highlight_spans_compiled(
         let start = cursor;
         let end = cursor + s.text.len();
         cursor = end;
-        let bg = palette.resolve_cell_bg(s.style);
-        let color = palette.resolve_cell_fg(s.style);
+        let bg = resolve_cell_bg(palette, s.style);
+        let color = resolve_cell_fg(palette, s.style);
         if s.style.hidden {
             push_ansi_segment(
                 &mut out,

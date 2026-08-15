@@ -1,6 +1,6 @@
 use gpui::{
     Context, Entity, FontFallbacks, IntoElement, MouseButton, Render, ScrollDelta,
-    ScrollWheelEvent, SharedString, Window, div, font, prelude::*, px, rgb, rgba,
+    ScrollWheelEvent, SharedString, WeakEntity, Window, div, font, prelude::*, px, rgb, rgba,
 };
 use nyaterm_terminal::{TerminalLineId, TerminalScreen, TerminalSnapshot};
 
@@ -267,7 +267,7 @@ pub(in crate::features) fn full_shell_paint_count() -> u64 {
 pub(in crate::features) struct TerminalSurface {
     session_id: String,
     /// Parent app for scroll/selection actions that still live on NyaTermApp.
-    app: Option<Entity<NyaTermApp>>,
+    app: Option<WeakEntity<NyaTermApp>>,
     snapshot: Option<Arc<TerminalSnapshot>>,
     retained_snapshots: Vec<Arc<TerminalSnapshot>>,
     retained_rows: BTreeMap<usize, Arc<nyaterm_terminal::TerminalSnapshotRow>>,
@@ -540,7 +540,7 @@ impl TerminalSurface {
     }
 
     pub(in crate::features) fn set_app(&mut self, app: Entity<NyaTermApp>) {
-        self.app = Some(app);
+        self.app = Some(app.downgrade());
     }
 
     pub(in crate::features) fn apply_frame_snapshot(
@@ -1771,7 +1771,7 @@ impl TerminalSurface {
     }
 
     fn handle_scroll_wheel(&mut self, event: &ScrollWheelEvent, cx: &mut Context<Self>) {
-        let Some(app) = self.app.clone() else {
+        let Some(app) = self.app.as_ref().and_then(WeakEntity::upgrade) else {
             return;
         };
         let session_id = self.session_id.clone();
@@ -2007,7 +2007,7 @@ impl TerminalSurface {
         let max = self.scrollback_len;
         let viewport_rows = self.viewport_rows.max(1);
         let show = max > 0;
-        let app = self.app.clone();
+        let app = self.app.as_ref().and_then(WeakEntity::upgrade);
         let track_bounds = app.as_ref().and_then(|app| {
             app.read(cx)
                 .terminal_scrollbar_track_bounds_for_session(Some(session_id.as_str()))
@@ -2419,7 +2419,7 @@ impl Render for TerminalSurface {
         let skipped_output_chars = self.skipped_output_chars;
         let mut surface_font = font(SharedString::from(self.font_family.clone()));
         surface_font.fallbacks = self.font_fallbacks.clone();
-        let app = self.app.clone();
+        let app = self.app.as_ref().and_then(WeakEntity::upgrade);
         let surface = cx.entity();
         let session_id = self.session_id.clone();
         let is_active = self.is_active;
