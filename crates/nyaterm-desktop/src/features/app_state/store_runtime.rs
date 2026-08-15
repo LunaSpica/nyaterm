@@ -10,7 +10,8 @@ impl NyaTermApp {
         request: R,
         apply: impl FnOnce(&mut Self, StoreEvent<R::Response>, &mut Context<Self>) + 'static,
         cx: &mut Context<Self>,
-    ) where
+    ) -> bool
+    where
         R: StoreRequest,
     {
         match self.store_ui.try_submit(generation, request) {
@@ -20,12 +21,14 @@ impl NyaTermApp {
                     let _ = this.update(cx, |this, cx| apply(this, event, cx));
                 })
                 .detach();
+                true
             }
             Err(error) => {
                 let message = format!("storage request was not queued: {error}");
                 self.settings.update_store_status(message.clone(), false);
                 self.shell.set_status(message);
                 cx.notify();
+                false
             }
         }
     }

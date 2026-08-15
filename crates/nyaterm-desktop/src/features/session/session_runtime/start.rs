@@ -6,7 +6,7 @@ use nyaterm_core::{
     AiExecutionProfile, ConnectionAuth, ConnectionType, SavedConnection, SftpCwdFollowMode,
     SftpSettings, SshAlgorithmMode, SshAlgorithmPreferences, SshProfile, resolve_ssh_terminal_type,
 };
-use nyaterm_store::{ConnectionStore, StoreBlockingClient, StoreDomain, store_request};
+use nyaterm_store::{StoreBlockingClient, StoreDomain, store_request};
 use nyaterm_transport::{
     LocalSessionConfig, RdpClipboardConfig, RdpDisplayConfig, RdpReconnectConfig, RdpSessionConfig,
     SerialSessionConfig, SessionKind, SshKeyAuthConfig, SshProxyConfig, SshSessionConfig,
@@ -79,6 +79,15 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.continue_saved_connection_start(connection, options, cx);
+    }
+
+    fn continue_saved_connection_start(
+        &mut self,
+        connection: SavedConnection,
+        options: SavedConnectionStartOptions,
+        cx: &mut Context<Self>,
+    ) {
         if self
             .session
             .start_saved_connection_is_pending_or_queued(&connection)
@@ -96,6 +105,64 @@ impl NyaTermApp {
             return;
         }
 
+        if let Some(password_id) = saved_connection_password_id(&connection) {
+            let connection_name = connection.name.clone();
+            self.shell
+                .set_status(format!("loading saved credentials for {connection_name}"));
+            self.submit_store_request(
+                0,
+                store_request(StoreDomain::Security, move |store| {
+                    store.load_decrypted_password_by_id(&password_id)
+                }),
+                move |this, event, cx| {
+                    let password = match event.outcome {
+                        Ok(Some(entry)) => entry
+                            .password
+                            .filter(|password| !password.trim().is_empty()),
+                        Ok(None) => {
+                            this.shell.set_status(format!(
+                                "failed to start {connection_name}: saved password was not found"
+                            ));
+                            cx.notify();
+                            return;
+                        }
+                        Err(error) => {
+                            this.shell.set_status(format!(
+                                "failed to start {connection_name}: could not load saved password: {error}"
+                            ));
+                            cx.notify();
+                            return;
+                        }
+                    };
+                    let Some(password) = password else {
+                        this.shell.set_status(format!(
+                            "failed to start {connection_name}: saved password is empty or locked"
+                        ));
+                        cx.notify();
+                        return;
+                    };
+                    let mut connection = connection;
+                    if let Some(auth) = connection.auth.as_mut() {
+                        auth.password = Some(password);
+                        auth.has_password = false;
+                    }
+                    this.continue_saved_connection_start(connection, options, cx);
+                },
+                cx,
+            );
+            cx.notify();
+            return;
+        }
+
+        self.start_saved_connection_ready(connection, options, cx);
+    }
+
+    fn start_saved_connection_ready(
+        &mut self,
+        connection: SavedConnection,
+        options: SavedConnectionStartOptions,
+        cx: &mut Context<Self>,
+    ) {
         match connection.config.clone() {
             ConnectionType::LocalTerminal {
                 shell_path,
@@ -145,7 +212,7 @@ impl NyaTermApp {
                 local_line_edit,
                 ..
             } => {
-                let password = load_telnet_connection_password(self, connection.auth.as_ref());
+                let password = inline_connection_password(connection.auth.as_ref());
                 let encoding = resolve_effective_connection_encoding(&encoding, self);
                 let config = TelnetSessionConfig {
                     name: connection.name.clone(),
@@ -232,7 +299,7 @@ impl NyaTermApp {
                     port,
                     username,
                     domain,
-                    password: load_telnet_connection_password(self, connection.auth.as_ref()),
+                    password: inline_connection_password(connection.auth.as_ref()),
                     use_nla: security.use_nla,
                     certificate_policy: parse_rdp_certificate_policy(&security.certificate_policy),
                     display: RdpDisplayConfig {
@@ -332,7 +399,7 @@ impl NyaTermApp {
                     name: connection.name.clone(),
                     host,
                     port,
-                    password: load_telnet_connection_password(self, connection.auth.as_ref()),
+                    password: inline_connection_password(connection.auth.as_ref()),
                     security: VncSecurityConfig {
                         mode: parse_vnc_security_mode(&security.mode),
                     },
@@ -714,10 +781,7 @@ fn load_ssh_connection_password_with_context(
     Ok(Some(password))
 }
 
-fn load_telnet_connection_password(
-    app: &NyaTermApp,
-    auth: Option<&ConnectionAuth>,
-) -> Option<String> {
+fn inline_connection_password(auth: Option<&ConnectionAuth>) -> Option<String> {
     let auth = auth?;
     if auth.mode == "none" {
         return None;
@@ -729,20 +793,34 @@ fn load_telnet_connection_password(
     {
         return (!auth.has_password).then(|| password.to_string());
     }
-    let password_id = auth
-        .password_id
+    None
+}
+
+fn saved_connection_password_id(connection: &SavedConnection) -> Option<String> {
+    if !matches!(
+        &connection.config,
+        ConnectionType::Telnet { .. } | ConnectionType::Rdp { .. } | ConnectionType::Vnc { .. }
+    ) {
+        return None;
+    }
+    stored_connection_password_id(connection.auth.as_ref())
+}
+
+fn stored_connection_password_id(auth: Option<&ConnectionAuth>) -> Option<String> {
+    let auth = auth?;
+    if auth.mode == "none"
+        || auth
+            .password
+            .as_deref()
+            .is_some_and(|password| !password.trim().is_empty() && !auth.has_password)
+    {
+        return None;
+    }
+    auth.password_id
         .as_deref()
         .map(str::trim)
-        .filter(|value| !value.is_empty())?;
-    ConnectionStore::open_with_portable_key_path(
-        app.runtime.config_dir(),
-        app.runtime.portable_key_path().map(ToOwned::to_owned),
-    )
-    .ok()?
-    .load_decrypted_password_by_id(password_id)
-    .ok()??
-    .password
-    .filter(|value| !value.trim().is_empty())
+        .filter(|password_id| !password_id.is_empty())
+        .map(ToString::to_string)
 }
 
 fn resolve_effective_connection_encoding(value: &str, app: &NyaTermApp) -> String {
@@ -910,12 +988,13 @@ mod tests {
         AiExecutionProfile, ConnectionAuth, ConnectionType, SavedConnection, SftpCwdFollowMode,
         SftpSettings, SshAlgorithmMode, SshAlgorithmPreferences, SshProfile, SshTerminalType, uuid,
     };
-    use nyaterm_store::{ConnectionStore, StoreConfig, StoreRuntime};
+    use nyaterm_store::{StoreConfig, StoreDomain, StoreRuntime};
     use nyaterm_transport::SshSessionProfile;
 
     use super::{
         SshSessionConfigBuildContext, build_ssh_session_config_with_context,
-        load_ssh_connection_password_with_context,
+        inline_connection_password, load_ssh_connection_password_with_context,
+        stored_connection_password_id,
     };
     use crate::features::{
         AgentPromptBroker, CredentialPromptBroker, HostKeyPromptBroker, NativeOtpProvider,
@@ -973,17 +1052,18 @@ mod tests {
     #[test]
     fn ssh_password_loader_resolves_saved_password_id() {
         let dir = unique_temp_dir("ssh-password-id");
-        let store = ConnectionStore::open(&dir).expect("open store");
-        let password_id = store
-            .save_password(nyaterm_core::SavedPassword {
-                id: "pw-1".to_string(),
-                name: "Primary".to_string(),
-                password: Some("stored-secret".to_string()),
-                has_password: false,
+        let context = test_ssh_build_context(dir.clone());
+        let password_id = context
+            .store
+            .request_fn(StoreDomain::Security, |store| {
+                store.save_password(nyaterm_core::SavedPassword {
+                    id: "pw-1".to_string(),
+                    name: "Primary".to_string(),
+                    password: Some("stored-secret".to_string()),
+                    has_password: false,
+                })
             })
             .expect("save password");
-        drop(store);
-        let context = test_ssh_build_context(dir.clone());
         let auth = ConnectionAuth {
             mode: "password".to_string(),
             password_id: Some(password_id),
@@ -994,6 +1074,35 @@ mod tests {
 
         assert_eq!(password.as_deref(), Some("stored-secret"));
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn non_ssh_password_selection_never_treats_locked_values_as_plaintext() {
+        let inline = ConnectionAuth {
+            mode: "password".to_string(),
+            password: Some("plain-secret".to_string()),
+            password_id: Some("pw-inline".to_string()),
+            has_password: false,
+            ..ConnectionAuth::default()
+        };
+        assert_eq!(
+            inline_connection_password(Some(&inline)).as_deref(),
+            Some("plain-secret")
+        );
+        assert_eq!(stored_connection_password_id(Some(&inline)), None);
+
+        let locked = ConnectionAuth {
+            mode: "password".to_string(),
+            password: Some("masked-or-encrypted".to_string()),
+            password_id: Some("pw-stored".to_string()),
+            has_password: true,
+            ..ConnectionAuth::default()
+        };
+        assert_eq!(inline_connection_password(Some(&locked)), None);
+        assert_eq!(
+            stored_connection_password_id(Some(&locked)).as_deref(),
+            Some("pw-stored")
+        );
     }
 
     #[test]

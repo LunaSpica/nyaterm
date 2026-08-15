@@ -1,12 +1,13 @@
 use gpui::{AppContext, Context, IntoElement, PathPromptOptions, SharedString, Window};
 use nyaterm_core::export_quick_commands_json;
-use nyaterm_store::ConnectionStore;
+use nyaterm_store::{StorageError, StoreDomain};
 use nyaterm_ui::NyaDialogWindowExt as _;
 
 use crate::features::NyaTermApp;
 use crate::models::{QuickCommandImportPathPromptKind, QuickCommandImportPathPromptResult};
 
-use super::sources::import_quick_commands_from_path;
+use super::merge::merge_import;
+use super::sources::parse_quick_commands_from_path;
 
 impl NyaTermApp {
     pub(in crate::features) fn open_quick_command_import_dialog(
@@ -50,21 +51,17 @@ impl NyaTermApp {
     pub(in crate::features) fn prompt_quick_command_export(&mut self, cx: &mut Context<Self>) {
         let directory = self.runtime.config_dir().to_path_buf();
         let receiver = cx.prompt_for_new_path(&directory, Some("nyaterm-quick-commands.json"));
-        let config_dir = self.runtime.config_dir().to_path_buf();
-        let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
+        let store = self.store_blocking_client();
         self.shell
             .set_status("selecting quick command export destination".to_string());
         cx.spawn(async move |this, cx| {
             let result = match receiver.await {
                 Ok(Ok(Some(path))) => {
                     cx.background_spawn(async move {
-                        let store = ConnectionStore::open_with_portable_key_path(
-                            &config_dir,
-                            portable_key_path,
-                        )
-                        .map_err(|error| error.to_string())?;
                         let config = store
-                            .load_quick_commands()
+                            .request_fn(StoreDomain::Commands, |database| {
+                                database.load_quick_commands()
+                            })
                             .map_err(|error| error.to_string())?;
                         let raw = export_quick_commands_json(config)
                             .map_err(|error| error.to_string())?;
@@ -127,8 +124,7 @@ impl NyaTermApp {
             prompt: Some(SharedString::from(kind.prompt_label())),
         };
         let receiver = cx.prompt_for_paths(options);
-        let config_dir = self.runtime.config_dir().to_path_buf();
-        let portable_key_path = self.runtime.portable_key_path().map(ToOwned::to_owned);
+        let store = self.store_blocking_client();
         self.shell.set_status(kind.selecting_status().to_string());
 
         cx.spawn(async move |this, cx| {
@@ -136,12 +132,21 @@ impl NyaTermApp {
                 Ok(Ok(Some(paths))) => match paths.into_iter().next() {
                     Some(path) => {
                         cx.background_spawn(async move {
-                            match import_quick_commands_from_path(
-                                &config_dir,
-                                portable_key_path,
-                                kind,
-                                &path,
-                            ) {
+                            let import_config = match parse_quick_commands_from_path(kind, &path) {
+                                Ok(config) => config,
+                                Err(error) => {
+                                    return QuickCommandImportPathPromptResult::Failed(error);
+                                }
+                            };
+                            match store.request_fn(StoreDomain::Commands, move |database| {
+                                let mut config = database.load_quick_commands()?;
+                                let mut summary = merge_import(&mut config, import_config)
+                                    .map_err(StorageError::InvalidData)?;
+                                database.save_quick_commands(config.clone())?;
+                                summary.total_commands = config.commands.len();
+                                summary.total_categories = config.categories.len();
+                                Ok(summary)
+                            }) {
                                 Ok(summary) => QuickCommandImportPathPromptResult::Imported {
                                     imported_commands: summary.imported_commands,
                                     imported_categories: summary.imported_categories,
@@ -149,7 +154,9 @@ impl NyaTermApp {
                                     total_commands: summary.total_commands,
                                     total_categories: summary.total_categories,
                                 },
-                                Err(error) => QuickCommandImportPathPromptResult::Failed(error),
+                                Err(error) => {
+                                    QuickCommandImportPathPromptResult::Failed(error.to_string())
+                                }
                             }
                         })
                         .await

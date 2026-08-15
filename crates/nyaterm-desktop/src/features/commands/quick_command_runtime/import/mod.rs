@@ -11,13 +11,12 @@ struct ImportSummary {
     total_categories: usize,
 }
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 struct ImportConfig {
     commands: Vec<ImportCommand>,
     categories: Vec<ImportCategory>,
 }
 
-#[derive(Debug)]
 struct ImportCategory {
     id: Option<String>,
     name: String,
@@ -25,7 +24,6 @@ struct ImportCategory {
     sort_order: i32,
 }
 
-#[derive(Debug)]
 struct ImportCommand {
     id: Option<String>,
     label: String,

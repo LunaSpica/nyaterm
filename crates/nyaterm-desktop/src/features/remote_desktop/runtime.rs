@@ -8,7 +8,7 @@ use nyaterm_remote_desktop::{
     RdpSessionConfig, RdpSessionState, VncError, VncErrorKind, VncInputEvent, VncRuntimeEvent,
     VncSessionConfig, VncSessionState,
 };
-use nyaterm_store::{ConnectionStore, KnownHostCheck, RdpCertificateMetadata};
+use nyaterm_store::{KnownHostCheck, RdpCertificateMetadata, StoreDomain, store_request};
 
 use crate::features::NyaTermApp;
 
@@ -87,20 +87,29 @@ impl NyaTermApp {
         session_id
     }
 
-    pub(in crate::features) fn retry_rdp_runtime(&mut self, session_id: &str) {
+    pub(in crate::features) fn retry_rdp_runtime(
+        &mut self,
+        session_id: &str,
+        cx: &mut Context<Self>,
+    ) {
         if self.session.metadata(session_id).is_some_and(|metadata| {
             matches!(
                 metadata.launch_config,
                 crate::models::SessionLaunchConfig::Vnc(_)
             )
         }) {
-            self.restart_vnc_runtime(session_id, true);
+            self.restart_vnc_runtime(session_id, true, cx);
         } else {
-            self.restart_rdp_runtime(session_id, true);
+            self.restart_rdp_runtime(session_id, true, cx);
         }
     }
 
-    fn restart_rdp_runtime(&mut self, session_id: &str, reset_attempts: bool) {
+    fn restart_rdp_runtime(
+        &mut self,
+        session_id: &str,
+        reset_attempts: bool,
+        cx: &mut Context<Self>,
+    ) {
         let Some(metadata) = self.session.metadata(session_id).cloned() else {
             return;
         };
@@ -116,7 +125,19 @@ impl NyaTermApp {
                 .iter()
                 .find(|connection| connection.id == connection_id)
         {
-            config.password = load_rdp_password(self, connection.auth.as_ref());
+            config.password = inline_remote_desktop_password(connection.auth.as_ref());
+            if config.password.is_none()
+                && let Some(password_id) = remote_desktop_password_id(connection.auth.as_ref())
+            {
+                self.request_remote_desktop_restart_password(
+                    session_id.to_string(),
+                    password_id,
+                    reset_attempts,
+                    false,
+                    cx,
+                );
+                return;
+            }
         }
         let reconnect_attempts = if reset_attempts {
             0
@@ -159,7 +180,12 @@ impl NyaTermApp {
         }
     }
 
-    fn restart_vnc_runtime(&mut self, session_id: &str, reset_attempts: bool) {
+    fn restart_vnc_runtime(
+        &mut self,
+        session_id: &str,
+        reset_attempts: bool,
+        cx: &mut Context<Self>,
+    ) {
         let Some(metadata) = self.session.metadata(session_id).cloned() else {
             return;
         };
@@ -175,7 +201,19 @@ impl NyaTermApp {
                 .iter()
                 .find(|connection| connection.id == connection_id)
         {
-            config.password = load_rdp_password(self, connection.auth.as_ref());
+            config.password = inline_remote_desktop_password(connection.auth.as_ref());
+            if config.password.is_none()
+                && let Some(password_id) = remote_desktop_password_id(connection.auth.as_ref())
+            {
+                self.request_remote_desktop_restart_password(
+                    session_id.to_string(),
+                    password_id,
+                    reset_attempts,
+                    true,
+                    cx,
+                );
+                return;
+            }
         }
         let reconnect_attempts = if reset_attempts {
             0
@@ -210,6 +248,64 @@ impl NyaTermApp {
                 }
             }
         }
+    }
+
+    fn request_remote_desktop_restart_password(
+        &mut self,
+        session_id: String,
+        password_id: String,
+        reset_attempts: bool,
+        vnc: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let response_session_id = session_id.clone();
+        self.submit_store_request(
+            0,
+            store_request(StoreDomain::Security, move |store| {
+                store.load_decrypted_password_by_id(&password_id)
+            }),
+            move |this, event, cx| {
+                let password = match event.outcome {
+                    Ok(Some(entry)) => entry
+                        .password
+                        .filter(|password| !password.trim().is_empty()),
+                    Ok(None) => None,
+                    Err(error) => {
+                        this.shell.set_status(format!(
+                            "remote desktop reconnect could not load saved password: {error}"
+                        ));
+                        cx.notify();
+                        return;
+                    }
+                };
+                let Some(password) = password else {
+                    this.shell.set_status(
+                        "remote desktop reconnect saved password is missing or locked".to_string(),
+                    );
+                    cx.notify();
+                    return;
+                };
+                let Some(metadata) = this.session.metadata_mut(&response_session_id) else {
+                    return;
+                };
+                match &mut metadata.launch_config {
+                    crate::models::SessionLaunchConfig::Rdp(config) if !vnc => {
+                        config.password = Some(password);
+                    }
+                    crate::models::SessionLaunchConfig::Vnc(config) if vnc => {
+                        config.password = Some(password);
+                    }
+                    _ => return,
+                }
+                if vnc {
+                    this.restart_vnc_runtime(&response_session_id, reset_attempts, cx);
+                } else {
+                    this.restart_rdp_runtime(&response_session_id, reset_attempts, cx);
+                }
+                cx.notify();
+            },
+            cx,
+        );
     }
 
     pub(in crate::features) fn close_remote_desktop_runtime(
@@ -324,7 +420,7 @@ impl NyaTermApp {
         }
         dirty |= self.drive_rdp_pointer_flush();
         dirty |= self.drive_rdp_resize_debounce();
-        dirty |= self.drive_rdp_reconnects();
+        dirty |= self.drive_rdp_reconnects(cx);
         self.sync_rdp_keyboard_capture(window);
         dirty |= self.poll_active_rdp_clipboard(cx);
         self.report_rdp_metrics();
@@ -789,7 +885,7 @@ impl NyaTermApp {
                 }
             }
             RdpRuntimeEvent::CertificateRequest(request) => {
-                self.handle_rdp_certificate_request(session_id, request);
+                self.handle_rdp_certificate_request(session_id, request, cx);
             }
             RdpRuntimeEvent::Capability { capability, .. } => {
                 if let Some(session) = self.remote_desktop.sessions.get_mut(session_id) {
@@ -851,7 +947,7 @@ impl NyaTermApp {
         true
     }
 
-    fn drive_rdp_reconnects(&mut self) -> bool {
+    fn drive_rdp_reconnects(&mut self, cx: &mut Context<Self>) -> bool {
         let now = Instant::now();
         let due = self
             .remote_desktop
@@ -864,7 +960,7 @@ impl NyaTermApp {
             if let Some(session) = self.remote_desktop.sessions.get_mut(session_id) {
                 session.reconnect_at = None;
             }
-            self.restart_rdp_runtime(session_id, false);
+            self.restart_rdp_runtime(session_id, false, cx);
         }
         !due.is_empty()
     }
@@ -998,7 +1094,12 @@ impl NyaTermApp {
         }
     }
 
-    fn handle_rdp_certificate_request(&mut self, session_id: &str, request: RdpCertificateRequest) {
+    fn handle_rdp_certificate_request(
+        &mut self,
+        session_id: &str,
+        request: RdpCertificateRequest,
+        cx: &mut Context<Self>,
+    ) {
         let policy = self
             .session
             .metadata(session_id)
@@ -1007,14 +1108,60 @@ impl NyaTermApp {
                 _ => None,
             })
             .unwrap_or(RdpCertificatePolicy::Prompt);
-        let check = ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .and_then(|store| {
-            store.check_rdp_known_host(&request.host, request.port, &request.sha256_fingerprint)
-        })
-        .unwrap_or(KnownHostCheck::UnknownHost);
+        if policy == RdpCertificatePolicy::Insecure {
+            self.apply_rdp_certificate_check(
+                session_id,
+                request,
+                policy,
+                KnownHostCheck::UnknownHost,
+                cx,
+            );
+            return;
+        }
+        let host = request.host.clone();
+        let port = request.port;
+        let fingerprint = request.sha256_fingerprint.clone();
+        let request_id = request.request_id.clone();
+        let failure_request_id = request_id.clone();
+        let session_id = session_id.to_string();
+        let submitted = self.submit_store_request(
+            0,
+            store_request(StoreDomain::Security, move |store| {
+                store.check_rdp_known_host(&host, port, &fingerprint)
+            }),
+            move |this, event, cx| match event.outcome {
+                Ok(check) if this.remote_desktop.sessions.contains_key(&session_id) => {
+                    this.apply_rdp_certificate_check(&session_id, request, policy, check, cx);
+                }
+                Ok(_) => {}
+                Err(error) => {
+                    this.shell
+                        .set_status(format!("RDP certificate verification failed: {error}"));
+                    let _ = this
+                        .remote_desktop
+                        .manager
+                        .respond_certificate(&request_id, RdpCertificateResponse::Reject);
+                    cx.notify();
+                }
+            },
+            cx,
+        );
+        if !submitted {
+            let _ = self
+                .remote_desktop
+                .manager
+                .respond_certificate(&failure_request_id, RdpCertificateResponse::Reject);
+        }
+    }
+
+    fn apply_rdp_certificate_check(
+        &mut self,
+        session_id: &str,
+        request: RdpCertificateRequest,
+        policy: RdpCertificatePolicy,
+        check: KnownHostCheck,
+        cx: &mut Context<Self>,
+    ) {
         let decision = match policy {
             RdpCertificatePolicy::Insecure => CertificateDecision::Accept,
             RdpCertificatePolicy::TrustOnFirstUse => match check {
@@ -1045,11 +1192,7 @@ impl NyaTermApp {
                     .respond_certificate(&request.request_id, RdpCertificateResponse::TrustOnce);
             }
             CertificateDecision::AcceptAndRemember => {
-                let _ = self.remember_rdp_certificate(&request);
-                let _ = self.remote_desktop.manager.respond_certificate(
-                    &request.request_id,
-                    RdpCertificateResponse::TrustAndRemember,
-                );
+                self.persist_rdp_certificate_and_respond(request, cx);
             }
             CertificateDecision::Reject => {
                 let _ = self
@@ -1069,6 +1212,7 @@ impl NyaTermApp {
         &mut self,
         session_id: &str,
         response: RdpCertificateResponse,
+        cx: &mut Context<Self>,
     ) {
         let request = self
             .remote_desktop
@@ -1079,7 +1223,8 @@ impl NyaTermApp {
             return;
         };
         if response == RdpCertificateResponse::TrustAndRemember {
-            let _ = self.remember_rdp_certificate(&request);
+            self.persist_rdp_certificate_and_respond(request, cx);
+            return;
         }
         if let Err(error) = self
             .remote_desktop
@@ -1090,23 +1235,54 @@ impl NyaTermApp {
         }
     }
 
-    fn remember_rdp_certificate(&self, request: &RdpCertificateRequest) -> anyhow::Result<()> {
-        let store = ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )?;
-        store.upsert_rdp_known_host(
-            &request.host,
-            request.port,
-            &request.sha256_fingerprint,
-            RdpCertificateMetadata {
-                subject: request.subject.clone(),
-                issuer: request.issuer.clone(),
-                valid_from: request.valid_from.clone(),
-                valid_to: request.valid_to.clone(),
+    fn persist_rdp_certificate_and_respond(
+        &mut self,
+        request: RdpCertificateRequest,
+        cx: &mut Context<Self>,
+    ) {
+        let request_id = request.request_id.clone();
+        let failure_request_id = request_id.clone();
+        let host = request.host;
+        let port = request.port;
+        let fingerprint = request.sha256_fingerprint;
+        let metadata = RdpCertificateMetadata {
+            subject: request.subject,
+            issuer: request.issuer,
+            valid_from: request.valid_from,
+            valid_to: request.valid_to,
+        };
+        let submitted = self.submit_store_request(
+            0,
+            store_request(StoreDomain::Security, move |store| {
+                store.upsert_rdp_known_host(&host, port, &fingerprint, metadata)
+            }),
+            move |this, event, cx| {
+                let response = match event.outcome {
+                    Ok(()) => RdpCertificateResponse::TrustAndRemember,
+                    Err(error) => {
+                        this.shell.set_status(format!(
+                            "RDP certificate could not be remembered: {error}"
+                        ));
+                        RdpCertificateResponse::Reject
+                    }
+                };
+                if let Err(error) = this
+                    .remote_desktop
+                    .manager
+                    .respond_certificate(&request_id, response)
+                {
+                    this.shell.set_status(format_rdp_error(&error));
+                }
+                cx.notify();
             },
-        )?;
-        Ok(())
+            cx,
+        );
+        if !submitted {
+            let _ = self
+                .remote_desktop
+                .manager
+                .respond_certificate(&failure_request_id, RdpCertificateResponse::Reject);
+        }
     }
 
     pub(in crate::features) fn queue_rdp_resize(
@@ -1435,10 +1611,7 @@ pub(super) fn format_rdp_error(error: &RdpError) -> String {
     format!("{category}: {}", error.message)
 }
 
-fn load_rdp_password(
-    app: &NyaTermApp,
-    auth: Option<&nyaterm_core::ConnectionAuth>,
-) -> Option<String> {
+fn inline_remote_desktop_password(auth: Option<&nyaterm_core::ConnectionAuth>) -> Option<String> {
     let auth = auth?;
     if auth.mode == "none" {
         return None;
@@ -1450,31 +1623,37 @@ fn load_rdp_password(
     {
         return (!auth.has_password).then(|| password.to_string());
     }
-    let password_id = auth
-        .password_id
+    None
+}
+
+fn remote_desktop_password_id(auth: Option<&nyaterm_core::ConnectionAuth>) -> Option<String> {
+    let auth = auth?;
+    if auth.mode == "none"
+        || auth
+            .password
+            .as_deref()
+            .is_some_and(|password| !password.trim().is_empty() && !auth.has_password)
+    {
+        return None;
+    }
+    auth.password_id
         .as_deref()
         .map(str::trim)
-        .filter(|password_id| !password_id.is_empty())?;
-    ConnectionStore::open_with_portable_key_path(
-        app.runtime.config_dir(),
-        app.runtime.portable_key_path().map(ToOwned::to_owned),
-    )
-    .ok()?
-    .load_decrypted_password_by_id(password_id)
-    .ok()??
-    .password
-    .filter(|password| !password.trim().is_empty())
+        .filter(|password_id| !password_id.is_empty())
+        .map(ToString::to_string)
 }
 
 #[cfg(test)]
 mod tests {
     use std::time::{Duration, Instant};
 
+    use nyaterm_core::ConnectionAuth;
     use nyaterm_remote_desktop::{RdpError, RdpErrorKind};
 
     use super::{
-        clear_rdp_reconnect_after_frame, rdp_error_is_retryable, rdp_reconnect_delay,
-        rdp_resize_is_material, should_disable_dynamic_resize_after_state,
+        clear_rdp_reconnect_after_frame, inline_remote_desktop_password, rdp_error_is_retryable,
+        rdp_reconnect_delay, rdp_resize_is_material, remote_desktop_password_id,
+        should_disable_dynamic_resize_after_state,
     };
     use crate::features::remote_desktop::state::RemoteDesktopSessionState;
 
@@ -1502,6 +1681,23 @@ mod tests {
         ] {
             assert!(!rdp_error_is_retryable(kind), "{kind:?}");
         }
+    }
+
+    #[test]
+    fn reconnect_password_selection_resolves_locked_values_by_id() {
+        let auth = ConnectionAuth {
+            mode: "password".to_string(),
+            password: Some("masked-or-encrypted".to_string()),
+            password_id: Some("pw-rdp".to_string()),
+            has_password: true,
+            ..ConnectionAuth::default()
+        };
+
+        assert_eq!(inline_remote_desktop_password(Some(&auth)), None);
+        assert_eq!(
+            remote_desktop_password_id(Some(&auth)).as_deref(),
+            Some("pw-rdp")
+        );
     }
 
     #[test]

@@ -1,30 +1,20 @@
 use std::collections::{BTreeMap, HashMap};
 use std::io::Read;
-use std::path::PathBuf;
 
-use nyaterm_store::ConnectionStore;
 use serde_json::Value;
 
 use crate::models::QuickCommandImportPathPromptKind;
 
 use super::helpers::{map_windterm_icon, trim_optional};
 use super::json::parse_import_value;
-use super::merge::merge_import;
-use super::{ImportCommand, ImportConfig, ImportSummary};
+use super::{ImportCommand, ImportConfig};
 
 pub(super) const MAX_QUICK_COMMAND_IMPORT_BYTES: u64 = 4 * 1024 * 1024;
 
-pub(super) fn import_quick_commands_from_path(
-    config_dir: &std::path::Path,
-    portable_key_path: Option<PathBuf>,
+pub(super) fn parse_quick_commands_from_path(
     kind: QuickCommandImportPathPromptKind,
     path: &std::path::Path,
-) -> Result<ImportSummary, String> {
-    let store = ConnectionStore::open_with_portable_key_path(config_dir, portable_key_path)
-        .map_err(|error| error.to_string())?;
-    let mut config = store
-        .load_quick_commands()
-        .map_err(|error| error.to_string())?;
+) -> Result<ImportConfig, String> {
     let import_config = match kind {
         QuickCommandImportPathPromptKind::NyatermJson => {
             let raw = read_quick_command_import_text(path)?;
@@ -39,13 +29,7 @@ pub(super) fn import_quick_commands_from_path(
     if import_config.commands.is_empty() {
         return Err("No valid quick commands found in import file".to_string());
     }
-    let mut summary = merge_import(&mut config, import_config)?;
-    store
-        .save_quick_commands(config.clone())
-        .map_err(|error| error.to_string())?;
-    summary.total_commands = config.commands.len();
-    summary.total_categories = config.categories.len();
-    Ok(summary)
+    Ok(import_config)
 }
 
 pub(super) fn parse_nyaterm_import(raw: &str) -> Result<ImportConfig, String> {

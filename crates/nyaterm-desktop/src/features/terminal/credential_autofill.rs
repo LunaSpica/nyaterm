@@ -5,7 +5,7 @@ use gpui::{
     svg,
 };
 use nyaterm_core::{CredentialPromptKind, SavedCredential, TerminalInputState, truncate_preview};
-use nyaterm_store::ConnectionStore;
+use nyaterm_store::{StoreDomain, store_request};
 use nyaterm_terminal::TerminalSnapshot;
 
 use crate::features::NyaTermApp;
@@ -414,34 +414,69 @@ impl NyaTermApp {
                     .set_status(format!("filled username from '{}'", credential.name));
             }
             CredentialPromptKind::Password => {
-                let password = self.decrypt_saved_credential_password(&credential.id);
-                let Some(password) = password.filter(|value| !value.is_empty()) else {
+                let credential_id = credential.id.clone();
+                let credential_name = credential.name.clone();
+                let session_id = session_id.to_string();
+                let submitted = self.submit_store_request(
+                    0,
+                    store_request(StoreDomain::Security, move |store| {
+                        store.load_decrypted_credential_by_id(&credential_id)
+                    }),
+                    move |this, event, cx| {
+                        if this.session.active_id() != Some(session_id.as_str()) {
+                            this.shell.set_status(
+                                "credential fill cancelled because the active session changed"
+                                    .to_string(),
+                            );
+                            cx.notify();
+                            return;
+                        }
+                        if this.session.is_disconnected(&session_id) {
+                            this.shell.set_status(
+                                "session disconnected - reconnect before filling credentials"
+                                    .to_string(),
+                            );
+                            cx.notify();
+                            return;
+                        }
+                        match event.outcome {
+                            Ok(Some(entry)) => {
+                                let Some(mut password) =
+                                    entry.password.filter(|value| !value.is_empty())
+                                else {
+                                    this.shell.set_status(format!(
+                                        "credential '{credential_name}' has no password"
+                                    ));
+                                    cx.notify();
+                                    return;
+                                };
+                                password.push('\r');
+                                this.send_terminal_input_without_suggestion_track(
+                                    password.into_bytes(),
+                                    cx,
+                                );
+                                this.shell.set_status(format!(
+                                    "filled password from '{credential_name}'"
+                                ));
+                            }
+                            Ok(None) => this.shell.set_status(format!(
+                                "credential '{credential_name}' was not found"
+                            )),
+                            Err(error) => this.shell.set_status(format!(
+                                "failed to load credential '{credential_name}': {error}"
+                            )),
+                        }
+                        cx.notify();
+                    },
+                    cx,
+                );
+                if submitted {
                     self.shell
-                        .set_status(format!("credential '{}' has no password", credential.name));
-                    cx.notify();
-                    return;
-                };
-                let mut payload = password;
-                payload.push('\r');
-                self.send_terminal_input_without_suggestion_track(payload.into_bytes(), cx);
-                self.shell
-                    .set_status(format!("filled password from '{}'", credential.name));
+                        .set_status(format!("loading password from '{}'", credential.name));
+                }
             }
         }
         cx.notify();
-    }
-
-    fn decrypt_saved_credential_password(&mut self, credential_id: &str) -> Option<String> {
-        let store = ConnectionStore::open_with_portable_key_path(
-            self.runtime.config_dir(),
-            self.runtime.portable_key_path().map(ToOwned::to_owned),
-        )
-        .ok()?;
-        store
-            .load_decrypted_credential_by_id(credential_id)
-            .ok()
-            .flatten()
-            .and_then(|entry| entry.password)
     }
 
     pub(in crate::features) fn apply_selected_credential_suggestion(

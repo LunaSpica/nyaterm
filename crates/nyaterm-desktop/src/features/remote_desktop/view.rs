@@ -70,7 +70,7 @@ impl NyaTermApp {
                             format!("rdp-retry-{session_id}"),
                             self.tr("remoteDesktop.retry"),
                             cx.listener(move |this, _, _, cx| {
-                                this.retry_rdp_runtime(&retry_id);
+                                this.retry_rdp_runtime(&retry_id, cx);
                                 cx.notify();
                             }),
                         ))
@@ -112,7 +112,7 @@ impl NyaTermApp {
                             format!("rdp-disconnected-retry-{session_id}"),
                             self.tr("remoteDesktop.retry"),
                             cx.listener(move |this, _, _, cx| {
-                                this.retry_rdp_runtime(&retry_id);
+                                this.retry_rdp_runtime(&retry_id, cx);
                                 cx.notify();
                             }),
                         ))
@@ -377,6 +377,7 @@ impl NyaTermApp {
                             this.resolve_rdp_certificate(
                                 &reject_id,
                                 RdpCertificateResponse::Reject,
+                                cx,
                             );
                             cx.notify();
                         }),
@@ -389,6 +390,7 @@ impl NyaTermApp {
                             this.resolve_rdp_certificate(
                                 &once_id,
                                 RdpCertificateResponse::TrustOnce,
+                                cx,
                             );
                             cx.notify();
                         }),
@@ -401,6 +403,7 @@ impl NyaTermApp {
                             this.resolve_rdp_certificate(
                                 &remember_id,
                                 RdpCertificateResponse::TrustAndRemember,
+                                cx,
                             );
                             cx.notify();
                         }),
