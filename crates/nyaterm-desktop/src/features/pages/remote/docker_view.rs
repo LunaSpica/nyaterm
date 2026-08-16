@@ -118,56 +118,6 @@ impl NyaTermApp {
             docker.tab
         };
         let query = docker.search_draft.trim().to_ascii_lowercase();
-        let filtered_containers = overview
-            .containers
-            .iter()
-            .filter(|container| docker_container_matches(container, &query))
-            .cloned()
-            .collect::<Vec<_>>();
-        let filtered_images = overview
-            .images
-            .iter()
-            .filter(|image| docker_image_matches(image, &query))
-            .cloned()
-            .collect::<Vec<_>>();
-        let filtered_volumes = overview
-            .volumes
-            .iter()
-            .filter(|volume| docker_volume_matches(volume, &query))
-            .cloned()
-            .collect::<Vec<_>>();
-        let filtered_networks = overview
-            .networks
-            .iter()
-            .filter(|network| docker_network_matches(network, &query))
-            .cloned()
-            .collect::<Vec<_>>();
-        let filtered_compose_projects = overview
-            .compose_projects
-            .iter()
-            .filter(|project| docker_compose_project_matches(project, &query))
-            .cloned()
-            .collect::<Vec<_>>();
-
-        // Keep virtual-list offsets valid after search/filter/tab changes.
-        {
-            const DOCKER_VIEWPORT_ROWS: usize = 16;
-            let total = filtered_containers.len();
-            let max_offset = total.saturating_sub(DOCKER_VIEWPORT_ROWS.min(total));
-            docker.list_offset = self.remote_ops.clamp_docker_list_offset(max_offset);
-        }
-        {
-            const DOCKER_RESOURCE_VIEWPORT_ROWS: usize = 14;
-            let total = match active_tab {
-                DockerTab::Images => filtered_images.len(),
-                DockerTab::Volumes => filtered_volumes.len(),
-                DockerTab::Networks => filtered_networks.len(),
-                _ => 0,
-            };
-            let max_offset = total.saturating_sub(DOCKER_RESOURCE_VIEWPORT_ROWS.min(total));
-            docker.resource_list_offset = self.remote_ops.clamp_docker_resource_offset(max_offset);
-        }
-
         let menu_bg = self.shell_surface_color(palette.surface);
         let dialog_bg = self.shell_surface_color(palette.bg);
         let render_context = DockerRenderContext {
@@ -176,56 +126,92 @@ impl NyaTermApp {
             labels,
         };
         let docker_content = match active_tab {
-            DockerTab::Containers => docker_containers_panel(
-                render_context,
-                DockerContainersPanelState {
-                    has_snapshot: true,
-                    has_session: self.session.active_ssh_config().is_some(),
-                    docker_available: overview.available,
-                    filtered_containers: &filtered_containers,
-                    query_empty: query.is_empty(),
-                    open_menu_id: docker.container_menu_id.as_deref(),
-                    list_offset: docker.list_offset,
-                },
-                cx,
-            )
-            .into_any_element(),
-            DockerTab::Images => docker_images_panel(
-                palette,
-                &filtered_images,
-                docker.resource_list_offset,
-                labels,
-                cx,
-            )
-            .into_any_element(),
-            DockerTab::Volumes => docker_volumes_panel(
-                palette,
-                &filtered_volumes,
-                docker.resource_list_offset,
-                labels,
-                cx,
-            )
-            .into_any_element(),
-            DockerTab::Networks => docker_networks_panel(
-                palette,
-                &filtered_networks,
-                docker.resource_list_offset,
-                labels,
-                cx,
-            )
-            .into_any_element(),
-            DockerTab::Compose => docker_compose_panel(
-                render_context,
-                DockerComposePanelState {
-                    projects: &filtered_compose_projects,
-                    expanded_projects: &docker.compose_expanded,
-                    services_by_project: &docker.compose_services,
-                    service_errors: &docker.compose_service_errors,
-                    open_menu_id: docker.compose_menu_id.as_deref(),
-                },
-                cx,
-            )
-            .into_any_element(),
+            DockerTab::Containers => {
+                let filtered = overview
+                    .containers
+                    .iter()
+                    .filter(|container| docker_container_matches(container, &query))
+                    .cloned()
+                    .collect::<Vec<_>>();
+                const VIEWPORT_ROWS: usize = 16;
+                let max_offset = filtered
+                    .len()
+                    .saturating_sub(VIEWPORT_ROWS.min(filtered.len()));
+                docker.list_offset = self.remote_ops.clamp_docker_list_offset(max_offset);
+                docker_containers_panel(
+                    render_context,
+                    DockerContainersPanelState {
+                        has_snapshot: true,
+                        has_session: self.session.active_ssh_config().is_some(),
+                        docker_available: overview.available,
+                        filtered_containers: &filtered,
+                        query_empty: query.is_empty(),
+                        open_menu_id: docker.container_menu_id.as_deref(),
+                        list_offset: docker.list_offset,
+                    },
+                    cx,
+                )
+                .into_any_element()
+            }
+            DockerTab::Images => {
+                let filtered = overview
+                    .images
+                    .iter()
+                    .filter(|image| docker_image_matches(image, &query))
+                    .cloned()
+                    .collect::<Vec<_>>();
+                docker.resource_list_offset = self
+                    .remote_ops
+                    .clamp_docker_resource_offset(resource_max_offset(filtered.len()));
+                docker_images_panel(palette, &filtered, docker.resource_list_offset, labels, cx)
+                    .into_any_element()
+            }
+            DockerTab::Volumes => {
+                let filtered = overview
+                    .volumes
+                    .iter()
+                    .filter(|volume| docker_volume_matches(volume, &query))
+                    .cloned()
+                    .collect::<Vec<_>>();
+                docker.resource_list_offset = self
+                    .remote_ops
+                    .clamp_docker_resource_offset(resource_max_offset(filtered.len()));
+                docker_volumes_panel(palette, &filtered, docker.resource_list_offset, labels, cx)
+                    .into_any_element()
+            }
+            DockerTab::Networks => {
+                let filtered = overview
+                    .networks
+                    .iter()
+                    .filter(|network| docker_network_matches(network, &query))
+                    .cloned()
+                    .collect::<Vec<_>>();
+                docker.resource_list_offset = self
+                    .remote_ops
+                    .clamp_docker_resource_offset(resource_max_offset(filtered.len()));
+                docker_networks_panel(palette, &filtered, docker.resource_list_offset, labels, cx)
+                    .into_any_element()
+            }
+            DockerTab::Compose => {
+                let filtered = overview
+                    .compose_projects
+                    .iter()
+                    .filter(|project| docker_compose_project_matches(project, &query))
+                    .cloned()
+                    .collect::<Vec<_>>();
+                docker_compose_panel(
+                    render_context,
+                    DockerComposePanelState {
+                        projects: &filtered,
+                        expanded_projects: &docker.compose_expanded,
+                        services_by_project: &docker.compose_services,
+                        service_errors: &docker.compose_service_errors,
+                        open_menu_id: docker.compose_menu_id.as_deref(),
+                    },
+                    cx,
+                )
+                .into_any_element()
+            }
         };
 
         // Tauri DockerManager shell: header actions + dense search + tabs + flex list body.
@@ -304,4 +290,9 @@ impl NyaTermApp {
                 ))
             })
     }
+}
+
+fn resource_max_offset(total: usize) -> usize {
+    const VIEWPORT_ROWS: usize = 14;
+    total.saturating_sub(VIEWPORT_ROWS.min(total))
 }

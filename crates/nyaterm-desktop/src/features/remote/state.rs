@@ -127,7 +127,7 @@ pub(in crate::features) struct RemoteOpsFeatureFocus {}
 
 struct DockerPaneState {
     job: RemoteJobState<DockerJobResult>,
-    pub overview: Option<RemoteDockerOverview>,
+    pub overview: Option<Arc<RemoteDockerOverview>>,
     pub status: String,
     pub details: Option<DockerContainerDetails>,
     pub details_container_id: Option<String>,
@@ -148,6 +148,8 @@ struct DockerPaneState {
 struct ProcessPaneState {
     job: RemoteJobState<ProcessJobResult>,
     pub items: Arc<[RemoteProcess]>,
+    data_generation: u64,
+    derived: Option<ProcessDerivedCache>,
     pub snapshot_loaded: bool,
     pub status: String,
     pub search_draft: String,
@@ -157,6 +159,19 @@ struct ProcessPaneState {
     pub selected_pid: Option<u32>,
     pub menu_pid: Option<u32>,
     pub nice_draft: String,
+}
+
+#[derive(Clone, PartialEq, Eq)]
+struct ProcessDerivedKey {
+    data_generation: u64,
+    normalized_query: String,
+    sort_key: RemoteProcessSortKey,
+    sort_direction: RemoteProcessSortDirection,
+}
+
+struct ProcessDerivedCache {
+    key: ProcessDerivedKey,
+    items: Arc<[RemoteProcess]>,
 }
 
 struct StatsPaneState {
@@ -178,7 +193,7 @@ struct AcceleratorPaneState<Data, Event> {
 
 #[derive(Clone)]
 pub(in crate::features) struct DockerPresentationState {
-    pub overview: Option<RemoteDockerOverview>,
+    pub overview: Option<Arc<RemoteDockerOverview>>,
     pub status: String,
     pub details: Option<DockerContainerDetails>,
     pub details_container_id: Option<String>,
@@ -266,6 +281,8 @@ impl RemoteOpsFeatureState {
             process: ProcessPaneState {
                 job: RemoteJobState::new(),
                 items: Arc::from([]),
+                data_generation: 0,
+                derived: None,
                 snapshot_loaded: false,
                 status: "ready".to_string(),
                 search_draft: String::new(),
@@ -331,6 +348,10 @@ impl RemoteOpsFeatureState {
             nice_draft: self.process.nice_draft.clone(),
             pending: self.process.is_pending(),
         }
+    }
+
+    pub(in crate::features) fn derived_processes(&mut self) -> Arc<[RemoteProcess]> {
+        self.process.derived_items()
     }
 
     pub(in crate::features) fn stats_presentation(&self) -> StatsPresentationState {
@@ -787,10 +808,7 @@ impl RemoteOpsFeatureState {
     }
 
     pub(in crate::features) fn clear_process_data(&mut self) {
-        self.process.items = Arc::from([]);
-        self.process.snapshot_loaded = false;
-        self.process.selected_pid = None;
-        self.process.menu_pid = None;
+        self.process.clear_data();
     }
 
     pub(in crate::features) fn apply_processes(&mut self, processes: Vec<RemoteProcess>) {
@@ -1088,7 +1106,7 @@ impl DockerPaneState {
             .retain(|key, _| active_compose_keys.contains(key));
         self.compose_service_errors
             .retain(|key, _| active_compose_keys.contains(key));
-        self.overview = Some(overview);
+        self.overview = Some(Arc::new(overview));
     }
 
     fn reset_for_session_switch(&mut self) {
@@ -1214,17 +1232,114 @@ impl ProcessPaneState {
             self.menu_pid = None;
         }
         self.items = processes.into();
+        self.data_generation = self.data_generation.wrapping_add(1);
+        self.derived = None;
         self.snapshot_loaded = true;
+    }
+
+    fn clear_data(&mut self) {
+        self.items = Arc::from([]);
+        self.data_generation = self.data_generation.wrapping_add(1);
+        self.derived = None;
+        self.snapshot_loaded = false;
+        self.selected_pid = None;
+        self.menu_pid = None;
+    }
+
+    fn derived_items(&mut self) -> Arc<[RemoteProcess]> {
+        let key = ProcessDerivedKey {
+            data_generation: self.data_generation,
+            normalized_query: self.search_draft.trim().to_ascii_lowercase(),
+            sort_key: self.sort_key,
+            sort_direction: self.sort_direction,
+        };
+        if let Some(cache) = self.derived.as_ref()
+            && cache.key == key
+        {
+            return cache.items.clone();
+        }
+        let mut items = self
+            .items
+            .iter()
+            .filter(|process| process_matches(process, &key.normalized_query))
+            .cloned()
+            .collect::<Vec<_>>();
+        sort_processes(&mut items, key.sort_key, key.sort_direction);
+        let items: Arc<[RemoteProcess]> = items.into();
+        self.derived = Some(ProcessDerivedCache {
+            key,
+            items: items.clone(),
+        });
+        items
     }
 
     fn reset_for_session_switch(&mut self) {
         self.job.reset_for_session_switch();
-        self.items = Arc::from([]);
-        self.snapshot_loaded = false;
-        self.selected_pid = None;
-        self.menu_pid = None;
+        self.clear_data();
         self.status = "ready".to_string();
     }
+}
+
+fn process_matches(process: &RemoteProcess, normalized_query: &str) -> bool {
+    if normalized_query.is_empty() {
+        return true;
+    }
+    format!(
+        "{} {} {} {} {} {}",
+        process.pid,
+        process.ppid,
+        process.user,
+        process.state,
+        process.command,
+        process.command_line
+    )
+    .to_ascii_lowercase()
+    .contains(normalized_query)
+}
+
+fn sort_processes(
+    processes: &mut [RemoteProcess],
+    key: RemoteProcessSortKey,
+    direction: RemoteProcessSortDirection,
+) {
+    processes.sort_by(|left, right| {
+        let ordering = match key {
+            RemoteProcessSortKey::Command => left
+                .command
+                .cmp(&right.command)
+                .then_with(|| left.pid.cmp(&right.pid)),
+            RemoteProcessSortKey::Memory => left
+                .memory_percent
+                .partial_cmp(&right.memory_percent)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| {
+                    left.rss_kb
+                        .partial_cmp(&right.rss_kb)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .then_with(|| left.pid.cmp(&right.pid)),
+            RemoteProcessSortKey::Pid => left.pid.cmp(&right.pid),
+            RemoteProcessSortKey::User => left
+                .user
+                .cmp(&right.user)
+                .then_with(|| left.pid.cmp(&right.pid)),
+            RemoteProcessSortKey::Cpu => left
+                .cpu_percent
+                .partial_cmp(&right.cpu_percent)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| {
+                    left.memory_percent
+                        .partial_cmp(&right.memory_percent)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .then_with(|| left.pid.cmp(&right.pid)),
+        };
+
+        match direction {
+            RemoteProcessSortDirection::Ascending => ordering,
+            RemoteProcessSortDirection::Descending => ordering.reverse(),
+        }
+    });
 }
 
 impl StatsPaneState {
@@ -1399,12 +1514,15 @@ fn gpu_device_key(index: u32, uuid: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use nyaterm_transport::{
         DockerContainerDetails, RemoteDockerOverview, RemoteGpu, RemoteGpuOverview, RemoteNpu,
         RemoteNpuOverview, RemoteProcess,
     };
 
     use super::{RemoteJobState, RemoteOpsFeatureFocus, RemoteOpsFeatureState};
+    use crate::models::RemoteProcessSortKey;
 
     fn process(pid: u32) -> RemoteProcess {
         RemoteProcess {
@@ -1519,6 +1637,11 @@ mod tests {
         state.apply_docker_overview(RemoteDockerOverview::default());
 
         let presentation = state.docker_presentation();
+        let second_presentation = state.docker_presentation();
+        assert!(Arc::ptr_eq(
+            presentation.overview.as_ref().expect("overview"),
+            second_presentation.overview.as_ref().expect("overview"),
+        ));
         assert!(presentation.details.is_none());
         assert!(presentation.details_container_id.is_none());
         assert!(state.docker_details_refresh().is_none());
@@ -1546,6 +1669,32 @@ mod tests {
         assert!(presentation.selected_pid.is_none());
         assert!(presentation.menu_pid.is_none());
         assert_eq!(presentation.nice_draft, "0");
+    }
+
+    #[test]
+    fn process_owner_caches_derived_items_by_data_search_and_sort() {
+        let mut state = RemoteOpsFeatureState::new(RemoteOpsFeatureFocus {});
+        let mut first_process = process(1);
+        first_process.command = "alpha".to_string();
+        let mut second_process = process(2);
+        second_process.command = "beta".to_string();
+        state.apply_processes(vec![first_process, second_process]);
+
+        let initial = state.derived_processes();
+        assert!(Arc::ptr_eq(&initial, &state.derived_processes()));
+
+        state.apply_process_search("alpha".to_string());
+        let searched = state.derived_processes();
+        assert!(!Arc::ptr_eq(&initial, &searched));
+        assert_eq!(searched.len(), 1);
+
+        state.toggle_process_sort(RemoteProcessSortKey::Pid);
+        let sorted = state.derived_processes();
+        assert!(!Arc::ptr_eq(&searched, &sorted));
+
+        state.apply_processes(vec![process(3)]);
+        let refreshed = state.derived_processes();
+        assert!(!Arc::ptr_eq(&sorted, &refreshed));
     }
 
     #[test]

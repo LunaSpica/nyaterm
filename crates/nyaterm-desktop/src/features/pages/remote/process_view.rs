@@ -12,7 +12,7 @@ use crate::widgets::empty_panel;
 use super::process::{
     ProcessDetailLabels, ProcessDisplayMode, ProcessTableLabels, ProcessTableRowActions,
     ProcessTableRowPresentation, process_details, process_details_height_px, process_display_mode,
-    process_matches, process_row_height_px, process_sort_button, process_table_row, sort_processes,
+    process_row_height_px, process_sort_button, process_table_row,
 };
 
 impl NyaTermApp {
@@ -73,13 +73,6 @@ impl NyaTermApp {
             copy_command: self.tr("processManager.copyCommand"),
             apply_nice: self.tr("processManager.applyNice"),
         };
-        let normalized_query = process_state.search_draft.trim().to_ascii_lowercase();
-        let mut filtered_processes = process_state
-            .items
-            .iter()
-            .filter(|process| process_matches(process, &normalized_query))
-            .cloned()
-            .collect::<Vec<_>>();
         // Responsive mode first so hidden columns do not keep invalid sort keys.
         let mode = process_display_mode(self.shell.right_panel_width());
         process_state.sort_key = self.remote_ops.constrain_process_sort(
@@ -89,11 +82,8 @@ impl NyaTermApp {
             ),
             mode == ProcessDisplayMode::Wide,
         );
-        sort_processes(
-            &mut filtered_processes,
-            process_state.sort_key,
-            process_state.sort_direction,
-        );
+        process_state = self.remote_ops.process_presentation();
+        let filtered_processes = self.remote_ops.derived_processes();
 
         // Tauri-like virtual list: base row + expanded details height, spacer padding.
         let process_row_px = process_row_height_px(mode);
