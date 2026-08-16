@@ -280,6 +280,10 @@ these as staged extraction candidates, not as formatting-only refactor targets.
 
 ## Completed
 
+- Cloud-sync history records, compatibility log encoding, retention scanning
+  and bounded reads now live in `nyaterm-core::cloud_sync::history`. The public
+  constants and history APIs remain re-exported from the facade, and existing
+  legacy-log shape and ordering tests remain unchanged.
 - Local-directory cloud storage and provider-neutral remote path helpers now
   live in `nyaterm-core::cloud_sync::remote`. The facade preserves
   `LocalDirectoryRemote` and all path helper exports; path traversal rejection,
