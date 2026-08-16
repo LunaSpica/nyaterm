@@ -403,7 +403,7 @@ fn default_palette() -> [[u8; 4]; 256] {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{decode_sixel_rgba, pack_nyar_rgba, unpack_nyar_rgba};
 
     #[test]
     fn decodes_solid_red_band() {

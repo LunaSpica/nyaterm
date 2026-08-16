@@ -117,7 +117,10 @@ pub fn terminal_text_cell_slice(cells: &[TerminalTextCell], start: usize, end: u
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{
+        terminal_byte_index_for_cell_col, terminal_cell_col_for_byte_index, terminal_cell_count,
+        terminal_is_zero_width_mark, terminal_text_cell_slice, terminal_text_cells,
+    };
 
     #[test]
     fn terminal_cell_count_keeps_combining_mark_with_previous_cell() {

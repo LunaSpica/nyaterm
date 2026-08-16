@@ -226,7 +226,9 @@ fn resolve_encoding(label: &str) -> (&'static str, &'static Encoding) {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::borrow::Cow;
+
+    use super::{SessionEncoding, incomplete_utf8_tail_len};
 
     #[test]
     fn utf8_is_passthrough() {

@@ -111,7 +111,7 @@ fn rgba32_to_nyar(data: &[u8], w: u32, h: u32) -> Option<Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::finalize_kitty_payload;
     use crate::sixel::nyar_dimensions;
     use flate2::Compression;
     use flate2::write::ZlibEncoder;

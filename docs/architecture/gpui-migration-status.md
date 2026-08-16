@@ -280,6 +280,8 @@ these as staged extraction candidates, not as formatting-only refactor targets.
 
 ## Completed
 
+- Terminal cell, encoding, Kitty graphics and Sixel parser tests now name their
+  exact module dependencies instead of importing the full parent module.
 - Remaining ordinary `nyaterm-core` test modules now use explicit imports
   instead of `use super::*`; this keeps test dependencies visible without
   changing any compatibility models or runtime behavior.
