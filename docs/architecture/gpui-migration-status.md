@@ -243,15 +243,16 @@ Last updated from the working tree on 2026-08-16.
 | Store snapshot publish calls | 0 | `publish.rs` and the publish throttle are gone. |
 
 Three production Rust files currently exceed 3,000 lines:
-`nyaterm-transport/src/lib.rs` at 3,328, `nyaterm-transport/src/sftp.rs` at
-3,146, and the terminal desktop model at 3,097. The former 4,000-line files now
-have these boundaries:
+`nyaterm-transport/src/lib.rs` at 3,384, `nyaterm-transport/src/sftp/mod.rs` at
+4,010, and the terminal desktop model at 3,098. These are deliberate staged
+extraction candidates rather than formatting-only targets; each already keeps
+its compatibility and runtime tests behind a normal child-module boundary:
 
 | Production file | Production lines | Test module lines | Notes |
 | --- | ---: | ---: | --- |
 | `crates/nyaterm-desktop/src/models/terminal/mod.rs` | 3097 | 2610 | Frame-pipeline tests live in `models/terminal/tests.rs`; terminal cell and selection models remain in the production module. |
-| `crates/nyaterm-desktop/src/features/terminal/terminal_surface_entity/mod.rs` | 2611 | 2600 | The 64 focused tests live in `terminal_surface_entity/tests.rs`; the paint hot path and private entity boundary are unchanged. |
-| `crates/nyaterm-transport/src/lib.rs` | 3328 | 1428 | Crate-root session lifecycle tests live in `src/tests.rs` with explicit imports. Session configuration contracts, the bounded event queue, and SSH command/process execution live in focused modules; the crate root preserves their public facade. |
+| `crates/nyaterm-desktop/src/features/terminal/terminal_surface_entity/mod.rs` | 2652 | 2599 | The 64 focused tests live in `terminal_surface_entity/tests.rs`; the paint hot path and private entity boundary are unchanged. |
+| `crates/nyaterm-transport/src/lib.rs` | 3384 | 1528 | Crate-root session lifecycle tests live in `src/tests.rs` with explicit imports. Session configuration contracts, the bounded event queue, and SSH command/process execution live in focused modules; the crate root preserves their public facade. |
 | `crates/nyaterm-store/src/storage/mod.rs` | 1476 | 3185 | Compatibility tests live in `storage/tests.rs` with explicit imports. The store crate owns the facade, redb schema, encryption adapters and fallback readers; table names, formats and fallback behavior remain unchanged. |
 
 Other large modules now keep their focused tests behind the same normal
@@ -259,19 +260,19 @@ child-module boundary:
 
 | Production file | Production lines | Test module lines | Notes |
 | --- | ---: | ---: | --- |
-| `crates/nyaterm-desktop/src/features/terminal/terminal_runtime/view_io/mod.rs` | 1687 | 973 | The 47 snapshot, scrolling, input-latency and key-encoding tests live in `view_io/tests.rs`; the focused `view_io/input.rs` module owns keyboard, mouse, focus, wire-write, recording and encoding input adapters. |
+| `crates/nyaterm-desktop/src/features/terminal/terminal_runtime/view_io/mod.rs` | 1682 | 973 | The 47 snapshot, scrolling, input-latency and key-encoding tests live in `view_io/tests.rs`; the focused `view_io/input.rs` module owns keyboard, mouse, focus, wire-write, recording and encoding input adapters. |
 | `crates/nyaterm-desktop/src/features/terminal/terminal_runtime/buffer/mod.rs` | 2807 | 396 | The 13 frame-budget, search-apply, OSC52 and window-tab tests live in `buffer/tests.rs`; buffer application and surface notification logic remain together. |
 | `crates/nyaterm-desktop/src/features/connections/state/mod.rs` | 1751 | 1610 | The 57 list, editor and network owner-transition tests live in `state/tests.rs`; the focused `editor_logic`, `list_logic` and `network_logic` modules are unchanged. |
-| `crates/nyaterm-desktop/src/features/transfers/state/mod.rs` | 1413 | 1091 | The 24 browser, queue, editor and external-sync owner tests live in `state/tests.rs`; the focused `state/browser.rs` and `state/editor.rs` modules own their transitions while `TransferFeatureState` remains authoritative. |
-| `crates/nyaterm-desktop/src/features/ai/state/mod.rs` | 1731 | 663 | The 20 chat, settings, discovery, history and agent owner-transition tests live in `state/tests.rs`; the focused `state/settings.rs` module owns provider settings, model catalog, credential and custom-action transitions while `AiFeatureState` remains authoritative. |
-| `crates/nyaterm-desktop/src/features/session/state/mod.rs` | 2465 | 954 | The 19 restore, prompt, dialog and start-lifecycle owner tests live in `state/tests.rs`. |
-| `crates/nyaterm-terminal/src/lib.rs` | 2274 | 1268 | The 80 terminal state-machine and snapshot tests live in `src/tests.rs` with explicit imports. |
-| `crates/nyaterm-terminal/src/graphics/mod.rs` | 1647 | 1307 | The 36 ingress, Kitty, iTerm2 and Sixel tests live in `graphics/tests.rs`; parser and graphics-state behavior remain in the production module. |
-| `crates/nyaterm-core/src/cloud_sync/mod.rs` | 2168 | 1469 | Transactional protocol and conservative retention logic live in the normal `cloud_sync/protocol.rs` and `cloud_sync/gc.rs` child modules; remote, history, provider, conflict, compatibility, recovery and failure-path tests remain in `cloud_sync/tests.rs`. |
-| `crates/nyaterm-terminal-gpui/src/element/mod.rs` | 1875 | 1377 | The 48 layout, shaping, row-cache and decoration tests live in `element/layout_cache_tests.rs`; GPUI layout and paint implementation remain together. |
+| `crates/nyaterm-desktop/src/features/transfers/state/mod.rs` | 1423 | 1130 | The 24 browser, queue, editor and external-sync owner tests live in `state/tests.rs`; the focused `state/browser.rs` and `state/editor.rs` modules own their transitions while `TransferFeatureState` remains authoritative. |
+| `crates/nyaterm-desktop/src/features/ai/state/mod.rs` | 1746 | 663 | The 20 chat, settings, discovery, history and agent owner-transition tests live in `state/tests.rs`; the focused `state/settings.rs` module owns provider settings, model catalog, credential and custom-action transitions while `AiFeatureState` remains authoritative. |
+| `crates/nyaterm-desktop/src/features/session/state/mod.rs` | 2533 | 954 | The 19 restore, prompt, dialog and start-lifecycle owner tests live in `state/tests.rs`. |
+| `crates/nyaterm-terminal/src/lib.rs` | 2607 | 1554 | The 80 terminal state-machine and snapshot tests live in `src/tests.rs` with explicit imports. |
+| `crates/nyaterm-terminal/src/graphics/mod.rs` | 1748 | 1312 | The 36 ingress, Kitty, iTerm2 and Sixel tests live in `graphics/tests.rs`; parser and graphics-state behavior remain in the production module. |
+| `crates/nyaterm-core/src/cloud_sync/mod.rs` | 707 | 1826 | Transactional protocol and conservative retention logic live in the normal `cloud_sync/protocol.rs` and `cloud_sync/gc.rs` child modules; remote, history, provider, conflict, compatibility, recovery and failure-path tests remain in `cloud_sync/tests.rs`. |
+| `crates/nyaterm-terminal-gpui/src/element/mod.rs` | 1946 | 1464 | The 48 layout, shaping, row-cache and decoration tests live in `element/layout_cache_tests.rs`; GPUI layout and paint implementation remain together. |
 | `crates/nyaterm-transport/src/trzsz/mod.rs` | 1925 | 1214 | The 42 detector, protocol, download and upload engine tests live in `trzsz/tests.rs` with explicit imports. |
 
-`core/ai/mod.rs` was on this list at 4,032 lines; it is now 1,547 after being split
+`core/ai/mod.rs` was on this list at 4,032 lines; it is now 1,265 after being split
 into `providers`, `agent`, `risk` and `settings`.
 
 Other files currently over 2,000 lines include terminal runtime/view modules,
@@ -280,6 +281,11 @@ these as staged extraction candidates, not as formatting-only refactor targets.
 
 ## Completed
 
+- Workspace-wide source-tree audit confirms every composite module uses a
+  normal directory root (`mod.rs`) and has no `foo.rs`/`foo/` collision or
+  `#[path]` escape. Standalone files remain standalone when they represent one
+  cohesive domain; large modules are recorded as staged extraction candidates
+  instead of being split solely to reduce line counts.
 - Transport Docker, system-stats, X11 and tunnel parser tests now name their
   exact parser/configuration helpers rather than importing whole parent
   modules.
