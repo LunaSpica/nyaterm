@@ -285,6 +285,10 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   redaction tests now use the normal `nyaterm-core/src/translation/` module
   directory; `translation/mod.rs` preserves the existing public paths and
   `translation/tests.rs` owns the compatibility tests.
+- Diagnostics archive, credential crypto, portable snapshot and credential
+  autofill domains now use directory roots with dedicated `tests.rs` children;
+  their crate-root exports, encryption formats, snapshot validation and prompt
+  matching behavior are unchanged.
 - Workspace-wide source-tree audit confirms every composite module uses a
   normal directory root (`mod.rs`) and has no `foo.rs`/`foo/` collision or
   `#[path]` escape. Standalone files remain standalone when they represent one
