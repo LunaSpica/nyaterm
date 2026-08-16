@@ -38,6 +38,7 @@ impl NyaTermApp {
     pub(crate) fn start_after_window_open(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.sync_component_theme(cx);
         self.refresh_window_render_inputs(window, cx);
+        self.queue_cloud_sync_history_refresh(None, cx);
         self.start_terminal_frame_event_wake(cx);
         self.try_restore_open_tabs(window, cx);
         let pending_session_start = self.session.start_has_pending();

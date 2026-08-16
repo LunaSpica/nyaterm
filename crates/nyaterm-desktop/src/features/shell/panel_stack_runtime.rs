@@ -895,9 +895,9 @@ impl NyaTermApp {
                         self.tr("resourceMonitor.refresh"),
                         true,
                         cx.listener(|this, _, _, cx| {
-                            this.refresh_cloud_sync_history();
+                            this.queue_cloud_sync_history_refresh(None, cx);
                             this.shell
-                                .set_status("cloud sync history refreshed".to_string());
+                                .set_status("refreshing cloud sync history".to_string());
                             cx.notify();
                         }),
                     )

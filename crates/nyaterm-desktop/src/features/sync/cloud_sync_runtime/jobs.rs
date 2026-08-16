@@ -102,8 +102,7 @@ impl NyaTermApp {
                             result.status.message.clone(),
                         );
                         history.duration_ms = Some(started_at.elapsed().as_millis() as u64);
-                        this.record_cloud_sync_history(&history);
-                        this.refresh_cloud_sync_history();
+                        this.queue_cloud_sync_history_refresh(Some(history), cx);
                         this.cloud_sync
                             .complete_job(result.state, result.status.message.clone());
                         this.shell.set_status(result.status.message);
@@ -129,8 +128,7 @@ impl NyaTermApp {
                             this.cloud_sync.status().to_string(),
                         );
                         history.duration_ms = Some(started_at.elapsed().as_millis() as u64);
-                        this.record_cloud_sync_history(&history);
-                        this.refresh_cloud_sync_history();
+                        this.queue_cloud_sync_history_refresh(Some(history), cx);
                     }
                 }
                 cx.notify();
@@ -193,8 +191,7 @@ impl NyaTermApp {
                             result.status.message.clone(),
                         );
                         history.duration_ms = Some(started_at.elapsed().as_millis() as u64);
-                        this.record_cloud_sync_history(&history);
-                        this.refresh_cloud_sync_history();
+                        this.queue_cloud_sync_history_refresh(Some(history), cx);
                         this.cloud_sync
                             .complete_job(result.state, result.status.message.clone());
                         this.shell.set_status(result.status.message);
@@ -221,8 +218,7 @@ impl NyaTermApp {
                             this.cloud_sync.status().to_string(),
                         );
                         history.duration_ms = Some(started_at.elapsed().as_millis() as u64);
-                        this.record_cloud_sync_history(&history);
-                        this.refresh_cloud_sync_history();
+                        this.queue_cloud_sync_history_refresh(Some(history), cx);
                     }
                 }
                 cx.notify();
@@ -290,8 +286,7 @@ impl NyaTermApp {
                             result.status.message.clone(),
                         );
                         history.duration_ms = Some(started_at.elapsed().as_millis() as u64);
-                        this.record_cloud_sync_history(&history);
-                        this.refresh_cloud_sync_history();
+                        this.queue_cloud_sync_history_refresh(Some(history), cx);
                         this.cloud_sync
                             .complete_job(result.state, result.status.message.clone());
                         this.shell.set_status(result.status.message);
@@ -317,8 +312,7 @@ impl NyaTermApp {
                             this.cloud_sync.status().to_string(),
                         );
                         history.duration_ms = Some(started_at.elapsed().as_millis() as u64);
-                        this.record_cloud_sync_history(&history);
-                        this.refresh_cloud_sync_history();
+                        this.queue_cloud_sync_history_refresh(Some(history), cx);
                     }
                 }
                 cx.notify();
@@ -386,8 +380,7 @@ impl NyaTermApp {
                             result.status.message.clone(),
                         );
                         history.duration_ms = Some(started_at.elapsed().as_millis() as u64);
-                        this.record_cloud_sync_history(&history);
-                        this.refresh_cloud_sync_history();
+                        this.queue_cloud_sync_history_refresh(Some(history), cx);
                         this.cloud_sync
                             .complete_job(result.state, result.status.message.clone());
                         this.shell.set_status(result.status.message);
@@ -414,8 +407,7 @@ impl NyaTermApp {
                             this.cloud_sync.status().to_string(),
                         );
                         history.duration_ms = Some(started_at.elapsed().as_millis() as u64);
-                        this.record_cloud_sync_history(&history);
-                        this.refresh_cloud_sync_history();
+                        this.queue_cloud_sync_history_refresh(Some(history), cx);
                     }
                 }
                 cx.notify();
@@ -495,8 +487,7 @@ impl NyaTermApp {
                             result.status.message.clone(),
                         );
                         history.duration_ms = Some(started_at.elapsed().as_millis() as u64);
-                        this.record_cloud_sync_history(&history);
-                        this.refresh_cloud_sync_history();
+                        this.queue_cloud_sync_history_refresh(Some(history), cx);
                         this.cloud_sync
                             .complete_job(result.state, result.status.message.clone());
                         this.shell.set_status(result.status.message);
@@ -518,8 +509,7 @@ impl NyaTermApp {
                             this.cloud_sync.status().to_string(),
                         );
                         history.duration_ms = Some(started_at.elapsed().as_millis() as u64);
-                        this.record_cloud_sync_history(&history);
-                        this.refresh_cloud_sync_history();
+                        this.queue_cloud_sync_history_refresh(Some(history), cx);
                         this.shell.set_status(this.cloud_sync.status().to_string());
                     }
                 }
@@ -540,21 +530,32 @@ impl NyaTermApp {
         true
     }
 
-    pub(in crate::features) fn record_cloud_sync_history(&mut self, entry: &CloudSyncHistoryEntry) {
-        if let Err(error) = append_cloud_sync_history(self.runtime.log_dir(), entry) {
-            self.cloud_sync
-                .set_status(format!("{}; history log failed: {error}", entry.message));
-        }
-    }
-
-    pub(in crate::features) fn refresh_cloud_sync_history(&mut self) {
-        let history = read_cloud_sync_history(
-            self.runtime.log_dir(),
-            self.settings.summary().diagnostics_retention_days,
-            CLOUD_SYNC_HISTORY_LIMIT,
-        )
-        .unwrap_or_default();
-        self.cloud_sync.replace_history(history);
+    pub(in crate::features) fn queue_cloud_sync_history_refresh(
+        &mut self,
+        entry: Option<CloudSyncHistoryEntry>,
+        cx: &mut Context<Self>,
+    ) {
+        let log_dir = self.runtime.log_dir().to_path_buf();
+        let retention_days = self.settings.summary().diagnostics_retention_days;
+        let task = cx.background_spawn(async move {
+            if let Some(entry) = entry.as_ref() {
+                append_cloud_sync_history(&log_dir, entry)?;
+            }
+            read_cloud_sync_history(&log_dir, retention_days, CLOUD_SYNC_HISTORY_LIMIT)
+        });
+        cx.spawn(async move |this, cx| {
+            let result = task.await;
+            let _ = this.update(cx, |this, cx| {
+                match result {
+                    Ok(history) => this.cloud_sync.replace_history(history),
+                    Err(error) => this
+                        .cloud_sync
+                        .set_status(format!("cloud sync history refresh failed: {error}")),
+                }
+                cx.notify();
+            });
+        })
+        .detach();
     }
 
     pub(in crate::features) fn toggle_cloud_sync_history_details(

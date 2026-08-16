@@ -4,7 +4,7 @@ use crate::models::{
 };
 use crate::terminal::initial_terminal_screen;
 use gpui::Context;
-use nyaterm_core::{AppRuntime, CLOUD_SYNC_HISTORY_LIMIT, read_cloud_sync_history, uuid};
+use nyaterm_core::{AppRuntime, uuid};
 use nyaterm_store::{BootstrapSnapshot, StoreBlockingClient, StoreUiClient};
 #[cfg(test)]
 use nyaterm_store::{LoadBootstrap, StoreConfig, StoreRuntime};
@@ -91,12 +91,6 @@ impl NyaTermApp {
             SftpDuplicatePolicy::from_legacy_value(&settings.transfer_duplicate_strategy);
         let recording = RecordingFeatureState::new(settings.recording_memory_limit_bytes as usize);
         let recording_writer = recording.writer();
-        let cloud_sync_history = read_cloud_sync_history(
-            runtime.log_dir(),
-            settings.diagnostics_retention_days,
-            CLOUD_SYNC_HISTORY_LIMIT,
-        )
-        .unwrap_or_default();
         let (ai_model_draft, ai_base_url_draft) = ai_active_profile_drafts(&ai_settings);
         let left_panel_width = settings.ui_left_panel_width as f32;
         let right_panel_width = settings.ui_right_panel_width as f32;
@@ -264,7 +258,7 @@ impl NyaTermApp {
             cloud_sync: CloudSyncFeatureState::new(
                 cloud_sync_settings,
                 cloud_sync_state,
-                cloud_sync_history,
+                Vec::new(),
             ),
             session: SessionFeatureState::new(
                 session_manager,
