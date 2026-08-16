@@ -341,7 +341,8 @@ struct MatchResult<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{AgentOutputCaptureProcessor, build_agent_capture_command};
+    use crate::AiExecutionProfile;
 
     #[test]
     fn builders_do_not_embed_matchable_markers_in_input_text() {

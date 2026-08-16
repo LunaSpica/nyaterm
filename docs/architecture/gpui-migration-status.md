@@ -280,6 +280,9 @@ these as staged extraction candidates, not as formatting-only refactor targets.
 
 ## Completed
 
+- Remaining ordinary `nyaterm-core` test modules now use explicit imports
+  instead of `use super::*`; this keeps test dependencies visible without
+  changing any compatibility models or runtime behavior.
 - AI facade compatibility tests and their shared request/history fixtures now
   live in `nyaterm-core/src/ai/tests.rs` with explicit imports. Provider and
   agent tests retain the same fixture module path, while `ai/mod.rs` remains

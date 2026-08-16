@@ -245,7 +245,10 @@ fn encrypt_bytes(plaintext: &[u8], key: &Key<Aes256Gcm>) -> Result<String, Crede
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use aes_gcm::aead::{Aead, KeyInit};
+    use base64::Engine;
+
+    use super::{Aes256Gcm, B64, CredentialCrypto, Key};
 
     #[test]
     fn debug_output_redacts_master_password() {

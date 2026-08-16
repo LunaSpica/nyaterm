@@ -441,7 +441,7 @@ struct LegacySnapshotRawHashInput<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{PortableSnapshotError, RawPortableSnapshot, validate_raw_snapshot};
 
     #[test]
     fn detects_payload_hash_mismatch() {

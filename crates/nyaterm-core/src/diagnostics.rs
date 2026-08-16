@@ -303,7 +303,8 @@ fn current_time_ms() -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{DiagnosticsExportOptions, DiagnosticsRuntimeSnapshot, export_diagnostics_archive};
+    use crate::{AppRuntime, RuntimeMode};
 
     #[test]
     fn exports_diagnostics_archive_with_manifest_runtime_and_logs() {

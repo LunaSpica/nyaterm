@@ -400,7 +400,10 @@ pub fn keyword_highlight_color_palette(is_dark: bool) -> &'static [&'static str]
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{
+        KeywordHighlightRule, get_builtin_keyword_rules, merge_keyword_highlight_rules_for_paint,
+    };
+    use std::collections::HashMap;
 
     #[test]
     fn builtin_catalog_is_stable() {

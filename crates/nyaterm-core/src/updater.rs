@@ -83,7 +83,8 @@ fn version_parts(version: &str) -> Vec<u64> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{compare_versions, parse_github_latest_release};
+    use std::cmp::Ordering;
 
     #[test]
     fn parses_latest_release_and_detects_available_update() {

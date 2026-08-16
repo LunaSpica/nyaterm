@@ -200,7 +200,11 @@ pub fn validate_prompt_regex(pattern: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{
+        CredentialPromptKind, detect_credential_prompt_kind, extract_credential_prompt_text,
+        find_matching_credentials, find_password_only_fallback_credentials, validate_prompt_regex,
+    };
+    use crate::SavedCredential;
 
     fn cred(
         id: &str,

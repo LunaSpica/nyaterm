@@ -225,7 +225,10 @@ pub fn is_pager_single_key_input(data: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{
+        command_starts_suggestion_suppressing_program, is_pager_search_or_command_input,
+        is_pager_single_key_input,
+    };
 
     #[test]
     fn detects_interactive_and_sudo_wrappers() {

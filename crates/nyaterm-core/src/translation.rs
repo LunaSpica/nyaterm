@@ -576,7 +576,15 @@ fn days_to_ymd(days: u64) -> (u64, u64, u64) {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{
+        MASKED_SECRET_VALUE, TranslationError, TranslationSettings, ali_signature,
+        ali_translate_body, ali_translate_lang, baidu_translate_lang, baidu_translate_signature,
+        deepl_translate_lang, format_ali_timestamp, google_translate_lang,
+        merge_masked_translation_settings, microsoft_translate_lang, parse_ali_translate_response,
+        parse_baidu_translate_response, parse_deepl_translate_response,
+        parse_google_translate_response, parse_microsoft_translate_response,
+        parse_youdao_translate_response, youdao_translate_lang, youdao_truncate_for_sign,
+    };
 
     #[test]
     fn settings_debug_output_redacts_provider_keys() {
