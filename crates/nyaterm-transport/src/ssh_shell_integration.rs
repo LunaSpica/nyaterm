@@ -346,9 +346,11 @@ pub(super) fn ssh_shell_injection_script(
     };
     let ready = ready_printf(ready_marker);
     let install_arg = mode.install_arg();
+    // Bash records each top-level definition from a multiline PTY write separately. Keep the
+    // guard start and finish on single physical lines so history is disabled between them.
     let prefix = match shell {
         ShellKind::Bash => {
-            " NYATERM_PRUNE_HISTORY=1; NYATERM_LAST_HISTCMD=\"${HISTCMD-}\"; export NYATERM_INJ=1;\n"
+            " case $- in *h*) NYATERM_INJ_HISTORY_WAS_ENABLED=1; NYATERM_PRUNE_HISTORY=1 ;; *) unset NYATERM_INJ_HISTORY_WAS_ENABLED NYATERM_PRUNE_HISTORY ;; esac; NYATERM_LAST_HISTCMD=\"${HISTCMD-}\"; export NYATERM_INJ=1; set +o history\n"
         }
         ShellKind::Zsh => " fc -p /dev/null 2>/dev/null\n export NYATERM_INJ=1;\n",
         ShellKind::Fish => " set fish_private_mode 1 2>/dev/null\n set -gx NYATERM_INJ 1\n",
@@ -357,7 +359,7 @@ pub(super) fn ssh_shell_injection_script(
     let suffix = match shell {
         ShellKind::Bash => {
             format!(
-                "\n__nyaterm_install_prompt {install_arg} 2>/dev/null || true; printf '{ready}'\n"
+                "\nif [ -n \"${{NYATERM_INJ_HISTORY_WAS_ENABLED:-}}\" ]; then set -o history; __nyaterm_prune_history; else unset NYATERM_PRUNE_HISTORY; fi; unset NYATERM_INJ_HISTORY_WAS_ENABLED; __nyaterm_install_prompt {install_arg} 2>/dev/null || true; printf '{ready}'\n"
             )
         }
         ShellKind::Zsh => format!(

@@ -5,6 +5,8 @@ use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant};
 
 use base64::Engine;
+#[cfg(unix)]
+use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 use tokio::sync::mpsc as tokio_mpsc;
 
 use super::{
@@ -697,6 +699,196 @@ fn cwd_only_shell_scripts_omit_semantic_markers_and_bash_debug_trap() {
     }
 }
 
+#[cfg(unix)]
+fn run_bash_injection_history_probe(
+    mode: super::ShellIntegrationMode,
+    history_initially_enabled: bool,
+) -> Option<String> {
+    if std::process::Command::new("bash")
+        .arg("--version")
+        .output()
+        .is_err()
+    {
+        return None;
+    }
+
+    let ready = super::build_ssh_ready_marker("history-probe");
+    let script = super::ssh_shell_injection_script(super::ShellKind::Bash, &ready, mode)
+        .expect("bash injection script");
+    let pty = native_pty_system()
+        .openpty(PtySize {
+            rows: 24,
+            cols: 80,
+            pixel_width: 0,
+            pixel_height: 0,
+        })
+        .expect("open bash history probe pty");
+    let mut command = CommandBuilder::new("bash");
+    command.args(["--noprofile", "--norc", "-i"]);
+    command.env("HISTFILE", "/dev/null");
+    command.env("PS1", "");
+    command.env("TERM", "xterm-256color");
+    command.env_remove("PROMPT_COMMAND");
+    command.env_remove("HISTCONTROL");
+
+    let mut reader = pty
+        .master
+        .try_clone_reader()
+        .expect("clone bash history probe reader");
+    let mut writer = pty
+        .master
+        .take_writer()
+        .expect("take bash history probe writer");
+    let mut child = pty
+        .slave
+        .spawn_command(command)
+        .expect("spawn bash history probe");
+    drop(pty.slave);
+
+    let output = Arc::new(Mutex::new(Vec::new()));
+    let reader_output = output.clone();
+    let reader_thread = std::thread::spawn(move || {
+        let mut buffer = [0_u8; 4096];
+        while let Ok(read) = reader.read(&mut buffer) {
+            if read == 0 {
+                break;
+            }
+            reader_output
+                .lock()
+                .expect("bash history probe output lock")
+                .extend_from_slice(&buffer[..read]);
+        }
+    });
+
+    writer
+        .write_all(b"stty -echo\nprintf '__NYATERM_PTY_READY__\\n'\n")
+        .expect("initialize bash history probe");
+    writer.flush().expect("flush bash history probe setup");
+    let setup_deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let ready = output
+            .lock()
+            .expect("bash history probe output lock")
+            .windows(b"__NYATERM_PTY_READY__".len())
+            .any(|window| window == b"__NYATERM_PTY_READY__");
+        if ready {
+            break;
+        }
+        if Instant::now() >= setup_deadline {
+            let _ = child.kill();
+            panic!("timed out preparing interactive bash");
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+
+    let mut commands = String::from("history -c\nprintf '__NYATERM_USER_BEFORE__\\n'\n");
+    if !history_initially_enabled {
+        commands.push_str("set +o history\n");
+    }
+    commands.push_str(&script);
+    commands.push_str(
+        "case $- in *h*) printf '__NYATERM_HISTORY_STATE__:enabled\\n' ;; *) printf '__NYATERM_HISTORY_STATE__:disabled\\n' ;; esac\nprintf '__NYATERM_HISTORY_BEGIN__\\n'\nHISTTIMEFORMAT= builtin history\nprintf '__NYATERM_HISTORY_END__\\n'\nexit\n",
+    );
+    writer
+        .write_all(commands.as_bytes())
+        .expect("write bash history probe commands");
+    writer.flush().expect("flush bash history probe commands");
+
+    let child_deadline = Instant::now() + Duration::from_secs(10);
+    let status = loop {
+        if let Some(status) = child.try_wait().expect("poll bash history probe") {
+            break status;
+        }
+        if Instant::now() >= child_deadline {
+            let _ = child.kill();
+            panic!("interactive bash history probe timed out");
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    };
+    assert!(status.success(), "bash history probe failed: {status:?}");
+    drop(writer);
+    drop(pty.master);
+    reader_thread
+        .join()
+        .expect("join bash history probe reader");
+
+    Some(
+        String::from_utf8_lossy(&output.lock().expect("bash history probe output lock"))
+            .into_owned(),
+    )
+}
+
+#[cfg(unix)]
+fn bash_history_probe_section(output: &str) -> &str {
+    let start_marker = "__NYATERM_HISTORY_BEGIN__\r\n";
+    let end_marker = "__NYATERM_HISTORY_END__";
+    let start = output
+        .rfind(start_marker)
+        .expect("bash history probe start marker")
+        + start_marker.len();
+    let end = output[start..]
+        .find(end_marker)
+        .map(|offset| start + offset)
+        .expect("bash history probe end marker");
+    &output[start..end]
+}
+
+#[cfg(unix)]
+#[test]
+fn bash_inline_shell_integration_does_not_pollute_enabled_history() {
+    for mode in [
+        super::ShellIntegrationMode::Full,
+        super::ShellIntegrationMode::CwdOnly,
+    ] {
+        let Some(output) = run_bash_injection_history_probe(mode, true) else {
+            return;
+        };
+        assert!(
+            output.contains("__NYATERM_HISTORY_STATE__:enabled"),
+            "history was not restored for {mode:?}: {output:?}"
+        );
+        let history = bash_history_probe_section(&output);
+        assert!(
+            history.contains("__NYATERM_USER_BEFORE__"),
+            "pre-injection history was lost for {mode:?}: {history:?}"
+        );
+        for leaked in ["NYATERM_INJ", "__nyaterm_", "__nya_bp_"] {
+            assert!(
+                !history.contains(leaked),
+                "injected Bash source leaked into history for {mode:?}: {history:?}"
+            );
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn bash_inline_shell_integration_preserves_disabled_history() {
+    for mode in [
+        super::ShellIntegrationMode::Full,
+        super::ShellIntegrationMode::CwdOnly,
+    ] {
+        let Some(output) = run_bash_injection_history_probe(mode, false) else {
+            return;
+        };
+        assert!(
+            output.contains("__NYATERM_HISTORY_STATE__:disabled"),
+            "history was unexpectedly enabled for {mode:?}: {output:?}"
+        );
+        let history = bash_history_probe_section(&output);
+        assert!(
+            history.contains("__NYATERM_USER_BEFORE__"),
+            "pre-injection history was lost for {mode:?}: {history:?}"
+        );
+        for leaked in ["NYATERM_INJ", "__nyaterm_", "__nya_bp_"] {
+            assert!(
+                !history.contains(leaked),
+                "injected Bash source leaked into disabled history for {mode:?}: {history:?}"
+            );
+        }
+    }
+}
+
 #[test]
 fn generated_bash_shell_integration_scripts_pass_syntax_check() {
     if std::process::Command::new("bash")
@@ -714,9 +906,21 @@ fn generated_bash_shell_integration_scripts_pass_syntax_check() {
         super::ssh_shell_injection_script(
             super::ShellKind::Bash,
             &ready,
+            super::ShellIntegrationMode::Full,
+        )
+        .expect("full bash script"),
+        super::ssh_shell_injection_script(
+            super::ShellKind::Bash,
+            &ready,
             super::ShellIntegrationMode::CwdOnly,
         )
         .expect("cwd-only bash script"),
+        super::activation_script(
+            super::ShellKind::Bash,
+            &ready,
+            super::ShellIntegrationMode::Full,
+        )
+        .expect("bash activation script"),
     ];
     for script in scripts {
         let output = std::process::Command::new("bash")
