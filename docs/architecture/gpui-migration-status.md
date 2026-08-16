@@ -280,6 +280,10 @@ these as staged extraction candidates, not as formatting-only refactor targets.
 
 ## Completed
 
+- Cloud-sync provider settings, compatibility defaults, masked-secret merging
+  and redacted local-operation options now live in
+  `nyaterm-core::cloud_sync::settings`. Explicit facade exports preserve the
+  serialized contracts, provider defaults and secret-masking API.
 - Cloud-sync history records, compatibility log encoding, retention scanning
   and bounded reads now live in `nyaterm-core::cloud_sync::history`. The public
   constants and history APIs remain re-exported from the facade, and existing
