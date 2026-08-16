@@ -14,9 +14,6 @@
   "多标签终端界面": {
     "message": "Multi-Tab Terminal"
   },
-  "同时管理多个 SSH 和本地终端会话。支持 WebGL 硬件加速渲染、自定义字体、关键词高亮、命令历史模糊搜索。": {
-    "message": "Manage multiple SSH and local terminal sessions simultaneously. WebGL hardware-accelerated rendering, custom fonts, keyword highlighting, and fuzzy command history search."
-  },
   "加密同步与备份": {
     "message": "Encrypted Cloud Sync"
   },
@@ -32,17 +29,11 @@
   "现代高性能 SSH 客户端": {
     "message": "Modern, High-Performance SSH Client"
   },
-  "基于 Tauri 和 React 构建，跨平台、安全、快速": {
-    "message": "Built with Tauri and React — cross-platform, secure, and fast"
-  },
   "快速开始": {
     "message": "Get Started"
   },
   "首页": {
     "message": "Home"
-  },
-  "现代高性能 SSH 客户端，基于 Tauri 和 React 构建": {
-    "message": "A modern, high-performance SSH client built with Tauri and React"
   },
   "下载": {
     "message": "Download"

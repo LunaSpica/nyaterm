@@ -24,7 +24,7 @@ Visit the [Releases](https://github.com/nyakang/nyaterm/releases) page and downl
 | macOS | `.dmg` |
 | Linux | `.deb` / `.AppImage` |
 
-For the Windows portable edition, extract the zip and run `NyaTerm.exe`. **Help → Check Updates** uses the same Cloudflare R2 update manifest and download source as the installed edition. Tauri updater signatures are always verified before staging an update; when restarting, NyaTerm replaces the program files and preserves the complete `data/` folder.
+For the Windows portable edition, extract the zip and run `NyaTerm.exe`. **Help → Check Updates** uses the same Cloudflare R2 update manifest and download source as the installed edition. When restarting, NyaTerm replaces the program files and preserves the complete `data/` folder.
 
 Direct downloads for the Windows portable edition:
 

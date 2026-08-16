@@ -4,7 +4,7 @@ sidebar_position: 3
 
 # Terminal Features
 
-NyaTerm's terminal experience is designed around high-frequency local and remote work inside one workspace. It is built on xterm.js, but the practical experience goes beyond a terminal canvas: search, command history, suggestions, optional enhancements, recording, and SSH-aware helpers are all part of it.
+NyaTerm's terminal experience is designed around high-frequency local and remote work inside one workspace. `nyaterm-terminal` maintains the terminal state machine and snapshots, using Alacritty terminal components for the grid and control sequences, while `nyaterm-terminal-gpui` provides native layout, input, and painting. Search, command history, suggestions, optional enhancements, recording, and SSH-aware helpers are all part of the complete experience.
 
 ## Core operations
 
@@ -166,7 +166,7 @@ During that period, the app temporarily suppresses some expensive decorations an
 
 ### Large-output drain
 
-Terminal output now passes through a batched drain before it is written to xterm.js. During high-throughput situations such as `tail -f`, build logs, or load-test output, this helps preserve input responsiveness, scrolling, and search behavior.
+Terminal output enters a batched drain as typed session events, updates the terminal state machine and snapshots, and is then painted by the GPUI renderer. During high-throughput situations such as `tail -f`, build logs, or load-test output, this helps preserve input responsiveness, scrolling, and search behavior.
 
 This is not a setting you need to enable. It is the default terminal output pipeline and works together with large-output protection, line-number / timestamp gutters, and command suggestions.
 

@@ -4,119 +4,121 @@ sidebar_position: 2
 
 # Development Setup
 
-## Prerequisites
+The NyaTerm application is a Cargo workspace. Node.js and pnpm are only required for the Docusaurus documentation site in this repository.
 
-### Node.js
+## Application prerequisites
 
-Install Node.js v18 or newer. Recommended: use [nvm](https://github.com/nvm-sh/nvm) (Linux/macOS) or [nvm-windows](https://github.com/coreybutler/nvm-windows) (Windows).
+### Rust and Git
 
-Use [pnpm](https://pnpm.io/) as the package manager.
-
-### Rust
-
-Install the latest stable Rust:
+Install the latest stable Rust toolchain:
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
-Windows users: visit [rustup.rs](https://rustup.rs/).
+Windows users can install from [rustup.rs](https://rustup.rs/). Every platform also needs Git and its native compiler toolchain.
 
-### Platform-Specific Dependencies
+### Platform dependencies
 
 #### Windows
 
-Install [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with "Desktop development with C++".
+Install [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with the **Desktop development with C++** workload.
 
 #### macOS
+
+Install Xcode and its command-line tools:
 
 ```bash
 xcode-select --install
 ```
 
-#### Linux (Ubuntu/Debian)
+GPUI uses Metal on macOS, so a working macOS SDK is required.
+
+#### Linux (Ubuntu / Debian)
+
+Install Rust crate build tools, font/window-system development libraries, and the Vulkan loader:
 
 ```bash
 sudo apt update
-sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file \
-  libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+sudo apt install build-essential pkg-config clang cmake libfontconfig-dev \
+  libglib2.0-dev libssl-dev libvulkan1 libwayland-dev libx11-xcb-dev \
+  libxkbcommon-x11-dev
 ```
 
-## Get the Source
+Running the desktop application also requires a working Vulkan driver and an X11 or Wayland session.
+
+## Clone the repository
 
 ```bash
 git clone https://github.com/nyakang/nyaterm.git
 cd nyaterm
 ```
 
-## Install Dependencies
+Cargo manages application dependencies; there is no root JavaScript dependency installation step.
+
+## Run the application
 
 ```bash
-pnpm install
+cargo run -p nyaterm-app --bin nyaterm
 ```
 
-## Start Development
+The first build compiles GPUI and vendored dependencies, so it takes noticeably longer than subsequent incremental builds.
+
+## Common checks
+
+Prefer checks scoped to the affected crate while iterating:
 
 ```bash
-pnpm tauri dev
+cargo check -p nyaterm-app
+cargo test -p <crate-name>
 ```
 
-This starts both:
-- Vite dev server (port 1420, HMR port 1421)
-- Tauri application window
-
-Frontend changes hot-reload; Rust changes trigger recompilation.
-
-## Production Build
+Run the relevant workspace checks before review:
 
 ```bash
-pnpm tauri build
+cargo check --workspace
+cargo test --workspace
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets
 ```
 
-Build artifacts are in `src-tauri/target/release/bundle/`.
+`cargo fmt --all` writes formatting changes; use it only when you intend to apply them.
 
-To use GitHub Gist cloud sync authorization in a locally packaged build, set the GitHub OAuth App device flow Client ID before building:
+## Release-profile build
 
 ```bash
-NYATERM_GITHUB_GIST_CLIENT_ID=your_client_id pnpm tauri build
+cargo build -p nyaterm-app --bin nyaterm --release
 ```
 
-Windows PowerShell:
+The native binary is written to `target/release/nyaterm`, or `target/release/nyaterm.exe` on Windows. This command only builds the application binary; it does not produce `.msi`, `.dmg`, `.deb`, or AppImage installers.
 
-```powershell
-$env:NYATERM_GITHUB_GIST_CLIENT_ID = "your_client_id"
-pnpm tauri build
-```
+## Documentation development
 
-## Available Scripts
-
-| Command | Description |
-|---------|-------------|
-| `pnpm dev` | Start Vite dev server only |
-| `pnpm build` | TypeScript check + Vite build |
-| `pnpm tauri dev` | Start Tauri development mode |
-| `pnpm tauri build` | Build for production |
-| `pnpm lint` | Run Biome linting |
-| `pnpm format` | Run Biome auto-format |
-| `pnpm version-sync` | Sync version numbers across files |
-| `pnpm --dir docs-site start` | Start the docs site for all locales |
-| `pnpm --dir docs-site start:zh` | Start the Chinese docs dev server |
-| `pnpm --dir docs-site start:en` | Start the English docs dev server |
-| `pnpm --dir docs-site build` | Build the docs site |
-
-## Docs workflow tips
-
-If you are editing README or files under `docs-site/docs/` / `docs-site/i18n/en/`, it is a good idea to run the docs build so you can verify:
-
-- both locales still build successfully
-- new pages appear in navigation
-- relative links still resolve correctly
-
-## Code Style
-
-The project uses [Biome](https://biomejs.dev/) for linting and formatting:
+When editing `docs-site`, also install Node.js 18+ and [pnpm](https://pnpm.io/):
 
 ```bash
-pnpm lint    # Check
-pnpm format  # Auto-format
+pnpm --dir docs-site install
+pnpm --dir docs-site start:zh
 ```
+
+Start the English documentation server with:
+
+```bash
+pnpm --dir docs-site start:en
+```
+
+Build every locale with:
+
+```bash
+pnpm --dir docs-site build
+```
+
+The documentation build checks pages, sidebars, Markdown links, and both locale resources.
+
+## Development conventions
+
+- Read the root `AGENTS.md` and `CONTRIBUTING.md` first.
+- UI state and views live in `nyaterm-desktop`; shared controls live in `nyaterm-ui`.
+- Transport, terminal, and core crates stay independent of GPUI.
+- New UI text updates both locale files under `crates/nyaterm-desktop/src/i18n/locales/`.
+- Never use real credentials in tests, logs, or diagnostic data.

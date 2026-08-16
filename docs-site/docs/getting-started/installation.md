@@ -24,7 +24,7 @@ NyaTerm 支持以下操作系统：
 | macOS | `.dmg` |
 | Linux | `.deb` / `.AppImage` |
 
-Windows 便携版解压后运行 `NyaTerm.exe` 即可。**Help → 检查更新** 与安装版共用 Cloudflare R2 更新清单和下载源，暂存更新前会强制验证 Tauri updater 签名。重启时 NyaTerm 会自动替换程序文件，并完整保留 `data/` 目录。
+Windows 便携版解压后运行 `NyaTerm.exe` 即可。**Help → 检查更新** 与安装版共用 Cloudflare R2 更新清单和下载源。重启时 NyaTerm 会自动替换程序文件，并完整保留 `data/` 目录。
 
 Windows 便携版直接下载：
 

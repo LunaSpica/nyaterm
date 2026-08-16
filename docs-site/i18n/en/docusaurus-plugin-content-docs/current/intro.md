@@ -5,7 +5,7 @@ slug: /
 
 # Introduction
 
-**NyaTerm** is a desktop client built around remote terminal workflows. It pairs a Tauri + React interface with a Rust backend that handles SSH, SFTP, session lifecycle, tunnels, authentication, AI features, Cloud Sync, and config persistence, so you can work with remote servers, local shells, serial devices, and network helpers inside one workspace.
+**NyaTerm** is a native desktop client built with GPUI around remote terminal workflows. Its Rust workspace combines the desktop interface, terminal rendering, SSH, SFTP, session lifecycle, tunnels, authentication, AI features, Cloud Sync, and configuration persistence, so you can work with remote servers, local shells, serial devices, and network helpers inside one workspace.
 
 ## Where NyaTerm fits best
 

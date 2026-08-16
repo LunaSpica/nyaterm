@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <strong>A modern remote terminal workspace built with Tauri, React, and Rust.</strong><br/>
+  <strong>A modern native remote terminal workspace built with GPUI.</strong><br/>
   <a href="https://nyaterm.app"><strong>nyaterm.app</strong></a> ·
   <a href="https://nyaterm.app/docs/"><strong>Documentation</strong></a>
 </p>
@@ -70,7 +70,7 @@ NyaTerm includes an AI Assistant panel for command generation, terminal output e
 <a name="what-is-nyaterm"></a>
 # What is NyaTerm
 
-**NyaTerm** is a desktop client for SSH-centric operations and mixed terminal workflows. It combines a React + Tauri interface with a Rust backend so you can manage remote hosts, local shells, file transfers, authentication, network tooling, AI-assisted terminal actions, session import/export, diagnostics, and encrypted sync/backup from one workspace.
+**NyaTerm** is a native GPUI desktop client for SSH-centric operations and mixed terminal workflows. Its Rust workspace combines the desktop interface, terminal rendering, transport protocols, persistence, authentication, network tooling, AI-assisted terminal actions, session import/export, diagnostics, and encrypted sync/backup in one application.
 
 - **NyaTerm is** an SSH client for developers, sysadmins, and DevOps engineers
 - **NyaTerm is** a terminal workspace with tabs, horizontal splits, and vertical splits
@@ -277,7 +277,7 @@ Download the latest build for your platform from [nyaterm.app](https://nyaterm.a
 | macOS | `.dmg` |
 | Linux | `.deb` / `.AppImage` |
 
-For the Windows portable edition, extract the zip and run `NyaTerm.exe`. **Help → Check Updates** uses the same Cloudflare R2 update manifest and download source as the installed edition. Tauri updater signatures are always verified before staging an update; NyaTerm preserves the complete `data/` folder while replacing the program files and restarting.
+For the Windows portable edition, extract the zip and run `NyaTerm.exe`. **Help → Check Updates** uses the same Cloudflare R2 update manifest and download source as the installed edition. NyaTerm preserves the complete `data/` folder while replacing the program files and restarting.
 
 ### macOS
 
@@ -324,36 +324,33 @@ AUR package: [`nyaterm-bin`](https://aur.archlinux.org/packages/nyaterm-bin)
 
 ## Prerequisites for Development
 
-- Node.js 18+
 - Rust stable via [rustup](https://rustup.rs/)
-- pnpm
+- Platform dependencies required by GPUI and your operating system
 
 ## Development
 
 ```bash
 git clone https://github.com/nyakang/nyaterm.git
 cd nyaterm
-pnpm install
-pnpm tauri dev
+cargo run -p nyaterm-app --bin nyaterm
 ```
 
 ## Project Structure
 
 ```text
-├── src/                    # React frontend
-│   ├── components/         # UI, terminal, panels, dialogs, settings
-│   ├── hooks/              # Frontend state and workflow hooks
-│   ├── lib/                # Terminal, AI, sync, theme, platform helpers
-│   ├── pages/              # Child-window pages
-│   └── i18n/               # Application translations
-├── src-tauri/              # Tauri 2 + Rust backend
-│   ├── src/cmd/            # Tauri commands exposed to the frontend
-│   ├── src/core/           # SSH, SFTP, PTY, Telnet, Serial, AI, backup logic
-│   ├── src/config/         # Persistent config models
-│   └── crates/otp/         # Local OTP implementation
-├── docs-site/              # Docusaurus documentation site
-├── public/                 # Static assets
-└── scripts/                # Checks, version sync, and demo helper scripts
+├── crates/
+│   ├── nyaterm-app/             # Native GPUI application entry point and assets
+│   ├── nyaterm-desktop/         # GPUI application composition and feature state
+│   ├── nyaterm-core/            # UI-independent domain models and policies
+│   ├── nyaterm-terminal/        # Terminal state machine and parsing
+│   ├── nyaterm-terminal-gpui/   # GPUI terminal layout, input, and painting
+│   ├── nyaterm-transport/       # SSH, PTY, SFTP, Telnet, Serial, and transfers
+│   ├── nyaterm-store/           # Persistence and database compatibility
+│   ├── nyaterm-ui/              # Shared GPUI controls and theme integration
+│   └── nyaterm-otp/              # OTP compatibility implementation
+├── docs-site/                   # Docusaurus documentation site
+├── Cargo.toml                   # Rust workspace definition
+└── Cargo.lock
 ```
 
 ---
@@ -363,7 +360,7 @@ pnpm tauri dev
 Thanks to the following projects and libraries that make NyaTerm possible:
 - [WindTerm](https://github.com/kingToolbox/WindTerm) - Inspired the design and features of NyaTerm
 - [tabby](https://github.com/Eugeny/tabby) - An excellent cross-platform terminal that provided many design inspirations
-- [xterm.js](https://xtermjs.org/) - A powerful frontend terminal emulator that provides rich terminal functionality and extensibility
+- [Alacritty](https://github.com/alacritty/alacritty) - Terminal emulation components used by NyaTerm
 - [russh](https://github.com/warp-tech/russh) - An SSH client and server implementation in Rust
 
 ---
