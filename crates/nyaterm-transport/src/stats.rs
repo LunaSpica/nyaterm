@@ -428,7 +428,7 @@ pub fn parse_stats_output(output: &str) -> RemoteStats {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::parse_stats_output;
 
     #[test]
     fn parses_remote_stats_and_deduplicates_mounts() {

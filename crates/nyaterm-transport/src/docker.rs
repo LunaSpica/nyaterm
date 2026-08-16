@@ -881,7 +881,12 @@ fn sh_quote(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{
+        normalize_compose_action, normalize_compose_service_action, normalize_container_action,
+        parse_compose_projects, parse_compose_services_output,
+        parse_docker_container_details_output, parse_docker_images_output,
+        parse_docker_networks_output, parse_docker_overview_output, parse_docker_volumes_output,
+    };
 
     #[test]
     fn parses_docker_overview_rows() {

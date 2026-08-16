@@ -280,6 +280,9 @@ these as staged extraction candidates, not as formatting-only refactor targets.
 
 ## Completed
 
+- Transport Docker, system-stats, X11 and tunnel parser tests now name their
+  exact parser/configuration helpers rather than importing whole parent
+  modules.
 - VNC runtime validation tests now name their protocol helpers, limits and
   shared framebuffer event types explicitly.
 - Bundled-asset validation tests now import the embedded asset source

@@ -642,9 +642,16 @@ fn request_runtime_secret(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::sync::{Arc, Mutex};
+
+    use russh::client;
+
+    use super::{
+        SshCredentialPrompt, SshKeyboardInteractivePrompt, SshKeyboardInteractiveRequest,
+        SshSessionConfig, request_keyboard_interactive_responses, should_auto_fill_otp_prompts,
+        should_auto_fill_password_prompts,
+    };
     use crate::SshCredentialProvider;
-    use std::sync::Mutex;
 
     #[derive(Default)]
     struct BatchKeyboardInteractiveProvider {

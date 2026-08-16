@@ -621,7 +621,11 @@ fn hex_value(byte: u8) -> Option<u8> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{
+        MIT_MAGIC_COOKIE, X11AuthRewriter, X11DisplayTarget, decode_hex,
+        local_x_server_error_message, pad4, parse_xauth_cookie, resolve_x11_display_spec,
+        rewrite_x11_auth_setup_packet,
+    };
 
     fn x11_target_desc(target: X11DisplayTarget) -> String {
         target.describe()

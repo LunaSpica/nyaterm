@@ -3505,9 +3505,26 @@ fn remote_join(base: &str, child: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use crate::SftpSettings;
+    use std::path::PathBuf;
+    use std::time::{Duration, UNIX_EPOCH};
 
-    use super::*;
+    use crate::{SftpSettings, SshSessionConfig};
+
+    use super::{
+        DirectoryUploadProgressSnapshot, RemoteFilePath, SFTP_DIRECTORY_STALL_TIMEOUT,
+        SFTP_SMALL_FILE_THRESHOLD, SFTP_TRANSFER_CANCELLED, SftpDirectoryConcurrency,
+        SftpDuplicatePolicy, SftpFileEntry, SftpFileType, SftpPathCodec, SftpTransferControl,
+        SftpTransferDirection, SftpTransferOptions, SftpTransferProgress,
+        collect_local_directory_upload_inventory, directory_transfer_progress,
+        directory_upload_aggregate_progress, directory_upload_stalled,
+        directory_upload_worker_count, is_sftp_large_file, is_sftp_transfer_cancelled,
+        remote_conflict_candidate, remote_join, remote_join_bytes,
+        remote_upload_write_target_requires_probe, resolve_duplicate_decision,
+        resolve_local_download_target, resolve_remote_upload_target,
+        sftp_client_config_for_options, sftp_directory_concurrency, sftp_pipeline_config,
+        sftp_session_pool_index, sftp_timestamp_secs, sftp_upload_buffer_size,
+        transfer_resume_offset,
+    };
 
     #[test]
     fn raw_remote_paths_round_trip_and_derive_the_raw_parent() {

@@ -612,7 +612,12 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    use super::{
+        SshTunnelConfig, SshTunnelMode, read_socks5_connect_request, validate_tunnel_config,
+    };
+    use crate::SshSessionConfig;
 
     #[test]
     fn tunnel_config_validation_matches_tunnel_modes() {
