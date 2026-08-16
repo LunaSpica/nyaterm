@@ -1,15 +1,14 @@
 use gpui::{Context, IntoElement, div, prelude::*, px, rgb};
 
-use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
+use crate::features::{NyaTermApp, remote::DockerDerivedItems, text_inputs::TextInputSetup};
 use crate::models::DockerTab;
 use crate::widgets::empty_panel;
 
 use super::docker::{
     DockerComposePanelState, DockerContainersPanelState, DockerLabels, DockerRenderContext,
-    DockerTabBarLabels, docker_compose_panel, docker_compose_project_matches,
-    docker_container_matches, docker_containers_panel, docker_details_panel, docker_image_matches,
-    docker_images_panel, docker_network_matches, docker_networks_panel, docker_overview_strip,
-    docker_tab_bar, docker_volume_matches, docker_volumes_panel,
+    DockerTabBarLabels, docker_compose_panel, docker_containers_panel, docker_details_panel,
+    docker_images_panel, docker_networks_panel, docker_overview_strip, docker_tab_bar,
+    docker_volumes_panel,
 };
 
 impl NyaTermApp {
@@ -117,7 +116,8 @@ impl NyaTermApp {
         } else {
             docker.tab
         };
-        let query = docker.search_draft.trim().to_ascii_lowercase();
+        let query_empty = docker.search_draft.trim().is_empty();
+        let filtered = self.remote_ops.derived_docker_items(active_tab);
         let menu_bg = self.shell_surface_color(palette.surface);
         let dialog_bg = self.shell_surface_color(palette.bg);
         let render_context = DockerRenderContext {
@@ -125,14 +125,8 @@ impl NyaTermApp {
             menu_bg,
             labels,
         };
-        let docker_content = match active_tab {
-            DockerTab::Containers => {
-                let filtered = overview
-                    .containers
-                    .iter()
-                    .filter(|container| docker_container_matches(container, &query))
-                    .cloned()
-                    .collect::<Vec<_>>();
+        let docker_content = match filtered {
+            DockerDerivedItems::Containers(filtered) => {
                 const VIEWPORT_ROWS: usize = 16;
                 let max_offset = filtered
                     .len()
@@ -144,8 +138,8 @@ impl NyaTermApp {
                         has_snapshot: true,
                         has_session: self.session.active_ssh_config().is_some(),
                         docker_available: overview.available,
-                        filtered_containers: &filtered,
-                        query_empty: query.is_empty(),
+                        filtered_containers: filtered.as_ref(),
+                        query_empty,
                         open_menu_id: docker.container_menu_id.as_deref(),
                         list_offset: docker.list_offset,
                     },
@@ -153,65 +147,57 @@ impl NyaTermApp {
                 )
                 .into_any_element()
             }
-            DockerTab::Images => {
-                let filtered = overview
-                    .images
-                    .iter()
-                    .filter(|image| docker_image_matches(image, &query))
-                    .cloned()
-                    .collect::<Vec<_>>();
+            DockerDerivedItems::Images(filtered) => {
                 docker.resource_list_offset = self
                     .remote_ops
                     .clamp_docker_resource_offset(resource_max_offset(filtered.len()));
-                docker_images_panel(palette, &filtered, docker.resource_list_offset, labels, cx)
-                    .into_any_element()
-            }
-            DockerTab::Volumes => {
-                let filtered = overview
-                    .volumes
-                    .iter()
-                    .filter(|volume| docker_volume_matches(volume, &query))
-                    .cloned()
-                    .collect::<Vec<_>>();
-                docker.resource_list_offset = self
-                    .remote_ops
-                    .clamp_docker_resource_offset(resource_max_offset(filtered.len()));
-                docker_volumes_panel(palette, &filtered, docker.resource_list_offset, labels, cx)
-                    .into_any_element()
-            }
-            DockerTab::Networks => {
-                let filtered = overview
-                    .networks
-                    .iter()
-                    .filter(|network| docker_network_matches(network, &query))
-                    .cloned()
-                    .collect::<Vec<_>>();
-                docker.resource_list_offset = self
-                    .remote_ops
-                    .clamp_docker_resource_offset(resource_max_offset(filtered.len()));
-                docker_networks_panel(palette, &filtered, docker.resource_list_offset, labels, cx)
-                    .into_any_element()
-            }
-            DockerTab::Compose => {
-                let filtered = overview
-                    .compose_projects
-                    .iter()
-                    .filter(|project| docker_compose_project_matches(project, &query))
-                    .cloned()
-                    .collect::<Vec<_>>();
-                docker_compose_panel(
-                    render_context,
-                    DockerComposePanelState {
-                        projects: &filtered,
-                        expanded_projects: &docker.compose_expanded,
-                        services_by_project: &docker.compose_services,
-                        service_errors: &docker.compose_service_errors,
-                        open_menu_id: docker.compose_menu_id.as_deref(),
-                    },
+                docker_images_panel(
+                    palette,
+                    filtered.as_ref(),
+                    docker.resource_list_offset,
+                    labels,
                     cx,
                 )
                 .into_any_element()
             }
+            DockerDerivedItems::Volumes(filtered) => {
+                docker.resource_list_offset = self
+                    .remote_ops
+                    .clamp_docker_resource_offset(resource_max_offset(filtered.len()));
+                docker_volumes_panel(
+                    palette,
+                    filtered.as_ref(),
+                    docker.resource_list_offset,
+                    labels,
+                    cx,
+                )
+                .into_any_element()
+            }
+            DockerDerivedItems::Networks(filtered) => {
+                docker.resource_list_offset = self
+                    .remote_ops
+                    .clamp_docker_resource_offset(resource_max_offset(filtered.len()));
+                docker_networks_panel(
+                    palette,
+                    filtered.as_ref(),
+                    docker.resource_list_offset,
+                    labels,
+                    cx,
+                )
+                .into_any_element()
+            }
+            DockerDerivedItems::Compose(filtered) => docker_compose_panel(
+                render_context,
+                DockerComposePanelState {
+                    projects: filtered.as_ref(),
+                    expanded_projects: &docker.compose_expanded,
+                    services_by_project: &docker.compose_services,
+                    service_errors: &docker.compose_service_errors,
+                    open_menu_id: docker.compose_menu_id.as_deref(),
+                },
+                cx,
+            )
+            .into_any_element(),
         };
 
         // Tauri DockerManager shell: header actions + dense search + tabs + flex list body.

@@ -4,5 +4,6 @@ mod remote_runtime;
 mod state;
 
 pub(in crate::features) use state::{
-    GpuPresentationState, NpuPresentationState, RemoteOpsFeatureFocus, RemoteOpsFeatureState,
+    DockerDerivedItems, GpuPresentationState, NpuPresentationState, RemoteOpsFeatureFocus,
+    RemoteOpsFeatureState,
 };

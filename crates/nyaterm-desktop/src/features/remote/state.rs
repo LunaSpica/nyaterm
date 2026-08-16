@@ -10,7 +10,8 @@ use std::sync::{Arc, mpsc};
 use std::time::Instant;
 
 use nyaterm_transport::{
-    DockerComposeService, DockerContainerDetails, RemoteDockerOverview, RemoteGpuOverview,
+    DockerComposeProject, DockerComposeService, DockerContainer, DockerContainerDetails,
+    DockerImage, DockerNetwork, DockerVolume, RemoteDockerOverview, RemoteGpuOverview,
     RemoteNpuOverview, RemoteProcess, RemoteStats,
 };
 
@@ -128,6 +129,8 @@ pub(in crate::features) struct RemoteOpsFeatureFocus {}
 struct DockerPaneState {
     job: RemoteJobState<DockerJobResult>,
     pub overview: Option<Arc<RemoteDockerOverview>>,
+    data_generation: u64,
+    derived: Option<DockerDerivedCache>,
     pub status: String,
     pub details: Option<DockerContainerDetails>,
     pub details_container_id: Option<String>,
@@ -138,11 +141,32 @@ struct DockerPaneState {
     pub tab_menu_open: bool,
     pub header_menu_open: bool,
     pub search_draft: String,
-    pub compose_expanded: HashSet<String>,
-    pub compose_services: HashMap<String, Vec<DockerComposeService>>,
-    pub compose_service_errors: HashMap<String, String>,
+    pub compose_expanded: Arc<HashSet<String>>,
+    pub compose_services: Arc<HashMap<String, Vec<DockerComposeService>>>,
+    pub compose_service_errors: Arc<HashMap<String, String>>,
     pub list_offset: usize,
     pub resource_list_offset: usize,
+}
+
+#[derive(Clone, PartialEq, Eq)]
+struct DockerDerivedKey {
+    data_generation: u64,
+    normalized_query: String,
+    tab: DockerTab,
+}
+
+struct DockerDerivedCache {
+    key: DockerDerivedKey,
+    items: DockerDerivedItems,
+}
+
+#[derive(Clone)]
+pub(in crate::features) enum DockerDerivedItems {
+    Containers(Arc<[DockerContainer]>),
+    Images(Arc<[DockerImage]>),
+    Volumes(Arc<[DockerVolume]>),
+    Networks(Arc<[DockerNetwork]>),
+    Compose(Arc<[DockerComposeProject]>),
 }
 
 struct ProcessPaneState {
@@ -202,9 +226,9 @@ pub(in crate::features) struct DockerPresentationState {
     pub tab: DockerTab,
     pub tab_menu_open: bool,
     pub search_draft: String,
-    pub compose_expanded: HashSet<String>,
-    pub compose_services: HashMap<String, Vec<DockerComposeService>>,
-    pub compose_service_errors: HashMap<String, String>,
+    pub compose_expanded: Arc<HashSet<String>>,
+    pub compose_services: Arc<HashMap<String, Vec<DockerComposeService>>>,
+    pub compose_service_errors: Arc<HashMap<String, String>>,
     pub list_offset: usize,
     pub resource_list_offset: usize,
     pub pending: bool,
@@ -262,6 +286,8 @@ impl RemoteOpsFeatureState {
             docker: DockerPaneState {
                 job: RemoteJobState::new(),
                 overview: None,
+                data_generation: 0,
+                derived: None,
                 status: "start an SSH session to inspect Docker".to_string(),
                 details: None,
                 details_container_id: None,
@@ -272,9 +298,9 @@ impl RemoteOpsFeatureState {
                 tab_menu_open: false,
                 header_menu_open: false,
                 search_draft: String::new(),
-                compose_expanded: HashSet::new(),
-                compose_services: HashMap::new(),
-                compose_service_errors: HashMap::new(),
+                compose_expanded: Arc::default(),
+                compose_services: Arc::default(),
+                compose_service_errors: Arc::default(),
                 list_offset: 0,
                 resource_list_offset: 0,
             },
@@ -332,6 +358,13 @@ impl RemoteOpsFeatureState {
             resource_list_offset: self.docker.resource_list_offset,
             pending: self.docker.is_pending(),
         }
+    }
+
+    pub(in crate::features) fn derived_docker_items(
+        &mut self,
+        tab: DockerTab,
+    ) -> DockerDerivedItems {
+        self.docker.derived_items(tab)
     }
 
     pub(in crate::features) fn process_presentation(&self) -> ProcessPresentationState {
@@ -618,11 +651,12 @@ impl RemoteOpsFeatureState {
         key: String,
         project_name: &str,
     ) -> bool {
-        if self.docker.compose_expanded.remove(&key) {
+        let expanded = Arc::make_mut(&mut self.docker.compose_expanded);
+        if expanded.remove(&key) {
             self.docker.status = format!("collapsed compose project {project_name}");
             return false;
         }
-        self.docker.compose_expanded.insert(key.clone());
+        expanded.insert(key.clone());
         self.docker.status = format!("expanded compose project {project_name}");
         !self.docker.compose_services.contains_key(&key)
             && !self.docker.compose_service_errors.contains_key(&key)
@@ -743,7 +777,7 @@ impl RemoteOpsFeatureState {
     }
 
     pub(in crate::features) fn clear_compose_service_error(&mut self, key: &str) {
-        self.docker.compose_service_errors.remove(key);
+        Arc::make_mut(&mut self.docker.compose_service_errors).remove(key);
     }
 
     pub(in crate::features) fn set_compose_services(
@@ -751,13 +785,13 @@ impl RemoteOpsFeatureState {
         key: String,
         services: Vec<DockerComposeService>,
     ) {
-        self.docker.compose_service_errors.remove(&key);
-        self.docker.compose_services.insert(key, services);
+        Arc::make_mut(&mut self.docker.compose_service_errors).remove(&key);
+        Arc::make_mut(&mut self.docker.compose_services).insert(key, services);
     }
 
     pub(in crate::features) fn set_compose_service_error(&mut self, key: String, error: String) {
-        self.docker.compose_services.remove(&key);
-        self.docker.compose_service_errors.insert(key, error);
+        Arc::make_mut(&mut self.docker.compose_services).remove(&key);
+        Arc::make_mut(&mut self.docker.compose_service_errors).insert(key, error);
     }
 
     pub(in crate::features) fn reset_docker_refresh_failures(&mut self) {
@@ -769,7 +803,7 @@ impl RemoteOpsFeatureState {
     }
 
     pub(in crate::features) fn clear_docker_overview(&mut self) {
-        self.docker.overview = None;
+        self.docker.clear_overview();
     }
 
     pub(in crate::features) fn process_is_pending_for(&self, session_id: &str) -> bool {
@@ -1100,27 +1134,167 @@ impl DockerPaneState {
                 docker_compose_project_key(&project.name, Some(project.config_files.as_str()))
             })
             .collect::<HashSet<_>>();
-        self.compose_expanded
-            .retain(|key| active_compose_keys.contains(key));
-        self.compose_services
+        Arc::make_mut(&mut self.compose_expanded).retain(|key| active_compose_keys.contains(key));
+        Arc::make_mut(&mut self.compose_services)
             .retain(|key, _| active_compose_keys.contains(key));
-        self.compose_service_errors
+        Arc::make_mut(&mut self.compose_service_errors)
             .retain(|key, _| active_compose_keys.contains(key));
         self.overview = Some(Arc::new(overview));
+        self.data_generation = self.data_generation.wrapping_add(1);
+        self.derived = None;
+    }
+
+    fn clear_overview(&mut self) {
+        self.overview = None;
+        self.data_generation = self.data_generation.wrapping_add(1);
+        self.derived = None;
+    }
+
+    fn derived_items(&mut self, tab: DockerTab) -> DockerDerivedItems {
+        let key = DockerDerivedKey {
+            data_generation: self.data_generation,
+            normalized_query: self.search_draft.trim().to_ascii_lowercase(),
+            tab,
+        };
+        if let Some(cache) = self.derived.as_ref()
+            && cache.key == key
+        {
+            return cache.items.clone();
+        }
+
+        let items = match (self.overview.as_deref(), tab) {
+            (Some(overview), DockerTab::Containers) => DockerDerivedItems::Containers(
+                overview
+                    .containers
+                    .iter()
+                    .filter(|item| docker_container_matches(item, &key.normalized_query))
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .into(),
+            ),
+            (Some(overview), DockerTab::Images) => DockerDerivedItems::Images(
+                overview
+                    .images
+                    .iter()
+                    .filter(|item| docker_image_matches(item, &key.normalized_query))
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .into(),
+            ),
+            (Some(overview), DockerTab::Volumes) => DockerDerivedItems::Volumes(
+                overview
+                    .volumes
+                    .iter()
+                    .filter(|item| docker_volume_matches(item, &key.normalized_query))
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .into(),
+            ),
+            (Some(overview), DockerTab::Networks) => DockerDerivedItems::Networks(
+                overview
+                    .networks
+                    .iter()
+                    .filter(|item| docker_network_matches(item, &key.normalized_query))
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .into(),
+            ),
+            (Some(overview), DockerTab::Compose) => DockerDerivedItems::Compose(
+                overview
+                    .compose_projects
+                    .iter()
+                    .filter(|item| docker_compose_project_matches(item, &key.normalized_query))
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .into(),
+            ),
+            (None, DockerTab::Containers) => DockerDerivedItems::Containers(Arc::from([])),
+            (None, DockerTab::Images) => DockerDerivedItems::Images(Arc::from([])),
+            (None, DockerTab::Volumes) => DockerDerivedItems::Volumes(Arc::from([])),
+            (None, DockerTab::Networks) => DockerDerivedItems::Networks(Arc::from([])),
+            (None, DockerTab::Compose) => DockerDerivedItems::Compose(Arc::from([])),
+        };
+        self.derived = Some(DockerDerivedCache {
+            key,
+            items: items.clone(),
+        });
+        items
     }
 
     fn reset_for_session_switch(&mut self) {
         self.job.reset_for_session_switch();
-        self.overview = None;
+        self.clear_overview();
         self.details = None;
         self.details_container_id = None;
         self.details_last_refresh_at = None;
         self.container_menu_id = None;
         self.compose_menu_id = None;
-        self.compose_services.clear();
-        self.compose_service_errors.clear();
+        self.compose_expanded = Arc::default();
+        self.compose_services = Arc::default();
+        self.compose_service_errors = Arc::default();
         self.status = "start an SSH session to inspect Docker".to_string();
     }
+}
+
+fn docker_container_matches(container: &DockerContainer, query: &str) -> bool {
+    docker_text_matches(
+        query,
+        [
+            container.id.as_str(),
+            container.name.as_str(),
+            container.image.as_str(),
+            container.status.as_str(),
+            container.state.as_str(),
+            container.ports.as_str(),
+        ],
+    )
+}
+
+fn docker_image_matches(image: &DockerImage, query: &str) -> bool {
+    docker_text_matches(
+        query,
+        [
+            image.id.as_str(),
+            image.repository.as_str(),
+            image.tag.as_str(),
+            image.size.as_str(),
+            image.created_since.as_str(),
+        ],
+    )
+}
+
+fn docker_volume_matches(volume: &DockerVolume, query: &str) -> bool {
+    docker_text_matches(query, [volume.driver.as_str(), volume.name.as_str()])
+}
+
+fn docker_network_matches(network: &DockerNetwork, query: &str) -> bool {
+    docker_text_matches(
+        query,
+        [
+            network.id.as_str(),
+            network.name.as_str(),
+            network.driver.as_str(),
+            network.scope.as_str(),
+        ],
+    )
+}
+
+fn docker_compose_project_matches(project: &DockerComposeProject, query: &str) -> bool {
+    docker_text_matches(
+        query,
+        [
+            project.name.as_str(),
+            project.status.as_str(),
+            project.config_files.as_str(),
+        ],
+    )
+}
+
+fn docker_text_matches<const N: usize>(query: &str, values: [&str; N]) -> bool {
+    query.is_empty()
+        || values
+            .iter()
+            .any(|value| value.to_ascii_lowercase().contains(query))
 }
 
 impl ProcessPaneState {
@@ -1517,12 +1691,12 @@ mod tests {
     use std::sync::Arc;
 
     use nyaterm_transport::{
-        DockerContainerDetails, RemoteDockerOverview, RemoteGpu, RemoteGpuOverview, RemoteNpu,
-        RemoteNpuOverview, RemoteProcess,
+        DockerContainer, DockerContainerDetails, DockerImage, RemoteDockerOverview, RemoteGpu,
+        RemoteGpuOverview, RemoteNpu, RemoteNpuOverview, RemoteProcess,
     };
 
-    use super::{RemoteJobState, RemoteOpsFeatureFocus, RemoteOpsFeatureState};
-    use crate::models::RemoteProcessSortKey;
+    use super::{DockerDerivedItems, RemoteJobState, RemoteOpsFeatureFocus, RemoteOpsFeatureState};
+    use crate::models::{DockerTab, RemoteProcessSortKey};
 
     fn process(pid: u32) -> RemoteProcess {
         RemoteProcess {
@@ -1537,6 +1711,44 @@ mod tests {
             elapsed: "00:01".to_string(),
             command: "sleep".to_string(),
             command_line: "sleep 10".to_string(),
+        }
+    }
+
+    fn docker_container(id: &str, name: &str) -> DockerContainer {
+        DockerContainer {
+            id: id.to_string(),
+            name: name.to_string(),
+            image: "image".to_string(),
+            status: "Up".to_string(),
+            state: "running".to_string(),
+            ports: String::new(),
+            created_at: String::new(),
+            size: String::new(),
+            stats: None,
+        }
+    }
+
+    fn docker_image(id: &str, repository: &str) -> DockerImage {
+        DockerImage {
+            id: id.to_string(),
+            repository: repository.to_string(),
+            tag: "latest".to_string(),
+            size: String::new(),
+            created_since: String::new(),
+        }
+    }
+
+    fn derived_containers(items: DockerDerivedItems) -> Arc<[DockerContainer]> {
+        match items {
+            DockerDerivedItems::Containers(items) => items,
+            _ => panic!("expected derived Docker containers"),
+        }
+    }
+
+    fn derived_images(items: DockerDerivedItems) -> Arc<[DockerImage]> {
+        match items {
+            DockerDerivedItems::Images(items) => items,
+            _ => panic!("expected derived Docker images"),
         }
     }
 
@@ -1642,12 +1854,77 @@ mod tests {
             presentation.overview.as_ref().expect("overview"),
             second_presentation.overview.as_ref().expect("overview"),
         ));
+        assert!(Arc::ptr_eq(
+            &presentation.compose_expanded,
+            &second_presentation.compose_expanded,
+        ));
+        assert!(Arc::ptr_eq(
+            &presentation.compose_services,
+            &second_presentation.compose_services,
+        ));
+        assert!(Arc::ptr_eq(
+            &presentation.compose_service_errors,
+            &second_presentation.compose_service_errors,
+        ));
         assert!(presentation.details.is_none());
         assert!(presentation.details_container_id.is_none());
         assert!(state.docker_details_refresh().is_none());
         assert!(presentation.compose_expanded.is_empty());
         assert!(presentation.compose_services.is_empty());
         assert!(presentation.compose_service_errors.is_empty());
+    }
+
+    #[test]
+    fn docker_owner_caches_active_tab_derivations_and_invalidates_changed_inputs() {
+        let mut state = RemoteOpsFeatureState::new(RemoteOpsFeatureFocus {});
+        state.apply_docker_overview(RemoteDockerOverview {
+            available: true,
+            containers: vec![
+                docker_container("one", "alpha"),
+                docker_container("two", "beta"),
+            ],
+            images: vec![docker_image("image-one", "alpha-image")],
+            ..Default::default()
+        });
+
+        let initial = derived_containers(state.derived_docker_items(DockerTab::Containers));
+        let reused = derived_containers(state.derived_docker_items(DockerTab::Containers));
+        assert!(Arc::ptr_eq(&initial, &reused));
+        assert_eq!(initial.len(), 2);
+
+        state.apply_docker_search("alpha".to_string());
+        let searched = derived_containers(state.derived_docker_items(DockerTab::Containers));
+        assert!(!Arc::ptr_eq(&initial, &searched));
+        assert_eq!(searched.len(), 1);
+        assert_eq!(searched[0].id, "one");
+
+        state.apply_docker_search("  ALPHA  ".to_string());
+        let normalized = derived_containers(state.derived_docker_items(DockerTab::Containers));
+        assert!(Arc::ptr_eq(&searched, &normalized));
+
+        state.set_docker_tab(DockerTab::Images);
+        let images = derived_images(state.derived_docker_items(DockerTab::Images));
+        assert_eq!(images.len(), 1);
+        assert!(Arc::ptr_eq(
+            &images,
+            &derived_images(state.derived_docker_items(DockerTab::Images)),
+        ));
+
+        state.set_docker_tab(DockerTab::Containers);
+        let before_refresh = derived_containers(state.derived_docker_items(DockerTab::Containers));
+        state.apply_docker_overview(RemoteDockerOverview {
+            available: true,
+            containers: vec![docker_container("three", "alpha-new")],
+            ..Default::default()
+        });
+        let refreshed = derived_containers(state.derived_docker_items(DockerTab::Containers));
+        assert!(!Arc::ptr_eq(&before_refresh, &refreshed));
+        assert_eq!(refreshed[0].id, "three");
+
+        state.clear_docker_overview();
+        let cleared = derived_containers(state.derived_docker_items(DockerTab::Containers));
+        assert!(!Arc::ptr_eq(&refreshed, &cleared));
+        assert!(cleared.is_empty());
     }
 
     #[test]
