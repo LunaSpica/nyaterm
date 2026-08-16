@@ -32,7 +32,7 @@ use crate::features::settings::{
     SecurityCatalogState, SecurityFeatureFocus, SecurityFeatureState, SettingsFeatureFocus,
     SettingsFeatureInit, SettingsFeatureState,
 };
-use crate::features::shell::{ShellFeatureInit, ShellFeatureState, appearance_font_options};
+use crate::features::shell::{ShellFeatureInit, ShellFeatureState};
 use crate::features::sync::CloudSyncFeatureState;
 use crate::features::sync_input::SyncInputFeatureState;
 use crate::features::terminal::{TerminalFeatureFocus, TerminalFeatureState};
@@ -84,8 +84,6 @@ impl NyaTermApp {
             "redb connection store online".to_string(),
             true,
         );
-        let (appearance_ui_font_options, appearance_terminal_font_options) =
-            appearance_font_options(cx);
         let otp_provider = Arc::new(NativeOtpProvider::new(store_blocking.clone()));
         let transfer_duplicate_policy =
             SftpDuplicatePolicy::from_legacy_value(&settings.transfer_duplicate_strategy);
@@ -304,8 +302,8 @@ impl NyaTermApp {
                     store_path: store_status.0,
                     store_message: store_status.1,
                     store_ready: store_status.2,
-                    ui_font_options: appearance_ui_font_options,
-                    terminal_font_options: appearance_terminal_font_options,
+                    ui_font_options: Vec::new(),
+                    terminal_font_options: Vec::new(),
                 },
                 SettingsFeatureFocus {
                     search_engine: cx.focus_handle(),

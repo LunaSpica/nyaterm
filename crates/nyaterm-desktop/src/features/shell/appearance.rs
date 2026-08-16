@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use gpui::{
     App, AppContext, Context, Font, FontFallbacks, PathPromptOptions, RenderImage, SharedString,
@@ -99,6 +100,46 @@ impl NyaTermApp {
                     }
                     Err(()) => {}
                 }
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    pub(in crate::features) fn ensure_appearance_font_options(&mut self, cx: &mut Context<Self>) {
+        if !self.settings.begin_font_options_load() {
+            return;
+        }
+        cx.spawn(async move |this, cx| {
+            let Ok(system_fonts) = this.update(cx, |_, cx| cx.text_system().all_font_names())
+            else {
+                return;
+            };
+            let mut ui_fonts = Vec::with_capacity(system_fonts.len());
+            for family in &system_fonts {
+                push_unique_font(&mut ui_fonts, family.clone());
+            }
+
+            const FONT_SCAN_BATCH_SIZE: usize = 16;
+            let mut terminal_fonts = Vec::new();
+            for batch in system_fonts.chunks(FONT_SCAN_BATCH_SIZE) {
+                let batch = batch.to_vec();
+                let Ok(monospace_fonts) =
+                    this.update(cx, |_, cx| appearance_monospace_font_options(cx, &batch))
+                else {
+                    return;
+                };
+                for family in monospace_fonts {
+                    push_unique_font(&mut terminal_fonts, family);
+                }
+                cx.background_executor()
+                    .timer(Duration::from_millis(1))
+                    .await;
+            }
+            push_unique_font(&mut terminal_fonts, "monospace".to_string());
+            let _ = this.update(cx, |this, cx| {
+                this.settings
+                    .finish_font_options_load(ui_fonts, terminal_fonts);
                 cx.notify();
             });
         })
@@ -696,17 +737,11 @@ pub(in crate::features) fn appearance_font_stack(raw: &str, fallback: &str) -> V
     }
 }
 
-pub(in crate::features) fn appearance_font_options(cx: &App) -> (Vec<String>, Vec<String>) {
+fn appearance_monospace_font_options(cx: &App, system_fonts: &[String]) -> Vec<String> {
     let text_system = cx.text_system();
-    let system_fonts = text_system.all_font_names();
-    let mut ui_fonts = Vec::new();
     let mut terminal_fonts = Vec::new();
 
-    for family in &system_fonts {
-        push_unique_font(&mut ui_fonts, family.clone());
-    }
-
-    for family in &system_fonts {
+    for family in system_fonts {
         let font_id = text_system.resolve_font(&font(SharedString::from(family.clone())));
         let font_size = px(14.);
         let widths = ['i', 'W', '0']
@@ -722,9 +757,7 @@ pub(in crate::features) fn appearance_font_options(cx: &App) -> (Vec<String>, Ve
             push_unique_font(&mut terminal_fonts, family.clone());
         }
     }
-    push_unique_font(&mut terminal_fonts, "monospace".to_string());
-
-    (ui_fonts, terminal_fonts)
+    terminal_fonts
 }
 
 fn push_unique_font(fonts: &mut Vec<String>, family: String) {

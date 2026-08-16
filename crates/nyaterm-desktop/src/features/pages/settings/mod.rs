@@ -303,7 +303,10 @@ impl NyaTermApp {
         .wide_breakpoint(1024.)
         .on_select(move |item_id, _, cx| {
             if let Some(tab) = settings_tab_from_nav_id(item_id.as_ref()) {
-                let _ = select_app.update(cx, |this, cx| {
+                select_app.update(cx, |this, cx| {
+                    if tab == SettingsTab::Appearance {
+                        this.ensure_appearance_font_options(cx);
+                    }
                     this.shell.set_settings_active_tab(tab);
                     cx.notify();
                 });

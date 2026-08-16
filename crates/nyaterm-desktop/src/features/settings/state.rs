@@ -138,6 +138,14 @@ struct KeywordHighlightSettingsState {
 struct AppearanceSettingsState {
     ui_font_options: Vec<String>,
     terminal_font_options: Vec<String>,
+    font_options_load_state: FontOptionsLoadState,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum FontOptionsLoadState {
+    Unloaded,
+    Loading,
+    Loaded,
 }
 
 struct KeybindingSettingsState {
@@ -186,6 +194,12 @@ impl SettingsFeatureState {
             terminal_font_options,
         } = init;
         let master_password = SettingsMasterPasswordState::new(summary.has_master_password);
+        let font_options_load_state =
+            if ui_font_options.is_empty() && terminal_font_options.is_empty() {
+                FontOptionsLoadState::Unloaded
+            } else {
+                FontOptionsLoadState::Loaded
+            };
         Self {
             summary,
             keyword_config,
@@ -210,6 +224,7 @@ impl SettingsFeatureState {
             appearance: AppearanceSettingsState {
                 ui_font_options,
                 terminal_font_options,
+                font_options_load_state,
             },
             keybindings: KeybindingSettingsState {
                 recording_id: None,
@@ -1255,6 +1270,24 @@ impl SettingsFeatureState {
         &self.appearance.terminal_font_options
     }
 
+    pub(in crate::features) fn begin_font_options_load(&mut self) -> bool {
+        if self.appearance.font_options_load_state != FontOptionsLoadState::Unloaded {
+            return false;
+        }
+        self.appearance.font_options_load_state = FontOptionsLoadState::Loading;
+        true
+    }
+
+    pub(in crate::features) fn finish_font_options_load(
+        &mut self,
+        ui_font_options: Vec<String>,
+        terminal_font_options: Vec<String>,
+    ) {
+        self.appearance.ui_font_options = ui_font_options;
+        self.appearance.terminal_font_options = terminal_font_options;
+        self.appearance.font_options_load_state = FontOptionsLoadState::Loaded;
+    }
+
     pub(in crate::features) fn config_path_prompt_active(&self) -> bool {
         self.prompts.config_path.is_some()
     }
@@ -1387,8 +1420,8 @@ mod tests {
     };
 
     use super::{
-        SearchEngineMenu, SettingsFeatureFocus, SettingsFeatureInit, SettingsFeatureState,
-        SettingsPersistenceDomain, UiLayoutSettingsUpdate,
+        FontOptionsLoadState, SearchEngineMenu, SettingsFeatureFocus, SettingsFeatureInit,
+        SettingsFeatureState, SettingsPersistenceDomain, UiLayoutSettingsUpdate,
     };
     use crate::models::{
         ConfigPathPromptKind, KeywordHighlightEditorField, SnapshotPasswordPromptKind,
@@ -1451,6 +1484,28 @@ mod tests {
         );
         let suggestions_enabled = state.summary().interaction_command_suggestions_enabled;
         assert_eq!(state.toggle_command_suggestions(), !suggestions_enabled);
+    }
+
+    #[test]
+    fn appearance_font_options_load_once_and_replace_the_catalog() {
+        let mut state = settings_state();
+        state.appearance.ui_font_options.clear();
+        state.appearance.terminal_font_options.clear();
+        state.appearance.font_options_load_state = FontOptionsLoadState::Unloaded;
+
+        assert!(state.begin_font_options_load());
+        assert!(!state.begin_font_options_load());
+        state.finish_font_options_load(
+            vec!["Inter".to_string(), "Noto Sans".to_string()],
+            vec!["JetBrains Mono".to_string(), "monospace".to_string()],
+        );
+
+        assert_eq!(state.ui_font_options(), ["Inter", "Noto Sans"]);
+        assert_eq!(
+            state.terminal_font_options(),
+            ["JetBrains Mono", "monospace"]
+        );
+        assert!(!state.begin_font_options_load());
     }
 
     #[test]
