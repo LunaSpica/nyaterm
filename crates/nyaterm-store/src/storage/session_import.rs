@@ -245,7 +245,7 @@ mod tests {
         SavedPassword,
     };
 
-    use super::*;
+    use super::{ConnectionStore, META_MASTER_KEY, META_TABLE};
 
     #[test]
     fn commit_session_import_persists_all_domains_together() {

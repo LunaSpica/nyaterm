@@ -148,7 +148,9 @@ fn ai_session_title(user_input: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use nyaterm_core::{AiAuditFile, AiAuditLog, AiMessage, AiMessageRole, AppendAiAuditRequest};
+
+    use super::{ConnectionStore, SETTINGS_AI_AUDIT};
     use crate::storage::tests::unique_temp_dir;
 
     #[test]

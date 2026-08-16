@@ -280,6 +280,8 @@ these as staged extraction candidates, not as formatting-only refactor targets.
 
 ## Completed
 
+- AI-history and atomic session-import storage tests now import only their
+  persisted models, store facade and exact compatibility keys.
 - HOTP, TOTP and HMAC compatibility tests now use explicit imports, making
   their cryptographic dependencies visible without changing OTP behavior.
 - Terminal cell, encoding, Kitty graphics and Sixel parser tests now name their
