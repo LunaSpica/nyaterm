@@ -862,7 +862,18 @@ pub(super) fn promote_reasoning_to_text(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{
+        AiMessage, AiMessageRole, AiMode, AiModelError, AiProviderCredential, AiSettings,
+        ResolvedAiModel, anthropic_messages_url, build_anthropic_chat_request_body,
+        build_anthropic_chat_request_body_with_stream, build_gemini_chat_request_body,
+        build_openai_compatible_chat_request_body,
+        build_openai_compatible_chat_request_body_with_stream, gemini_generate_content_url,
+        gemini_stream_generate_content_url, openai_compatible_chat_completions_url,
+        openai_compatible_models_url, parse_anthropic_chat_response, parse_anthropic_stream_chunk,
+        parse_gemini_chat_response, parse_gemini_stream_chunk,
+        parse_openai_compatible_chat_response, parse_openai_compatible_models_response,
+        parse_openai_compatible_stream_chunk,
+    };
     use crate::ai::tests::{sample_ai_history, sample_ai_request};
     use crate::{
         AiProviderKind, RiskLevel, agent_response_action, merge_model_discoveries,

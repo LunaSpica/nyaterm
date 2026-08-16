@@ -448,7 +448,11 @@ pub fn build_observation_message(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{
+        AgentApprovalDecision, AgentCommandExecutionMode, AiSettings, CommandObservation,
+        RiskLevel, agent_response_action, assess_agent_command_risk, build_observation_message,
+        decide_agent_command_execution, parse_agent_model_output,
+    };
     use crate::ai::tests::sample_ai_request;
     use crate::{
         AiMode, AiProviderKind, ResolvedAiModel, build_openai_compatible_chat_request_body,

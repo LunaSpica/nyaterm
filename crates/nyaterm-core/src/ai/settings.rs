@@ -457,7 +457,10 @@ fn optional_secret_present(value: &Option<String>) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{
+        AgentCommandExecutionMode, AiSettings, MASKED_SECRET_VALUE, RiskLevel, mask_ai_settings,
+        merge_masked_ai_settings, normalize_ai_settings,
+    };
 
     #[test]
     fn merge_preserves_masked_api_key() {

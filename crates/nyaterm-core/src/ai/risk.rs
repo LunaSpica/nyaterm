@@ -210,7 +210,7 @@ fn is_dangerous_dd_command(command: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::RiskLevel;
     use crate::{assess_agent_command_risk, parse_agent_model_output};
 
     #[test]

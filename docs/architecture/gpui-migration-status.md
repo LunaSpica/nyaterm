@@ -284,6 +284,9 @@ these as staged extraction candidates, not as formatting-only refactor targets.
   live in `nyaterm-core/src/ai/tests.rs` with explicit imports. Provider and
   agent tests retain the same fixture module path, while `ai/mod.rs` remains
   focused on public models, prompts and orchestration helpers.
+- AI provider, agent, risk and settings test modules now name their exact
+  parent dependencies instead of using wildcard imports; no AI wire format,
+  redaction behavior or provider compatibility contract changed.
 - Cloud-sync provider settings, compatibility defaults, masked-secret merging
   and redacted local-operation options now live in
   `nyaterm-core::cloud_sync::settings`. Explicit facade exports preserve the
