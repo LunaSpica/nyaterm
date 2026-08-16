@@ -17,7 +17,7 @@ pub fn terminal_input_fanout_status(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::terminal_input_fanout_status;
 
     #[test]
     fn fanout_status_omits_sync_when_no_peer_was_attempted() {

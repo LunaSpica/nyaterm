@@ -54,7 +54,9 @@ pub fn terminal_wire_write_disposition(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{
+        TerminalWireWriteDisposition, TerminalWireWriteKind, terminal_wire_write_disposition,
+    };
 
     #[test]
     fn protocol_responses_do_not_record_input_or_command_history() {

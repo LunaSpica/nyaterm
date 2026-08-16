@@ -507,7 +507,13 @@ pub fn resync_from_terminal_line(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{
+        TerminalInputState, apply_terminal_input_data, apply_terminal_input_data_in_place,
+        build_move_input_cursor_data, can_suggest_from_tracked_command, can_suggest_from_tracker,
+        delete_terminal_input_range, get_tracked_command, get_tracked_submission_command,
+        resync_from_terminal_line, sanitize_terminal_command,
+        terminal_input_tracker_below_min_chars,
+    };
 
     #[test]
     fn tracks_insert_backspace_and_submit() {

@@ -19,7 +19,7 @@ pub fn terminal_mouse_report_should_send(eligibility: TerminalMouseReportEligibi
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{TerminalMouseReportEligibility, terminal_mouse_report_should_send};
 
     fn eligible() -> TerminalMouseReportEligibility {
         TerminalMouseReportEligibility {

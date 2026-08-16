@@ -37,7 +37,7 @@ pub fn terminal_drop_overlay_copy(session_kind: &str) -> (&'static str, &'static
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{format_local_terminal_drop_input, quote_local_path, terminal_drop_overlay_copy};
 
     #[test]
     fn quotes_paths_with_spaces() {

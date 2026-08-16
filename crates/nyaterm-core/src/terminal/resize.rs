@@ -148,7 +148,12 @@ pub fn terminal_backend_resize_changed(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{
+        TerminalBackendResize, TerminalResizeGeometry, TerminalViewportInsets,
+        terminal_backend_resize_changed, terminal_resize_geometry_for_size,
+        terminal_resize_geometry_for_size_with_insets,
+        terminal_resize_geometry_for_size_with_insets_and_scale,
+    };
 
     #[test]
     fn resize_geometry_keeps_usable_pixel_remainder() {
