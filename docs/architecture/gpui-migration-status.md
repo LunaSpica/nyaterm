@@ -280,6 +280,11 @@ these as staged extraction candidates, not as formatting-only refactor targets.
 
 ## Completed
 
+- Cloud-sync S3 SigV4 request construction now lives in
+  `nyaterm-core::cloud_sync::s3`; the facade and crate-root re-exports preserve
+  the existing request types and functions, while bucket validation, endpoint
+  styles, query canonicalization, timestamp formatting and secret signing
+  behavior remain covered by the compatibility tests.
 - Xshell archive, MobaXterm bookmark, WindTerm session and NyaTerm JSON parsing
   now live in their respective `nyaterm-core::session_import` format modules.
   The session-import facade retains public result contracts, dispatch and
