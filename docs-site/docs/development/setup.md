@@ -40,9 +40,14 @@ GPUI 在 macOS 上使用 Metal，因此需要可用的 macOS SDK。
 
 ```bash
 sudo apt update
-sudo apt install build-essential pkg-config clang cmake libfontconfig-dev \
-  libglib2.0-dev libssl-dev libvulkan1 libwayland-dev libx11-xcb-dev \
-  libxkbcommon-x11-dev
+sudo apt install build-essential clang pkg-config cmake \
+  libfontconfig1-dev libfreetype6-dev libssl-dev libudev-dev \
+  libwayland-dev libx11-dev libx11-xcb-dev \
+  libxcb-cursor-dev libxcb-icccm4-dev libxcb-image0-dev \
+  libxcb-keysyms1-dev libxcb-randr0-dev libxcb-render0-dev \
+  libxcb-shape0-dev libxcb-xfixes0-dev libxcb-xinerama0-dev \
+  libxkbcommon-dev libxkbcommon-x11-dev libzstd-dev \
+  libvulkan1 mesa-vulkan-drivers
 ```
 
 运行桌面应用还需要可用的 Vulkan 驱动，以及 X11 或 Wayland 会话。
@@ -113,7 +118,7 @@ pnpm --dir docs-site start:en
 pnpm --dir docs-site build
 ```
 
-文档构建会检查页面、sidebar、Markdown 链接和中英文翻译资源。
+文档构建会检查页面和 sidebar；Markdown 链接问题会按站点配置报告。中英文页面是否完整对应仍需要人工复核，当前没有自动翻译完整性检查。
 
 ## 开发约定
 

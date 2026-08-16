@@ -8,12 +8,14 @@ sidebar_position: 2
 
 ## 第一步：选择会话类型
 
-点击 **新建连接**，你会看到四类可选会话：
+点击 **新建连接**，你会看到六类可选会话：
 
 - **SSH** — 最完整的远程运维场景
 - **本地终端** — 直接在 NyaTerm 中打开本地 shell
 - **Telnet** — 适合旧系统或实验环境
 - **串口** — 适合串口调试设备
+- **RDP** — 适合 Windows 远程桌面
+- **VNC** — 适合 VNC 服务或虚拟机控制台；当前真实服务器互通范围有限
 
 如果你只是第一次体验，建议优先创建一个 **SSH** 会话，再额外创建一个 **本地终端** 对比工作区效果。
 
@@ -45,6 +47,10 @@ NyaTerm 支持从以下来源导入：
 - **Xshell**（`.xts`）
 - **MobaXterm**（`.mxtsessions`）
 - **WindTerm**（`.sessions`）
+- **SecureCRT**（`.xml`）
+- **FinalShell**（`conn` 目录）
+- **Termius**（本机 IndexedDB）
+- **NyaTerm / Electerm JSON**（`.json`）
 - **NyaTerm** 自己的加密备份文件（`.nya`）
 
 其中：

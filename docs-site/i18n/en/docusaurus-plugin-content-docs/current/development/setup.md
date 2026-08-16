@@ -40,9 +40,14 @@ Install Rust crate build tools, font/window-system development libraries, and th
 
 ```bash
 sudo apt update
-sudo apt install build-essential pkg-config clang cmake libfontconfig-dev \
-  libglib2.0-dev libssl-dev libvulkan1 libwayland-dev libx11-xcb-dev \
-  libxkbcommon-x11-dev
+sudo apt install build-essential clang pkg-config cmake \
+  libfontconfig1-dev libfreetype6-dev libssl-dev libudev-dev \
+  libwayland-dev libx11-dev libx11-xcb-dev \
+  libxcb-cursor-dev libxcb-icccm4-dev libxcb-image0-dev \
+  libxcb-keysyms1-dev libxcb-randr0-dev libxcb-render0-dev \
+  libxcb-shape0-dev libxcb-xfixes0-dev libxcb-xinerama0-dev \
+  libxkbcommon-dev libxkbcommon-x11-dev libzstd-dev \
+  libvulkan1 mesa-vulkan-drivers
 ```
 
 Running the desktop application also requires a working Vulkan driver and an X11 or Wayland session.
@@ -113,7 +118,7 @@ Build every locale with:
 pnpm --dir docs-site build
 ```
 
-The documentation build checks pages, sidebars, Markdown links, and both locale resources.
+The documentation build checks pages and sidebars; Markdown-link problems are reported according to the site configuration. English and Chinese page completeness still requires manual review because there is no automatic translation-completeness check.
 
 ## Development conventions
 

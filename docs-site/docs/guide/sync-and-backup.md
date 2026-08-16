@@ -119,11 +119,11 @@ WebDAV 认证同时支持 **Basic** 和 **Digest** 两种方式。当服务端�
 - 在浏览器打开的 GitHub 授权页面输入设备码
 - 授权 `gist` scope
 
-如果没有填写 Gist ID，NyaTerm 会在授权成功后自动创建一个私有 Gist。已有 Gist ID 时，会复用该 Gist。
+在 GitHub device-flow 授权流程中，如果没有填写 Gist ID，NyaTerm 会在授权成功后自动创建并回填一个私有 Gist；已有 Gist ID 时，会先验证并复用该 Gist。
 
 ### Google Drive / OneDrive / AliyunDrive
 
-如果 provider 选的是 **Google Drive**、**OneDrive** 或 **AliyunDrive**，NyaTerm 会通过 OpenDAL 使用对应网盘服务。
+如果 provider 选的是 **Google Drive**、**OneDrive** 或 **AliyunDrive**，NyaTerm 会通过桌面端原生 HTTP adapter 访问对应网盘服务。
 
 当前需要手动填写 OAuth 信息：
 
@@ -142,7 +142,7 @@ AliyunDrive 还需要填写 **Drive Type**，通常为 `resource`。
 - WebDAV 至少需要填写 endpoint
 - S3 至少需要填写 endpoint 与 bucket
 - `Access Key ID` 和 `Secret Access Key` 需要成对出现
-- GitHub Gist 需要完成 GitHub 授权并拥有 Gist ID
+- GitHub Gist 需要完成 GitHub 授权；Gist ID 可以在授权流程中自动创建并回填，也可以使用已有 ID
 - Google Drive / OneDrive / AliyunDrive 需要填写 Refresh Token、Client ID、Client Secret
 
 建议在真正启用自动策略前，先执行一次 **测试连接**。

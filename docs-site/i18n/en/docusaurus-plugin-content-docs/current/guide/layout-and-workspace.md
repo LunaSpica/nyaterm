@@ -104,6 +104,8 @@ The left side is mainly for capability entry points:
 
 The **Cloud Sync** panel is a runtime entry point for cross-device config sync. It surfaces current status, recent sync activity, and direct conflict-handling actions when a conflict is detected.
 
+The **File Explorer** can follow the current SSH terminal working directory and can send a directory or file path back to the terminal.
+
 ### Right side
 
 The right side is mainly for live state and navigation:
@@ -116,6 +118,8 @@ The right side is mainly for live state and navigation:
 If your workflow is "pick a connection, then inspect live state," this split feels natural.
 
 The GPU monitor, process manager, and Docker manager panels are off by default; enable them per panel in **Settings → Terminal**. When a panel is disabled its activity-bar icon is hidden, and monitor panels only bind to a genuinely active SSH session.
+
+The **AI Assistant** panel can use the active pane as context to generate commands, explain output or selected text, analyze errors, and create approved quick commands.
 
 ## Bottom helper area
 
@@ -174,6 +178,12 @@ This is useful when you want to:
 - SSH terminal enters the target directory
 - File explorer syncs to the same path
 - Open a remote file, edit it locally, then upload it back
+
+### Multi-host synchronized input
+
+- Open multiple SSH sessions for related hosts
+- Add the sessions to a synchronized input group
+- Input typed in one active session is broadcast to the other enabled sessions in the group
 
 :::tip Screenshot suggestion
 - Suggested image path: `/img/docs/layout/quick-start-split-workspace.png`

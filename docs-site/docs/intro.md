@@ -14,18 +14,20 @@ slug: /
 - 边看终端输出边操作远程文件
 - 为常用运维命令、登录流程和跳板机链路做标准化配置
 - 需要 OTP、录制、资源监控、自动上传、AI 辅助、跨设备配置同步或本地加密备份等增强能力
-- 想从 Xshell、MobaXterm、WindTerm 或 NyaTerm 备份文件快速迁移现有配置
+- 想从 Xshell、MobaXterm、WindTerm、SecureCRT、FinalShell、Termius 或 NyaTerm 备份文件快速迁移现有配置
 
 ## 核心能力
 
 ### 多种会话类型
 
-NyaTerm 不只支持 SSH，还支持：
+NyaTerm 当前支持六类会话：
 
 - **SSH** — 远程登录、文件传输、资源监控、隧道、OTP 等完整能力
 - **本地终端** — 在同一套 UI 中打开本地 shell
 - **Telnet** — 兼容旧设备或实验环境
 - **串口** — 适合网络设备、嵌入式板卡、调试口场景
+- **RDP** — Windows 远程桌面和图形化运维
+- **VNC** — 传统 RFB/VNC 服务和虚拟机控制台；真实服务器互通范围仍在持续验证
 
 ### 可组合的工作区
 
@@ -49,7 +51,7 @@ NyaTerm 不只支持 SSH，还支持：
 - 可选的**动作链接**（如 IPv4、`host:port`、压缩包文件名）
 - 可选的**关键词高亮**与自定义规则
 - 大输出场景下的保护机制、会话录制与 SSH Keep-Alive
-- 支持直接在终端中使用 **Zmodem** 进行文件传输
+- 支持直接在终端中使用 **Zmodem**（`rz`/`sz`）和 **trzsz**（`trz`/`tsz`）进行文件传输
 - 支持自定义终端与界面操作的**键盘快捷键**
 
 ### 远程文件与传输队列
@@ -82,7 +84,7 @@ NyaTerm 不只支持 SSH，还支持：
 - OTP 管理（TOTP / HOTP）、二维码导入、SSH 自动填充
 - 支持 SOCKS5、HTTP、ProxyCommand、跳板机链路校验、本地 / 远程 / 动态隧道和 SSH X11 转发
 - 锁屏、主密码与空闲应用锁定能力
-- 支持导入 **Xshell / MobaXterm / WindTerm** 会话
+- 支持导入 **Xshell / MobaXterm / WindTerm / SecureCRT / FinalShell / Termius** 会话，以及 NyaTerm/Electerm JSON
 - 支持导入 / 导出 NyaTerm 自身的加密 `.nya` 配置备份
 - 可打开日志目录并导出诊断包，便于问题排查与支持协作
 

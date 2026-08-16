@@ -52,6 +52,16 @@ Good for storing:
 
 In the SSH connection form, password authentication can reference these saved password entries directly.
 
+### Credential auto-fill
+
+Credential management is separate from SSH password authentication and can respond to password prompts in an interactive terminal.
+
+1. Create an entry with a name, prompt-matching regular expression, value to send, and enabled/disabled state.
+2. When terminal output matches the prompt expression, NyaTerm shows an autofill prompt.
+3. You can approve the fill or ignore it.
+
+Values remain encrypted locally, viewing saved passwords requires unlocking sensitive data, and autofill only triggers after a prompt match rather than sending values unconditionally.
+
 ### OTP management
 
 OTP management supports:
@@ -129,9 +139,15 @@ When SSH first connects to an unknown host, NyaTerm supports three policies:
 | Accept | Automatically accept new host keys |
 | Strict | Reject all unknown host keys |
 
-Known host records are stored in local storage at `~/.nyaterm/nyaterm.redb`; legacy `known_hosts` is imported on first launch.
+Known host records are stored in the local redb `known_hosts` document. Legacy `known_hosts` content from the old redb text-document path can be imported through the compatibility reader; NyaTerm does not promise to scan arbitrary filesystem locations for an old `known_hosts` file.
 
 If host identity validation matters in your environment, prefer **Prompt** or **Strict** over unconditional acceptance.
+
+## Local persistence model
+
+In installed mode, the main local data file is normally `~/.nyaterm/nyaterm.redb`. Portable mode stores configuration under the adjacent `data/config/` directory. Legacy Dragonfly data is handled through compatibility fallbacks for old encryption prefixes and storage documents; NyaTerm does not promise to copy the entire `~/.dragonfly/` directory or create an automatic rollback copy.
+
+The **Export Configuration** action creates an encrypted `.nya` backup for migration or offline storage. The **Export Diagnostics** action is intended for troubleshooting and packages recent logs and runtime summaries; review diagnostic contents before sharing them.
 
 ## Practical security advice
 

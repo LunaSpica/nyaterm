@@ -4,7 +4,7 @@ sidebar_position: 3
 
 # Terminal Features
 
-NyaTerm's terminal experience is designed around high-frequency local and remote work inside one workspace. `nyaterm-terminal` maintains the terminal state machine and snapshots, using Alacritty terminal components for the grid and control sequences, while `nyaterm-terminal-gpui` provides native layout, input, and painting. Search, command history, suggestions, optional enhancements, recording, and SSH-aware helpers are all part of the complete experience.
+NyaTerm's terminal experience is designed around high-frequency local and remote work inside one workspace. Search, command history, suggestions, optional enhancements, recording, AI assistance, and SSH-aware helpers are all part of the complete experience.
 
 ## Core operations
 
@@ -29,10 +29,10 @@ In **Settings → Interaction**, you can also adjust:
 
 ### Scrollback, fonts, and zoom
 
-- The default scrollback buffer keeps **10000 lines**
+- The default scrollback buffer keeps **5000 lines**
 - You can customize font family, font size, normal font weight, bold font weight, cursor style, and cursor blink
 - Use the menu or keyboard shortcuts to zoom in, zoom out, or reset zoom; the terminal root coordinates zoom handling so nested workspaces do not process it twice
-- **Hardware acceleration** is optional and is **not enabled by default**; you can toggle it manually in **Settings → Terminal** if you want to compare rendering behavior
+- **Hardware acceleration** is enabled by default; you can toggle it manually in **Settings → Terminal** when diagnosing rendering or driver issues
 
 ### Paste and input compatibility
 
@@ -164,11 +164,9 @@ When a session produces too much output too quickly, NyaTerm can enter a tempora
 
 During that period, the app temporarily suppresses some expensive decorations and reports how many queued characters were skipped. Once pressure drops, normal rendering resumes. This is mainly intended for log storms or constantly streaming output.
 
-### Large-output drain
+### Large-output handling
 
-Terminal output enters a batched drain as typed session events, updates the terminal state machine and snapshots, and is then painted by the GPUI renderer. During high-throughput situations such as `tail -f`, build logs, or load-test output, this helps preserve input responsiveness, scrolling, and search behavior.
-
-This is not a setting you need to enable. It is the default terminal output pipeline and works together with large-output protection, line-number / timestamp gutters, and command suggestions.
+Terminal output is processed in batches before the screen is updated. This helps preserve input responsiveness, scrolling, and search during `tail -f`, build logs, and other high-throughput output; it is enabled by default and requires no setting.
 
 ## SSH-specific helpers
 
@@ -176,7 +174,7 @@ This is not a setting you need to enable. It is the default terminal output pipe
 
 For SSH sessions, you can configure a Keep-Alive interval in **Settings → Terminal**:
 
-- Default is **60 seconds**
+- Default is **30 seconds**
 - Set it to `0` to disable it
 - Useful for reducing idle disconnects on long-lived sessions
 
@@ -186,7 +184,7 @@ NyaTerm provides four right-side monitoring panels for SSH sessions: **Resource 
 
 - They only make sense for an **SSH session**, and bind only to a genuinely active SSH session
 - Each is shown or hidden by its own toggle in **Settings → Terminal**; turning a toggle off also hides its activity-bar icon
-- Poll intervals are adjustable, ranging from **3 to 120 seconds**
+- GPU, process, and Docker panels accept **3 to 120 seconds**; the resource-monitor panel separately accepts **1 to 60 seconds**
 - A panel stops refreshing after several consecutive polling failures, to avoid repeatedly hitting an unsupported host
 
 #### Resource Monitor

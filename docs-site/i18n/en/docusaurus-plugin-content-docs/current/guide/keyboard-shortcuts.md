@@ -24,7 +24,7 @@ If you want to copy text from the terminal, use NyaTerm's app-level shortcuts ra
 | `Ctrl / Cmd + Shift + V` | Paste |
 | `Ctrl / Cmd + Shift + X` | Paste selected text |
 | `Ctrl / Cmd + Shift + F` | Find |
-| `Ctrl / Cmd + Shift + K` | Clear screen |
+| `Ctrl / Cmd + L` | Clear screen |
 | `Ctrl / Cmd + Shift + A` | Select all |
 
 ## Tabs and workspace
@@ -37,7 +37,7 @@ If you want to copy text from the terminal, use NyaTerm's app-level shortcuts ra
 | `Ctrl / Cmd + Shift + W` | Close current tab |
 | `Ctrl + Tab` | Next tab |
 | `Ctrl + Shift + Tab` | Previous tab |
-| `Ctrl / Cmd + 1-8` | Jump to a specific tab |
+| `Ctrl / Cmd + 1-8` | Jump to a specific tab (1 through 8) |
 | `Ctrl / Cmd + 9` | Jump to the last tab |
 | `Ctrl / Cmd + Shift + D` | Duplicate current session |
 | `Ctrl / Cmd + Shift + M` | Multiplex current SSH session |
@@ -62,6 +62,17 @@ If you want to copy text from the terminal, use NyaTerm's app-level shortcuts ra
 | `Ctrl / Cmd + ,` | Open settings |
 | `Ctrl / Cmd + Shift + G` | Manage synchronized input groups |
 | `Ctrl / Cmd + Alt + C` | Copy selected saved connections in the Saved Connections panel |
+
+## Other shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl / Cmd + Alt + N` | Open a temporary SSH link |
+| `Ctrl / Cmd + Shift + R` | Start or stop recording for the active session |
+| `Alt + R` | Show command suggestions |
+| `Ctrl / Cmd + Alt + I` | Open AI Chat |
+| `Ctrl / Cmd + Shift + P` | Show all commands |
+| `F2` | Rename the selected file-browser entry |
 
 ## Usage tips
 

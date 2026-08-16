@@ -20,16 +20,13 @@ NyaTerm 支持以下操作系统：
 
 | 平台 | 安装包格式 |
 |------|-----------|
-| Windows | `.msi` / `.exe` / 便携版 `.zip` |
-| macOS | `.dmg` |
-| Linux | `.deb` / `.AppImage` |
+| Windows | 安装版 `-setup.exe` / 便携版 `.zip` |
+| macOS | `.dmg` / `.app.tar.gz` |
+| Linux | `.deb` / `.AppImage` / `.rpm` |
 
-Windows 便携版解压后运行 `NyaTerm.exe` 即可。**Help → 检查更新** 与安装版共用 Cloudflare R2 更新清单和下载源。重启时 NyaTerm 会自动替换程序文件，并完整保留 `data/` 目录。
+Windows 便携版解压后运行 `NyaTerm.exe` 即可。**Help → 检查更新** 会检查 GitHub Releases，并提供 Releases 页面入口；当前不会自动下载或替换程序文件。更新便携版时，请关闭 NyaTerm 后手动替换程序文件，并保留同目录下的 `data/`。
 
-Windows 便携版直接下载：
-
-- [NyaTerm_1.1.18_windows_x64_portable.zip](https://downloads.nyaterm.app/releases/v1.1.18/NyaTerm_1.1.18_windows_x64_portable.zip)（x64）
-- [NyaTerm_1.1.18_windows_arm64_portable.zip](https://downloads.nyaterm.app/releases/v1.1.18/NyaTerm_1.1.18_windows_arm64_portable.zip)（ARM64）
+请从 [Releases](https://github.com/nyakang/nyaterm/releases) 选择最新的 Windows 便携版（x64 或 ARM64）。文档不维护固定版本的直链，以免链接和版本过期。
 
 ### macOS
 
@@ -89,6 +86,10 @@ sudo xattr -cr /Applications/NyaTerm.app
 - **Xshell**（`.xts`）
 - **MobaXterm**（`.mxtsessions`）
 - **WindTerm**（`.sessions`）
+- **SecureCRT**（`.xml`）
+- **FinalShell**（`conn` 目录）
+- **Termius**（本机 IndexedDB）
+- **NyaTerm / Electerm JSON**（`.json`）
 - **NyaTerm** 的 `.nya` 加密配置备份
 
 如果你的目标是完整恢复 NyaTerm 配置，优先使用 `.nya`；它会恢复的不只是连接，还包括更多本地配置数据。

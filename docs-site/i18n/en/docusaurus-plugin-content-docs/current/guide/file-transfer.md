@@ -141,6 +141,12 @@ Note that the controls available for Zmodem transfers differ from regular SFTP t
 
 This is because the Zmodem protocol is driven directly by both ends of the terminal; NyaTerm only handles progress display and file selection, and does not intervene in the protocol's own pause/resume behavior.
 
+## trzsz transfer (`trz` / `tsz`)
+
+NyaTerm also supports in-terminal trzsz transfers. Run `tsz` on the remote side to download files, or `trz` to upload files; directory uploads open a local directory picker. These transfers appear in the queue with progress information.
+
+trzsz, like Zmodem, is driven by the terminal protocol and is not a replacement for SFTP file operations. It is useful when SFTP is unavailable but the remote host provides the trzsz commands. Pause, resume, and retry behavior follows the active protocol session and should not be treated like an SFTP queue job.
+
 ## Sync with terminal paths
 
 The file explorer can work together with the current SSH terminal path:

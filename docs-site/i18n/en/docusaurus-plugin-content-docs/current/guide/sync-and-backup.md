@@ -119,11 +119,11 @@ You will typically:
 - enter the device code on the GitHub authorization page
 - grant the `gist` scope
 
-If no Gist ID is configured, NyaTerm creates a private Gist after authorization succeeds. If a Gist ID is already configured, NyaTerm reuses it.
+During the GitHub device-flow authorization, NyaTerm creates and fills in a private Gist when no Gist ID is configured. When a Gist ID already exists, it validates and reuses that Gist.
 
 ### Google Drive / OneDrive / AliyunDrive
 
-When the provider is **Google Drive**, **OneDrive**, or **AliyunDrive**, NyaTerm uses OpenDAL to access the selected drive service.
+When the provider is **Google Drive**, **OneDrive**, or **AliyunDrive**, NyaTerm uses native desktop HTTP adapters to access the selected drive service.
 
 The current implementation expects OAuth credentials to be entered manually:
 
@@ -142,7 +142,7 @@ The current implementation performs basic provider validation before actions are
 - WebDAV requires an endpoint
 - S3 requires both an endpoint and a bucket
 - `Access Key ID` and `Secret Access Key` must be provided together
-- GitHub Gist requires GitHub authorization and a Gist ID
+- GitHub Gist requires GitHub authorization; the Gist ID can be created and filled in during authorization or supplied for an existing Gist
 - Google Drive / OneDrive / AliyunDrive require Refresh Token, Client ID, and Client Secret
 
 A good habit is to run **Test Connection** before enabling any automatic strategy.

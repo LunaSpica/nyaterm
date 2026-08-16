@@ -20,16 +20,13 @@ Visit the [Releases](https://github.com/nyakang/nyaterm/releases) page and downl
 
 | Platform | Format |
 |----------|--------|
-| Windows | `.msi` / `.exe` / portable `.zip` |
-| macOS | `.dmg` |
-| Linux | `.deb` / `.AppImage` |
+| Windows | installer `-setup.exe` / portable `.zip` |
+| macOS | `.dmg` / `.app.tar.gz` |
+| Linux | `.deb` / `.AppImage` / `.rpm` |
 
-For the Windows portable edition, extract the zip and run `NyaTerm.exe`. **Help → Check Updates** uses the same Cloudflare R2 update manifest and download source as the installed edition. When restarting, NyaTerm replaces the program files and preserves the complete `data/` folder.
+For the Windows portable edition, extract the zip and run `NyaTerm.exe`. **Help → Check Updates** checks GitHub Releases and provides a Releases-page entry; it currently does not download or replace program files automatically. To update a portable build, close NyaTerm, replace the program files manually, and keep the adjacent `data/` directory.
 
-Direct downloads for the Windows portable edition:
-
-- [NyaTerm_1.1.18_windows_x64_portable.zip](https://downloads.nyaterm.app/releases/v1.1.18/NyaTerm_1.1.18_windows_x64_portable.zip) (x64)
-- [NyaTerm_1.1.18_windows_arm64_portable.zip](https://downloads.nyaterm.app/releases/v1.1.18/NyaTerm_1.1.18_windows_arm64_portable.zip) (ARM64)
+Choose the latest Windows portable asset (x64 or ARM64) from [Releases](https://github.com/nyakang/nyaterm/releases). This page intentionally avoids fixed-version asset links so they do not become stale.
 
 ### macOS
 
@@ -82,6 +79,21 @@ Before using NyaTerm long term, quickly review:
 - **Settings → AI**: providers, models, risk controls, history, and context limits
 
 If you often keep sessions or sync tasks running in the background, check **Minimize to tray when closing** early.
+
+## Migrating an existing environment
+
+NyaTerm can import sessions from:
+
+- **Xshell** (`.xts`)
+- **MobaXterm** (`.mxtsessions`)
+- **WindTerm** (`.sessions`)
+- **SecureCRT** (`.xml`)
+- **FinalShell** (`conn` directory)
+- **Termius** (local IndexedDB)
+- **NyaTerm / Electerm JSON** (`.json`)
+- NyaTerm encrypted backup files (`.nya`)
+
+Use `.nya` when you need to restore the broader NyaTerm configuration, not only a connection list. `.nya` import and export require a master password.
 
 ## Suggested first run
 

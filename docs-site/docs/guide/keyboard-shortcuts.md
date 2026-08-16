@@ -24,7 +24,7 @@ NyaTerm 的快捷键分成两类理解最不容易混淆：
 | `Ctrl / Cmd + Shift + V` | 粘贴 |
 | `Ctrl / Cmd + Shift + X` | 粘贴选中的文本 |
 | `Ctrl / Cmd + Shift + F` | 查找 |
-| `Ctrl / Cmd + Shift + K` | 清屏 |
+| `Ctrl / Cmd + L` | 清屏 |
 | `Ctrl / Cmd + Shift + A` | 全选 |
 
 ## 标签与工作区
@@ -37,7 +37,7 @@ NyaTerm 的快捷键分成两类理解最不容易混淆：
 | `Ctrl / Cmd + Shift + W` | 关闭当前标签 |
 | `Ctrl + Tab` | 切换到下一个标签 |
 | `Ctrl + Shift + Tab` | 切换到上一个标签 |
-| `Ctrl / Cmd + 1-8` | 跳转到指定标签 |
+| `Ctrl / Cmd + 1-8` | 跳转到指定标签（1 到 8） |
 | `Ctrl / Cmd + 9` | 跳转到最后一个标签 |
 | `Ctrl / Cmd + Shift + D` | 复制当前会话 |
 | `Ctrl / Cmd + Shift + M` | 多路复用当前 SSH 会话 |
@@ -62,6 +62,17 @@ NyaTerm 的快捷键分成两类理解最不容易混淆：
 | `Ctrl / Cmd + ,` | 打开设置 |
 | `Ctrl / Cmd + Shift + G` | 管理同步输入组 |
 | `Ctrl / Cmd + Alt + C` | 复制已选保存连接（在已保存连接面板中） |
+
+## 其他快捷键
+
+| 快捷键 | 功能 |
+|--------|------|
+| `Ctrl / Cmd + Alt + N` | 打开临时 SSH 链接 |
+| `Ctrl / Cmd + Shift + R` | 开始或停止当前会话录制 |
+| `Alt + R` | 显示命令建议 |
+| `Ctrl / Cmd + Alt + I` | 打开 AI Chat |
+| `Ctrl / Cmd + Shift + P` | 显示全部命令 |
+| `F2` | 在文件浏览器中重命名选中项 |
 
 ## 使用建议
 

@@ -163,20 +163,20 @@ SSH 首次连接未知主机时，NyaTerm 支持三种策略：
 | 接受 | 自动接受新的主机密钥 |
 | 严格 | 拒绝所有未知主机 |
 
-已知主机记录最终保存在本地 `redb` 存储中的 `known_hosts` 文本文档；旧版 `known_hosts` 文件会在首次启动时迁入。
+已知主机记录最终保存在本地 `redb` 存储中的 `known_hosts` 文本文档。旧版 redb 文本文档中的 `known_hosts` 内容会按兼容路径导入；文档不承诺读取任意文件系统位置的旧 `known_hosts` 文件。
 
 如果你处在对主机身份校验要求更高的环境，建议使用“提示”或“严格”，而不是无条件接受。
 
 ## 本地持久化模型
 
-NyaTerm 当前把主要用户数据保存在 `~/.nyaterm/nyaterm.redb` 中，而不是继续以多个 JSON 文件作为主存储。
+安装模式下，NyaTerm 当前把主要用户数据保存在 `~/.nyaterm/nyaterm.redb` 中，而不是继续以多个 JSON 文件作为主存储。portable 模式则使用程序旁 `data/config/` 下的配置数据。
 
 其中大致包括：
 
 - 设置、连接、密钥、密码、OTP、代理、隧道、快捷命令、历史等 JSON 文档
 - `known_hosts`、`master.key` 等文本文档
 
-从 Dragonfly 升级时，NyaTerm 会在首次启动时复制 `~/.dragonfly/dragonfly.redb`；如果旧环境只有 `.dragonfly` JSON / 文本文件，也会复制后迁入 redb。旧 `~/.dragonfly/` 目录会保留作为回滚备份。
+旧 Dragonfly 数据通过旧加密前缀和旧存储文档的兼容 fallback 读取；不会承诺首次启动自动复制整个 `~/.dragonfly/` 目录或保留一个自动回滚副本。
 
 ## 诊断与排障材料
 

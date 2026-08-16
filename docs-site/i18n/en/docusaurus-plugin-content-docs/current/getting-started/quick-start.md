@@ -8,12 +8,14 @@ This chapter helps you experience NyaTerm's core workflow as quickly as possible
 
 ## Step 1: Pick a session type
 
-When you click **New Connection**, NyaTerm offers four session types:
+When you click **New Connection**, NyaTerm offers six session types:
 
 - **SSH** — the most complete remote-operations workflow
 - **Local Terminal** — open a local shell inside NyaTerm
 - **Telnet** — useful for legacy systems or lab environments
 - **Serial** — useful for serial debugging devices
+- **RDP** — useful for Windows Remote Desktop
+- **VNC** — useful for VNC services or VM consoles; real-server interoperability is currently limited
 
 If this is your first time using NyaTerm, start with one **SSH** session and then add one **Local Terminal** to compare the mixed-workspace experience.
 
@@ -44,6 +46,10 @@ NyaTerm can import from:
 - **Xshell** (`.xts`)
 - **MobaXterm** (`.mxtsessions`)
 - **WindTerm** (`.sessions`)
+- **SecureCRT** (`.xml`)
+- **FinalShell** (`conn` directory)
+- **Termius** (local IndexedDB)
+- **NyaTerm / Electerm JSON** (`.json`)
 - NyaTerm encrypted backup files (`.nya`)
 
 Session import is best for connection inventories. `.nya` import is best for restoring a full local NyaTerm environment and requires a **Master Password**.

@@ -6,7 +6,7 @@ sidebar_position: 100
 
 ## 会话与连接
 
-### SSH 能连，本地终端 / Telnet / 串口为什么行为不一样？
+### SSH 能连，本地终端 / Telnet / 串口 / RDP / VNC 为什么行为不一样？
 
 因为 NyaTerm 支持多种会话类型，但能力并不完全相同：
 
@@ -14,6 +14,8 @@ sidebar_position: 100
 - **本地终端**：只负责本地 shell 工作流
 - **Telnet**：轻量远程终端，不包含 SSH 专属能力
 - **串口**：用于串口调试，不属于 SSH 网络链路
+- **RDP**：图形远程桌面，不提供文本终端能力
+- **VNC**：传统 RFB 图形远程桌面；部分真实服务器组合仍在验证
 
 如果你希望使用文件浏览器、远程资源监控或 OTP，请确认当前打开的是 **SSH 会话**。
 
@@ -26,6 +28,8 @@ sidebar_position: 100
 - 本地终端
 - Telnet
 - 串口
+- RDP
+- VNC
 
 ### 为什么没有看到远程资源监控？
 
@@ -127,7 +131,7 @@ sidebar_position: 100
 - 云同步相关操作
 - `.nya` 配置导入 / 导出
 
-在手动处理前，建议先备份 `~/.nyaterm/` 目录，再决定如何重建本地配置。
+在手动处理前，建议先备份当前运行模式的数据目录：安装模式通常是 `~/.nyaterm/`，portable 模式是程序旁的 `data/`，再决定如何重建本地配置。
 
 ### OTP 应该在哪里管理？
 
@@ -142,11 +146,15 @@ sidebar_position: 100
 - Xshell（`.xts`）
 - MobaXterm（`.mxtsessions`）
 - WindTerm（`.sessions`）
+- SecureCRT（`.xml`）
+- FinalShell（`conn` 目录）
+- Termius（本机 IndexedDB）
+- NyaTerm / Electerm JSON（`.json`）
 
 导入后建议检查用户名、端口、认证方式，以及是否需要补充代理 / 跳板机 / OTP。
 
 ### NyaTerm 的配置文件存放在哪里？
 
-当前主要用户数据保存在 `~/.nyaterm/nyaterm.redb` 中，其中会保存设置、连接、密钥、密码、OTP、隧道、代理、历史、AI 历史等本地数据。
+安装模式下主要用户数据默认保存在 `~/.nyaterm/nyaterm.redb`；portable 模式使用程序旁 `data/config/` 下的配置数据。数据包括设置、连接、密钥、密码、OTP、隧道、代理、历史、AI 历史等本地内容。
 
-从 Dragonfly 升级时，NyaTerm 会在首次启动时复制 `~/.dragonfly/dragonfly.redb`；如果旧环境只有 `.dragonfly` JSON / 文本文件，也会复制后迁入 redb。旧 `~/.dragonfly/` 目录会保留作为回滚备份。
+旧 Dragonfly 数据只按当前兼容读取路径处理：应用保留旧加密前缀和旧存储文档的 fallback，不会承诺首次启动自动复制整个 `~/.dragonfly/` 目录或创建回滚副本。
