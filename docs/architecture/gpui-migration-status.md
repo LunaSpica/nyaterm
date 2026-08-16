@@ -280,6 +280,8 @@ these as staged extraction candidates, not as formatting-only refactor targets.
 
 ## Completed
 
+- HOTP, TOTP and HMAC compatibility tests now use explicit imports, making
+  their cryptographic dependencies visible without changing OTP behavior.
 - Terminal cell, encoding, Kitty graphics and Sixel parser tests now name their
   exact module dependencies instead of importing the full parent module.
 - Remaining ordinary `nyaterm-core` test modules now use explicit imports

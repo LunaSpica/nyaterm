@@ -442,7 +442,8 @@ impl std::fmt::Debug for Totp {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{ParseUriError, Totp};
+    use crate::{Algorithm, Secret};
 
     #[test]
     fn test_from_uri() {

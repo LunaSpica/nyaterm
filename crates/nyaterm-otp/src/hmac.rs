@@ -82,7 +82,7 @@ pub fn hmac(alg: Algorithm, key: &[u8], message: &[u8]) -> Vec<u8> {
 /// All the test case is found here: https://datatracker.ietf.org/doc/html/rfc2202#section-3
 #[cfg(test)]
 mod hmac_sha1_tests {
-    use super::*;
+    use super::{Algorithm, hmac};
     use crate::encoding::hex::encode;
 
     #[test]
@@ -184,7 +184,7 @@ mod hmac_sha1_tests {
 /// All the test case is found here: https://datatracker.ietf.org/doc/html/rfc4231#section-4
 #[cfg(test)]
 mod hmac_sha256_tests {
-    use super::*;
+    use super::{Algorithm, hmac};
     use crate::encoding::hex::encode;
 
     #[test]
@@ -287,7 +287,7 @@ mod hmac_sha256_tests {
 /// All the test case is found here: https://datatracker.ietf.org/doc/html/rfc4231#section-4
 #[cfg(test)]
 mod hmac_sha512_tests {
-    use super::*;
+    use super::{Algorithm, hmac};
     use crate::encoding::hex::encode;
 
     #[test]

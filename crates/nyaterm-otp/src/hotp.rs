@@ -490,7 +490,8 @@ impl std::fmt::Debug for Hotp {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{Hotp, ParseUriError};
+    use crate::{Algorithm, Secret};
 
     #[test]
     fn test_from_uri() {
