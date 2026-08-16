@@ -769,9 +769,10 @@ fn is_latin1_within_limit(text: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{MAX_VNC_CLIPBOARD_TEXT_BYTES, is_latin1_within_limit, validate_vnc_config};
     use crate::{
-        Framebuffer, VncClipboardConfig, VncDisplayConfig, VncReconnectConfig, VncSecurityConfig,
+        Framebuffer, PixelFormat, RdpFrameEvent, VncClipboardConfig, VncDisplayConfig,
+        VncErrorKind, VncReconnectConfig, VncSecurityConfig, VncSecurityMode, VncSessionConfig,
     };
 
     fn config() -> VncSessionConfig {

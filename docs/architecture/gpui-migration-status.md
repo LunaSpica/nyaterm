@@ -280,6 +280,8 @@ these as staged extraction candidates, not as formatting-only refactor targets.
 
 ## Completed
 
+- VNC runtime validation tests now name their protocol helpers, limits and
+  shared framebuffer event types explicitly.
 - Bundled-asset validation tests now import the embedded asset source
   explicitly, keeping the app asset boundary visible.
 - Termius LevelDB import tests now explicitly identify their raw compatibility
