@@ -280,10 +280,11 @@ these as staged extraction candidates, not as formatting-only refactor targets.
 
 ## Completed
 
-- Xshell archive, MobaXterm bookmark and WindTerm session parsing now live in
-  their respective `nyaterm-core::session_import` format modules. The
-  session-import facade retains dispatch and shared bounded helpers, while ZIP
-  entry limits, encoding handling, group derivation and authentication
+- Xshell archive, MobaXterm bookmark, WindTerm session and NyaTerm JSON parsing
+  now live in their respective `nyaterm-core::session_import` format modules.
+  The session-import facade retains public result contracts, dispatch and
+  shared bounded helpers; JSON defaults and credential-reference validation,
+  ZIP entry limits, encoding handling, group derivation and authentication
   compatibility remain covered by the existing parser tests.
 - Composite Rust domains now consistently use directory roots (`mod.rs`) when
   they own child modules, and `nyaterm-core::models::workspace` owns the

@@ -5,9 +5,9 @@ use serde::Deserialize;
 
 use crate::{ConnectionAuth, ConnectionType};
 
+use super::nyaterm_json::parse_nyaterm_json_content;
 use super::{
-    AppError, AppResult, PreparedJsonConnection, PreparedJsonImport, parse_nyaterm_json_content,
-    read_text_file_limited,
+    AppError, AppResult, PreparedJsonConnection, PreparedJsonImport, read_text_file_limited,
 };
 
 #[derive(Debug, Deserialize)]

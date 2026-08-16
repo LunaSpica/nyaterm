@@ -1,8 +1,7 @@
-use super::{
-    ConnectionType, parse_nyaterm_json_content, prepare_session_import, read_file_limited,
-};
+use super::{ConnectionType, prepare_session_import, read_file_limited};
 use super::{
     mobaxterm::parse_moba_entry,
+    nyaterm_json::parse_nyaterm_json_content,
     windterm::{parse_windterm_content, parse_windterm_target},
     xshell::parse_xsh_content,
 };
