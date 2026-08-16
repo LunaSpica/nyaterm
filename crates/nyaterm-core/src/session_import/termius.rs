@@ -1121,7 +1121,13 @@ fn encrypt_termius_secret_for_test(value: &str, local_key: &[u8; 32], nonce: &[u
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::ConnectionType;
+
+    use super::{
+        TermiusRawGroup, TermiusRawHost, TermiusRawIdentity, TermiusRawSshConfig, TermiusRawSshKey,
+        TermiusRawStore, TermiusTaggedValue, decrypt_termius_values,
+        encrypt_termius_secret_for_test, prepare_termius_import,
+    };
 
     #[test]
     fn decrypts_termius_encrypted_values_with_local_key() {

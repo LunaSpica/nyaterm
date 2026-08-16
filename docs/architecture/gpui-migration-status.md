@@ -280,6 +280,8 @@ these as staged extraction candidates, not as formatting-only refactor targets.
 
 ## Completed
 
+- Termius LevelDB import tests now explicitly identify their raw compatibility
+  records and decryption/preparation helpers instead of importing the facade.
 - AI-history and atomic session-import storage tests now import only their
   persisted models, store facade and exact compatibility keys.
 - HOTP, TOTP and HMAC compatibility tests now use explicit imports, making
