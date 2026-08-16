@@ -232,21 +232,6 @@ impl ConnectionFeatureState {
         self.retain_list_references_for_catalog();
     }
 
-    pub fn clear_loaded(&mut self) {
-        self.catalog.clear_loaded();
-        self.retain_list_references_for_catalog();
-    }
-
-    pub fn clear_connections(&mut self) {
-        self.catalog.clear_connections();
-        self.retain_list_references_for_catalog();
-    }
-
-    pub fn replace_connections(&mut self, connections: Vec<SavedConnection>) {
-        self.catalog.replace_connections(connections);
-        self.retain_list_references_for_catalog();
-    }
-
     pub fn replace_serial_ports(&mut self, serial_ports: Vec<String>) {
         self.catalog.replace_serial_ports(serial_ports);
     }

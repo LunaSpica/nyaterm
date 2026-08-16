@@ -281,14 +281,6 @@ impl ShellFeatureState {
         true
     }
 
-    pub(in crate::features) fn acknowledge_open_tabs_persistence(&mut self) {
-        self.runtime.open_tabs_persist_dirty = false;
-    }
-
-    pub(in crate::features) fn acknowledge_window_layout_persistence(&mut self) {
-        self.runtime.window_layout_persist_dirty = false;
-    }
-
     pub(in crate::features) fn queue_terminal_scroll_position(
         &mut self,
         session_id: &str,

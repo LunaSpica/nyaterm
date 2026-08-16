@@ -66,7 +66,7 @@ impl NyaTermApp {
             proxies,
             proxy_groups,
             quick_commands,
-            quick_command_categories: quick_command_categories,
+            quick_command_categories,
             command_history,
             keyword_highlights,
             settings,

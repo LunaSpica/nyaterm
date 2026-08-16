@@ -189,7 +189,7 @@ impl NyaTermApp {
                 self.tr("menu.terminalTheme"),
                 self.title_terminal_theme_menu_items(current_theme, cx),
             )
-            .icon("icons/terminal.svg"),
+            .icon("icons/conn/terminal.svg"),
             NyaMenuItem::submenu(self.tr("menu.language"), self.title_language_menu_items(cx))
                 .icon("icons/translation.svg"),
             NyaMenuItem::submenu(

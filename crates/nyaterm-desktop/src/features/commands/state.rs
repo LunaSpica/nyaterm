@@ -71,11 +71,6 @@ impl CommandFeatureState {
         self.history = Arc::from(history);
     }
 
-    pub(in crate::features) fn clear_loaded(&mut self) {
-        self.catalog.clear();
-        self.history = Arc::default();
-    }
-
     pub(in crate::features) fn quick_commands(&self) -> &[QuickCommand] {
         &self.catalog.commands
     }
@@ -714,11 +709,6 @@ impl CommandCatalogState {
         self.categories = categories;
     }
 
-    fn clear(&mut self) {
-        self.commands = Arc::default();
-        self.categories.clear();
-    }
-
     fn increment_use_count(&mut self, command_id: &str) {
         if let Some(command) = Arc::make_mut(&mut self.commands)
             .iter_mut()
@@ -842,6 +832,8 @@ impl QuickCommandFeatureState {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use gpui::TestAppContext;
     use nyaterm_core::{QuickCommand, QuickCommandCategory};
     use nyaterm_store::{StoreConfig, StoreRuntime};
@@ -1004,7 +996,8 @@ mod tests {
         assert_eq!(catalog.commands.len(), 1);
         assert_eq!(catalog.categories.len(), 1);
 
-        catalog.clear();
+        catalog.commands = Arc::default();
+        catalog.categories.clear();
         assert!(catalog.commands.is_empty());
         assert!(catalog.categories.is_empty());
     }

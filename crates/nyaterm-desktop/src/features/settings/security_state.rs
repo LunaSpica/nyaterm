@@ -235,10 +235,6 @@ impl SecurityFeatureState {
         self.catalog = catalog;
     }
 
-    pub(in crate::features) fn clear_catalog(&mut self) {
-        self.replace_catalog(Vec::new(), Vec::new(), Vec::new(), Vec::new());
-    }
-
     pub(in crate::features) fn auth_tab(&self) -> SecurityAuthTab {
         self.auth_tab
     }
@@ -1089,7 +1085,8 @@ mod tests {
         assert_eq!(security.passwords().len(), 1);
         assert_eq!(security.credentials().len(), 1);
 
-        security.clear_catalog();
+        security.catalog =
+            SecurityCatalogState::new(Vec::new(), Vec::new(), Vec::new(), Vec::new());
 
         assert!(security.ssh_keys().is_empty());
         assert!(security.otp_entries().is_empty());

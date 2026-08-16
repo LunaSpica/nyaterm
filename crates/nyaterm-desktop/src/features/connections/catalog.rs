@@ -37,19 +37,6 @@ impl ConnectionCatalogState {
         self.groups = groups;
     }
 
-    pub(super) fn clear_loaded(&mut self) {
-        self.connections.clear();
-        self.groups.clear();
-    }
-
-    pub(super) fn clear_connections(&mut self) {
-        self.connections.clear();
-    }
-
-    pub(super) fn replace_connections(&mut self, connections: Vec<SavedConnection>) {
-        self.connections = connections;
-    }
-
     pub(super) fn replace_serial_ports(&mut self, serial_ports: Vec<String>) {
         self.serial_ports = serial_ports;
     }
@@ -146,56 +133,6 @@ mod tests {
             updated_at_ms: None,
             last_used_at_ms: None,
         }
-    }
-
-    #[test]
-    fn catalog_keeps_runtime_discovery_separate_from_loaded_data() {
-        let mut catalog = ConnectionCatalogState::new(Vec::new(), Vec::new());
-
-        assert!(catalog.connections().is_empty());
-        assert!(catalog.groups().is_empty());
-        assert!(catalog.serial_ports().is_empty());
-
-        catalog.replace_serial_ports(vec!["ttyUSB0".to_string()]);
-        catalog.replace_loaded(
-            vec![connection("connection-1", None, 0)],
-            vec![Group {
-                id: "group-1".to_string(),
-                name: "Group".to_string(),
-                parent_id: None,
-                sort_order: 0,
-                created_at_ms: None,
-                updated_at_ms: None,
-            }],
-        );
-        catalog.clear_loaded();
-
-        assert!(catalog.connections().is_empty());
-        assert!(catalog.groups().is_empty());
-        assert_eq!(catalog.serial_ports(), ["ttyUSB0"]);
-    }
-
-    #[test]
-    fn clearing_connections_preserves_groups_and_runtime_discovery() {
-        let group = Group {
-            id: "group-1".to_string(),
-            name: "Group".to_string(),
-            parent_id: None,
-            sort_order: 0,
-            created_at_ms: None,
-            updated_at_ms: None,
-        };
-        let mut catalog = ConnectionCatalogState::new(
-            vec![connection("connection-1", Some("group-1"), 0)],
-            vec![group.clone()],
-        );
-        catalog.replace_serial_ports(vec!["ttyUSB0".to_string()]);
-
-        catalog.clear_connections();
-
-        assert!(catalog.connections().is_empty());
-        assert_eq!(catalog.groups(), [group]);
-        assert_eq!(catalog.serial_ports(), ["ttyUSB0"]);
     }
 
     #[test]

@@ -285,10 +285,6 @@ impl SettingsFeatureState {
         }
     }
 
-    pub(in crate::features) fn persistence_is_dirty(&self) -> bool {
-        self.persistence.values().any(|slot| slot.dirty)
-    }
-
     pub(in crate::features) fn dirty_persistence_domains(&self) -> Vec<SettingsPersistenceDomain> {
         const DOMAINS: [SettingsPersistenceDomain; 13] = [
             SettingsPersistenceDomain::Diagnostics,
@@ -1794,7 +1790,11 @@ mod tests {
             state.finish_persistence(SettingsPersistenceDomain::Interaction, generation, false);
         assert!(completion.report_result);
         assert!(!completion.apply_result);
-        assert!(state.persistence_is_dirty());
+        assert!(
+            state
+                .dirty_persistence_domains()
+                .contains(&SettingsPersistenceDomain::Interaction)
+        );
     }
 
     #[test]

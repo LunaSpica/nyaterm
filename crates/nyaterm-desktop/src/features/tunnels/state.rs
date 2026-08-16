@@ -110,13 +110,6 @@ impl TunnelFeatureState {
         self.catalog = TunnelCatalogState::new(tunnels, tunnel_groups, proxies, proxy_groups);
     }
 
-    pub(in crate::features) fn clear_catalog(&mut self) {
-        self.catalog.tunnels.clear();
-        self.catalog.tunnel_groups.clear();
-        self.catalog.proxies.clear();
-        self.catalog.proxy_groups.clear();
-    }
-
     pub(in crate::features) fn has_tunnel_group(&self, group_id: &str) -> bool {
         self.catalog
             .tunnel_groups

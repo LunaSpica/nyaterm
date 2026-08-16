@@ -1,13 +1,11 @@
-use std::borrow::Cow;
 use std::collections::{HashMap, VecDeque};
 use std::future::Future;
 use std::io::{Read, Write};
 use std::net::{Shutdown, TcpStream};
 use std::pin::Pin;
 use std::process::Stdio;
-use std::str::FromStr;
 use std::sync::{
-    Arc, Mutex, OnceLock,
+    Arc, Mutex,
     atomic::{AtomicBool, Ordering},
     mpsc,
 };
@@ -16,8 +14,10 @@ use std::time::{Duration, Instant};
 
 use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system};
 use regex::Regex;
-use russh::keys::{Algorithm, EcdsaCurve, HashAlg, PublicKeyBase64};
-use russh::{ChannelMsg, Disconnect, Preferred, cipher, client, kex, mac};
+use russh::keys::PublicKeyBase64;
+use russh::{ChannelMsg, Disconnect, client};
+#[cfg(test)]
+use russh::{cipher, kex, mac};
 use serialport::{DataBits, FlowControl, Parity, SerialPort, StopBits};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite};
 use tokio::sync::mpsc as tokio_mpsc;
@@ -34,8 +34,20 @@ mod session_event_queue;
 mod session_types;
 mod sftp;
 mod ssh_agent;
+mod ssh_algorithms;
 mod ssh_auth;
+mod telnet_prompts;
+#[cfg(test)]
+use ssh_algorithms::defaults_from_preferred;
+use ssh_algorithms::resolve_preferred_algorithms;
 use ssh_auth::authenticate_ssh;
+use telnet_prompts::{
+    compile_optional_regex, default_failure_regex, default_password_regex, default_success_regex,
+    default_username_regex, default_wake_regex, last_chars, last_login_regex, last_non_empty_line,
+    prompt_candidates, strip_telnet_auto_login_control_sequences,
+};
+#[cfg(test)]
+use telnet_prompts::{has_password_prompt, has_username_prompt};
 mod ssh_shell_integration;
 mod tunnel;
 mod x11;
@@ -81,6 +93,11 @@ pub use sftp_transfer_types::{
     SFTP_TRANSFER_MIN_DIRECTORY_UPLOAD_THREADS, SftpDuplicateDecision, SftpDuplicatePolicy,
     SftpDuplicateRequest, SftpDuplicateResolver, SftpPathTransferOptions, SftpTransferDirection,
     SftpTransferOptions, SftpTransferProgress, SftpTransferSummary,
+};
+pub use ssh_algorithms::{
+    SshAlgorithmDefaults, SshAlgorithmListKind, SshAlgorithmOption, SshAlgorithmRisk,
+    SshAlgorithmValidationError, SupportedSshAlgorithms, supported_ssh_algorithms,
+    validate_ssh_algorithm_preferences,
 };
 pub use trzsz::{
     TrzszAction, TrzszConfig, TrzszDetectResult, TrzszDetector, TrzszDownloadEngine,
@@ -2079,304 +2096,6 @@ fn ssh_client_config(config: &SshSessionConfig) -> anyhow::Result<Arc<russh::cli
     }))
 }
 
-fn compatible_algorithms() -> Preferred {
-    let mut preferred = Preferred::default();
-    preferred.kex = Cow::Owned(vec![
-        kex::MLKEM768X25519_SHA256,
-        kex::CURVE25519,
-        kex::CURVE25519_PRE_RFC_8731,
-        kex::ECDH_SHA2_NISTP256,
-        kex::ECDH_SHA2_NISTP384,
-        kex::ECDH_SHA2_NISTP521,
-        kex::DH_G18_SHA512,
-        kex::DH_G17_SHA512,
-        kex::DH_G16_SHA512,
-        kex::DH_G15_SHA512,
-        kex::DH_G14_SHA256,
-        kex::DH_GEX_SHA256,
-        kex::DH_G14_SHA1,
-        kex::DH_GEX_SHA1,
-        kex::DH_G1_SHA1,
-        kex::EXTENSION_SUPPORT_AS_CLIENT,
-        kex::EXTENSION_SUPPORT_AS_SERVER,
-        kex::EXTENSION_OPENSSH_STRICT_KEX_AS_CLIENT,
-        kex::EXTENSION_OPENSSH_STRICT_KEX_AS_SERVER,
-    ]);
-    preferred.key = Cow::Owned(vec![
-        Algorithm::Ed25519,
-        Algorithm::Ecdsa {
-            curve: EcdsaCurve::NistP256,
-        },
-        Algorithm::Ecdsa {
-            curve: EcdsaCurve::NistP384,
-        },
-        Algorithm::Rsa {
-            hash: Some(HashAlg::Sha512),
-        },
-        Algorithm::Rsa {
-            hash: Some(HashAlg::Sha256),
-        },
-        Algorithm::Rsa { hash: None },
-        Algorithm::Ecdsa {
-            curve: EcdsaCurve::NistP521,
-        },
-        Algorithm::Dsa,
-    ]);
-    preferred.cipher = Cow::Owned(vec![
-        cipher::CHACHA20_POLY1305,
-        cipher::AES_256_GCM,
-        cipher::AES_128_GCM,
-        cipher::AES_256_CTR,
-        cipher::AES_192_CTR,
-        cipher::AES_128_CTR,
-        cipher::AES_256_CBC,
-        cipher::AES_192_CBC,
-        cipher::AES_128_CBC,
-        cipher::TRIPLE_DES_CBC,
-    ]);
-    preferred.mac = Cow::Owned(vec![
-        mac::HMAC_SHA512_ETM,
-        mac::HMAC_SHA256_ETM,
-        mac::HMAC_SHA512,
-        mac::HMAC_SHA256,
-        mac::HMAC_SHA1_ETM,
-        mac::HMAC_SHA1,
-    ]);
-    preferred
-}
-
-fn secure_algorithms() -> Preferred {
-    Preferred::default()
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SshAlgorithmListKind {
-    KeyExchange,
-    Cipher,
-    Mac,
-    HostKey,
-}
-
-impl std::fmt::Display for SshAlgorithmListKind {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str(match self {
-            Self::KeyExchange => "key exchanges",
-            Self::Cipher => "ciphers",
-            Self::Mac => "MACs",
-            Self::HostKey => "host keys",
-        })
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SshAlgorithmRisk {
-    Modern,
-    Legacy,
-    Insecure,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SshAlgorithmOption {
-    pub id: String,
-    pub risk: SshAlgorithmRisk,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SshAlgorithmDefaults {
-    pub kex: Vec<String>,
-    pub ciphers: Vec<String>,
-    pub macs: Vec<String>,
-    pub host_keys: Vec<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SupportedSshAlgorithms {
-    pub kex: Vec<SshAlgorithmOption>,
-    pub ciphers: Vec<SshAlgorithmOption>,
-    pub macs: Vec<SshAlgorithmOption>,
-    pub host_keys: Vec<SshAlgorithmOption>,
-    pub compatible: SshAlgorithmDefaults,
-    pub secure: SshAlgorithmDefaults,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum SshAlgorithmValidationError {
-    #[error("SSH algorithm list '{kind}' must not be empty")]
-    EmptyList { kind: SshAlgorithmListKind },
-    #[error("Unsupported SSH algorithm '{algorithm}' in {kind}")]
-    Unsupported {
-        kind: SshAlgorithmListKind,
-        algorithm: String,
-    },
-}
-
-pub fn validate_ssh_algorithm_preferences(
-    preferences: Option<&SshAlgorithmPreferences>,
-) -> Result<(), SshAlgorithmValidationError> {
-    resolve_preferred_algorithms(preferences).map(|_| ())
-}
-
-fn resolve_preferred_algorithms(
-    preferences: Option<&SshAlgorithmPreferences>,
-) -> Result<Preferred, SshAlgorithmValidationError> {
-    let Some(preferences) = preferences else {
-        return Ok(compatible_algorithms());
-    };
-    match preferences.mode {
-        SshAlgorithmMode::Compatible => Ok(compatible_algorithms()),
-        SshAlgorithmMode::Secure => Ok(secure_algorithms()),
-        SshAlgorithmMode::Custom => {
-            let mut preferred = Preferred::default();
-            preferred.kex = Cow::Owned(parse_required_list(
-                &preferences.kex,
-                SshAlgorithmListKind::KeyExchange,
-                |value| kex::Name::try_from(value).ok(),
-            )?);
-            preferred.cipher = Cow::Owned(parse_required_list(
-                &preferences.ciphers,
-                SshAlgorithmListKind::Cipher,
-                |value| cipher::Name::try_from(value).ok(),
-            )?);
-            preferred.mac = Cow::Owned(parse_required_list(
-                &preferences.macs,
-                SshAlgorithmListKind::Mac,
-                |value| mac::Name::try_from(value).ok(),
-            )?);
-            preferred.key = Cow::Owned(parse_required_list(
-                &preferences.host_keys,
-                SshAlgorithmListKind::HostKey,
-                |value| Algorithm::from_str(value).ok(),
-            )?);
-            Ok(preferred)
-        }
-    }
-}
-
-fn parse_required_list<T, F>(
-    values: &[String],
-    kind: SshAlgorithmListKind,
-    mut parse: F,
-) -> Result<Vec<T>, SshAlgorithmValidationError>
-where
-    F: FnMut(&str) -> Option<T>,
-{
-    if values.is_empty() {
-        return Err(SshAlgorithmValidationError::EmptyList { kind });
-    }
-    values
-        .iter()
-        .map(|value| {
-            parse(value).ok_or_else(|| SshAlgorithmValidationError::Unsupported {
-                kind,
-                algorithm: value.clone(),
-            })
-        })
-        .collect()
-}
-
-fn defaults_from_preferred(preferred: Preferred) -> SshAlgorithmDefaults {
-    SshAlgorithmDefaults {
-        kex: preferred
-            .kex
-            .iter()
-            .map(|algorithm| algorithm.as_ref().to_string())
-            // russh keeps extension-negotiation markers in `Preferred.kex`,
-            // but its public parser intentionally does not accept those
-            // markers as user-configurable key-exchange algorithms.
-            .filter(|algorithm| kex::Name::try_from(algorithm.as_str()).is_ok())
-            .collect(),
-        ciphers: preferred
-            .cipher
-            .iter()
-            .map(|algorithm| algorithm.as_ref().to_string())
-            .collect(),
-        macs: preferred
-            .mac
-            .iter()
-            .map(|algorithm| algorithm.as_ref().to_string())
-            .collect(),
-        host_keys: preferred.key.iter().map(ToString::to_string).collect(),
-    }
-}
-
-fn algorithm_option(id: String, risk: SshAlgorithmRisk) -> SshAlgorithmOption {
-    SshAlgorithmOption { id, risk }
-}
-
-fn kex_risk(id: &str) -> SshAlgorithmRisk {
-    match id {
-        "diffie-hellman-group1-sha1"
-        | "diffie-hellman-group14-sha1"
-        | "diffie-hellman-group-exchange-sha1" => SshAlgorithmRisk::Insecure,
-        value if value.starts_with("diffie-hellman-") => SshAlgorithmRisk::Legacy,
-        _ => SshAlgorithmRisk::Modern,
-    }
-}
-
-fn cipher_risk(id: &str) -> SshAlgorithmRisk {
-    match id {
-        "3des-cbc" => SshAlgorithmRisk::Insecure,
-        value if value.ends_with("-cbc") => SshAlgorithmRisk::Legacy,
-        _ => SshAlgorithmRisk::Modern,
-    }
-}
-
-fn mac_risk(id: &str) -> SshAlgorithmRisk {
-    match id {
-        "hmac-sha1" => SshAlgorithmRisk::Insecure,
-        "hmac-sha1-etm@openssh.com" => SshAlgorithmRisk::Legacy,
-        _ => SshAlgorithmRisk::Modern,
-    }
-}
-
-fn host_key_risk(id: &str) -> SshAlgorithmRisk {
-    match id {
-        "ssh-dss" => SshAlgorithmRisk::Insecure,
-        "ssh-rsa" => SshAlgorithmRisk::Legacy,
-        _ => SshAlgorithmRisk::Modern,
-    }
-}
-
-fn build_supported_ssh_algorithms() -> SupportedSshAlgorithms {
-    let compatible = defaults_from_preferred(compatible_algorithms());
-    let secure = defaults_from_preferred(secure_algorithms());
-
-    fn merge(mut compatible: Vec<String>, secure: &[String]) -> Vec<String> {
-        for id in secure {
-            if !compatible.contains(id) {
-                compatible.push(id.clone());
-            }
-        }
-        compatible
-    }
-
-    SupportedSshAlgorithms {
-        kex: merge(compatible.kex.clone(), &secure.kex)
-            .into_iter()
-            .map(|id| algorithm_option(id.clone(), kex_risk(&id)))
-            .collect(),
-        ciphers: merge(compatible.ciphers.clone(), &secure.ciphers)
-            .into_iter()
-            .map(|id| algorithm_option(id.clone(), cipher_risk(&id)))
-            .collect(),
-        macs: merge(compatible.macs.clone(), &secure.macs)
-            .into_iter()
-            .map(|id| algorithm_option(id.clone(), mac_risk(&id)))
-            .collect(),
-        host_keys: merge(compatible.host_keys.clone(), &secure.host_keys)
-            .into_iter()
-            .map(|id| algorithm_option(id.clone(), host_key_risk(&id)))
-            .collect(),
-        compatible,
-        secure,
-    }
-}
-
-pub fn supported_ssh_algorithms() -> &'static SupportedSshAlgorithms {
-    static SUPPORTED: OnceLock<SupportedSshAlgorithms> = OnceLock::new();
-    SUPPORTED.get_or_init(build_supported_ssh_algorithms)
-}
-
 type SshHandleChain = (
     client::Handle<SshClientHandler>,
     Vec<client::Handle<SshClientHandler>>,
@@ -3138,191 +2857,8 @@ fn edit_telnet_line_input(
     (send, echo)
 }
 
-#[cfg(test)]
-fn has_username_prompt(text: &str) -> bool {
-    let normalized = strip_telnet_auto_login_control_sequences(text).replace('\r', "\n");
-    let last_line = last_non_empty_line(&normalized);
-    !last_login_regex().is_match(&last_line)
-        && prompt_candidates(&normalized, &normalized)
-            .iter()
-            .any(|prompt| default_username_regex().is_match(prompt))
-}
-
-#[cfg(test)]
-fn has_password_prompt(text: &str) -> bool {
-    let normalized = strip_telnet_auto_login_control_sequences(text).replace('\r', "\n");
-    prompt_candidates(&normalized, &normalized)
-        .iter()
-        .any(|prompt| default_password_regex().is_match(prompt))
-}
-
-fn compile_optional_regex(pattern: Option<&str>) -> Option<Regex> {
-    let trimmed = pattern?.trim();
-    if trimmed.is_empty() {
-        return None;
-    }
-    Regex::new(trimmed).ok()
-}
-
 fn telnet_auto_login_line_bytes(value: &str, config: &TelnetSessionConfig) -> Vec<u8> {
-    let mut data = value.as_bytes().to_vec();
-    data.push(b'\r');
-    normalize_telnet_input(&data, config)
-}
-
-fn last_chars(value: &str, max_chars: usize) -> String {
-    let len = value.chars().count();
-    if len <= max_chars {
-        return value.to_string();
-    }
-    value.chars().skip(len - max_chars).collect()
-}
-
-fn last_non_empty_line(value: &str) -> String {
-    value
-        .lines()
-        .rev()
-        .find(|line| !line.trim().is_empty())
-        .unwrap_or_default()
-        .trim()
-        .to_string()
-}
-
-fn prompt_candidates(window: &str, current_input: &str) -> Vec<String> {
-    let mut prompts = Vec::new();
-    for source in [window, current_input] {
-        for line in source.lines() {
-            let prompt = line.trim();
-            push_prompt_candidate(&mut prompts, prompt);
-            push_prompt_suffix_candidates(&mut prompts, prompt);
-        }
-    }
-    prompts
-}
-
-fn push_prompt_candidate(prompts: &mut Vec<String>, prompt: &str) {
-    if !prompt.is_empty() && !prompts.iter().any(|existing| existing == prompt) {
-        prompts.push(prompt.to_string());
-    }
-}
-
-fn push_prompt_suffix_candidates(prompts: &mut Vec<String>, prompt: &str) {
-    const KEYWORDS: &[&str] = &[
-        "user name",
-        "username",
-        "login",
-        "logon",
-        "account",
-        "userid",
-        "user id",
-        "user",
-        "password",
-        "passwd",
-        "passcode",
-        "passphrase",
-        "pin",
-        "用户名",
-        "帐号",
-        "账号",
-        "登录",
-        "登入",
-        "密码",
-        "口令",
-    ];
-
-    let lower = prompt.to_lowercase();
-    for keyword in KEYWORDS {
-        let mut search_start = 0;
-        while let Some(offset) = lower[search_start..].find(keyword) {
-            let start = search_start + offset;
-            push_prompt_candidate(prompts, prompt[start..].trim());
-            search_start = start + keyword.len();
-            if search_start >= lower.len() {
-                break;
-            }
-        }
-    }
-}
-
-fn default_username_regex() -> &'static Regex {
-    static REGEX: OnceLock<Regex> = OnceLock::new();
-    REGEX.get_or_init(|| {
-        Regex::new(
-            r"(?i)^\s*(?:[^\r\n:：>]{1,80}\s+)?(?:user\s*name|username|login|logon|account|userid|user\s*id|user|用户名|帐号|账号|登录|登入)\s*[:：>]\s*$",
-        )
-        .expect("default username prompt regex")
-    })
-}
-
-fn last_login_regex() -> &'static Regex {
-    static REGEX: OnceLock<Regex> = OnceLock::new();
-    REGEX
-        .get_or_init(|| Regex::new(r"(?i)\b(?:last|previous)\s+login\b").expect("last login regex"))
-}
-
-fn default_password_regex() -> &'static Regex {
-    static REGEX: OnceLock<Regex> = OnceLock::new();
-    REGEX.get_or_init(|| {
-        Regex::new(
-            r"(?i)(?:^|[\r\n])\s*(?:input\s+)?(?:password|passwd|passcode|passphrase|pin|密码|口令)\s*[:：>]?\s*$",
-        )
-        .expect("default password prompt regex")
-    })
-}
-
-fn default_wake_regex() -> &'static Regex {
-    static REGEX: OnceLock<Regex> = OnceLock::new();
-    REGEX.get_or_init(|| {
-        Regex::new(r"(?i)(press\s+(?:return|<enter>|\[enter\]|enter|any\s+key))")
-            .expect("default wake prompt regex")
-    })
-}
-
-fn default_success_regex() -> &'static Regex {
-    static REGEX: OnceLock<Regex> = OnceLock::new();
-    REGEX.get_or_init(|| Regex::new(r"[$#>]\s*$").expect("default success prompt regex"))
-}
-
-fn default_failure_regex() -> &'static Regex {
-    static REGEX: OnceLock<Regex> = OnceLock::new();
-    REGEX.get_or_init(|| {
-        Regex::new(
-            r"(?i)(login\s+incorrect|authentication\s+failed|access\s+denied|密码错误|认证失败)",
-        )
-        .expect("default failure prompt regex")
-    })
-}
-
-fn strip_telnet_auto_login_control_sequences(text: &str) -> String {
-    let mut stripped = String::with_capacity(text.len());
-    let bytes = text.as_bytes();
-    let mut index = 0;
-    while index < bytes.len() {
-        if bytes[index] == 0x1b {
-            index += 1;
-            if index < bytes.len() && bytes[index] == b'[' {
-                index += 1;
-                while index < bytes.len() {
-                    let byte = bytes[index];
-                    index += 1;
-                    if (0x40..=0x7e).contains(&byte) {
-                        break;
-                    }
-                }
-            } else {
-                index += 1;
-            }
-            continue;
-        }
-        let Some(ch) = text[index..].chars().next() else {
-            break;
-        };
-        if ch != '\u{7f}' && (!ch.is_control() || matches!(ch, '\r' | '\n' | '\t')) {
-            stripped.push(ch);
-        }
-        index += ch.len_utf8();
-    }
-    stripped
+    telnet_prompts::telnet_auto_login_line_bytes(value, config, normalize_telnet_input)
 }
 
 fn build_command(config: &LocalSessionConfig) -> CommandBuilder {
