@@ -281,6 +281,10 @@ these as staged extraction candidates, not as formatting-only refactor targets.
 
 ## Completed
 
+- Translation compatibility models, provider signatures, response parsers and
+  redaction tests now use the normal `nyaterm-core/src/translation/` module
+  directory; `translation/mod.rs` preserves the existing public paths and
+  `translation/tests.rs` owns the compatibility tests.
 - Workspace-wide source-tree audit confirms every composite module uses a
   normal directory root (`mod.rs`) and has no `foo.rs`/`foo/` collision or
   `#[path]` escape. Standalone files remain standalone when they represent one
