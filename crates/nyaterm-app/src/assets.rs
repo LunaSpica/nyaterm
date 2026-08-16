@@ -69,7 +69,9 @@ impl AssetSource for NyaTermAssets {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use gpui::AssetSource;
+
+    use super::{EmbeddedAssets, NyaTermAssets};
 
     /// `img()` rasterizes at `SMOOTH_SVG_SCALE_FACTOR` (2.0) times the asset's
     /// *intrinsic* size, not its display size, and `App::fetch_asset` never evicts
