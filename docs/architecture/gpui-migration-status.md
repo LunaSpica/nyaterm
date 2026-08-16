@@ -280,6 +280,10 @@ these as staged extraction candidates, not as formatting-only refactor targets.
 
 ## Completed
 
+- Gitee snippet and GitHub Gist HTTP backends, blob codecs and the shared
+  `SnippetRemote` adapter now live in `nyaterm-core::cloud_sync::snippet`.
+  Explicit facade re-exports preserve the public API, and existing tests cover
+  request shapes, raw-file fallback, retry behavior and legacy blob encoding.
 - Cloud-sync S3 SigV4 request construction now lives in
   `nyaterm-core::cloud_sync::s3`; the facade and crate-root re-exports preserve
   the existing request types and functions, while bucket validation, endpoint
