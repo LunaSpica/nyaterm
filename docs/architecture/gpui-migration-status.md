@@ -280,6 +280,10 @@ these as staged extraction candidates, not as formatting-only refactor targets.
 
 ## Completed
 
+- Local-directory cloud storage and provider-neutral remote path helpers now
+  live in `nyaterm-core::cloud_sync::remote`. The facade preserves
+  `LocalDirectoryRemote` and all path helper exports; path traversal rejection,
+  normalized joins and snapshot-layout behavior are unchanged.
 - Gitee snippet and GitHub Gist HTTP backends, blob codecs and the shared
   `SnippetRemote` adapter now live in `nyaterm-core::cloud_sync::snippet`.
   Explicit facade re-exports preserve the public API, and existing tests cover
