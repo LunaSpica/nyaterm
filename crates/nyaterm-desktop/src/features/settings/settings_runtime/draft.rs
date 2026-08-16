@@ -276,7 +276,7 @@ impl NyaTermApp {
                     saved_cloud_sync_settings,
                     saved_ai_settings,
                 )) => {
-                    this.apply_gpui_settings(saved_settings);
+                    this.apply_gpui_settings(saved_settings, cx);
                     this.settings.rebase_master_password();
                     this.ai.replace_settings_config(saved_ai_settings, true);
                     this.cloud_sync
@@ -329,7 +329,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn cancel_settings(&mut self, cx: &mut Context<Self>) {
         if let Some(snapshot) = self.shell.take_settings_draft_snapshot() {
-            self.apply_gpui_settings(snapshot.settings);
+            self.apply_gpui_settings(snapshot.settings, cx);
             self.ai.restore_settings_draft(
                 snapshot.ai_settings,
                 snapshot.ai_model_draft,

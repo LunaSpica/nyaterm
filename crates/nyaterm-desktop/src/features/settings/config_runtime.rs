@@ -611,7 +611,7 @@ impl NyaTermApp {
             LoadBootstrap,
             |this, event, cx| match event.outcome {
                 Ok(snapshot) => {
-                    this.apply_store_refresh(snapshot);
+                    this.apply_store_refresh(snapshot, cx);
                     this.sync_component_theme(cx);
                     cx.notify();
                 }
@@ -626,7 +626,7 @@ impl NyaTermApp {
         );
     }
 
-    fn apply_store_refresh(&mut self, snapshot: BootstrapSnapshot) {
+    fn apply_store_refresh(&mut self, snapshot: BootstrapSnapshot, cx: &mut Context<Self>) {
         self.connection_state
             .replace_loaded(snapshot.connections, snapshot.connection_groups);
         self.security.replace_catalog(
@@ -648,7 +648,7 @@ impl NyaTermApp {
         );
         self.settings
             .replace_keyword_config(snapshot.keyword_highlights);
-        self.apply_gpui_settings(snapshot.settings);
+        self.apply_gpui_settings(snapshot.settings, cx);
         self.apply_ui_layout_from_settings();
         self.translation.replace_settings(
             snapshot.translation_settings,

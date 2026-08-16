@@ -5,9 +5,10 @@
 //! independently mutable mirrors.
 
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use gpui::{Entity, Pixels, ScrollHandle, SharedString};
+use gpui::{Entity, Pixels, RenderImage, ScrollHandle, SharedString};
 use nyaterm_ui::{NyaAppMenuBar, NyaWindowHandle};
 
 use super::super::app_state::SettingsDraftSnapshot;
@@ -76,9 +77,32 @@ pub(super) struct ShellBottomPanelState {
 /// Window geometry and viewport-derived caches.
 pub(super) struct ShellViewportState {
     pub(super) size: (f32, f32),
-    pub(super) wallpaper_tile_dimensions: Option<(String, u32, u32)>,
+    pub(super) wallpaper: WallpaperCache,
     pub(super) last_change_at: Option<Instant>,
     pub(super) title_drag_active_until: Option<Instant>,
+}
+
+#[derive(Clone)]
+pub(in crate::features) struct WallpaperAsset {
+    image: Arc<RenderImage>,
+    width: u32,
+    height: u32,
+}
+
+impl WallpaperAsset {
+    pub(in crate::features) fn image(&self) -> &Arc<RenderImage> {
+        &self.image
+    }
+
+    pub(in crate::features) fn dimensions(&self) -> (u32, u32) {
+        (self.width, self.height)
+    }
+}
+
+#[derive(Default)]
+pub(super) struct WallpaperCache {
+    requested_path: Option<String>,
+    asset: Option<WallpaperAsset>,
 }
 
 /// Top-level page navigation and the settings-page/window lifecycle.
@@ -156,7 +180,7 @@ impl ShellFeatureState {
             },
             viewport: ShellViewportState {
                 size: (1280., 800.),
-                wallpaper_tile_dimensions: None,
+                wallpaper: WallpaperCache::default(),
                 last_change_at: None,
                 title_drag_active_until: None,
             },
@@ -276,17 +300,39 @@ impl ShellFeatureState {
         self.viewport.size
     }
 
-    pub(in crate::features) fn wallpaper_tile_dimensions(&self) -> Option<&(String, u32, u32)> {
-        self.viewport.wallpaper_tile_dimensions.as_ref()
+    pub(in crate::features) fn wallpaper_asset(&self) -> Option<&WallpaperAsset> {
+        self.viewport.wallpaper.asset.as_ref()
     }
 
-    pub(in crate::features) fn cache_wallpaper_tile_dimensions(
+    pub(in crate::features) fn request_wallpaper(&mut self, path: Option<String>) -> bool {
+        if self.viewport.wallpaper.requested_path == path {
+            return false;
+        }
+        self.viewport.wallpaper.requested_path = path;
+        self.viewport.wallpaper.asset = None;
+        true
+    }
+
+    pub(in crate::features) fn wallpaper_is_requested(&self, path: &str) -> bool {
+        self.viewport.wallpaper.requested_path.as_deref() == Some(path)
+    }
+
+    pub(in crate::features) fn cache_wallpaper(
         &mut self,
         path: String,
+        image: Arc<RenderImage>,
         width: u32,
         height: u32,
-    ) {
-        self.viewport.wallpaper_tile_dimensions = Some((path, width, height));
+    ) -> bool {
+        if self.viewport.wallpaper.requested_path.as_deref() != Some(path.as_str()) {
+            return false;
+        }
+        self.viewport.wallpaper.asset = Some(WallpaperAsset {
+            image,
+            width,
+            height,
+        });
+        true
     }
 
     pub(in crate::features) fn selected_nav(&self) -> NavItem {
@@ -991,9 +1037,10 @@ impl ShellWorkspaceState {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+    use std::sync::Arc;
     use std::time::{Duration, Instant};
 
-    use gpui::{SharedString, px};
+    use gpui::{RenderImage, SharedString, px};
 
     use super::{ShellFeatureInit, ShellFeatureState};
     use crate::models::{
@@ -1043,6 +1090,30 @@ mod tests {
         assert_eq!(shell.status(), "connected");
         shell.set_status(String::new());
         assert!(shell.status().is_empty());
+    }
+
+    #[test]
+    fn wallpaper_cache_rejects_stale_background_results() {
+        let mut shell = shell(BottomPanelMode::Hidden);
+        let image = || {
+            Arc::new(RenderImage::new(vec![image::Frame::new(
+                image::RgbaImage::new(1, 1),
+            )]))
+        };
+
+        assert!(shell.request_wallpaper(Some("first.png".to_string())));
+        assert!(!shell.request_wallpaper(Some("first.png".to_string())));
+        assert!(shell.request_wallpaper(Some("second.png".to_string())));
+        assert!(!shell.cache_wallpaper("first.png".to_string(), image(), 10, 20));
+        assert!(shell.wallpaper_asset().is_none());
+
+        assert!(shell.cache_wallpaper("second.png".to_string(), image(), 30, 40));
+        assert_eq!(
+            shell.wallpaper_asset().map(|asset| asset.dimensions()),
+            Some((30, 40))
+        );
+        assert!(shell.request_wallpaper(None));
+        assert!(shell.wallpaper_asset().is_none());
     }
 
     #[test]

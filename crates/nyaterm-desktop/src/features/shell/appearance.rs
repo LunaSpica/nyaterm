@@ -1,7 +1,8 @@
-use std::{path::Path, sync::Arc};
+use std::sync::Arc;
 
 use gpui::{
-    App, Context, Font, FontFallbacks, PathPromptOptions, SharedString, font, px, rgb, rgba,
+    App, AppContext, Context, Font, FontFallbacks, PathPromptOptions, RenderImage, SharedString,
+    font, px, rgb, rgba,
 };
 use nyaterm_core::{
     AppSettingsSummary, ResolvedKeywordHighlightRule, merge_keyword_highlight_rules_for_paint,
@@ -28,9 +29,14 @@ impl ResolvedAppearanceFont {
 }
 
 impl NyaTermApp {
-    pub(in crate::features) fn apply_gpui_settings(&mut self, settings: AppSettingsSummary) {
+    pub(in crate::features) fn apply_gpui_settings(
+        &mut self,
+        settings: AppSettingsSummary,
+        cx: &mut Context<Self>,
+    ) {
         self.settings.replace_summary(settings);
         self.invalidate_paint_theme_caches();
+        self.queue_wallpaper_refresh(cx);
     }
 
     pub(in crate::features) fn sync_component_theme(&self, cx: &mut App) {
@@ -59,12 +65,44 @@ impl NyaTermApp {
     }
 
     pub(in crate::features) fn wallpaper_enabled(&self) -> bool {
-        self.settings
+        self.shell.wallpaper_asset().is_some()
+    }
+
+    pub(in crate::features) fn queue_wallpaper_refresh(&mut self, cx: &mut Context<Self>) {
+        let path = self
+            .settings
             .summary()
             .background_image_path
             .as_deref()
             .map(str::trim)
-            .is_some_and(|path| !path.is_empty() && Path::new(path).is_file())
+            .filter(|path| !path.is_empty())
+            .map(str::to_string);
+        if !self.shell.request_wallpaper(path.clone()) {
+            return;
+        }
+        let Some(path) = path else {
+            cx.notify();
+            return;
+        };
+        let task_path = path.clone();
+        let task = cx.background_spawn(async move { load_wallpaper_image(&task_path) });
+        cx.spawn(async move |this, cx| {
+            let result = task.await;
+            let _ = this.update(cx, |this, cx| {
+                match result {
+                    Ok((image, width, height)) => {
+                        this.shell.cache_wallpaper(path, image, width, height);
+                    }
+                    Err(()) if this.shell.wallpaper_is_requested(&path) => {
+                        this.shell
+                            .set_status("wallpaper image could not be loaded".to_string());
+                    }
+                    Err(()) => {}
+                }
+                cx.notify();
+            });
+        })
+        .detach();
     }
 
     /// Wallpaper opacity applies to surface backgrounds, not their contents.
@@ -552,6 +590,7 @@ impl NyaTermApp {
                 if let Some(path) = path {
                     this.settings
                         .select_background_image(path.display().to_string());
+                    this.queue_wallpaper_refresh(cx);
                     this.save_appearance_settings(cx);
                     this.shell
                         .set_status("wallpaper image selected".to_string());
@@ -568,6 +607,7 @@ impl NyaTermApp {
 
     pub(in crate::features) fn clear_background_image(&mut self, cx: &mut Context<Self>) {
         self.settings.clear_background_image();
+        self.queue_wallpaper_refresh(cx);
         self.save_appearance_settings(cx);
         self.shell.set_status("wallpaper cleared".to_string());
     }
@@ -622,6 +662,24 @@ impl NyaTermApp {
         self.refresh_visible_terminal_surfaces(cx);
         self.queue_settings_save(crate::features::settings::SettingsSaveKind::Appearance, cx);
     }
+}
+
+fn load_wallpaper_image(path: &str) -> Result<(Arc<RenderImage>, u32, u32), ()> {
+    let reader = image::ImageReader::open(path)
+        .map_err(|_| ())?
+        .with_guessed_format()
+        .map_err(|_| ())?;
+    let mut rgba = reader.decode().map_err(|_| ())?.into_rgba8();
+    let (width, height) = rgba.dimensions();
+    if width == 0 || height == 0 {
+        return Err(());
+    }
+    // GPUI's render atlas expects BGRA pixels.
+    for pixel in rgba.chunks_exact_mut(4) {
+        pixel.swap(0, 2);
+    }
+    let image = Arc::new(RenderImage::new(vec![image::Frame::new(rgba)]));
+    Ok((image, width, height))
 }
 
 pub(in crate::features) fn appearance_font_stack(raw: &str, fallback: &str) -> Vec<String> {

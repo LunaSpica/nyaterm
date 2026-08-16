@@ -329,7 +329,7 @@ impl NyaTermApp {
                 if completion.apply_result
                     && let Ok(settings) = event.outcome.as_ref()
                 {
-                    this.apply_gpui_settings(settings.clone());
+                    this.apply_gpui_settings(settings.clone(), cx);
                 }
                 if completion.report_result {
                     match event.outcome {

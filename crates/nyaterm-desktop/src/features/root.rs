@@ -2,8 +2,8 @@ use std::time::{Duration, Instant};
 
 use crate::models::{MainMode, NavItem, PanelResizeSide, PanelSide};
 use gpui::{
-    AnyElement, Context, Div, ImageSource, IntoElement, KeyDownEvent, MouseButton, MouseMoveEvent,
-    MouseUpEvent, NavigationDirection, ObjectFit, Render, SharedString, Stateful, Window, div, img,
+    AnyElement, Context, Div, IntoElement, KeyDownEvent, MouseButton, MouseMoveEvent, MouseUpEvent,
+    NavigationDirection, ObjectFit, Render, SharedString, Stateful, Window, canvas, div, img,
     prelude::*, px, rgb, rgba, svg,
 };
 
@@ -39,6 +39,7 @@ impl NyaTermApp {
         self.sync_component_theme(cx);
         self.refresh_window_render_inputs(window, cx);
         self.queue_cloud_sync_history_refresh(None, cx);
+        self.queue_wallpaper_refresh(cx);
         self.start_terminal_frame_event_wake(cx);
         self.try_restore_open_tabs(window, cx);
         let pending_session_start = self.session.start_has_pending();
@@ -58,22 +59,10 @@ impl NyaTermApp {
     fn root_chrome(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Stateful<Div> {
         self.ensure_paint_theme_caches();
         let palette = self.theme_palette();
-        let wallpaper_path = self
-            .settings
-            .summary()
-            .background_image_path
-            .as_ref()
-            .map(|p| p.trim())
-            .filter(|p| !p.is_empty())
-            .filter(|p| std::path::Path::new(p).is_file())
-            .map(|p| p.to_string());
+        let wallpaper = self.shell.wallpaper_asset().cloned();
         let wallpaper_opacity =
             (self.settings.summary().background_image_opacity.min(100) as f32) / 100.0;
         let wallpaper_fit = self.settings.summary().background_image_fit.clone();
-        let wallpaper_tile_size = wallpaper_path
-            .as_deref()
-            .filter(|_| wallpaper_fit == "tile")
-            .map(|path| self.wallpaper_tile_size(path));
         div()
             .id(SharedString::from("nyaterm-root"))
             .size_full()
@@ -201,32 +190,53 @@ impl NyaTermApp {
                     }
                 }),
             )
-            .when_some(wallpaper_path.clone(), |this, path| {
-                let source: ImageSource = std::sync::Arc::<std::path::Path>::from(
-                    std::path::PathBuf::from(path).into_boxed_path(),
-                )
-                .into();
-                if let Some((tile_width, tile_height)) = wallpaper_tile_size {
-                    let (columns, rows) =
-                        wallpaper_tile_grid(self.shell.viewport_size(), (tile_width, tile_height));
-                    let mut layer = div()
+            .when_some(wallpaper, |this, wallpaper| {
+                if wallpaper_fit == "tile" {
+                    let image = wallpaper.image().clone();
+                    let dimensions = wallpaper.dimensions();
+                    let layer = div()
                         .absolute()
                         .inset_0()
                         .overflow_hidden()
-                        .opacity(wallpaper_opacity);
-                    for row in 0..rows {
-                        for column in 0..columns {
-                            layer = layer.child(
-                                img(source.clone())
-                                    .absolute()
-                                    .left(px(column as f32 * tile_width))
-                                    .top(px(row as f32 * tile_height))
-                                    .w(px(tile_width))
-                                    .h(px(tile_height))
-                                    .object_fit(ObjectFit::None),
-                            );
-                        }
-                    }
+                        .opacity(wallpaper_opacity)
+                        .child(
+                            canvas(
+                                |_, _, _| (),
+                                move |bounds, (), window, _| {
+                                    let viewport = (
+                                        f32::from(bounds.size.width),
+                                        f32::from(bounds.size.height),
+                                    );
+                                    let (tile_width, tile_height) = fit_wallpaper_tile_size(
+                                        viewport,
+                                        (dimensions.0 as f32, dimensions.1 as f32),
+                                    );
+                                    let (columns, rows) =
+                                        wallpaper_tile_grid(viewport, (tile_width, tile_height));
+                                    for row in 0..rows {
+                                        for column in 0..columns {
+                                            let tile_bounds = gpui::Bounds::new(
+                                                gpui::point(
+                                                    bounds.origin.x
+                                                        + px(column as f32 * tile_width),
+                                                    bounds.origin.y + px(row as f32 * tile_height),
+                                                ),
+                                                gpui::size(px(tile_width), px(tile_height)),
+                                            );
+                                            let _ = window.paint_image(
+                                                tile_bounds,
+                                                tile_bounds,
+                                                gpui::Corners::default(),
+                                                image.clone(),
+                                                0,
+                                                false,
+                                            );
+                                        }
+                                    }
+                                },
+                            )
+                            .size_full(),
+                        );
                     return this.child(layer);
                 }
                 let object_fit = match wallpaper_fit.as_str() {
@@ -234,7 +244,7 @@ impl NyaTermApp {
                     "stretch" | "fill" => ObjectFit::Fill,
                     _ => ObjectFit::Cover,
                 };
-                let image = img(source)
+                let image = img(wallpaper.image().clone())
                     .absolute()
                     .top_0()
                     .left_0()
@@ -251,24 +261,6 @@ impl NyaTermApp {
                     .child(self.title_bar(window, cx))
                     .child(self.workspace_surface(palette, window, cx)),
             )
-    }
-
-    fn wallpaper_tile_size(&mut self, path: &str) -> (f32, f32) {
-        if let Some((cached_path, width, height)) = self.shell.wallpaper_tile_dimensions()
-            && cached_path == path
-        {
-            return fit_wallpaper_tile_size(
-                self.shell.viewport_size(),
-                (*width as f32, *height as f32),
-            );
-        }
-        let (width, height) = image::image_dimensions(path)
-            .ok()
-            .filter(|(width, height)| *width > 0 && *height > 0)
-            .unwrap_or((256, 256));
-        self.shell
-            .cache_wallpaper_tile_dimensions(path.to_string(), width, height);
-        fit_wallpaper_tile_size(self.shell.viewport_size(), (width as f32, height as f32))
     }
 
     fn workspace_surface(
