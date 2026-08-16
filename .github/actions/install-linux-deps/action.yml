@@ -1,0 +1,17 @@
+name: Install Linux dependencies
+description: Install the native libraries required to build and package NyaTerm
+
+inputs:
+  extra_packages:
+    description: Additional space-separated apt packages
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Install Linux system dependencies
+      shell: bash
+      env:
+        EXTRA_PACKAGES: ${{ inputs.extra_packages }}
+      run: ${{ github.action_path }}/../../../scripts/ci/install-linux-deps.sh

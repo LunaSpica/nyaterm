@@ -38,6 +38,10 @@ dist-ssr
 
 temp/
 
+# Python automation
+__pycache__/
+*.py[cod]
+
 # Rust / native app
 target/
 data/

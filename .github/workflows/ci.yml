@@ -1,0 +1,112 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, migration/gpui]
+    paths:
+      - 'crates/**'
+      - 'vendor/**'
+      - 'scripts/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/actions/**'
+      - '.github/workflows/ci.yml'
+      - '.github/workflows/native-package.yml'
+  pull_request:
+    branches: [main, migration/gpui]
+    paths:
+      - 'crates/**'
+      - 'vendor/**'
+      - 'scripts/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/actions/**'
+      - '.github/workflows/ci.yml'
+      - '.github/workflows/native-package.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    name: Rust workspace
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          cache-on-failure: false
+
+      - name: Install Linux system dependencies
+        uses: ./.github/actions/install-linux-deps
+
+      - name: Check workspace
+        run: cargo check --workspace --all-targets
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Test workspace
+        run: cargo test --workspace
+
+      - name: Test packaging helpers
+        run: >-
+          python3 -m unittest
+          scripts.tests.test_package_native
+          scripts.tests.test_verify_native_package
+
+  macos:
+    name: macOS application check
+    runs-on: macos-14
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          key: check-macos-arm64
+          cache-on-failure: false
+
+      - name: Check application
+        run: cargo check -p nyaterm-app
+
+  windows:
+    name: Windows application check
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          key: check-windows-x64
+          cache-on-failure: false
+
+      - name: Check application
+        run: cargo check -p nyaterm-app
