@@ -30,3 +30,8 @@ path = "src/lib.rs"
 [[bin]]
 name = "nyaterm"
 path = "src/main.rs"
+
+
+[features]
+default = ["font-kit"]
+font-kit = ["gpui_platform/font-kit"]
