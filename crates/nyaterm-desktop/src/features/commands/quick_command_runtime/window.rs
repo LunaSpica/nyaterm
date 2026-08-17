@@ -154,14 +154,14 @@ fn open_quick_command_window_now_from_app(app: Entity<NyaTermApp>, cx: &mut App)
     }
 
     let title = app.read(cx).quick_command_editor_title().to_string();
-    let bounds = Bounds::centered(None, size(px(540.), px(640.)), cx);
+    let bounds = Bounds::centered(None, size(px(540.), px(688.)), cx);
     let close_app = app.clone();
     let view_app = app.clone();
     let result: anyhow::Result<NyaWindowHandle> = cx.open_window(
         WindowOptions {
             titlebar: child_window_titlebar(title),
             window_bounds: Some(WindowBounds::Windowed(bounds)),
-            window_min_size: Some(size(px(420.), px(480.))),
+            window_min_size: Some(size(px(420.), px(560.))),
             kind: WindowKind::Floating,
             is_minimizable: false,
             ..Default::default()

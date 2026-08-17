@@ -297,12 +297,49 @@ impl CommandFeatureState {
 
     pub(in crate::features) fn open_quick_editor(&mut self, editor: QuickCommandEditorState) {
         self.quick.editor.draft = Some(editor);
+        self.quick.editor.category_picker_open = false;
+        self.quick.editor.icon_picker_open = false;
     }
 
     pub(in crate::features) fn close_quick_editor(&mut self) {
         self.quick.editor.draft = None;
         self.quick.editor.window = None;
         self.quick.editor.window_open_pending = false;
+        self.quick.editor.category_picker_open = false;
+        self.quick.editor.icon_picker_open = false;
+    }
+
+    pub(in crate::features) fn quick_editor_category_picker_is_open(&self) -> bool {
+        self.quick.editor.category_picker_open
+    }
+
+    pub(in crate::features) fn set_quick_editor_category_picker_open(
+        &mut self,
+        open: bool,
+    ) -> bool {
+        if self.quick.editor.category_picker_open == open {
+            return false;
+        }
+        self.quick.editor.category_picker_open = open;
+        if open {
+            self.quick.editor.icon_picker_open = false;
+        }
+        true
+    }
+
+    pub(in crate::features) fn quick_editor_icon_picker_is_open(&self) -> bool {
+        self.quick.editor.icon_picker_open
+    }
+
+    pub(in crate::features) fn set_quick_editor_icon_picker_open(&mut self, open: bool) -> bool {
+        if self.quick.editor.icon_picker_open == open {
+            return false;
+        }
+        self.quick.editor.icon_picker_open = open;
+        if open {
+            self.quick.editor.category_picker_open = false;
+        }
+        true
     }
 
     pub(in crate::features) fn apply_quick_editor_input(
@@ -327,18 +364,6 @@ impl CommandFeatureState {
         true
     }
 
-    pub(in crate::features) fn focus_quick_editor_field(
-        &mut self,
-        field: QuickCommandEditorField,
-    ) -> bool {
-        let Some(editor) = self.quick.editor.draft.as_mut() else {
-            return false;
-        };
-        editor.focused_field = field;
-        editor.error = None;
-        true
-    }
-
     pub(in crate::features) fn set_quick_editor_category(
         &mut self,
         category_id: Option<String>,
@@ -350,6 +375,7 @@ impl CommandFeatureState {
         editor.category_id = category_id;
         editor.category_draft = category_draft;
         editor.error = None;
+        self.quick.editor.category_picker_open = false;
         true
     }
 
@@ -363,6 +389,7 @@ impl CommandFeatureState {
         editor.color_tag = color_tag;
         editor.icon_tag = None;
         editor.error = None;
+        self.quick.editor.icon_picker_open = false;
         true
     }
 
@@ -375,6 +402,7 @@ impl CommandFeatureState {
             editor.color_tag = None;
         }
         editor.error = None;
+        self.quick.editor.icon_picker_open = false;
         true
     }
 
@@ -763,6 +791,8 @@ struct QuickCommandEditorFeatureState {
     focus: FocusHandle,
     window: Option<NyaWindowHandle>,
     window_open_pending: bool,
+    category_picker_open: bool,
+    icon_picker_open: bool,
 }
 
 /// Delete/details/rename confirmations and the variable prompt.
@@ -805,6 +835,8 @@ impl QuickCommandFeatureState {
                 focus: focus.editor,
                 window: None,
                 window_open_pending: false,
+                category_picker_open: false,
+                icon_picker_open: false,
             },
             dialogs: QuickCommandDialogState {
                 details: None,
@@ -905,6 +937,36 @@ mod tests {
         assert!(state.close_quick_toolbar_popovers());
         assert!(!state.quick_ai_popover_is_open());
         assert!(!state.close_quick_toolbar_popovers());
+    }
+
+    #[test]
+    fn quick_editor_picker_state_is_exclusive_and_resets_on_close() {
+        let mut state = command_state();
+        state.open_quick_editor(QuickCommandEditorState::blank());
+
+        assert!(state.set_quick_editor_category_picker_open(true));
+        assert!(state.quick_editor_category_picker_is_open());
+        assert!(!state.quick_editor_icon_picker_is_open());
+
+        assert!(state.set_quick_editor_icon_picker_open(true));
+        assert!(!state.quick_editor_category_picker_is_open());
+        assert!(state.quick_editor_icon_picker_is_open());
+
+        assert!(state.set_quick_editor_icon(Some("docker".to_string())));
+        assert!(!state.quick_editor_icon_picker_is_open());
+
+        assert!(state.set_quick_editor_icon_picker_open(true));
+        assert!(state.set_quick_editor_color(Some("blue".to_string())));
+        assert!(!state.quick_editor_icon_picker_is_open());
+
+        assert!(state.set_quick_editor_category_picker_open(true));
+        assert!(state.set_quick_editor_category(Some("category-1".to_string()), String::new()));
+        assert!(!state.quick_editor_category_picker_is_open());
+
+        state.set_quick_editor_icon_picker_open(true);
+        state.close_quick_editor();
+        assert!(!state.quick_editor_category_picker_is_open());
+        assert!(!state.quick_editor_icon_picker_is_open());
     }
 
     #[test]
