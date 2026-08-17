@@ -297,12 +297,16 @@ impl CommandFeatureState {
 
     pub(in crate::features) fn open_quick_editor(&mut self, editor: QuickCommandEditorState) {
         self.quick.editor.draft = Some(editor);
+        self.quick.editor.category_search_draft.clear();
+        self.quick.editor.new_category_draft.clear();
         self.quick.editor.category_picker_open = false;
         self.quick.editor.icon_picker_open = false;
     }
 
     pub(in crate::features) fn close_quick_editor(&mut self) {
         self.quick.editor.draft = None;
+        self.quick.editor.category_search_draft.clear();
+        self.quick.editor.new_category_draft.clear();
         self.quick.editor.window = None;
         self.quick.editor.window_open_pending = false;
         self.quick.editor.category_picker_open = false;
@@ -313,6 +317,47 @@ impl CommandFeatureState {
         self.quick.editor.category_picker_open
     }
 
+    pub(in crate::features) fn quick_editor_category_search_draft(&self) -> &str {
+        &self.quick.editor.category_search_draft
+    }
+
+    pub(in crate::features) fn apply_quick_editor_category_search(&mut self, text: String) -> bool {
+        if self.quick.editor.category_search_draft == text {
+            return false;
+        }
+        self.quick.editor.category_search_draft = text;
+        true
+    }
+
+    pub(in crate::features) fn quick_editor_new_category_draft(&self) -> &str {
+        &self.quick.editor.new_category_draft
+    }
+
+    pub(in crate::features) fn apply_quick_editor_new_category(&mut self, text: String) -> bool {
+        if self.quick.editor.new_category_draft == text {
+            return false;
+        }
+        self.quick.editor.new_category_draft = text;
+        true
+    }
+
+    pub(in crate::features) fn commit_quick_editor_new_category(&mut self) -> bool {
+        let draft = self.quick.editor.new_category_draft.trim().to_string();
+        if draft.is_empty() {
+            return false;
+        }
+        let Some(editor) = self.quick.editor.draft.as_mut() else {
+            return false;
+        };
+        editor.category_id = None;
+        editor.category_draft = draft;
+        editor.error = None;
+        self.quick.editor.category_search_draft.clear();
+        self.quick.editor.new_category_draft.clear();
+        self.quick.editor.category_picker_open = false;
+        true
+    }
+
     pub(in crate::features) fn set_quick_editor_category_picker_open(
         &mut self,
         open: bool,
@@ -321,6 +366,10 @@ impl CommandFeatureState {
             return false;
         }
         self.quick.editor.category_picker_open = open;
+        if !open {
+            self.quick.editor.category_search_draft.clear();
+            self.quick.editor.new_category_draft.clear();
+        }
         if open {
             self.quick.editor.icon_picker_open = false;
         }
@@ -347,6 +396,16 @@ impl CommandFeatureState {
         field: QuickCommandEditorField,
         text: String,
     ) -> bool {
+        if field == QuickCommandEditorField::Category {
+            let changed = self.apply_quick_editor_category_search(text);
+            if changed {
+                if let Some(editor) = self.quick.editor.draft.as_mut() {
+                    editor.focused_field = field;
+                    editor.error = None;
+                }
+            }
+            return changed;
+        }
         let Some(editor) = self.quick.editor.draft.as_mut() else {
             return false;
         };
@@ -355,10 +414,7 @@ impl CommandFeatureState {
             QuickCommandEditorField::Label => editor.label = text,
             QuickCommandEditorField::Command => editor.command = text,
             QuickCommandEditorField::Description => editor.description = text,
-            QuickCommandEditorField::Category => {
-                editor.category_draft = text;
-                editor.category_id = None;
-            }
+            QuickCommandEditorField::Category => unreachable!(),
         }
         editor.error = None;
         true
@@ -375,6 +431,8 @@ impl CommandFeatureState {
         editor.category_id = category_id;
         editor.category_draft = category_draft;
         editor.error = None;
+        self.quick.editor.category_search_draft.clear();
+        self.quick.editor.new_category_draft.clear();
         self.quick.editor.category_picker_open = false;
         true
     }
@@ -793,6 +851,8 @@ struct QuickCommandEditorFeatureState {
     window_open_pending: bool,
     category_picker_open: bool,
     icon_picker_open: bool,
+    category_search_draft: String,
+    new_category_draft: String,
 }
 
 /// Delete/details/rename confirmations and the variable prompt.
@@ -837,6 +897,8 @@ impl QuickCommandFeatureState {
                 window_open_pending: false,
                 category_picker_open: false,
                 icon_picker_open: false,
+                category_search_draft: String::new(),
+                new_category_draft: String::new(),
             },
             dialogs: QuickCommandDialogState {
                 details: None,
@@ -967,6 +1029,22 @@ mod tests {
         state.close_quick_editor();
         assert!(!state.quick_editor_category_picker_is_open());
         assert!(!state.quick_editor_icon_picker_is_open());
+    }
+
+    #[test]
+    fn quick_editor_category_search_and_new_category_drafts_are_separate() {
+        let mut state = command_state();
+        state.open_quick_editor(QuickCommandEditorState::blank());
+
+        assert!(state.apply_quick_editor_category_search("linux".to_string()));
+        assert_eq!(state.quick_editor_category_search_draft(), "linux");
+        assert_eq!(state.quick_editor().unwrap().category_draft, "");
+
+        assert!(state.apply_quick_editor_new_category("Operations".to_string()));
+        assert!(state.commit_quick_editor_new_category());
+        assert_eq!(state.quick_editor().unwrap().category_draft, "Operations");
+        assert_eq!(state.quick_editor_category_search_draft(), "");
+        assert_eq!(state.quick_editor_new_category_draft(), "");
     }
 
     #[test]

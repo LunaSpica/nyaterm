@@ -1249,6 +1249,8 @@
     "labelPlaceholder": "例如：列出文件",
     "listMode": "列表模式",
     "newCategoryPlaceholder": "新建分类...",
+    "newCategoryParentHint": "将在「{{category}}」下创建子分类",
+    "newCategoryRootHint": "将在顶层创建分类",
     "noCommandsFound": "未找到匹配的命令。",
     "pin": "置顶显示",
     "renameCategory": "重命名分类",

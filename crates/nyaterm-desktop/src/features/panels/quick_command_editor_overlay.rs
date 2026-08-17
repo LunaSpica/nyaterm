@@ -3,7 +3,7 @@ use gpui::{
     Window, div, prelude::*, px, rgb, rgba, svg,
 };
 use nyaterm_core::truncate_preview;
-use nyaterm_ui::{NyaPopover, NyaSwitch};
+use nyaterm_ui::{NyaPopover, NyaScrollArea, NyaSwitch};
 
 use super::{
     quick_command_color, quick_command_editor_field, quick_command_editor_script_field,
@@ -47,6 +47,8 @@ impl NyaTermApp {
         let uncategorized_label = self.tr("quickCommands.uncategorized");
         let category_label_text = self.tr("quickCommands.category");
         let category_search_label = self.tr("quickCommands.searchOrCreateCategory");
+        let new_category_placeholder = self.tr("quickCommands.newCategoryPlaceholder");
+        let new_category_root_hint = self.tr("quickCommands.newCategoryRootHint");
         let description_label = self.tr("quickCommands.description");
         let description_placeholder = self.tr("quickCommands.descriptionPlaceholder");
         let label_name = self.tr("quickCommands.labelName");
@@ -89,10 +91,21 @@ impl NyaTermApp {
             editor.command.clone(),
             cx,
         );
-        let category_search_input = self.search_input_box(
+        let category_search_draft = self
+            .commands
+            .quick_editor_category_search_draft()
+            .to_string();
+        let new_category_draft = self.commands.quick_editor_new_category_draft().to_string();
+        let category_search_input = self.text_input_box(
             "quick-command.editor.category",
-            &editor.category_draft,
+            &category_search_draft,
             TextInputSetup::placeholder(category_search_label),
+            cx,
+        );
+        let new_category_input = self.text_input_box(
+            "quick-command.editor.new-category",
+            &new_category_draft,
+            TextInputSetup::placeholder(new_category_placeholder),
             cx,
         );
         let category_label = editor
@@ -106,20 +119,17 @@ impl NyaTermApp {
             })
             .map(|category| category.name.clone())
             .unwrap_or_else(|| uncategorized_label.to_string());
-        let category_draft = editor.category_draft.trim().to_string();
-        let category_query = category_draft.to_lowercase();
-        let exact_category_match = self
+        let category_draft = self
             .commands
-            .quick_command_categories()
-            .iter()
-            .any(|category| category.name.eq_ignore_ascii_case(&category_draft));
-        let category_display = if category_draft.is_empty() {
+            .quick_editor_category_search_draft()
+            .trim()
+            .to_string();
+        let category_query = category_draft.to_lowercase();
+        let category_display = if editor.category_draft.trim().is_empty() {
             category_label.clone()
-        } else if exact_category_match {
-            category_draft.clone()
         } else {
             self.tr("quickCommands.createCategory")
-                .replace("{{name}}", &category_draft)
+                .replace("{{name}}", editor.category_draft.trim())
         };
         let mut color_swatches = div().flex().items_center().gap_2().flex_wrap();
         for option in QUICK_COMMAND_COLOR_OPTIONS {
@@ -151,7 +161,7 @@ impl NyaTermApp {
                 }),
             ));
         }
-        let mut category_choices = div().mt_2().flex().flex_col().gap_1();
+        let mut category_choices = div().w_full().flex().flex_col();
         if category_draft.is_empty() {
             let uncategorized_selected =
                 editor.category_id.as_deref().unwrap_or_default().is_empty();
@@ -187,20 +197,48 @@ impl NyaTermApp {
                 }),
             ));
         }
-        if !category_draft.is_empty() && !exact_category_match {
-            let label = self
-                .tr("quickCommands.createCategory")
-                .replace("{{name}}", &truncate_preview(&category_draft, 18));
-            category_choices = category_choices.child(quick_command_category_choice(
-                palette,
-                "quick-command-editor-category-draft".to_string(),
-                label,
-                true,
-                cx.listener(|this, _, _, cx| {
-                    this.confirm_quick_command_editor_category_draft(cx);
-                }),
-            ));
-        }
+        let new_category_name = self
+            .commands
+            .quick_editor_new_category_draft()
+            .trim()
+            .to_string();
+        let new_category_duplicate = !new_category_name.is_empty()
+            && self
+                .commands
+                .quick_command_categories()
+                .iter()
+                .any(|category| {
+                    category
+                        .name
+                        .trim()
+                        .eq_ignore_ascii_case(&new_category_name)
+                });
+        let category_list = NyaScrollArea::new("quick-command-editor-category-list")
+            .max_h(px(258.))
+            .child(category_choices);
+        let new_category_add = div()
+            .id("quick-command-editor-new-category-add")
+            .size(px(28.))
+            .rounded_sm()
+            .flex()
+            .items_center()
+            .justify_center()
+            .cursor_pointer()
+            .text_color(if new_category_name.is_empty() || new_category_duplicate {
+                rgb(palette.text_dimmed)
+            } else {
+                rgb(palette.text)
+            })
+            .hover(|style| style.bg(rgb(palette.hover)))
+            .child(svg().size(px(14.)).path("icons/plus.svg"))
+            .when(
+                !(new_category_name.is_empty() || new_category_duplicate),
+                |this| {
+                    this.on_click(cx.listener(|this, _, _, cx| {
+                        this.commit_quick_command_editor_new_category(cx);
+                    }))
+                },
+            );
         let category_picker_open = self.commands.quick_editor_category_picker_is_open();
         let category_picker_trigger = div()
             .id("quick-command-editor-category-trigger")
@@ -239,9 +277,7 @@ impl NyaTermApp {
                     .path("icons/chevron-down.svg"),
             );
         let category_picker_content = div()
-            .w(px(360.))
-            .max_w(px(420.))
-            .p_2()
+            .w(px((viewport_width - 38.).clamp(320., 560.)))
             .rounded_md()
             .border_1()
             .border_color(rgb(palette.border))
@@ -251,8 +287,43 @@ impl NyaTermApp {
                 self.shell_surface_color(palette.surface)
             })
             .shadow_lg()
-            .child(category_search_input)
-            .child(category_choices);
+            .child(div().p_1().child(category_search_input))
+            .child(category_list)
+            .child(
+                div()
+                    .border_t_1()
+                    .border_color(rgb(palette.border))
+                    .p_1()
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .child(
+                                div()
+                                    .min_w_0()
+                                    .flex_1()
+                                    .on_key_down(cx.listener(
+                                        |this, event: &KeyDownEvent, _, cx| {
+                                            if event.keystroke.key == "enter" {
+                                                this.commit_quick_command_editor_new_category(cx);
+                                                cx.stop_propagation();
+                                            }
+                                        },
+                                    ))
+                                    .child(new_category_input),
+                            )
+                            .child(new_category_add),
+                    )
+                    .child(
+                        div()
+                            .px_1()
+                            .pt_1()
+                            .text_size(px(10.))
+                            .text_color(rgb(palette.text_dimmed))
+                            .child(new_category_root_hint),
+                    ),
+            );
         let category_picker = NyaPopover::new(
             "quick-command-editor-category-popover",
             category_picker_trigger,
@@ -614,32 +685,35 @@ fn quick_command_category_choice(
 ) -> impl IntoElement {
     div()
         .id(SharedString::from(id))
-        .min_h(px(28.))
+        .h(px(36.))
         .w_full()
-        .px_2()
-        .rounded_sm()
-        .border_1()
-        .border_color(if selected {
-            rgb(0x4ade80)
-        } else {
-            rgb(palette.border)
-        })
+        .px_3()
         .bg(if selected {
-            rgb(0x10251a)
+            rgb(0x1d3357)
         } else {
-            rgb(palette.input)
+            rgb(palette.surface)
         })
         .cursor_pointer()
         .flex()
         .items_center()
-        .text_size(px(10.))
+        .justify_between()
+        .gap_2()
+        .text_size(px(13.))
         .text_color(if selected {
-            rgb(palette.success)
+            rgb(palette.link)
         } else {
             rgb(palette.text)
         })
-        .hover(|style| style.border_color(rgb(palette.link)).bg(rgb(palette.hover)))
-        .child(label)
+        .hover(|style| style.bg(rgb(palette.hover)))
+        .child(div().min_w_0().text_ellipsis().child(label))
+        .when(selected, |this| {
+            this.child(
+                svg()
+                    .size(px(14.))
+                    .text_color(rgb(palette.link))
+                    .path("icons/check.svg"),
+            )
+        })
         .on_click(on_click)
 }
 

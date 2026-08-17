@@ -18,6 +18,7 @@ impl NyaTermApp {
             .set_quick_editor_category(category_id, String::new())
         {
             self.reset_text_input("quick-command.editor.category", "", cx);
+            self.reset_text_input("quick-command.editor.new-category", "", cx);
             cx.notify();
         }
     }
@@ -28,39 +29,23 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) {
         if self.commands.set_quick_editor_category_picker_open(open) {
+            if !open {
+                self.reset_text_input("quick-command.editor.category", "", cx);
+                self.reset_text_input("quick-command.editor.new-category", "", cx);
+            }
             cx.notify();
         }
     }
 
-    pub(in crate::features) fn confirm_quick_command_editor_category_draft(
+    pub(in crate::features) fn commit_quick_command_editor_new_category(
         &mut self,
         cx: &mut Context<Self>,
     ) {
-        let Some(draft) = self
-            .commands
-            .quick_editor()
-            .map(|editor| editor.category_draft.trim().to_string())
-        else {
-            return;
-        };
-        if draft.is_empty() {
-            return;
-        }
-        let category_id = self
-            .commands
-            .quick_command_categories()
-            .iter()
-            .find(|category| category.name.eq_ignore_ascii_case(&draft))
-            .map(|category| category.id.clone());
-        if let Some(category_id) = category_id {
-            self.commands
-                .set_quick_editor_category(Some(category_id), String::new());
+        if self.commands.commit_quick_editor_new_category() {
             self.reset_text_input("quick-command.editor.category", "", cx);
-        } else {
-            self.reset_text_input("quick-command.editor.category", &draft, cx);
-            self.commands.set_quick_editor_category(None, draft);
+            self.reset_text_input("quick-command.editor.new-category", "", cx);
+            cx.notify();
         }
-        cx.notify();
     }
 
     pub(in crate::features) fn set_quick_command_editor_color(
@@ -264,6 +249,16 @@ impl NyaTermApp {
             _ => return,
         };
         if self.commands.apply_quick_editor_input(field, text) {
+            cx.notify();
+        }
+    }
+
+    pub(in crate::features) fn apply_quick_command_editor_new_category_input(
+        &mut self,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
+        if self.commands.apply_quick_editor_new_category(text) {
             cx.notify();
         }
     }

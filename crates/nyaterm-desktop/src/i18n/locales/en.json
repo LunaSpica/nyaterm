@@ -1249,6 +1249,8 @@
     "labelPlaceholder": "e.g. List files",
     "listMode": "List mode",
     "newCategoryPlaceholder": "New Category...",
+    "newCategoryParentHint": "Create as a subcategory under \"{{category}}\"",
+    "newCategoryRootHint": "Create at the top level",
     "noCommandsFound": "No commands.",
     "pin": "Pin",
     "renameCategory": "Rename Category",
