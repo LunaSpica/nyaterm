@@ -1,8 +1,9 @@
 use gpui::{
     AnyElement, App, ClickEvent, Context, FontWeight, IntoElement, KeyDownEvent, SharedString,
-    Window, div, prelude::*, px, rgb, rgba,
+    Window, div, prelude::*, px, rgb, rgba, svg,
 };
 use nyaterm_core::truncate_preview;
+use nyaterm_ui::{NyaPopover, NyaSwitch};
 
 use super::{
     quick_command_color, quick_command_editor_field, quick_command_editor_script_field,
@@ -10,6 +11,7 @@ use super::{
 };
 use crate::features::{
     NyaTermApp, commands::QUICK_COMMAND_COLOR_OPTIONS, icons::QUICK_COMMAND_ICON_OPTIONS,
+    text_inputs::TextInputSetup,
 };
 use crate::models::{QuickCommandEditorField, QuickCommandEditorState};
 use crate::widgets::{mode_button, small_button};
@@ -87,6 +89,12 @@ impl NyaTermApp {
             editor.command.clone(),
             cx,
         );
+        let category_search_input = self.search_input_box(
+            "quick-command.editor.category",
+            &editor.category_draft,
+            TextInputSetup::placeholder(category_search_label),
+            cx,
+        );
         let category_label = editor
             .category_id
             .as_deref()
@@ -113,7 +121,7 @@ impl NyaTermApp {
             self.tr("quickCommands.createCategory")
                 .replace("{{name}}", &category_draft)
         };
-        let mut color_swatches = div().mt_2().flex().items_center().gap_2().flex_wrap();
+        let mut color_swatches = div().flex().items_center().gap_2().flex_wrap();
         for option in QUICK_COMMAND_COLOR_OPTIONS {
             let selected = editor.color_tag.as_deref() == option && editor.icon_tag.is_none();
             color_swatches = color_swatches.child(quick_command_color_swatch(
@@ -130,7 +138,7 @@ impl NyaTermApp {
             .copied()
             .flatten()
             .collect::<Vec<_>>();
-        let mut icon_grid = div().mt_2().flex().items_center().gap_1().flex_wrap();
+        let mut icon_grid = div().grid().grid_cols(6).gap_1();
         for option in icon_options {
             let selected = editor.icon_tag.as_deref() == Some(option);
             icon_grid = icon_grid.child(quick_command_icon_option(
@@ -143,7 +151,7 @@ impl NyaTermApp {
                 }),
             ));
         }
-        let mut category_choices = div().mt_2().flex().items_center().gap_1().flex_wrap();
+        let mut category_choices = div().mt_2().flex().flex_col().gap_1();
         if category_draft.is_empty() {
             let uncategorized_selected =
                 editor.category_id.as_deref().unwrap_or_default().is_empty();
@@ -193,6 +201,119 @@ impl NyaTermApp {
                 }),
             ));
         }
+        let category_picker_open = self.commands.quick_editor_category_picker_is_open();
+        let category_picker_trigger = div()
+            .id("quick-command-editor-category-trigger")
+            .h(px(36.))
+            .w_full()
+            .px_3()
+            .rounded_sm()
+            .border_1()
+            .border_color(if category_picker_open {
+                rgb(palette.focus_ring)
+            } else {
+                rgb(palette.border)
+            })
+            .bg(rgb(palette.input))
+            .cursor_pointer()
+            .flex()
+            .items_center()
+            .justify_between()
+            .gap_2()
+            .hover(|style| style.border_color(rgb(palette.link)))
+            .child(
+                div()
+                    .min_w_0()
+                    .text_sm()
+                    .text_color(if editor.category_id.is_some() {
+                        rgb(palette.text)
+                    } else {
+                        rgb(palette.text_muted)
+                    })
+                    .child(truncate_preview(&category_display, 48)),
+            )
+            .child(
+                svg()
+                    .size(px(14.))
+                    .text_color(rgb(palette.text_muted))
+                    .path("icons/chevron-down.svg"),
+            );
+        let category_picker_content = div()
+            .w(px(360.))
+            .max_w(px(420.))
+            .p_2()
+            .rounded_md()
+            .border_1()
+            .border_color(rgb(palette.border))
+            .bg(if native_window {
+                rgb(palette.surface)
+            } else {
+                self.shell_surface_color(palette.surface)
+            })
+            .shadow_lg()
+            .child(category_search_input)
+            .child(category_choices);
+        let category_picker = NyaPopover::new(
+            "quick-command-editor-category-popover",
+            category_picker_trigger,
+            category_picker_content,
+        )
+        .appearance(false)
+        .open(category_picker_open)
+        .on_open_change(cx.listener(|this, open, window, cx| {
+            this.set_quick_command_editor_category_picker_open(*open, cx);
+            if *open {
+                this.focus_text_input_if_present("quick-command.editor.category", window, cx);
+            }
+        }));
+
+        let icon_picker_open = self.commands.quick_editor_icon_picker_is_open();
+        let icon_picker_trigger = div()
+            .id("quick-command-editor-icon-trigger")
+            .size(px(24.))
+            .rounded_full()
+            .border_2()
+            .border_dashed()
+            .border_color(if icon_picker_open {
+                rgb(palette.focus_ring)
+            } else {
+                rgb(palette.text_muted)
+            })
+            .cursor_pointer()
+            .flex()
+            .items_center()
+            .justify_center()
+            .hover(|style| style.border_color(rgb(palette.link)))
+            .child(
+                svg()
+                    .size(px(12.))
+                    .text_color(rgb(palette.text_muted))
+                    .path("icons/plus.svg"),
+            );
+        let icon_picker_content = div()
+            .w(px(192.))
+            .max_h(px(220.))
+            .p_2()
+            .rounded_md()
+            .border_1()
+            .border_color(rgb(palette.border))
+            .bg(if native_window {
+                rgb(palette.surface)
+            } else {
+                self.shell_surface_color(palette.surface)
+            })
+            .shadow_lg()
+            .child(icon_grid);
+        let icon_picker = NyaPopover::new(
+            "quick-command-editor-icon-popover",
+            icon_picker_trigger,
+            icon_picker_content,
+        )
+        .appearance(false)
+        .open(icon_picker_open)
+        .on_open_change(cx.listener(|this, open, _, cx| {
+            this.set_quick_command_editor_icon_picker_open(*open, cx);
+        }));
         let can_save = !editor.label.trim().is_empty() && !editor.command.trim().is_empty();
         let dialog_bg = if native_window {
             rgb(palette.bg)
@@ -284,69 +405,15 @@ impl NyaTermApp {
                                     .child(div().min_w_0().flex_1().child(label_input))
                                     .child(
                                         div()
-                                            .id("quick-command-editor-category")
                                             .min_w_0()
                                             .flex_1()
-                                            .rounded_sm()
-                                            .border_1()
-                                            .border_color(
-                                                if editor.focused_field
-                                                    == QuickCommandEditorField::Category
-                                                {
-                                                    rgb(0x4ade80)
-                                                } else {
-                                                    rgb(palette.border)
-                                                },
-                                            )
-                                            .bg(
-                                                if editor.focused_field
-                                                    == QuickCommandEditorField::Category
-                                                {
-                                                    rgb(0x0f1f18)
-                                                } else {
-                                                    rgb(palette.input)
-                                                },
-                                            )
-                                            .p_2()
-                                            .cursor_pointer()
-                                            .on_click(cx.listener(|this, _, window, cx| {
-                                                this.focus_quick_command_editor_field(
-                                                    QuickCommandEditorField::Category,
-                                                    window,
-                                                    cx,
-                                                );
-                                            }))
                                             .child(
                                                 div()
                                                     .text_size(px(10.))
                                                     .text_color(rgb(palette.text_muted))
                                                     .child(category_label_text),
                                             )
-                                            .child(
-                                                div()
-                                                    .mt_1()
-                                                    .flex()
-                                                    .items_center()
-                                                    .justify_between()
-                                                    .gap_2()
-                                                    .child(
-                                                        div()
-                                                            .min_w_0()
-                                                            .text_xs()
-                                                            .text_color(rgb(palette.text))
-                                                            .child(truncate_preview(
-                                                                &category_display,
-                                                                26,
-                                                            )),
-                                                    )
-                                                    .child(
-                                                        div()
-                                                            .text_size(px(10.))
-                                                            .text_color(rgb(palette.text_muted))
-                                                            .child(category_search_label),
-                                                    ),
-                                            )
-                                            .child(category_choices),
+                                            .child(div().mt_1().child(category_picker)),
                                     ),
                             )
                             .child(description_input)
@@ -365,29 +432,40 @@ impl NyaTermApp {
                                             .min_w_0()
                                             .flex_1()
                                             .child(
+                                                div().flex().items_center().gap_2().child(
+                                                    div()
+                                                        .text_size(px(10.))
+                                                        .text_color(rgb(palette.text_muted))
+                                                        .child(color_tag_label),
+                                                ),
+                                            )
+                                            .child(
                                                 div()
+                                                    .mt_2()
                                                     .flex()
                                                     .items_center()
-                                                    .justify_between()
                                                     .gap_2()
-                                                    .child(
-                                                        div()
-                                                            .text_size(px(10.))
-                                                            .text_color(rgb(palette.text_muted))
-                                                            .child(color_tag_label),
-                                                    )
-                                                    .child(
-                                                        div().flex().items_center().gap_1().child(
-                                                            quick_command_icon_mark(
-                                                                palette,
-                                                                editor.icon_tag.as_deref(),
-                                                                editor.color_tag.as_deref(),
-                                                            ),
-                                                        ),
-                                                    ),
-                                            )
-                                            .child(color_swatches)
-                                            .child(icon_grid),
+                                                    .child(color_swatches)
+                                                    .when(editor.icon_tag.is_some(), |this| {
+                                                        this.child(
+                                                            div()
+                                                                .size(px(24.))
+                                                                .rounded_full()
+                                                                .border_2()
+                                                                .border_color(rgb(palette.text))
+                                                                .bg(rgb(palette.input))
+                                                                .flex()
+                                                                .items_center()
+                                                                .justify_center()
+                                                                .child(quick_command_icon_mark(
+                                                                    palette,
+                                                                    editor.icon_tag.as_deref(),
+                                                                    editor.color_tag.as_deref(),
+                                                                )),
+                                                        )
+                                                    })
+                                                    .child(icon_picker),
+                                            ),
                                     )
                                     .child(
                                         div()
@@ -404,15 +482,13 @@ impl NyaTermApp {
                                                     .text_color(rgb(palette.text_muted))
                                                     .child(pin_label),
                                             )
-                                            .child(mode_button(
-                                                "quick-command-editor-pinned",
-                                                pin_label,
-                                                editor.pinned,
-                                                self.theme_palette(),
-                                                cx.listener(|this, _, _, cx| {
-                                                    this.toggle_quick_command_editor_pinned(cx);
-                                                }),
-                                            )),
+                                            .child(
+                                                NyaSwitch::new("quick-command-editor-pinned")
+                                                    .checked(editor.pinned)
+                                                    .on_click(cx.listener(|this, _, _, cx| {
+                                                        this.toggle_quick_command_editor_pinned(cx);
+                                                    })),
+                                            ),
                                     ),
                             )
                             .child(
@@ -538,8 +614,8 @@ fn quick_command_category_choice(
 ) -> impl IntoElement {
     div()
         .id(SharedString::from(id))
-        .h(px(24.))
-        .max_w(px(148.))
+        .min_h(px(28.))
+        .w_full()
         .px_2()
         .rounded_sm()
         .border_1()

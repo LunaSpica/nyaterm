@@ -1,4 +1,4 @@
-use gpui::{Context, KeyDownEvent, Window};
+use gpui::{Context, KeyDownEvent};
 use nyaterm_core::{QuickCommand, QuickCommandCategory, uuid};
 use nyaterm_store::{StoreDomain, store_request};
 
@@ -8,18 +8,6 @@ use crate::models::QuickCommandEditorField;
 use super::helpers::unix_millis_now;
 
 impl NyaTermApp {
-    pub(in crate::features) fn focus_quick_command_editor_field(
-        &mut self,
-        field: QuickCommandEditorField,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if self.commands.focus_quick_editor_field(field) {
-            window.focus(self.commands.quick_editor_focus(), cx);
-            cx.notify();
-        }
-    }
-
     pub(in crate::features) fn set_quick_command_editor_category(
         &mut self,
         category_id: Option<String>,
@@ -29,6 +17,17 @@ impl NyaTermApp {
             .commands
             .set_quick_editor_category(category_id, String::new())
         {
+            self.reset_text_input("quick-command.editor.category", "", cx);
+            cx.notify();
+        }
+    }
+
+    pub(in crate::features) fn set_quick_command_editor_category_picker_open(
+        &mut self,
+        open: bool,
+        cx: &mut Context<Self>,
+    ) {
+        if self.commands.set_quick_editor_category_picker_open(open) {
             cx.notify();
         }
     }
@@ -56,7 +55,9 @@ impl NyaTermApp {
         if let Some(category_id) = category_id {
             self.commands
                 .set_quick_editor_category(Some(category_id), String::new());
+            self.reset_text_input("quick-command.editor.category", "", cx);
         } else {
+            self.reset_text_input("quick-command.editor.category", &draft, cx);
             self.commands.set_quick_editor_category(None, draft);
         }
         cx.notify();
@@ -84,6 +85,16 @@ impl NyaTermApp {
             .commands
             .set_quick_editor_icon(icon_tag.map(ToOwned::to_owned))
         {
+            cx.notify();
+        }
+    }
+
+    pub(in crate::features) fn set_quick_command_editor_icon_picker_open(
+        &mut self,
+        open: bool,
+        cx: &mut Context<Self>,
+    ) {
+        if self.commands.set_quick_editor_icon_picker_open(open) {
             cx.notify();
         }
     }
