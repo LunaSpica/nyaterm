@@ -473,7 +473,9 @@ impl NyaTermApp {
         family: &str,
         cx: &mut Context<Self>,
     ) {
-        self.settings.set_ui_font_family(family.to_string());
+        if !self.settings.set_ui_font_family(family.to_string()) {
+            return;
+        }
         self.save_appearance_settings(cx);
     }
 
@@ -563,7 +565,9 @@ impl NyaTermApp {
         size: u16,
         cx: &mut Context<Self>,
     ) {
-        self.settings.set_ui_font_size(size.clamp(12, 24));
+        if !self.settings.set_ui_font_size(size.clamp(12, 24)) {
+            return;
+        }
         self.save_appearance_settings(cx);
     }
 
@@ -724,17 +728,18 @@ fn load_wallpaper_image(path: &str) -> Result<(Arc<RenderImage>, u32, u32), ()> 
 }
 
 pub(in crate::features) fn appearance_font_stack(raw: &str, fallback: &str) -> Vec<String> {
-    let fonts = raw
+    let mut fonts = Vec::new();
+    for family in raw
         .split(',')
         .map(trim_gpui_font_family)
         .filter(|family| !family.is_empty())
-        .map(str::to_string)
-        .collect::<Vec<_>>();
-    if fonts.is_empty() {
-        vec![fallback.to_string()]
-    } else {
-        fonts
+    {
+        push_unique_font(&mut fonts, family.to_string());
     }
+    if fonts.is_empty() {
+        fonts.push(fallback.to_string());
+    }
+    fonts
 }
 
 fn appearance_monospace_font_options(cx: &App, system_fonts: &[String]) -> Vec<String> {
@@ -924,6 +929,25 @@ mod tests {
         assert_eq!(
             appearance_font_stack("JetBrains Mono, Noto Sans SC Variable, Inter", "Inter"),
             vec!["JetBrains Mono", "Noto Sans SC Variable", "Inter"]
+        );
+    }
+
+    #[test]
+    fn appearance_font_stack_normalizes_quotes_whitespace_and_duplicates() {
+        assert_eq!(
+            appearance_font_stack(
+                "  'JetBrains Mono', JetBrains Mono, \"Noto Sans SC\",  ",
+                "Inter"
+            ),
+            vec!["JetBrains Mono", "Noto Sans SC"]
+        );
+    }
+
+    #[test]
+    fn appearance_font_stack_uses_fallback_for_empty_input() {
+        assert_eq!(
+            appearance_font_stack("  ,  ", "system-ui"),
+            vec!["system-ui"]
         );
     }
 

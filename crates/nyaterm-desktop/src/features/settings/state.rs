@@ -896,12 +896,20 @@ impl SettingsFeatureState {
         true
     }
 
-    pub(in crate::features) fn set_ui_font_family(&mut self, family: String) {
+    pub(in crate::features) fn set_ui_font_family(&mut self, family: String) -> bool {
+        if self.summary.ui_font_family == family {
+            return false;
+        }
         self.summary.ui_font_family = family;
+        true
     }
 
-    pub(in crate::features) fn set_ui_font_size(&mut self, size: u16) {
+    pub(in crate::features) fn set_ui_font_size(&mut self, size: u16) -> bool {
+        if self.summary.ui_font_size == size {
+            return false;
+        }
         self.summary.ui_font_size = size;
+        true
     }
 
     pub(in crate::features) fn set_terminal_font_weight(&mut self, weight: u16) -> bool {
@@ -1506,6 +1514,24 @@ mod tests {
             ["JetBrains Mono", "monospace"]
         );
         assert!(!state.begin_font_options_load());
+    }
+
+    #[test]
+    fn appearance_font_settings_report_only_real_changes() {
+        let mut state = settings_state();
+        let defaults = state.summary().clone();
+
+        assert!(!state.set_ui_font_family(defaults.ui_font_family.clone()));
+        assert!(state.set_ui_font_family("Noto Sans".to_string()));
+        assert!(!state.set_ui_font_family("Noto Sans".to_string()));
+
+        assert!(!state.set_ui_font_size(defaults.ui_font_size));
+        assert!(state.set_ui_font_size(defaults.ui_font_size + 1));
+        assert!(!state.set_ui_font_size(defaults.ui_font_size + 1));
+
+        assert!(!state.set_terminal_font_size(defaults.terminal_font_size));
+        assert!(state.set_terminal_font_size(defaults.terminal_font_size + 1));
+        assert!(!state.set_terminal_font_size(defaults.terminal_font_size + 1));
     }
 
     #[test]

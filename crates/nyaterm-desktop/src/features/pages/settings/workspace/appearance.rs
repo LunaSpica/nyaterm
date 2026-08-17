@@ -16,9 +16,6 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let palette = self.theme_palette();
-        let font_size_label = self.settings.summary().terminal_font_size.to_string();
-        let ui_font_size_label = self.settings.summary().ui_font_size.to_string();
-
         div()
             .flex()
             .flex_col()
@@ -168,44 +165,6 @@ impl NyaTermApp {
                     .gap_5()
                     .child(appearance_settings_field(
                         palette,
-                        self.tr("settings.fontSize"),
-                        None,
-                        self.number_input_box(
-                            "appearance.number.terminal-font-size",
-                            font_size_label.as_str(),
-                            NyaNumberInputOptions::default().range(8.0, 72.0).step(1.0),
-                            cx,
-                        ),
-                    ))
-                    .child(appearance_settings_field(
-                        palette,
-                        self.tr("settings.terminalFontWeight"),
-                        Some(SharedString::from(
-                            self.tr("settings.terminalFontWeightDesc"),
-                        )),
-                        self.appearance_font_weight_select(false, cx),
-                    ))
-                    .child(appearance_settings_field(
-                        palette,
-                        self.tr("settings.terminalFontWeightBold"),
-                        Some(SharedString::from(
-                            self.tr("settings.terminalFontWeightBoldDesc"),
-                        )),
-                        self.appearance_font_weight_select(true, cx),
-                    ))
-                    .child(appearance_settings_field(
-                        palette,
-                        self.tr("settings.uiFontSize"),
-                        None,
-                        self.number_input_box(
-                            "appearance.number.ui-font-size",
-                            ui_font_size_label.as_str(),
-                            NyaNumberInputOptions::default().range(12.0, 24.0).step(1.0),
-                            cx,
-                        ),
-                    ))
-                    .child(appearance_settings_field(
-                        palette,
                         self.tr("settings.cursorStyle"),
                         None,
                         self.appearance_cursor_style_select(cx),
@@ -278,11 +237,7 @@ impl NyaTermApp {
         let fallback_label = self.tr("settings.fontFallback");
         let remove_label = self.tr("common.remove");
 
-        appearance_form_section_with_action(
-            palette,
-            title,
-            desc,
-            add_action,
+        let mut content =
             div()
                 .flex()
                 .flex_col()
@@ -347,8 +302,54 @@ impl NyaTermApp {
                                     delete,
                                 )),
                         )
-                })),
-        )
+                }));
+
+        if terminal {
+            let font_size_label = self.settings.summary().terminal_font_size.to_string();
+            content = content
+                .child(appearance_settings_field(
+                    palette,
+                    self.tr("settings.fontSize"),
+                    None,
+                    self.number_input_box(
+                        "appearance.number.terminal-font-size",
+                        font_size_label.as_str(),
+                        NyaNumberInputOptions::default().range(8.0, 72.0).step(1.0),
+                        cx,
+                    ),
+                ))
+                .child(appearance_settings_field(
+                    palette,
+                    self.tr("settings.terminalFontWeight"),
+                    Some(SharedString::from(
+                        self.tr("settings.terminalFontWeightDesc"),
+                    )),
+                    self.appearance_font_weight_select(false, cx),
+                ))
+                .child(appearance_settings_field(
+                    palette,
+                    self.tr("settings.terminalFontWeightBold"),
+                    Some(SharedString::from(
+                        self.tr("settings.terminalFontWeightBoldDesc"),
+                    )),
+                    self.appearance_font_weight_select(true, cx),
+                ));
+        } else {
+            let font_size_label = self.settings.summary().ui_font_size.to_string();
+            content = content.child(appearance_settings_field(
+                palette,
+                self.tr("settings.uiFontSize"),
+                None,
+                self.number_input_box(
+                    "appearance.number.ui-font-size",
+                    font_size_label.as_str(),
+                    NyaNumberInputOptions::default().range(12.0, 24.0).step(1.0),
+                    cx,
+                ),
+            ));
+        }
+
+        appearance_form_section_with_action(palette, title, desc, add_action, content)
     }
 
     fn appearance_opacity_slider(
