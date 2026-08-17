@@ -22,6 +22,7 @@ sudo apt-get "${apt_options[@]}" -o APT::Update::Error-Mode=any update
 packages=(
   build-essential
   clang
+  libdbus-1-dev
   libfontconfig1-dev
   libfreetype6-dev
   libssl-dev
