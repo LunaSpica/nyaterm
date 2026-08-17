@@ -2,10 +2,19 @@
 
 use gpui::{
     AnyView, AppContext as _, Context, InteractiveElement as _, IntoElement, ParentElement as _,
-    Render, Styled as _, Window, WindowHandle, div,
+    Render, Styled as _, Window, WindowHandle, deferred, div,
 };
 
 use crate::input_focus::schedule_nya_input_blur_on_outside_pointer_down;
+
+/// The base deferred priority at the component level.
+///
+/// The drag divider on the main interface uses the default priority `0`,
+/// while Select/Popover inside components typically use `1` or `2`.
+/// The component root layer also uses `1`, so it can cover the main interface divider,
+/// while internal popups are added to the deferred queue after the parent layer and
+/// can still appear above the dialog card.
+const COMPONENT_OVERLAY_PRIORITY: usize = 1;
 
 /// NyaTerm's component root type.
 ///
@@ -35,9 +44,23 @@ impl Render for NyaRootContent {
                 schedule_nya_input_blur_on_outside_pointer_down(event.button, window, cx);
             })
             .child(self.view.clone())
-            .children(gpui_component::Root::render_sheet_layer(window, cx))
-            .children(gpui_component::Root::render_dialog_layer(window, cx))
-            .children(gpui_component::Root::render_notification_layer(window, cx))
+            // GPUI's deferred rendering occurs after normal views. The panel boundaries
+            // and drag lines in the main interface also use this mechanism,
+            // so all component layers use a unified base priority to avoid hierarchies
+            // being scattered across various popup types. The priority of internal popups
+            // continues to take effect after the parent layer.
+            .children(
+                gpui_component::Root::render_sheet_layer(window, cx)
+                    .map(|layer| deferred(layer).with_priority(COMPONENT_OVERLAY_PRIORITY)),
+            )
+            .children(
+                gpui_component::Root::render_dialog_layer(window, cx)
+                    .map(|layer| deferred(layer).with_priority(COMPONENT_OVERLAY_PRIORITY)),
+            )
+            .children(
+                gpui_component::Root::render_notification_layer(window, cx)
+                    .map(|layer| deferred(layer).with_priority(COMPONENT_OVERLAY_PRIORITY)),
+            )
     }
 }
 

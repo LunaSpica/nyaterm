@@ -3,8 +3,8 @@ use std::time::{Duration, Instant};
 use crate::models::{MainMode, NavItem, PanelResizeSide, PanelSide};
 use gpui::{
     AnyElement, Context, Div, IntoElement, KeyDownEvent, MouseButton, MouseMoveEvent, MouseUpEvent,
-    NavigationDirection, ObjectFit, Render, SharedString, Stateful, Window, canvas, div, img,
-    prelude::*, px, rgb, rgba, svg,
+    NavigationDirection, ObjectFit, Render, SharedString, Stateful, Window, canvas, deferred, div,
+    img, prelude::*, px, rgb, rgba, svg,
 };
 
 use super::NyaTermApp;
@@ -15,6 +15,7 @@ use crate::theme::ThemePalette;
 
 const WALLPAPER_TILE_ELEMENT_LIMIT: usize = 8192;
 const WALLPAPER_TILE_MIN_SIZE: f32 = 8.;
+const SSH_AUTH_PROMPT_PRIORITY: usize = usize::MAX;
 
 /// Which overlays the root chrome should render this frame.
 ///
@@ -615,8 +616,11 @@ impl NyaTermApp {
             // modal is open, so authentication must be the topmost overlay.
             .when(ssh_auth_prompt_open, |this| {
                 this.child(
-                    full_window_input_layer("ssh-auth-prompt-input-layer")
-                        .child(self.ssh_auth_prompt_overlay(cx)),
+                    deferred(
+                        full_window_input_layer("ssh-auth-prompt-input-layer")
+                            .child(self.ssh_auth_prompt_overlay(cx)),
+                    )
+                    .with_priority(SSH_AUTH_PROMPT_PRIORITY),
                 )
             })
     }
