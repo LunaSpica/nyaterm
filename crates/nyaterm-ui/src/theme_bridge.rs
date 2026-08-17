@@ -34,7 +34,7 @@ fn theme_mode(palette: ThemePalette) -> ThemeMode {
 
 pub fn apply_component_theme(palette: ThemePalette, cx: &mut App) {
     if !cx.has_global::<Theme>() {
-        return;
+        gpui_component::init(cx);
     }
 
     let mode = theme_mode(palette);
@@ -187,6 +187,19 @@ mod tests {
 
     use super::{apply_component_theme, color};
     use crate::theme::theme_palette;
+
+    #[test]
+    fn applying_component_theme_initializes_missing_component_theme() {
+        let cx = TestAppContext::single();
+
+        cx.update(|cx| {
+            assert!(!cx.has_global::<Theme>());
+
+            apply_component_theme(theme_palette("github-dark"), cx);
+
+            assert!(cx.has_global::<Theme>());
+        });
+    }
 
     #[test]
     fn segmented_tab_tokens_follow_nyaterm_palette() {

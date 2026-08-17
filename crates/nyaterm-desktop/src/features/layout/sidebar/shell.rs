@@ -49,7 +49,10 @@ impl NyaTermApp {
             NavItem::SyncBackupHistory => self.sync_backup_history_panel(cx).into_any_element(),
             NavItem::Connections => self.connection_panel.clone().into_any_element(),
             NavItem::AiAssistant => self.ai_assistant_panel(cx).into_any_element(),
-            NavItem::ActiveSessions => self.active_sessions_panel(cx).into_any_element(),
+            NavItem::ActiveSessions => {
+                let model = self.active_sessions_panel_model();
+                self.active_sessions_panel(model, cx).into_any_element()
+            }
             NavItem::CommandHistory => self.command_history_panel(cx).into_any_element(),
             NavItem::Stats if self.settings.summary().ui_show_remote_stats => {
                 self.stats_view(cx).into_any_element()
@@ -91,7 +94,10 @@ impl NyaTermApp {
                 self.tr("dockerManager.disabled"),
             )
             .into_any_element(),
-            NavItem::Recording => self.recording_panel(cx).into_any_element(),
+            NavItem::Recording => {
+                let model = self.recording_sessions_panel_model();
+                self.recording_panel(model, cx).into_any_element()
+            }
             NavItem::Workspace | NavItem::Settings => {
                 self.left_workspace_summary(cx).into_any_element()
             }

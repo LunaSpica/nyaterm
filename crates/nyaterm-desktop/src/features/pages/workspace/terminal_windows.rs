@@ -2,21 +2,81 @@ use gpui::{
     Context, FontWeight, IntoElement, SharedString, div, prelude::*, px, relative, rgb, rgba, svg,
 };
 use nyaterm_core::truncate_preview;
+use nyaterm_transport::{SessionInfo, SessionKind};
+use std::collections::HashMap;
+use std::time::Instant;
 
 use super::super::super::NyaTermApp;
 use super::PaneBorderEdges;
 use crate::features::formatting::{session_kind_label, short_id};
+use crate::features::perf::record_gpui_perf_sample;
 use crate::features::shell::{SessionTabDragPayload, SessionTabDragPreview, SessionTabTooltip};
 use crate::models::{
     TabDockEdge, TabDockZone, TerminalWindowNode, WorkspacePaneNode, WorkspaceSplitDirection,
 };
 use crate::theme::ThemePalette;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct TerminalWindowTabRenderMeta {
+    number: usize,
+    kind: SessionKind,
+}
+
+#[derive(Default)]
+pub(super) struct TerminalWindowRenderIndex {
+    tabs: HashMap<String, TerminalWindowTabRenderMeta>,
+}
+
+impl TerminalWindowRenderIndex {
+    fn from_sessions(sessions: impl IntoIterator<Item = SessionInfo>) -> Self {
+        let tabs = sessions
+            .into_iter()
+            .enumerate()
+            .map(|(index, session)| {
+                (
+                    session.id,
+                    TerminalWindowTabRenderMeta {
+                        number: index + 1,
+                        kind: session.kind,
+                    },
+                )
+            })
+            .collect();
+        Self { tabs }
+    }
+
+    fn tab(&self, session_id: &str) -> Option<TerminalWindowTabRenderMeta> {
+        self.tabs.get(session_id).copied()
+    }
+}
+
 impl NyaTermApp {
-    pub(super) fn render_terminal_window_node(
+    fn terminal_window_render_index(&self) -> TerminalWindowRenderIndex {
+        TerminalWindowRenderIndex::from_sessions(self.ordered_tab_sessions())
+    }
+
+    pub(super) fn render_terminal_window_tree(
         &mut self,
         node: TerminalWindowNode,
         border_edges: PaneBorderEdges,
+        cx: &mut Context<Self>,
+    ) -> gpui::AnyElement {
+        let started_at = Instant::now();
+        let index = self.terminal_window_render_index();
+        let output = self.render_terminal_window_node(node, border_edges, &index, cx);
+        record_gpui_perf_sample(
+            "terminal_window_chrome",
+            started_at.elapsed(),
+            self.gpui_perf_context(index.tabs.len(), None),
+        );
+        output
+    }
+
+    fn render_terminal_window_node(
+        &mut self,
+        node: TerminalWindowNode,
+        border_edges: PaneBorderEdges,
+        render_index: &TerminalWindowRenderIndex,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
         let palette = self.theme_palette();
@@ -38,19 +98,14 @@ impl NyaTermApp {
                     .border_b_1()
                     .border_color(rgb(palette.border))
                     .bg(self.shell_surface_color(palette.surface));
-                let global_index: std::collections::HashMap<String, usize> = self
-                    .ordered_tab_sessions()
-                    .into_iter()
-                    .enumerate()
-                    .map(|(index, session)| (session.id, index + 1))
-                    .collect();
                 for tab_id in &tab_ids {
                     let is_active_tab = active.as_str() == tab_id.as_str()
                         || self
                             .session
                             .active_id()
                             .is_some_and(|id| self.tab_root_for_session(id) == *tab_id);
-                    let tab_number = global_index.get(tab_id).copied().unwrap_or(0);
+                    let tab_meta = render_index.tab(tab_id);
+                    let tab_number = tab_meta.map(|meta| meta.number).unwrap_or(0);
                     let title = self
                         .session
                         .display_name(tab_id)
@@ -60,15 +115,11 @@ impl NyaTermApp {
                     let close_id = tab_id.clone();
                     let actions_id = tab_id.clone();
                     let drop_before_id = tab_id.clone();
-                    let (kind_label, kind_icon) = self
-                        .session
-                        .ordered_sessions()
-                        .into_iter()
-                        .find(|session| session.id == *tab_id)
-                        .map(|session| {
+                    let (kind_label, kind_icon) = tab_meta
+                        .map(|meta| {
                             (
-                                session_kind_label(session.kind),
-                                multi_leaf_session_kind_icon(session.kind),
+                                session_kind_label(meta.kind),
+                                multi_leaf_session_kind_icon(meta.kind),
                             )
                         })
                         .unwrap_or(("Session", "icons/conn/terminal.svg"));
@@ -412,8 +463,10 @@ impl NyaTermApp {
                 second,
             } => {
                 let (first_edges, second_edges) = border_edges.split(direction);
-                let first_el = self.render_terminal_window_node(*first, first_edges, cx);
-                let second_el = self.render_terminal_window_node(*second, second_edges, cx);
+                let first_el =
+                    self.render_terminal_window_node(*first, first_edges, render_index, cx);
+                let second_el =
+                    self.render_terminal_window_node(*second, second_edges, render_index, cx);
                 let primary_basis =
                     relative(WorkspacePaneNode::primary_weight(ratio_percent) / 100.);
                 let secondary_basis =
@@ -534,5 +587,68 @@ fn multi_leaf_session_kind_icon(kind: nyaterm_transport::SessionKind) -> &'stati
         nyaterm_transport::SessionKind::LocalPty => "icons/conn/terminal.svg",
         nyaterm_transport::SessionKind::Rdp => "icons/conn/server.svg",
         nyaterm_transport::SessionKind::Vnc => "icons/conn/server.svg",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::Cell;
+    use std::rc::Rc;
+
+    use nyaterm_transport::{SessionInfo, SessionKind};
+
+    use super::TerminalWindowRenderIndex;
+
+    struct CountedSessions {
+        sessions: std::vec::IntoIter<SessionInfo>,
+        visits: Rc<Cell<usize>>,
+    }
+
+    impl Iterator for CountedSessions {
+        type Item = SessionInfo;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            let next = self.sessions.next();
+            if next.is_some() {
+                self.visits.set(self.visits.get() + 1);
+            }
+            next
+        }
+    }
+
+    fn session(id: &str, kind: SessionKind) -> SessionInfo {
+        SessionInfo {
+            id: id.to_string(),
+            name: id.to_string(),
+            kind,
+            working_dir: None,
+            cols: 80,
+            rows: 24,
+        }
+    }
+
+    #[test]
+    fn terminal_window_render_index_preserves_number_and_kind_in_one_pass() {
+        let visits = Rc::new(Cell::new(0));
+        let sessions = CountedSessions {
+            sessions: vec![
+                session("alpha", SessionKind::Ssh),
+                session("beta", SessionKind::LocalPty),
+                session("gamma", SessionKind::Serial),
+            ]
+            .into_iter(),
+            visits: visits.clone(),
+        };
+
+        let index = TerminalWindowRenderIndex::from_sessions(sessions);
+
+        assert_eq!(index.tab("alpha").map(|meta| meta.number), Some(1));
+        assert_eq!(index.tab("beta").map(|meta| meta.number), Some(2));
+        assert_eq!(
+            index.tab("gamma").map(|meta| meta.kind),
+            Some(SessionKind::Serial)
+        );
+        assert_eq!(index.tab("missing"), None);
+        assert_eq!(visits.get(), 3);
     }
 }

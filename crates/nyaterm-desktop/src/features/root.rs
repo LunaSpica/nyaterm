@@ -850,6 +850,19 @@ impl Render for NyaTermApp {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+    use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+    use gpui::{
+        AppContext as _, IntoElement, ParentElement as _, Render, Styled as _, TestAppContext,
+        VisualTestContext, div,
+    };
+    use nyaterm_core::{AiExecutionProfile, AppRuntime, RuntimeMode};
+    use nyaterm_transport::LocalSessionConfig;
+
+    use crate::entities::{OverlayStore, StartupRestoreStore, UiStoreHandles};
+    use crate::models::{SessionLaunchConfig, SessionRuntimeMetadata, TabDockEdge, TabDockZone};
+
     use super::{fit_wallpaper_tile_size, wallpaper_tile_grid};
 
     #[test]
@@ -863,5 +876,161 @@ mod tests {
         assert!(columns * rows <= 8192);
         assert!(columns as f32 * tile.0 >= 3840.);
         assert!(rows as f32 * tile.1 >= 2160.);
+    }
+
+    fn root_render_benchmark_dir() -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time after unix epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "nyaterm-root-render-benchmark-{}-{nanos}",
+            std::process::id()
+        ))
+    }
+
+    fn root_render_benchmark_session(name: String) -> SessionRuntimeMetadata {
+        SessionRuntimeMetadata {
+            ssh_config: None,
+            ssh_multiplex_key: None,
+            source_connection_id: None,
+            ai_execution_profile: AiExecutionProfile::Posix,
+            launch_config: SessionLaunchConfig::Local(LocalSessionConfig {
+                name,
+                ..LocalSessionConfig::default()
+            }),
+            disconnected: false,
+        }
+    }
+
+    struct RootRenderBenchmarkFixture {
+        app: gpui::Entity<super::NyaTermApp>,
+    }
+
+    impl Render for RootRenderBenchmarkFixture {
+        fn render(
+            &mut self,
+            _window: &mut gpui::Window,
+            _cx: &mut gpui::Context<Self>,
+        ) -> impl IntoElement {
+            div().size_full().child(self.app.clone())
+        }
+    }
+
+    fn forced_root_draw(
+        app: &gpui::Entity<super::NyaTermApp>,
+        cx: &mut VisualTestContext,
+    ) -> Duration {
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            app.update(cx, |_, cx| cx.notify());
+            let started_at = Instant::now();
+            _ = window.draw(cx);
+            started_at.elapsed()
+        })
+    }
+
+    fn run_root_render_benchmark(cx: &mut TestAppContext) {
+        let root = root_render_benchmark_dir();
+        let runtime = AppRuntime::from_parts_for_test(
+            RuntimeMode::Portable,
+            root.clone(),
+            root.join("config"),
+            root.join("logs"),
+            root.join("cache"),
+            None,
+        );
+        let stores = UiStoreHandles {
+            startup_restore: cx.new(|_| StartupRestoreStore::default()),
+            overlays: cx.new(|_| OverlayStore::default()),
+        };
+        let app = cx.new(|cx| super::NyaTermApp::new(runtime, stores, cx));
+        cx.update_entity(&app, |app, cx| {
+            app.sync_component_theme(cx);
+            let session_ids = (0..100)
+                .map(|index| format!("benchmark-session-{index:03}"))
+                .collect::<Vec<_>>();
+            for (index, session_id) in session_ids.iter().enumerate() {
+                app.session.register_session_metadata(
+                    session_id,
+                    root_render_benchmark_session(format!("Local session {index:03}")),
+                );
+                app.terminal
+                    .seed_session_view(session_id.clone(), String::new(), "UTF-8");
+            }
+            let active_session_id = session_ids[0].clone();
+            app.session.select_active_session(active_session_id.clone());
+            app.shell.show_workspace();
+            let target_leaf_id = app
+                .terminal
+                .ensure_terminal_windows_root(session_ids.clone(), Some(active_session_id))
+                .expect("benchmark terminal window root");
+            let mut leaf_ids = vec![target_leaf_id.clone()];
+            for session_id in session_ids.iter().skip(1).take(7) {
+                let result = app.terminal.dock_tab_on_terminal_window_leaf(
+                    session_id,
+                    &target_leaf_id,
+                    TabDockZone::Edge(TabDockEdge::Right),
+                );
+                let crate::features::terminal::TerminalWindowDockResult::Docked {
+                    focused_leaf_id: Some(leaf_id),
+                } = result
+                else {
+                    panic!("benchmark session should create a terminal leaf");
+                };
+                leaf_ids.push(leaf_id);
+            }
+            for (index, session_id) in session_ids.iter().skip(8).enumerate() {
+                let leaf_id = &leaf_ids[index % leaf_ids.len()];
+                if leaf_id == &target_leaf_id {
+                    continue;
+                }
+                let result = app.terminal.dock_tab_on_terminal_window_leaf(
+                    session_id,
+                    leaf_id,
+                    TabDockZone::Center,
+                );
+                assert!(matches!(
+                    result,
+                    crate::features::terminal::TerminalWindowDockResult::Docked { .. }
+                ));
+            }
+        });
+        let fixture_app = app.clone();
+        let (_, cx) =
+            cx.add_window_view(move |_, _| RootRenderBenchmarkFixture { app: fixture_app });
+        let cx: &mut VisualTestContext = cx;
+
+        for _ in 0..12 {
+            _ = forced_root_draw(&app, cx);
+        }
+        let mut samples = (0..120)
+            .map(|_| forced_root_draw(&app, cx))
+            .collect::<Vec<_>>();
+        samples.sort_unstable();
+        let total = samples.iter().copied().sum::<Duration>();
+        let average = total / samples.len() as u32;
+        let p95_index = ((samples.len() * 95).div_ceil(100)).saturating_sub(1);
+        let p95 = samples[p95_index];
+        let max = *samples.last().expect("benchmark samples");
+
+        eprintln!(
+            "root render benchmark: sessions=100 leaves=8 samples=120 average={average:?} p95={p95:?} max={max:?}"
+        );
+    }
+
+    #[test]
+    #[ignore = "performance benchmark; run manually with --ignored --nocapture"]
+    fn root_render_hundred_sessions_eight_terminal_leaves_benchmark() {
+        std::thread::Builder::new()
+            .name("nyaterm-root-render-benchmark".to_string())
+            .stack_size(16 * 1024 * 1024)
+            .spawn(|| {
+                let mut cx = TestAppContext::single();
+                run_root_render_benchmark(&mut cx);
+            })
+            .expect("spawn root render benchmark thread")
+            .join()
+            .expect("root render benchmark thread");
     }
 }

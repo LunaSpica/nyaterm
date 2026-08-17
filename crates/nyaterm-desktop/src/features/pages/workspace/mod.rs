@@ -100,7 +100,7 @@ impl NyaTermApp {
                 .min_h_0()
                 .min_w_0()
                 .bg(self.shell_transparent_color(palette.bg))
-                .child(self.render_terminal_window_node(window_root, PaneBorderEdges::ALL, cx))
+                .child(self.render_terminal_window_tree(window_root, PaneBorderEdges::ALL, cx))
                 .into_any_element();
         }
         let root =

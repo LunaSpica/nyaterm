@@ -21,6 +21,18 @@ use nyaterm_ui::NyaTooltip;
 const EXCLUSIVE_PANEL_IDS: &[&str] = &["aiAssistant"];
 const NON_PANEL_IDS: &[&str] = &["settings", "lock", "quickCmdBar", "serialSend"];
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SidePanelStackRenderMode {
+    Overlay(NavItem),
+    Stack,
+}
+
+fn side_panel_stack_render_mode(overlay: Option<NavItem>) -> SidePanelStackRenderMode {
+    overlay
+        .map(SidePanelStackRenderMode::Overlay)
+        .unwrap_or(SidePanelStackRenderMode::Stack)
+}
+
 impl NyaTermApp {
     pub(in crate::features) fn is_exclusive_panel_id(id: &str) -> bool {
         EXCLUSIVE_PANEL_IDS.contains(&id)
@@ -421,8 +433,18 @@ impl NyaTermApp {
     ) -> impl IntoElement {
         use gpui::relative;
 
+        if let SidePanelStackRenderMode::Overlay(overlay) =
+            side_panel_stack_render_mode(self.side_overlay_panel(side))
+        {
+            return div()
+                .relative()
+                .size_full()
+                .overflow_hidden()
+                .child(self.single_side_panel(side, overlay, window, cx));
+        }
+
         let open_ids = self.side_open_panel_ids(side);
-        let mut stack = if open_ids.is_empty() {
+        let stack = if open_ids.is_empty() {
             let fallback = match side {
                 PanelSide::Left => self.current_left_panel(),
                 PanelSide::Right => self.current_right_panel(),
@@ -458,17 +480,13 @@ impl NyaTermApp {
             for (index, panel_id) in open_ids.iter().enumerate() {
                 let panel = NavItem::from_persistence_id(panel_id).unwrap_or(NavItem::Transfers);
                 let basis = weights[index] / total;
-                let meta = self.side_panel_meta(side, panel);
                 let title = panel
                     .i18n_key()
                     .map(|key| self.tr(key))
                     .unwrap_or_else(|| panel.panel_title());
                 let actions = self.side_panel_header_actions(panel, cx);
                 let palette = self.theme_palette();
-                let body = match side {
-                    PanelSide::Left => self.left_panel_body(panel, window, cx),
-                    PanelSide::Right => self.right_panel_body(panel, window, cx),
-                };
+                let (meta, body) = self.side_panel_content(side, panel, window, cx);
                 stack = stack.child(
                     div()
                         .flex_shrink(1.)
@@ -495,23 +513,6 @@ impl NyaTermApp {
             stack
         };
 
-        if let Some(overlay) = self.side_overlay_panel(side) {
-            stack = stack.opacity(0.);
-            return div()
-                .relative()
-                .size_full()
-                .overflow_hidden()
-                .child(stack)
-                .child(
-                    self.single_side_panel(side, overlay, window, cx)
-                        .absolute()
-                        .top_0()
-                        .left_0()
-                        .right_0()
-                        .bottom_0(),
-                );
-        }
-
         stack
     }
 
@@ -522,17 +523,13 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> gpui::Div {
-        let meta = self.side_panel_meta(side, panel);
         let title = panel
             .i18n_key()
             .map(|key| self.tr(key))
             .unwrap_or_else(|| panel.panel_title());
         let actions = self.side_panel_header_actions(panel, cx);
         let palette = self.theme_palette();
-        let body = match side {
-            PanelSide::Left => self.left_panel_body(panel, window, cx),
-            PanelSide::Right => self.right_panel_body(panel, window, cx),
-        };
+        let (meta, body) = self.side_panel_content(side, panel, window, cx);
         div()
             .size_full()
             .flex()
@@ -545,6 +542,37 @@ impl NyaTermApp {
                 actions,
             ))
             .child(div().flex_1().min_h_0().overflow_hidden().child(body))
+    }
+
+    fn side_panel_content(
+        &mut self,
+        side: PanelSide,
+        panel: NavItem,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> (SharedString, AnyElement) {
+        match panel {
+            NavItem::ActiveSessions => {
+                let model = self.active_sessions_panel_model();
+                let meta = SharedString::from(model.count_label());
+                let body = self.active_sessions_panel(model, cx).into_any_element();
+                (meta, body)
+            }
+            NavItem::Recording => {
+                let model = self.recording_sessions_panel_model();
+                let meta = SharedString::from(model.count_label());
+                let body = self.recording_panel(model, cx).into_any_element();
+                (meta, body)
+            }
+            _ => {
+                let meta = self.side_panel_meta(side, panel);
+                let body = match side {
+                    PanelSide::Left => self.left_panel_body(panel, window, cx),
+                    PanelSide::Right => self.right_panel_body(panel, window, cx),
+                };
+                (meta, body)
+            }
+        }
     }
 
     /// Tauri PanelHeader meta/actions: Connections shows total count; AI shows model name.
@@ -565,7 +593,7 @@ impl NyaTermApp {
                     .unwrap_or_else(|| self.tr("ai.notConfigured").to_string());
                 SharedString::from(label)
             }
-            NavItem::ActiveSessions => SharedString::from(self.active_sessions_header_count()),
+            NavItem::ActiveSessions => SharedString::from(""),
             // Tauri NetworkPanel header shows active tab profile count.
             NavItem::Tunnels => {
                 let count = match self.connection_state.network_active_tab() {
@@ -636,7 +664,7 @@ impl NyaTermApp {
                 };
                 SharedString::from(count.to_string())
             }
-            NavItem::Recording => SharedString::from(self.recording_sessions_header_count()),
+            NavItem::Recording => SharedString::from(""),
             NavItem::SyncBackupHistory => SharedString::from(""),
             _ => SharedString::from(""),
         }
@@ -1022,4 +1050,23 @@ fn header_svg_icon_button(
                 on_click(event, window, cx);
             }
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::models::NavItem;
+
+    use super::{SidePanelStackRenderMode, side_panel_stack_render_mode};
+
+    #[test]
+    fn exclusive_panel_overlay_takes_precedence_over_stack_construction() {
+        assert_eq!(
+            side_panel_stack_render_mode(Some(NavItem::AiAssistant)),
+            SidePanelStackRenderMode::Overlay(NavItem::AiAssistant)
+        );
+        assert_eq!(
+            side_panel_stack_render_mode(None),
+            SidePanelStackRenderMode::Stack
+        );
+    }
 }

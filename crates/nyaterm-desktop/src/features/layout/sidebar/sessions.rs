@@ -1,61 +1,90 @@
-use gpui::{Context, FontWeight, IntoElement, SharedString, div, prelude::*, px, rgb, rgba, svg};
+use std::sync::Arc;
+use std::time::Instant;
+
+use gpui::{
+    AnyElement, Context, FontWeight, IntoElement, SharedString, div, prelude::*, px, rgb, rgba,
+    svg, uniform_list,
+};
 use nyaterm_core::{RuntimeMode, truncate_preview};
 use nyaterm_transport::SessionInfo;
 use nyaterm_ui::{NyaDropdownMenu, NyaMenuItem};
 
 use crate::features::formatting::{session_kind_label, status_label};
+use crate::features::perf::record_gpui_perf_sample;
 use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
 use crate::widgets::{capability_line, empty_panel, small_button, status_pill};
 
 use super::super::view_helpers::session_action_svg_button;
 
+const SESSION_PANEL_LOGICAL_ROW_HEIGHT_PX: f32 = 52.;
+
+#[derive(Clone)]
+struct ActiveSessionPanelRow {
+    session: SessionInfo,
+    display_name: String,
+}
+
+pub(in crate::features) struct ActiveSessionsPanelModel {
+    total_count: usize,
+    rows: Arc<Vec<ActiveSessionPanelRow>>,
+    query_active: bool,
+}
+
+impl ActiveSessionsPanelModel {
+    pub(in crate::features) fn count_label(&self) -> String {
+        session_panel_count_label(self.total_count, self.rows.len(), self.query_active)
+    }
+}
+
 impl NyaTermApp {
     pub(in crate::features) fn sorted_active_sessions(&self) -> Vec<SessionInfo> {
         let mut sessions = self.session.ordered_sessions();
-        sessions.sort_by(|left, right| {
-            left.name
-                .to_lowercase()
-                .cmp(&right.name.to_lowercase())
-                .then_with(|| session_kind_label(left.kind).cmp(session_kind_label(right.kind)))
-        });
+        sort_active_sessions(&mut sessions);
         sessions
     }
 
-    fn active_session_matches_query(&self, session: &SessionInfo, query: &str) -> bool {
-        query.is_empty()
-            || format!(
-                "{} {} {} {}",
-                self.session.display_name_by_info(session),
-                session.name,
-                session_kind_label(session.kind),
-                session.id
-            )
-            .to_lowercase()
-            .contains(query)
-    }
-
-    pub(in crate::features) fn active_sessions_header_count(&self) -> String {
+    pub(in crate::features) fn active_sessions_panel_model(&self) -> ActiveSessionsPanelModel {
+        let started_at = Instant::now();
         let sessions = self.sorted_active_sessions();
-        let total = sessions.len();
+        let total_count = sessions.len();
         let query = self.session.active_search_draft().trim().to_lowercase();
-        if query.is_empty() {
-            return total.to_string();
-        }
-
-        let visible = sessions
-            .iter()
-            .filter(|session| self.active_session_matches_query(session, &query))
-            .count();
-        format!("{visible}/{total}")
+        let query_active = !query.is_empty();
+        let rows = sessions
+            .into_iter()
+            .filter_map(|session| {
+                let display_name = self.session.display_name_by_info(&session);
+                active_session_matches_query(&session, &display_name, &query).then_some(
+                    ActiveSessionPanelRow {
+                        session,
+                        display_name,
+                    },
+                )
+            })
+            .collect::<Vec<_>>();
+        let model = ActiveSessionsPanelModel {
+            total_count,
+            rows: Arc::new(rows),
+            query_active,
+        };
+        record_gpui_perf_sample(
+            "active_sessions_model",
+            started_at.elapsed(),
+            self.gpui_perf_context(model.rows.len(), None),
+        );
+        model
     }
 
     pub(in crate::features) fn active_sessions_panel(
         &mut self,
+        model: ActiveSessionsPanelModel,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let ActiveSessionsPanelModel {
+            total_count,
+            rows,
+            query_active: _,
+        } = model;
         let palette = self.theme_palette();
-        let sessions = self.sorted_active_sessions();
-        let query = self.session.active_search_draft().trim().to_lowercase();
         // Built before the panel, which reads `self` throughout: creating the
         // box needs it mutably.
         let search_draft = self.session.active_search_draft().to_string();
@@ -67,37 +96,54 @@ impl NyaTermApp {
                 cx,
             )
             .into_any_element();
-        let mut rows = div().flex().flex_col().gap_1().p_2();
-        let mut visible_count = 0usize;
-        if sessions.is_empty() {
-            rows = rows.child(
-                div()
-                    .py_4()
-                    .text_center()
-                    .text_size(px(11.))
-                    .text_color(rgb(palette.text_dimmed))
-                    .child(self.tr("panel.noActiveSessions")),
-            );
+        let list: AnyElement = if total_count == 0 {
+            div()
+                .id(SharedString::from("active-sessions-list"))
+                .flex_1()
+                .px_2()
+                .py_4()
+                .text_center()
+                .text_size(px(11.))
+                .text_color(rgb(palette.text_dimmed))
+                .child(self.tr("panel.noActiveSessions"))
+                .into_any_element()
+        } else if rows.is_empty() {
+            div()
+                .id(SharedString::from("active-sessions-list"))
+                .flex_1()
+                .px_2()
+                .py_4()
+                .text_center()
+                .text_size(px(11.))
+                .text_color(rgb(palette.text_dimmed))
+                .child(self.tr("activeSessions.noMatches"))
+                .into_any_element()
         } else {
-            for session in sessions {
-                let display_name = self.session.display_name_by_info(&session);
-                if !self.active_session_matches_query(&session, &query) {
-                    continue;
-                }
-                visible_count += 1;
-                rows = rows.child(self.active_session_row(session, display_name, cx));
-            }
-            if visible_count == 0 {
-                rows = rows.child(
-                    div()
-                        .py_4()
-                        .text_center()
-                        .text_size(px(11.))
-                        .text_color(rgb(palette.text_dimmed))
-                        .child(self.tr("activeSessions.noMatches")),
-                );
-            }
-        }
+            uniform_list(
+                "active-sessions-list",
+                rows.len(),
+                cx.processor(move |this, range: std::ops::Range<usize>, _, cx| {
+                    let mut items = Vec::with_capacity(range.len());
+                    for index in range {
+                        let Some(row) = rows.get(index).cloned() else {
+                            continue;
+                        };
+                        items.push(
+                            div()
+                                .h(px(SESSION_PANEL_LOGICAL_ROW_HEIGHT_PX))
+                                .px_2()
+                                .pb_1()
+                                .flex_none()
+                                .child(this.active_session_row(row.session, row.display_name, cx)),
+                        );
+                    }
+                    items
+                }),
+            )
+            .flex_1()
+            .min_h_0()
+            .into_any_element()
+        };
 
         div()
             .size_full()
@@ -139,12 +185,13 @@ impl NyaTermApp {
             )
             .child(
                 div()
-                    .id(SharedString::from("active-sessions-list"))
                     .flex_1()
                     .min_h_0()
-                    .overflow_scroll()
-                    .scrollbar_width(px(6.))
-                    .child(rows),
+                    .flex()
+                    .flex_col()
+                    .overflow_hidden()
+                    .py_2()
+                    .child(list),
             )
     }
 
@@ -571,5 +618,99 @@ impl NyaTermApp {
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.select_session(session_id.clone(), cx);
             }))
+    }
+}
+
+fn sort_active_sessions(sessions: &mut [SessionInfo]) {
+    sessions.sort_by(|left, right| {
+        left.name
+            .to_lowercase()
+            .cmp(&right.name.to_lowercase())
+            .then_with(|| session_kind_label(left.kind).cmp(session_kind_label(right.kind)))
+    });
+}
+
+fn active_session_matches_query(session: &SessionInfo, display_name: &str, query: &str) -> bool {
+    query.is_empty()
+        || format!(
+            "{} {} {} {}",
+            display_name,
+            session.name,
+            session_kind_label(session.kind),
+            session.id
+        )
+        .to_lowercase()
+        .contains(query)
+}
+
+fn session_panel_count_label(total: usize, visible: usize, query_active: bool) -> String {
+    if query_active {
+        format!("{visible}/{total}")
+    } else {
+        total.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use nyaterm_transport::{SessionInfo, SessionKind};
+
+    use super::{active_session_matches_query, session_panel_count_label, sort_active_sessions};
+
+    fn session(id: &str, name: &str, kind: SessionKind) -> SessionInfo {
+        SessionInfo {
+            id: id.to_string(),
+            name: name.to_string(),
+            kind,
+            working_dir: None,
+            cols: 80,
+            rows: 24,
+        }
+    }
+
+    #[test]
+    fn active_session_model_sort_is_case_insensitive_and_stable_by_kind() {
+        let mut sessions = vec![
+            session("serial", "alpha", SessionKind::Serial),
+            session("ssh", "Alpha", SessionKind::Ssh),
+            session("beta", "beta", SessionKind::LocalPty),
+        ];
+
+        sort_active_sessions(&mut sessions);
+
+        assert_eq!(
+            sessions
+                .iter()
+                .map(|session| session.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["serial", "ssh", "beta"]
+        );
+    }
+
+    #[test]
+    fn active_session_query_matches_dynamic_display_name_case_insensitively() {
+        let session = session("session-1", "original", SessionKind::Ssh);
+
+        assert!(active_session_matches_query(
+            &session,
+            "Production Shell",
+            "production"
+        ));
+        assert!(active_session_matches_query(
+            &session,
+            "Production Shell",
+            "SESSION-1".to_lowercase().as_str()
+        ));
+        assert!(!active_session_matches_query(
+            &session,
+            "Production Shell",
+            "missing"
+        ));
+    }
+
+    #[test]
+    fn active_session_count_label_tracks_filtered_and_unfiltered_counts() {
+        assert_eq!(session_panel_count_label(100, 12, false), "100");
+        assert_eq!(session_panel_count_label(100, 12, true), "12/100");
     }
 }
