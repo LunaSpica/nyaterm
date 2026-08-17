@@ -47,7 +47,7 @@ impl NyaTermApp {
                     .items_center()
                     .gap_2()
                     .px_3()
-                    .when(macos, |this| this.pl(px(70.)))
+                    .when(macos, |this| this.pl(px(78.)))
                     .window_control_area(WindowControlArea::Drag)
                     .on_mouse_down(
                         MouseButton::Left,
