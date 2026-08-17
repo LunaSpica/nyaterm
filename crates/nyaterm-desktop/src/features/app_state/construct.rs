@@ -3,7 +3,7 @@ use crate::models::{
     TerminalFramePipeline,
 };
 use crate::terminal::initial_terminal_screen;
-use gpui::Context;
+use gpui::{AppContext as _, Context};
 use nyaterm_core::{AppRuntime, uuid};
 use nyaterm_store::{BootstrapSnapshot, StoreBlockingClient, StoreUiClient};
 #[cfg(test)]
@@ -22,6 +22,7 @@ use crate::features::commands::{
     quick_command_sort_mode_from_setting, quick_command_view_mode_from_setting,
 };
 use crate::features::connections::{ConnectionFeatureFocus, ConnectionFeatureState};
+use crate::features::pages::connections::panel::ConnectionPanel;
 use crate::features::panels::{SendCommandFeatureFocus, SendCommandFeatureState};
 use crate::features::recording::RecordingFeatureState;
 use crate::features::remote::{RemoteOpsFeatureFocus, RemoteOpsFeatureState};
@@ -158,6 +159,9 @@ impl NyaTermApp {
             crate::i18n::text(&settings.language, "savedConnections.filter");
         let command_store = store_blocking.clone();
 
+        let app_entity = cx.entity();
+        let connection_panel = cx.new(|cx| ConnectionPanel::new(app_entity, cx));
+
         Self {
             stores,
             store_ui,
@@ -173,6 +177,7 @@ impl NyaTermApp {
                 },
                 cx,
             ),
+            connection_panel,
             commands: CommandFeatureState::new(CommandFeatureInit {
                 commands: quick_commands,
                 categories: quick_command_categories,

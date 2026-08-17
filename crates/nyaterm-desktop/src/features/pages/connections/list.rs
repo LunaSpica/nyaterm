@@ -23,7 +23,7 @@ use nyaterm_ui::{
 };
 
 #[derive(Clone)]
-pub(super) enum ConnectionListRow {
+pub(in crate::features) enum ConnectionListRow {
     Separator,
     GroupHeader(ConnectionSection),
     InlineGroupEditor {
@@ -34,12 +34,12 @@ pub(super) enum ConnectionListRow {
         depth: usize,
     },
     Connection {
-        connection: Box<SavedConnection>,
+        connection_id: String,
         depth: usize,
     },
 }
 
-pub(super) fn flatten_connection_rows(
+pub(in crate::features) fn flatten_connection_rows(
     sections: &[ConnectionSection],
     expanded_groups: &std::collections::HashSet<String>,
     group_editor: Option<&ConnectionGroupEditorState>,
@@ -83,7 +83,7 @@ pub(super) fn flatten_connection_rows(
     }
     for connection in root_connections {
         rows.push(ConnectionListRow::Connection {
-            connection: Box::new(connection),
+            connection_id: connection.id,
             depth: 0,
         });
     }
@@ -136,7 +136,7 @@ fn append_connection_section_rows(
     }
     for connection in section.connections {
         rows.push(ConnectionListRow::Connection {
-            connection: Box::new(connection),
+            connection_id: connection.id,
             depth: section.depth + 1,
         });
     }
@@ -144,17 +144,17 @@ fn append_connection_section_rows(
 
 #[derive(Clone)]
 pub(in crate::features) struct ConnectionSection {
-    pub(super) group_id: Option<String>,
-    pub(super) parent_id: Option<String>,
-    pub(super) label: String,
-    pub(super) is_root: bool,
-    pub(super) depth: usize,
-    pub(super) total_count: usize,
-    pub(super) has_child_groups: bool,
-    pub(super) connections: Vec<SavedConnection>,
+    pub(in crate::features) group_id: Option<String>,
+    pub(in crate::features) parent_id: Option<String>,
+    pub(in crate::features) label: String,
+    pub(in crate::features) is_root: bool,
+    pub(in crate::features) depth: usize,
+    pub(in crate::features) total_count: usize,
+    pub(in crate::features) has_child_groups: bool,
+    pub(in crate::features) connections: Vec<SavedConnection>,
 }
 
-pub(super) fn connection_sections(
+pub(in crate::features) fn connection_sections(
     connections: &[SavedConnection],
     groups: &[Group],
     query: &str,
@@ -337,6 +337,43 @@ pub(super) fn connection_tree_indent_px(depth: usize) -> f32 {
     }
 }
 
+/// Index of the connection row that is most likely the widest.
+///
+/// `uniform_list` measures a single row to decide how far the list can scroll
+/// sideways, so pointing it at row 0 would cap the scroll at whatever that row
+/// happens to be. This picks the candidate by indent plus rendered name width -
+/// an estimate, since the real width comes from the text system, but one that
+/// only has to identify the right row rather than its exact size.
+pub(in crate::features) fn widest_connection_row(
+    rows: &[ConnectionListRow],
+    connections: &[SavedConnection],
+) -> Option<usize> {
+    let names_by_id = connections
+        .iter()
+        .map(|connection| (connection.id.as_str(), connection.name.as_str()))
+        .collect::<HashMap<_, _>>();
+    rows.iter()
+        .enumerate()
+        .filter_map(|(index, row)| match row {
+            ConnectionListRow::Connection {
+                connection_id,
+                depth,
+            } => {
+                let name = names_by_id.get(connection_id.as_str()).copied()?;
+                let name_width: usize = name
+                    .chars()
+                    // CJK and other wide glyphs take about two Latin advances.
+                    .map(|c| if c as u32 >= 0x1100 { 2 } else { 1 })
+                    .sum();
+                Some((index, *depth * 16 + name_width * 8))
+            }
+            ConnectionListRow::InlineGroupEditor { depth, .. } => Some((index, *depth * 16 + 128)),
+            _ => None,
+        })
+        .max_by_key(|(_, width)| *width)
+        .map(|(index, _)| index)
+}
+
 #[derive(Clone)]
 pub(super) struct ConnectionEditorChoice {
     pub value: Option<String>,
@@ -496,8 +533,11 @@ mod tests {
                 ConnectionListRow::GroupHeader(section) => {
                     format!("group:{}:{}", section.label, section.depth)
                 }
-                ConnectionListRow::Connection { connection, depth } => {
-                    format!("conn:{}:{depth}", connection.id)
+                ConnectionListRow::Connection {
+                    connection_id,
+                    depth,
+                } => {
+                    format!("conn:{connection_id}:{depth}")
                 }
                 ConnectionListRow::InlineGroupEditor { depth, .. } => {
                     format!("inline:{depth}")
@@ -606,8 +646,8 @@ mod tests {
         assert!(matches!(rows.get(1), Some(ConnectionListRow::Separator)));
         assert!(matches!(
             rows.get(2),
-            Some(ConnectionListRow::Connection { connection, depth: 0 })
-                if connection.id == "root-conn"
+            Some(ConnectionListRow::Connection { connection_id, depth: 0 })
+                if connection_id == "root-conn"
         ));
     }
 
@@ -638,8 +678,27 @@ mod tests {
         ));
         assert!(matches!(
             rows.get(1),
-            Some(ConnectionListRow::Connection { connection, depth: 0 })
-                if connection.id == "root-conn"
+            Some(ConnectionListRow::Connection { connection_id, depth: 0 })
+                if connection_id == "root-conn"
+        ));
+    }
+
+    #[test]
+    fn flat_connection_rows_store_ids_not_full_connections() {
+        let connections = vec![connection("root-conn", "Root Conn", None, 0)];
+        let sections = connection_sections(
+            &connections,
+            &[],
+            "",
+            crate::models::ConnectionSortMode::Default,
+        );
+
+        let rows = flatten_connection_rows(&sections, &HashSet::new(), None);
+
+        assert!(matches!(
+            rows.first(),
+            Some(ConnectionListRow::Connection { connection_id, depth: 0 })
+                if connection_id == "root-conn"
         ));
     }
 

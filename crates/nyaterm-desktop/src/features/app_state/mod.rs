@@ -4,6 +4,7 @@ use nyaterm_store::{StoreBlockingClient, StoreUiClient};
 use super::ai::AiFeatureState;
 use super::commands::CommandFeatureState;
 use super::connections::ConnectionFeatureState;
+use super::pages::connections::panel::ConnectionPanel;
 use super::panels::SendCommandFeatureState;
 use super::recording::RecordingFeatureState;
 use super::remote::RemoteOpsFeatureState;
@@ -33,6 +34,7 @@ pub struct NyaTermApp {
     pub(in crate::features) store_blocking: StoreBlockingClient,
     pub(in crate::features) runtime: AppRuntime,
     pub(in crate::features) connection_state: ConnectionFeatureState,
+    pub(in crate::features) connection_panel: gpui::Entity<ConnectionPanel>,
     /// Real text inputs for the panels that have not been given their own,
     /// keyed by an id the panel picks. See `features::text_inputs`.
     pub(in crate::features) text_inputs: TextInputRegistry,

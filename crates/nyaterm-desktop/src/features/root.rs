@@ -10,6 +10,7 @@ use gpui::{
 use super::NyaTermApp;
 use super::terminal::{FULL_SHELL_PAINT_COUNT, terminal_surface_paint_count};
 use super::view_widgets::full_window_input_layer;
+use crate::features::perf::{GpuiPerfContext, record_gpui_perf_sample};
 use crate::features::runtime_jobs::ActivitySide;
 use crate::theme::ThemePalette;
 
@@ -36,6 +37,29 @@ struct OverlayFlags {
 }
 
 impl NyaTermApp {
+    pub(in crate::features) fn gpui_perf_context(
+        &self,
+        flat_row_count: usize,
+        cache_hit: Option<bool>,
+    ) -> GpuiPerfContext {
+        GpuiPerfContext {
+            connection_count: self.connection_state.connections().len(),
+            group_count: self.connection_state.groups().len(),
+            flat_row_count,
+            cache_hit,
+            full_shell_paint_count: FULL_SHELL_PAINT_COUNT
+                .load(std::sync::atomic::Ordering::Relaxed),
+            surface_paint_count: terminal_surface_paint_count(),
+            left_panel: self
+                .current_left_panel()
+                .map(|panel| panel.persistence_id()),
+            right_panel: self
+                .current_right_panel()
+                .map(|panel| panel.persistence_id()),
+            resize_active: self.shell.panel_resize_active(),
+        }
+    }
+
     pub(crate) fn start_after_window_open(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.sync_component_theme(cx);
         self.refresh_window_render_inputs(window, cx);
@@ -270,7 +294,8 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        if self.shell.main_mode() == MainMode::Page
+        let started_at = Instant::now();
+        let output = if self.shell.main_mode() == MainMode::Page
             && self.shell.selected_nav() == NavItem::Settings
         {
             div()
@@ -395,7 +420,13 @@ impl NyaTermApp {
             }
 
             surface.into_any_element()
-        }
+        };
+        record_gpui_perf_sample(
+            "workspace_surface",
+            started_at.elapsed(),
+            self.gpui_perf_context(0, None),
+        );
+        output
     }
 
     fn mobile_drawer_header(
@@ -786,6 +817,16 @@ impl Render for NyaTermApp {
         let output = self.overlay_host(content, window, cx);
         let overlay_duration = overlay_started_at.elapsed();
         let render_duration = render_started_at.elapsed();
+        record_gpui_perf_sample(
+            "root_chrome",
+            root_duration,
+            self.gpui_perf_context(0, None),
+        );
+        record_gpui_perf_sample(
+            "root_render",
+            render_duration,
+            self.gpui_perf_context(0, None),
+        );
         if render_duration >= Duration::from_millis(12)
             && self.should_log_slow_diagnostic("root_render", Instant::now())
         {

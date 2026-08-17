@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::time::{Duration, Instant};
 
 use gpui::{
     App, AppContext as _, Bounds, Context, Entity, FocusHandle, Pixels, SharedString, Subscription,
@@ -10,6 +11,10 @@ use super::catalog::ConnectionCatalogState;
 use super::connection_runtime::ConnectionEditorToggle;
 use super::interaction::{ConnectionDragKind, ConnectionDropPosition, ConnectionDropTarget};
 use crate::features::NyaTermApp;
+use crate::features::pages::connections::list::{
+    ConnectionListRow, ConnectionSection, connection_sections, flatten_connection_rows,
+    widest_connection_row,
+};
 use crate::models::{
     ConnectionEditorAdvancedTab, ConnectionEditorField, ConnectionEditorPasswordSource,
     ConnectionEditorRdpTab, ConnectionEditorSelect, ConnectionEditorSshAlgorithmTab,
@@ -63,10 +68,55 @@ use self::network_logic::{
 pub(in crate::features) struct ConnectionFeatureState {
     catalog: ConnectionCatalogState,
     list: ConnectionListState,
+    list_model: ConnectionListModelCache,
     import: ConnectionImportState,
     editor: ConnectionEditorFeatureState,
     group_editor: ConnectionGroupEditorFeatureState,
     network: NetworkFeatureState,
+}
+
+#[derive(Clone, Copy, Default, PartialEq)]
+pub(in crate::features) struct ConnectionListModelStats {
+    pub cache_hit: bool,
+    pub connection_count: usize,
+    pub group_count: usize,
+    pub flat_row_count: usize,
+    pub sections_ms: f64,
+    pub flatten_ms: f64,
+    pub widest_ms: f64,
+}
+
+#[derive(Clone)]
+pub(in crate::features) struct ConnectionListModelSnapshot {
+    pub rows: Vec<ConnectionListRow>,
+    pub widest_row: Option<usize>,
+    pub stats: ConnectionListModelStats,
+}
+
+#[derive(Clone, Eq, PartialEq)]
+struct ConnectionListSectionKey {
+    connections_revision: u64,
+    groups_revision: u64,
+    search_revision: u64,
+    sort_revision: u64,
+    query: String,
+    sort_mode: ConnectionSortMode,
+}
+
+#[derive(Clone, Eq, PartialEq)]
+struct ConnectionListRowsKey {
+    section_key: ConnectionListSectionKey,
+    expanded_groups_revision: u64,
+    group_editor_revision: u64,
+}
+
+#[derive(Default)]
+struct ConnectionListModelCache {
+    section_key: Option<ConnectionListSectionKey>,
+    sections: Vec<ConnectionSection>,
+    rows_key: Option<ConnectionListRowsKey>,
+    snapshot: Option<ConnectionListModelSnapshot>,
+    pending_sections_ms: f64,
 }
 
 pub(in crate::features) struct ConnectionFeatureFocus {
@@ -96,6 +146,9 @@ struct ConnectionListState {
     search_applied_query: Option<String>,
     selected_ids: HashSet<String>,
     last_selected_id: Option<String>,
+    search_revision: u64,
+    sort_revision: u64,
+    expanded_groups_revision: u64,
 }
 
 struct ConnectionImportState {
@@ -127,6 +180,7 @@ struct ConnectionGroupEditorFeatureState {
     /// The folder-name input, built with the draft it mirrors.
     field: Option<Entity<NyaInputState>>,
     field_subscription: Option<Subscription>,
+    revision: u64,
 }
 
 struct NetworkFeatureState {
@@ -182,7 +236,11 @@ impl ConnectionFeatureState {
                 search_applied_query: None,
                 selected_ids: HashSet::new(),
                 last_selected_id: None,
+                search_revision: 0,
+                sort_revision: 0,
+                expanded_groups_revision: 0,
             },
+            list_model: ConnectionListModelCache::default(),
             import: ConnectionImportState {
                 import_path_prompt: None,
             },
@@ -203,6 +261,7 @@ impl ConnectionFeatureState {
                 draft: None,
                 field: None,
                 field_subscription: None,
+                revision: 0,
             },
             network: NetworkFeatureState {
                 tab: NetworkTab::Tunnels,
@@ -223,6 +282,13 @@ impl ConnectionFeatureState {
         self.catalog.groups()
     }
 
+    pub fn connection_by_id(&self, connection_id: &str) -> Option<&SavedConnection> {
+        self.catalog
+            .connections()
+            .iter()
+            .find(|connection| connection.id == connection_id)
+    }
+
     pub fn serial_ports(&self) -> &[String] {
         self.catalog.serial_ports()
     }
@@ -238,6 +304,86 @@ impl ConnectionFeatureState {
 
     pub fn update_connection(&mut self, updated: SavedConnection) -> bool {
         self.catalog.update_connection(updated)
+    }
+
+    pub(in crate::features) fn connection_list_model(&mut self) -> ConnectionListModelSnapshot {
+        let query = self.list.search_query();
+        let section_key = ConnectionListSectionKey {
+            connections_revision: self.catalog.connections_revision(),
+            groups_revision: self.catalog.groups_revision(),
+            search_revision: self.list.search_revision,
+            sort_revision: self.list.sort_revision,
+            query: query.clone(),
+            sort_mode: self.list.sort_mode(),
+        };
+        if self.list_model.section_key.as_ref() != Some(&section_key) {
+            let started_at = Instant::now();
+            self.list_model.sections = connection_sections(
+                self.catalog.connections(),
+                self.catalog.groups(),
+                &query,
+                self.list.sort_mode(),
+            );
+            self.list_model.section_key = Some(section_key.clone());
+            self.list_model.snapshot = None;
+            self.list_model.rows_key = None;
+            self.list_model
+                .remember_sections_duration(duration_ms(started_at.elapsed()));
+        }
+
+        if self.list.sync_search_expansion(
+            &query,
+            self.list_model
+                .sections
+                .iter()
+                .filter_map(|section| section.group_id.clone()),
+        ) {
+            self.list.bump_expanded_groups_revision();
+        }
+
+        let rows_key = ConnectionListRowsKey {
+            section_key,
+            expanded_groups_revision: self.list.expanded_groups_revision,
+            group_editor_revision: self.group_editor.revision,
+        };
+        if self.list_model.rows_key.as_ref() == Some(&rows_key)
+            && let Some(snapshot) = self.list_model.snapshot.as_ref()
+        {
+            let mut snapshot = snapshot.clone();
+            snapshot.stats.cache_hit = true;
+            snapshot.stats.sections_ms = 0.0;
+            snapshot.stats.flatten_ms = 0.0;
+            snapshot.stats.widest_ms = 0.0;
+            return snapshot;
+        }
+
+        let flatten_started_at = Instant::now();
+        let rows = flatten_connection_rows(
+            &self.list_model.sections,
+            self.list.expanded_group_ids(),
+            self.group_editor.draft.as_ref(),
+        );
+        let flatten_ms = duration_ms(flatten_started_at.elapsed());
+        let widest_started_at = Instant::now();
+        let widest_row = widest_connection_row(&rows, self.catalog.connections());
+        let widest_ms = duration_ms(widest_started_at.elapsed());
+        let stats = ConnectionListModelStats {
+            cache_hit: false,
+            connection_count: self.catalog.connections().len(),
+            group_count: self.catalog.groups().len(),
+            flat_row_count: rows.len(),
+            sections_ms: self.list_model.take_sections_duration(),
+            flatten_ms,
+            widest_ms,
+        };
+        let snapshot = ConnectionListModelSnapshot {
+            rows,
+            widest_row,
+            stats,
+        };
+        self.list_model.rows_key = Some(rows_key);
+        self.list_model.snapshot = Some(snapshot.clone());
+        snapshot
     }
 
     pub fn connections_reordered_into_group(
@@ -268,10 +414,6 @@ impl ConnectionFeatureState {
             .collect::<HashSet<_>>();
         self.list
             .retain_loaded_references(&connection_ids, &group_ids);
-    }
-
-    pub fn list_search_query(&self) -> String {
-        self.list.search_query()
     }
 
     pub fn list_search_is_empty(&self) -> bool {
@@ -395,14 +537,6 @@ impl ConnectionFeatureState {
             .map(|group| group.id.clone())
             .collect::<Vec<_>>();
         self.list.expand_groups(group_ids);
-    }
-
-    pub fn sync_list_search_expansion(
-        &mut self,
-        query: &str,
-        matching_group_ids: impl IntoIterator<Item = String>,
-    ) -> bool {
-        self.list.sync_search_expansion(query, matching_group_ids)
     }
 
     pub fn set_list_drop_target_if_changed(&mut self, target: ConnectionDropTarget) -> bool {
@@ -784,6 +918,7 @@ impl ConnectionFeatureState {
         if let Some(draft) = self.group_editor.draft.as_mut() {
             draft.name = name;
             draft.error = None;
+            self.group_editor.bump_revision();
         }
     }
 
@@ -802,6 +937,7 @@ impl ConnectionFeatureState {
             parent_id,
             error: None,
         });
+        self.group_editor.bump_revision();
     }
 
     pub fn begin_rename_group_editor(
@@ -817,6 +953,7 @@ impl ConnectionFeatureState {
             parent_id,
             error: None,
         });
+        self.group_editor.bump_revision();
     }
 
     pub fn group_editor_is_renaming(&self, group_id: &str) -> bool {
@@ -826,11 +963,16 @@ impl ConnectionFeatureState {
     }
 
     pub fn set_group_editor_error(&mut self, error: String) -> bool {
-        self.group_editor.set_error(error)
+        let changed = self.group_editor.set_error(error);
+        if changed {
+            self.group_editor.bump_revision();
+        }
+        changed
     }
 
     pub fn close_group_editor(&mut self) {
         self.group_editor.close();
+        self.group_editor.bump_revision();
     }
 
     pub fn network_active_tab(&self) -> NetworkTab {
@@ -994,6 +1136,7 @@ impl ConnectionFeatureState {
             &mut self.editor.window_open_pending,
         );
         self.editor.group_select_trigger_bounds = None;
+        let expanded_before = self.list.expanded_group_ids.clone();
         select_saved_connection_after_editor_save(
             &mut self.list.selected_ids,
             &mut self.list.last_selected_id,
@@ -1001,6 +1144,9 @@ impl ConnectionFeatureState {
             connection_id,
             group_id,
         );
+        if self.list.expanded_group_ids != expanded_before {
+            self.list.bump_expanded_groups_revision();
+        }
     }
 
     pub fn import_path_prompt_active(&self) -> bool {
@@ -1032,7 +1178,10 @@ impl ConnectionListState {
     /// Cache what the field just reported. Filtering runs on every keystroke and
     /// from paths without an `App`, so it reads this rather than the entity.
     pub fn set_search_text(&mut self, text: String) {
-        self.search_draft = text;
+        if self.search_draft != text {
+            self.search_draft = text;
+            self.search_revision = self.search_revision.wrapping_add(1);
+        }
     }
 
     pub fn sort_mode(&self) -> ConnectionSortMode {
@@ -1099,7 +1248,9 @@ impl ConnectionListState {
     }
 
     pub fn cycle_sort_mode(&mut self) -> ConnectionSortMode {
-        cycle_connection_sort_mode(&mut self.sort_mode)
+        let sort_mode = cycle_connection_sort_mode(&mut self.sort_mode);
+        self.sort_revision = self.sort_revision.wrapping_add(1);
+        sort_mode
     }
 
     pub fn set_group_hover(&mut self, group_id: String, hovered: bool) -> bool {
@@ -1126,18 +1277,26 @@ impl ConnectionListState {
 
     pub fn toggle_group_expanded(&mut self, group_id: String) -> bool {
         if self.expanded_group_ids.remove(&group_id) {
+            self.bump_expanded_groups_revision();
             return false;
         }
         self.expanded_group_ids.insert(group_id);
+        self.bump_expanded_groups_revision();
         true
     }
 
     pub fn expand_group(&mut self, group_id: String) {
-        self.expanded_group_ids.insert(group_id);
+        if self.expanded_group_ids.insert(group_id) {
+            self.bump_expanded_groups_revision();
+        }
     }
 
     pub fn expand_groups(&mut self, group_ids: impl IntoIterator<Item = String>) {
+        let before = self.expanded_group_ids.len();
         self.expanded_group_ids.extend(group_ids);
+        if self.expanded_group_ids.len() != before {
+            self.bump_expanded_groups_revision();
+        }
     }
 
     pub fn sync_search_expansion(
@@ -1174,6 +1333,7 @@ impl ConnectionListState {
         self.search_expanded_base = None;
         self.search_applied_query = None;
         self.keyboard_active_connection_id = None;
+        let expanded_before = self.expanded_group_ids.clone();
         clear_connection_list_runtime_state(
             &mut self.selected_ids,
             &mut self.last_selected_id,
@@ -1181,6 +1341,9 @@ impl ConnectionListState {
             &mut self.drop_target,
             &mut self.hovered_group_id,
         );
+        if self.expanded_group_ids != expanded_before {
+            self.bump_expanded_groups_revision();
+        }
     }
 
     pub fn remove_connection_references(&mut self, connection_id: &str) {
@@ -1193,12 +1356,16 @@ impl ConnectionListState {
     }
 
     pub fn remove_group_references(&mut self, group_id: &str) {
+        let expanded_before = self.expanded_group_ids.clone();
         remove_group_list_references(
             &mut self.expanded_group_ids,
             &mut self.hovered_group_id,
             &mut self.drop_target,
             group_id,
         );
+        if self.expanded_group_ids != expanded_before {
+            self.bump_expanded_groups_revision();
+        }
     }
 
     pub fn retain_loaded_references(
@@ -1215,13 +1382,35 @@ impl ConnectionListState {
             &mut self.drop_target,
             connection_ids,
         );
+        let expanded_before = self.expanded_group_ids.clone();
         retain_loaded_group_list_references(
             &mut self.expanded_group_ids,
             &mut self.hovered_group_id,
             &mut self.drop_target,
             group_ids,
         );
+        if self.expanded_group_ids != expanded_before {
+            self.bump_expanded_groups_revision();
+        }
     }
+
+    fn bump_expanded_groups_revision(&mut self) {
+        self.expanded_groups_revision = self.expanded_groups_revision.wrapping_add(1);
+    }
+}
+
+impl ConnectionListModelCache {
+    fn remember_sections_duration(&mut self, duration_ms: f64) {
+        self.pending_sections_ms = duration_ms;
+    }
+
+    fn take_sections_duration(&mut self) -> f64 {
+        std::mem::take(&mut self.pending_sections_ms)
+    }
+}
+
+fn duration_ms(duration: Duration) -> f64 {
+    duration.as_secs_f64() * 1000.0
 }
 
 impl ConnectionImportState {
@@ -1521,6 +1710,10 @@ impl ConnectionGroupEditorFeatureState {
 
     pub fn close(&mut self) {
         self.draft = None;
+    }
+
+    fn bump_revision(&mut self) {
+        self.revision = self.revision.wrapping_add(1);
     }
 }
 

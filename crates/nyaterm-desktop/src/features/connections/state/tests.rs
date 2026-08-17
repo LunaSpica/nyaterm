@@ -26,6 +26,8 @@ use super::{
     toggle_network_move_picker_state, toggle_network_tunnel_auto_open,
     visible_connection_ids_for_list_state,
 };
+use crate::entities::{OverlayStore, StartupRestoreStore, UiStoreHandles};
+use crate::features::NyaTermApp;
 use crate::features::{
     connections::ConnectionDragKind, connections::ConnectionDropPosition,
     connections::ConnectionDropTarget, connections::ConnectionEditorToggle,
@@ -38,11 +40,14 @@ use crate::models::{
     NetworkProxyEditorField, NetworkProxyEditorState, NetworkTab, NetworkTunnelEditorField,
     NetworkTunnelEditorState,
 };
-use gpui::TestAppContext;
+use gpui::{AppContext as _, TestAppContext};
 use nyaterm_core::{
-    AiExecutionProfile, ConnectionRecordingSettings, ConnectionType, Group, RecordingMode,
-    RecordingRotationPolicy, SavedConnection, SshProfile, SshTerminalType,
+    AiExecutionProfile, AppRuntime, ConnectionRecordingSettings, ConnectionType, Group,
+    RecordingMode, RecordingRotationPolicy, RuntimeMode, SavedConnection, SshProfile,
+    SshTerminalType,
 };
+use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[test]
 fn search_expansion_opens_matches_and_restores_the_prior_tree() {
@@ -383,6 +388,77 @@ fn visible_connection_ids_for_list_state_tracks_expanded_tree_order() {
     );
 
     assert_eq!(visible, vec!["child", "parent", "root"]);
+}
+
+#[test]
+fn connection_list_model_cache_hits_for_unchanged_revisions() {
+    let mut cx = TestAppContext::single();
+    let app = cache_test_app(&mut cx);
+    seed_cached_connections(&mut cx, &app);
+
+    let first = cx.update_entity(&app, |app, _| app.connection_state.connection_list_model());
+    let second = cx.update_entity(&app, |app, _| app.connection_state.connection_list_model());
+
+    assert!(!first.stats.cache_hit);
+    assert!(second.stats.cache_hit);
+    assert_eq!(first.rows.len(), second.rows.len());
+    assert_eq!(second.stats.sections_ms, 0.0);
+    assert_eq!(second.stats.flatten_ms, 0.0);
+    assert_eq!(second.stats.widest_ms, 0.0);
+}
+
+#[test]
+fn connection_list_model_cache_misses_when_search_changes() {
+    let mut cx = TestAppContext::single();
+    let app = cache_test_app(&mut cx);
+    seed_cached_connections(&mut cx, &app);
+    cx.update_entity(&app, |app, _| {
+        let _ = app.connection_state.connection_list_model();
+    });
+
+    let filtered = cx.update_entity(&app, |app, _| {
+        app.connection_state
+            .set_list_search_text("child".to_string());
+        app.connection_state.connection_list_model()
+    });
+
+    assert!(!filtered.stats.cache_hit);
+    assert!(filtered.stats.flat_row_count > 0);
+}
+
+#[test]
+fn connection_list_model_cache_misses_when_expansion_changes() {
+    let mut cx = TestAppContext::single();
+    let app = cache_test_app(&mut cx);
+    seed_cached_connections(&mut cx, &app);
+    cx.update_entity(&app, |app, _| {
+        let _ = app.connection_state.connection_list_model();
+    });
+
+    let collapsed = cx.update_entity(&app, |app, _| {
+        app.connection_state
+            .toggle_list_group_expanded("parent-group".to_string());
+        app.connection_state.connection_list_model()
+    });
+
+    assert!(!collapsed.stats.cache_hit);
+}
+
+#[test]
+fn connection_list_model_cache_ignores_unrelated_shell_state() {
+    let mut cx = TestAppContext::single();
+    let app = cache_test_app(&mut cx);
+    seed_cached_connections(&mut cx, &app);
+    cx.update_entity(&app, |app, _| {
+        let _ = app.connection_state.connection_list_model();
+    });
+
+    let after_shell_status_change = cx.update_entity(&app, |app, _| {
+        app.shell.set_status("unrelated render state");
+        app.connection_state.connection_list_model()
+    });
+
+    assert!(after_shell_status_change.stats.cache_hit);
 }
 
 #[test]
@@ -1443,6 +1519,50 @@ fn set_network_proxy_editor_error_updates_active_editor() {
         proxy_editor.and_then(|editor| editor.error),
         Some("Proxy host is required".to_string())
     );
+}
+
+fn cache_test_app(cx: &mut TestAppContext) -> gpui::Entity<NyaTermApp> {
+    let root = unique_test_dir("connection-list-cache");
+    let runtime = AppRuntime::from_parts_for_test(
+        RuntimeMode::Portable,
+        root.clone(),
+        root.join("config"),
+        root.join("logs"),
+        root.join("cache"),
+        None,
+    );
+    let stores = UiStoreHandles {
+        startup_restore: cx.new(|_| StartupRestoreStore::default()),
+        overlays: cx.new(|_| OverlayStore::default()),
+    };
+    cx.new(|cx| NyaTermApp::new(runtime, stores, cx))
+}
+
+fn seed_cached_connections(cx: &mut TestAppContext, app: &gpui::Entity<NyaTermApp>) {
+    let connections = vec![
+        saved_connection("root", "Root", None, 0),
+        saved_connection("parent", "Parent", Some("parent-group"), 1),
+        saved_connection("child", "Child", Some("child-group"), 0),
+    ];
+    let groups = vec![
+        group("parent-group", "Parent Group", None, 0),
+        group("child-group", "Child Group", Some("parent-group"), 0),
+    ];
+    cx.update_entity(app, |app, _| {
+        app.connection_state.replace_loaded(connections, groups);
+        app.connection_state
+            .expand_list_group("parent-group".to_string());
+        app.connection_state
+            .expand_list_group("child-group".to_string());
+    });
+}
+
+fn unique_test_dir(label: &str) -> PathBuf {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system time after epoch")
+        .as_nanos();
+    std::env::temp_dir().join(format!("nyaterm-{label}-{}-{nanos}", std::process::id()))
 }
 
 fn saved_connection(

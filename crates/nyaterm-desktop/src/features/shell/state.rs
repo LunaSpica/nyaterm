@@ -505,6 +505,10 @@ impl ShellFeatureState {
         self.panels.right_width
     }
 
+    pub(in crate::features) fn panel_resize_active(&self) -> bool {
+        self.panels.resize.is_some() || self.panels.stack_resize.is_some()
+    }
+
     pub(in crate::features) fn panel_multi_open(&self) -> bool {
         self.panels.multi_open
     }

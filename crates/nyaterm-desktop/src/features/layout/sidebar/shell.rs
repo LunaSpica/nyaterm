@@ -38,7 +38,7 @@ impl NyaTermApp {
     pub(in crate::features) fn panel_body(
         &mut self,
         panel: NavItem,
-        window: &mut gpui::Window,
+        _window: &mut gpui::Window,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
         let palette = self.theme_palette();
@@ -47,7 +47,7 @@ impl NyaTermApp {
             NavItem::Tunnels => self.tunnels_view(cx).into_any_element(),
             NavItem::SecurityAuth => self.security_auth_panel(cx).into_any_element(),
             NavItem::SyncBackupHistory => self.sync_backup_history_panel(cx).into_any_element(),
-            NavItem::Connections => self.connections_view(window, cx).into_any_element(),
+            NavItem::Connections => self.connection_panel.clone().into_any_element(),
             NavItem::AiAssistant => self.ai_assistant_panel(cx).into_any_element(),
             NavItem::ActiveSessions => self.active_sessions_panel(cx).into_any_element(),
             NavItem::CommandHistory => self.command_history_panel(cx).into_any_element(),

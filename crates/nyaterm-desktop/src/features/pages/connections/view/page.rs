@@ -1,6 +1,9 @@
+use std::time::Duration;
+use std::time::Instant;
+
 use gpui::{
-    Context, IntoElement, KeyDownEvent, ListHorizontalSizingBehavior, MouseButton, SharedString,
-    div,
+    AnyElement, Context, IntoElement, KeyDownEvent, ListHorizontalSizingBehavior, MouseButton,
+    SharedString, div,
     prelude::{InteractiveElement, ParentElement, StatefulInteractiveElement, Styled},
     px, rgb, svg, uniform_list,
 };
@@ -8,64 +11,41 @@ use nyaterm_ui::{NyaContextMenu, NyaDropdownMenu, NyaSearchInput};
 
 use crate::features::{
     NyaTermApp, connections::ConnectionDragKind, connections::ConnectionDragPayload,
+    perf::record_gpui_perf_sample,
 };
 use crate::models::ConnectionSortMode;
 
 use super::super::list::{
-    ConnectionListRow, connection_sections, connection_tree_indent_px, flatten_connection_rows,
-    icon_action_button, icon_action_button_styled,
+    ConnectionListRow, connection_tree_indent_px, icon_action_button, icon_action_button_styled,
 };
 
 const CONNECTION_LIST_ROW_HEIGHT_PX: f32 = 34.;
-
-/// Index of the connection row that is most likely the widest.
-///
-/// `uniform_list` measures a single row to decide how far the list can scroll
-/// sideways, so pointing it at row 0 would cap the scroll at whatever that row
-/// happens to be. This picks the candidate by indent plus rendered name width —
-/// an estimate, since the real width comes from the text system, but one that
-/// only has to identify the right row rather than its exact size.
-fn widest_connection_row(rows: &[ConnectionListRow]) -> Option<usize> {
-    rows.iter()
-        .enumerate()
-        .filter_map(|(index, row)| match row {
-            ConnectionListRow::Connection { connection, depth } => {
-                let name_width: usize = connection
-                    .name
-                    .chars()
-                    // CJK and other wide glyphs take about two Latin advances.
-                    .map(|c| if c as u32 >= 0x1100 { 2 } else { 1 })
-                    .sum();
-                Some((index, *depth * 16 + name_width * 8))
-            }
-            ConnectionListRow::InlineGroupEditor { depth, .. } => Some((index, *depth * 16 + 128)),
-            _ => None,
-        })
-        .max_by_key(|(_, width)| *width)
-        .map(|(index, _)| index)
-}
 
 impl NyaTermApp {
     pub(in crate::features) fn connections_view(
         &mut self,
         window: &mut gpui::Window,
         cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let query = self.connection_state.list_search_query();
-        let sections = connection_sections(
-            self.connection_state.connections(),
-            self.connection_state.groups(),
-            &query,
-            self.connection_state.list_sort_mode(),
+    ) -> AnyElement {
+        let started_at = Instant::now();
+        let model = self.connection_state.connection_list_model();
+        let model_stats = model.stats;
+        let perf_context =
+            self.gpui_perf_context(model_stats.flat_row_count, Some(model_stats.cache_hit));
+        record_gpui_perf_sample(
+            "connection_sections",
+            Duration::from_secs_f64(model_stats.sections_ms / 1000.0),
+            perf_context,
         );
-        // Folders start closed, so a filter would otherwise match into a tree the
-        // user cannot see. Open the folders that still have hits, and put the tree
-        // back once the filter clears.
-        self.connection_state.sync_list_search_expansion(
-            &query,
-            sections
-                .iter()
-                .filter_map(|section| section.group_id.clone()),
+        record_gpui_perf_sample(
+            "flatten_connection_rows",
+            Duration::from_secs_f64(model_stats.flatten_ms / 1000.0),
+            perf_context,
+        );
+        record_gpui_perf_sample(
+            "widest_connection_row",
+            Duration::from_secs_f64(model_stats.widest_ms / 1000.0),
+            perf_context,
         );
         let empty_connections_label = self.tr("savedConnections.empty");
         let empty_connections_hint = self.tr("savedConnections.emptyHint");
@@ -74,11 +54,7 @@ impl NyaTermApp {
 
         // Keep the flattened model cheap to rebuild, then let GPUI instantiate only
         // the rows intersecting the scroll viewport.
-        let flat_rows = flatten_connection_rows(
-            &sections,
-            self.connection_state.list_expanded_group_ids(),
-            self.connection_state.active_group_editor_draft().as_ref(),
-        );
+        let flat_rows = model.rows;
         // A folder is worth showing even before anything is filed under it, so the
         // empty state waits until there are no folders either. Otherwise a freshly
         // created folder is swallowed by "no saved connections".
@@ -152,7 +128,7 @@ impl NyaTermApp {
             // `uniform_list` derives its scrollable width from one measured row, so
             // point it at the row most likely to be the widest or long names would
             // still be unreachable.
-            let widest_row = widest_connection_row(&flat_rows);
+            let widest_row = model.widest_row;
             list = list.child(
                 uniform_list(
                     "connections-list-rows",
@@ -198,12 +174,22 @@ impl NyaTermApp {
                                         .text_color(rgb(palette.text_dimmed))
                                         .child(empty_group_label),
                                 ),
-                                ConnectionListRow::Connection { connection, depth } => {
-                                    item.child(div().w_full().child(this.saved_connection_row(
-                                        *connection,
-                                        depth,
-                                        cx,
-                                    )))
+                                ConnectionListRow::Connection {
+                                    connection_id,
+                                    depth,
+                                } => {
+                                    let Some(connection) = this
+                                        .connection_state
+                                        .connection_by_id(&connection_id)
+                                        .cloned()
+                                    else {
+                                        continue;
+                                    };
+                                    item.child(
+                                        div().w_full().child(
+                                            this.saved_connection_row(connection, depth, cx),
+                                        ),
+                                    )
                                 }
                             });
                         }
@@ -221,7 +207,7 @@ impl NyaTermApp {
 
         // Tauri: PanelHeader (shared stack) + search/action strip + flat tree list.
         // Count is shown in the shared panel header via meta; strip hosts search + icons.
-        div()
+        let output = div()
             .relative()
             .flex()
             .flex_col()
@@ -229,7 +215,9 @@ impl NyaTermApp {
             .overflow_hidden()
             .bg(self.shell_transparent_color(palette.surface))
             .child(self.connections_search_bar(window, cx))
-            .child(list)
+            .child(list);
+        record_gpui_perf_sample("connections_view", started_at.elapsed(), perf_context);
+        output.into_any_element()
     }
 
     pub(in crate::features) fn connections_search_bar(

@@ -8,6 +8,7 @@ mod inspector;
 mod layout;
 mod pages;
 mod panels;
+mod perf;
 mod recording;
 mod remote;
 mod remote_desktop;

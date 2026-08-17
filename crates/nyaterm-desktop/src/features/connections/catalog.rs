@@ -9,6 +9,8 @@ pub(super) struct ConnectionCatalogState {
     connections: Vec<SavedConnection>,
     groups: Vec<Group>,
     serial_ports: Vec<String>,
+    connections_revision: u64,
+    groups_revision: u64,
 }
 
 impl ConnectionCatalogState {
@@ -17,6 +19,8 @@ impl ConnectionCatalogState {
             connections,
             groups,
             serial_ports: Vec::new(),
+            connections_revision: 0,
+            groups_revision: 0,
         }
     }
 
@@ -32,9 +36,19 @@ impl ConnectionCatalogState {
         &self.serial_ports
     }
 
+    pub(super) fn connections_revision(&self) -> u64 {
+        self.connections_revision
+    }
+
+    pub(super) fn groups_revision(&self) -> u64 {
+        self.groups_revision
+    }
+
     pub(super) fn replace_loaded(&mut self, connections: Vec<SavedConnection>, groups: Vec<Group>) {
         self.connections = connections;
         self.groups = groups;
+        self.connections_revision = self.connections_revision.wrapping_add(1);
+        self.groups_revision = self.groups_revision.wrapping_add(1);
     }
 
     pub(super) fn replace_serial_ports(&mut self, serial_ports: Vec<String>) {
@@ -50,6 +64,7 @@ impl ConnectionCatalogState {
             return false;
         };
         *connection = updated;
+        self.connections_revision = self.connections_revision.wrapping_add(1);
         true
     }
 
