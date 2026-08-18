@@ -525,6 +525,79 @@ fn is_modifier_key(key: &str) -> bool {
         "ctrl" | "control" | "meta" | "cmd" | "command" | "super" | "alt" | "option" | "shift"
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use gpui::{KeyDownEvent, Keystroke, Modifiers};
+
+    use super::shortcut_matches;
+
+    fn key_event(key: &str, modifiers: Modifiers) -> KeyDownEvent {
+        KeyDownEvent {
+            keystroke: Keystroke {
+                modifiers,
+                key: key.to_string(),
+                key_char: Some(key.to_string()),
+            },
+            is_held: false,
+            prefer_character_input: false,
+        }
+    }
+
+    #[test]
+    fn terminal_clipboard_shortcuts_require_shift() {
+        let overrides = HashMap::new();
+
+        assert!(!shortcut_matches(
+            &key_event(
+                "c",
+                Modifiers {
+                    control: true,
+                    ..Modifiers::default()
+                }
+            ),
+            "terminal.copy",
+            &overrides,
+        ));
+        assert!(shortcut_matches(
+            &key_event(
+                "c",
+                Modifiers {
+                    control: true,
+                    shift: true,
+                    ..Modifiers::default()
+                }
+            ),
+            "terminal.copy",
+            &overrides,
+        ));
+        assert!(!shortcut_matches(
+            &key_event(
+                "v",
+                Modifiers {
+                    control: true,
+                    ..Modifiers::default()
+                }
+            ),
+            "terminal.paste",
+            &overrides,
+        ));
+        assert!(shortcut_matches(
+            &key_event(
+                "v",
+                Modifiers {
+                    control: true,
+                    shift: true,
+                    ..Modifiers::default()
+                }
+            ),
+            "terminal.paste",
+            &overrides,
+        ));
+    }
+}
 use std::collections::HashMap;
 
 use gpui::KeyDownEvent;

@@ -6,7 +6,7 @@ use gpui::{
     SharedString, div, prelude::*, px, rgb, rgba,
 };
 use nyaterm_terminal::{TerminalScreen, TerminalSnapshot};
-use nyaterm_ui::NyaContextMenu;
+use nyaterm_ui::{NyaContextMenu, NyaCopy, NyaPaste, NyaSelectAll};
 
 use crate::features::NyaTermApp;
 use crate::features::formatting::{
@@ -16,7 +16,9 @@ use crate::features::terminal::terminal_runtime::TerminalMouseReportRequest;
 use crate::features::terminal::terminal_selection_runtime::{
     terminal_bounds_tracker, terminal_gutter_metrics, terminal_line_number_digits,
 };
-use crate::features::terminal::{TERMINAL_KEY_CONTEXT, TerminalShiftTab, TerminalTab};
+use crate::features::terminal::{
+    TERMINAL_KEY_CONTEXT, TerminalControlC, TerminalShiftTab, TerminalTab,
+};
 use crate::models::{
     SessionLaunchConfig, TerminalPerformanceMode, TerminalPerformanceOverlay, TerminalSearchMode,
     terminal_action_link_matcher_key, terminal_expensive_interactions_enabled,
@@ -51,6 +53,21 @@ impl NyaTermApp {
                 },
                 key: "tab".to_string(),
                 key_char: None,
+            },
+            is_held: false,
+            prefer_character_input: false,
+        }
+    }
+
+    fn terminal_control_c_key_event() -> KeyDownEvent {
+        KeyDownEvent {
+            keystroke: gpui::Keystroke {
+                modifiers: gpui::Modifiers {
+                    control: true,
+                    ..gpui::Modifiers::default()
+                },
+                key: "c".to_string(),
+                key_char: Some("c".to_string()),
             },
             is_held: false,
             prefer_character_input: false,
@@ -157,16 +174,19 @@ impl NyaTermApp {
             }
             return;
         }
-        let keystroke = &event.keystroke;
-        let primary = keystroke.modifiers.control || keystroke.modifiers.platform;
-        if primary
-            && !keystroke.modifiers.alt
-            && !keystroke.modifiers.function
-            && matches!(keystroke.key.as_str(), "v" | "V")
+        #[cfg(target_os = "macos")]
         {
-            cx.stop_propagation();
-            self.paste_from_clipboard(window, cx);
-            return;
+            let keystroke = &event.keystroke;
+            if keystroke.modifiers.platform
+                && !keystroke.modifiers.control
+                && !keystroke.modifiers.alt
+                && !keystroke.modifiers.function
+                && matches!(keystroke.key.as_str(), "v" | "V")
+            {
+                cx.stop_propagation();
+                self.paste_from_clipboard(window, cx);
+                return;
+            }
         }
         if self.terminal_should_defer_key_text_to_input_handler(event) {
             return;
@@ -754,6 +774,22 @@ impl NyaTermApp {
                     .on_action(cx.listener(|this, _: &TerminalShiftTab, window, cx| {
                         let event = NyaTermApp::terminal_tab_key_event(true);
                         this.handle_terminal_surface_key_down(&event, window, cx);
+                    }))
+                    .on_action(cx.listener(|this, _: &TerminalControlC, window, cx| {
+                        let event = NyaTermApp::terminal_control_c_key_event();
+                        this.handle_terminal_surface_key_down(&event, window, cx);
+                    }))
+                    .on_action(cx.listener(|this, _: &NyaCopy, _window, cx| {
+                        this.copy_terminal_selection_or_visible(cx);
+                        cx.stop_propagation();
+                    }))
+                    .on_action(cx.listener(|this, _: &NyaPaste, window, cx| {
+                        this.paste_from_clipboard(window, cx);
+                        cx.stop_propagation();
+                    }))
+                    .on_action(cx.listener(|this, _: &NyaSelectAll, _window, cx| {
+                        this.select_all_terminal(cx);
+                        cx.stop_propagation();
                     }))
                     .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                         this.handle_terminal_surface_key_down(event, window, cx);

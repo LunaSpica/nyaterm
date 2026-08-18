@@ -745,15 +745,6 @@ impl Render for AppShell {
             .on_action(cx.listener(|this, _: &NativeResetZoom, window, cx| {
                 this.perform_native_menu_command(NativeMenuCommand::ResetZoom, window, cx);
             }))
-            .on_action(cx.listener(|this, _: &NyaCopy, window, cx| {
-                this.perform_native_menu_command(NativeMenuCommand::TerminalCopy, window, cx);
-            }))
-            .on_action(cx.listener(|this, _: &NyaPaste, window, cx| {
-                this.perform_native_menu_command(NativeMenuCommand::TerminalPaste, window, cx);
-            }))
-            .on_action(cx.listener(|this, _: &NyaSelectAll, window, cx| {
-                this.perform_native_menu_command(NativeMenuCommand::TerminalSelectAll, window, cx);
-            }))
             .on_action(cx.listener(|this, _: &NativeRefitTerminals, _window, cx| {
                 this.update_app(cx, |app, cx| {
                     app.resize_all_known_terminal_surfaces_for_menu(cx);

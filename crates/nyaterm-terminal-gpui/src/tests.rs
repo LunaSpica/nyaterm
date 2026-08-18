@@ -73,6 +73,12 @@ fn terminal_key_bytes_encode_modified_xterm_keys() {
 }
 
 #[test]
+fn terminal_key_bytes_send_control_c_and_control_v() {
+    assert_eq!(key_bytes("c", Some("c"), mods(false, false, true)), b"\x03");
+    assert_eq!(key_bytes("v", Some("v"), mods(false, false, true)), b"\x16");
+}
+
+#[test]
 fn terminal_key_bytes_reserve_platform_only_shortcuts() {
     let event = key_event(
         "c",

@@ -19,12 +19,14 @@ mod window_state;
 
 pub(in crate::features) const TERMINAL_KEY_CONTEXT: &str = "Terminal";
 
-actions!(terminal, [TerminalTab, TerminalShiftTab]);
+actions!(terminal, [TerminalTab, TerminalShiftTab, TerminalControlC]);
 
 pub(in crate::features) fn init_key_bindings(cx: &mut App) {
     cx.bind_keys([
         KeyBinding::new("tab", TerminalTab, Some(TERMINAL_KEY_CONTEXT)),
         KeyBinding::new("shift-tab", TerminalShiftTab, Some(TERMINAL_KEY_CONTEXT)),
+        #[cfg(not(target_os = "macos"))]
+        KeyBinding::new("ctrl-c", TerminalControlC, Some(TERMINAL_KEY_CONTEXT)),
     ]);
 }
 
@@ -42,9 +44,9 @@ pub(in crate::features) use window_state::{
 mod tests {
     use gpui::{KeyBinding, KeyContext, Keymap, actions};
 
-    use super::{TERMINAL_KEY_CONTEXT, TerminalShiftTab, TerminalTab};
+    use super::{TERMINAL_KEY_CONTEXT, TerminalControlC, TerminalShiftTab, TerminalTab};
 
-    actions!(terminal_test, [RootTab, RootShiftTab]);
+    actions!(terminal_test, [RootTab, RootShiftTab, RootCopy, InputCopy]);
 
     #[test]
     fn terminal_tab_bindings_shadow_root_focus_navigation() {
@@ -69,5 +71,48 @@ mod tests {
         assert!(!shift_tab_pending);
         assert!(tab_bindings[0].action().partial_eq(&TerminalTab));
         assert!(shift_tab_bindings[0].action().partial_eq(&TerminalShiftTab));
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn terminal_ctrl_c_binding_shadows_root_copy() {
+        let mut keymap = Keymap::default();
+        keymap.add_bindings([
+            KeyBinding::new("ctrl-c", RootCopy, Some("Root")),
+            KeyBinding::new("ctrl-c", TerminalControlC, Some(TERMINAL_KEY_CONTEXT)),
+        ]);
+        let contexts = [
+            KeyContext::parse("Root").unwrap(),
+            KeyContext::parse(TERMINAL_KEY_CONTEXT).unwrap(),
+        ];
+
+        let (bindings, pending) =
+            keymap.bindings_for_input(&[gpui::Keystroke::parse("ctrl-c").unwrap()], &contexts);
+
+        assert!(!pending);
+        assert!(bindings[0].action().partial_eq(&TerminalControlC));
+        assert!(bindings[1].action().partial_eq(&RootCopy));
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn input_ctrl_c_binding_stays_local_without_terminal_context() {
+        let mut keymap = Keymap::default();
+        keymap.add_bindings([
+            KeyBinding::new("ctrl-c", RootCopy, Some("Root")),
+            KeyBinding::new("ctrl-c", InputCopy, Some("Input")),
+            KeyBinding::new("ctrl-c", TerminalControlC, Some(TERMINAL_KEY_CONTEXT)),
+        ]);
+        let contexts = [
+            KeyContext::parse("Root").unwrap(),
+            KeyContext::parse("Input").unwrap(),
+        ];
+
+        let (bindings, pending) =
+            keymap.bindings_for_input(&[gpui::Keystroke::parse("ctrl-c").unwrap()], &contexts);
+
+        assert!(!pending);
+        assert!(bindings[0].action().partial_eq(&InputCopy));
+        assert!(bindings[1].action().partial_eq(&RootCopy));
     }
 }
