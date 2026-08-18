@@ -1,6 +1,8 @@
+use std::time::Duration;
+
 use gpui::{
-    AnyElement, Hsla, Img, IntoElement, Svg, div, img, linear_color_stop, linear_gradient,
-    prelude::*, px, rgb, svg,
+    AnimationExt, AnyElement, Hsla, Img, IntoElement, SharedString, Svg, div, img,
+    linear_color_stop, linear_gradient, prelude::*, px, rgb, svg,
 };
 
 use crate::features::{icons::IconDef, icons::file_entry_icon};
@@ -22,6 +24,44 @@ pub(in crate::features) fn mono_icon(path: &'static str, color: Hsla, size_px: f
         .flex_none()
         .path(path)
         .text_color(color)
+}
+
+/// Tauri-compatible connection spinner: a dim ring with a rotating bright arc.
+pub(in crate::features) fn connection_spinner(
+    animation_id: SharedString,
+    color: Hsla,
+    size_px: f32,
+) -> impl IntoElement {
+    let stroke_px = (size_px / 6.).max(1.);
+    div()
+        .relative()
+        .size(px(size_px))
+        .flex_none()
+        .child(
+            div()
+                .absolute()
+                .inset_0()
+                .rounded_full()
+                .border(px(stroke_px))
+                .border_color(color.opacity(0.25)),
+        )
+        .child(
+            svg()
+                .absolute()
+                .inset_0()
+                .size(px(size_px))
+                .path("icons/conn/spinner-arc.svg")
+                .text_color(color.opacity(0.75))
+                .with_animation(
+                    animation_id,
+                    gpui::Animation::new(Duration::from_secs(1)).repeat(),
+                    |svg, delta| {
+                        svg.with_transformation(gpui::Transformation::rotate(gpui::percentage(
+                            delta,
+                        )))
+                    },
+                ),
+        )
 }
 
 /// Paint a full-color asset from `color/**`.

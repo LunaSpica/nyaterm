@@ -102,9 +102,17 @@ impl NyaTermApp {
             startup_command,
             multiplex_key,
             source_connection_id,
+            reconnect_session_id,
+            workspace_split,
             status_message,
             append_start_log,
         } = registration;
+
+        if let Some(connection_id) = source_connection_id.as_deref() {
+            self.session
+                .start
+                .release_saved_connection_start(connection_id);
+        }
 
         let reconnecting = self.session.start.register_pending(
             request_id.clone(),
@@ -123,7 +131,8 @@ impl NyaTermApp {
                 startup_command,
                 multiplex_key,
                 source_connection_id,
-                reconnect_session_id: None,
+                workspace_split,
+                reconnect_session_id,
             },
         );
         if !reconnecting {
@@ -155,6 +164,8 @@ impl NyaTermApp {
             insert_index,
             seed_output,
             startup_command,
+            reconnect_session_id,
+            workspace_split,
         } = options;
         let kind = session_kind_for_launch_config(&launch_config);
         let request_id = self.register_pending_session_start(
@@ -172,6 +183,8 @@ impl NyaTermApp {
                 startup_command,
                 multiplex_key: None,
                 source_connection_id,
+                reconnect_session_id,
+                workspace_split,
                 status_message: format!("connecting to {connection_name}"),
                 append_start_log: true,
             },
@@ -219,11 +232,13 @@ impl NyaTermApp {
             insert_index,
             seed_output,
             startup_command,
+            reconnect_session_id,
+            workspace_split,
         } = options;
         config.deferred_pty = true;
         let geometry_session_hint = after_session_id
             .as_deref()
-            .or(self.session.start.reconnect_target());
+            .or(reconnect_session_id.as_deref());
         if let Some(geometry) =
             self.desired_terminal_resize_geometry_for_session_hint(geometry_session_hint)
         {
@@ -247,6 +262,8 @@ impl NyaTermApp {
                 startup_command,
                 multiplex_key: None,
                 source_connection_id,
+                reconnect_session_id,
+                workspace_split,
                 status_message: format!("connecting to {connection_name}"),
                 append_start_log: true,
             },
@@ -299,11 +316,13 @@ impl NyaTermApp {
             insert_index,
             seed_output,
             startup_command,
+            reconnect_session_id,
+            workspace_split,
         } = options;
         config.deferred_pty = true;
         let geometry_session_hint = after_session_id
             .as_deref()
-            .or(self.session.start.reconnect_target());
+            .or(reconnect_session_id.as_deref());
         if let Some(geometry) =
             self.desired_terminal_resize_geometry_for_session_hint(geometry_session_hint)
         {
@@ -328,6 +347,8 @@ impl NyaTermApp {
                 startup_command,
                 multiplex_key: Some(multiplex_key.clone()),
                 source_connection_id,
+                reconnect_session_id,
+                workspace_split,
                 status_message: format!("multiplexing SSH session {connection_name}"),
                 append_start_log: false,
             },
@@ -451,11 +472,13 @@ impl NyaTermApp {
                     let reconnect_session_id = pending
                         .as_ref()
                         .and_then(|pending| pending.reconnect_session_id.clone());
+                    let workspace_split = pending
+                        .as_ref()
+                        .and_then(|pending| pending.workspace_split.clone());
                     if reconnect_session_id
                         .as_deref()
                         .is_some_and(|stale_id| !self.session.has_session(stale_id))
                     {
-                        self.session.start.clear_reconnect_target();
                         if let Err(error) = self.session.manager().close(&session_id) {
                             tracing::warn!(
                                 request_id = %request_id,
@@ -562,13 +585,10 @@ impl NyaTermApp {
                         self.persist_workspace_pane_layout();
                         self.persist_terminal_window_layout();
                     }
-                    let should_activate = self.session.start.complete_success(
-                        pending
-                            .as_ref()
-                            .is_some_and(|pending| pending.reconnect_session_id.is_some()),
-                        was_active_pending,
-                        self.session.active_id().is_none(),
-                    );
+                    let should_activate = self
+                        .session
+                        .start
+                        .complete_success(was_active_pending, self.session.active_id().is_none());
                     if should_activate {
                         self.activate_session_id(&session_id);
                         self.load_transfer_browser_for_active_session_if_needed(cx);
@@ -590,12 +610,12 @@ impl NyaTermApp {
                         self.recording
                             .schedule_auto_start(session_id.clone(), session_info.name.clone());
                     }
+                    self.apply_workspace_split_for_duplicate(workspace_split, &session_id);
                     if let Some(startup_command) =
                         pending.and_then(|pending| pending.startup_command)
                     {
                         self.schedule_startup_command(session_id.clone(), startup_command, cx);
                     }
-                    self.apply_pending_workspace_split_for_duplicate(&session_id);
                     self.shell.select_nav(NavItem::Workspace);
                     let ui_register_duration = ui_register_started_at.elapsed();
                     let request_to_ui_duration = requested_at

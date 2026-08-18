@@ -2,7 +2,7 @@ use nyaterm_core::AiExecutionProfile;
 use nyaterm_transport::{SessionKind, SshMultiplexHandle, SshSessionConfig};
 
 use super::state::SavedConnectionStartOptions;
-use crate::models::{SessionLaunchConfig, StartupCommandRequest};
+use crate::models::{SessionLaunchConfig, StartupCommandRequest, WorkspaceSplitDirection};
 
 pub(in crate::features) struct MultiplexSshStartRequest {
     pub connection_name: String,
@@ -27,6 +27,8 @@ pub(in crate::features) struct PendingSessionStartRegistration {
     pub(in crate::features) startup_command: Option<StartupCommandRequest>,
     pub(in crate::features) multiplex_key: Option<String>,
     pub(in crate::features) source_connection_id: Option<String>,
+    pub(in crate::features) reconnect_session_id: Option<String>,
+    pub(in crate::features) workspace_split: Option<(WorkspaceSplitDirection, String)>,
     pub(in crate::features) status_message: String,
     pub(in crate::features) append_start_log: bool,
 }

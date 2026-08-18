@@ -21,12 +21,6 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.session.start_has_pending() {
-            self.shell
-                .set_status("wait for the pending session to finish connecting".to_string());
-            cx.notify();
-            return;
-        }
         self.refresh_connection_serial_ports();
         self.session.dialogs.open_temporary_ssh_link();
         self.forget_text_inputs("temporary-ssh.");
@@ -59,16 +53,6 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        if self.session.start_has_pending() {
-            self.session
-                .dialogs
-                .reject_temporary_ssh_link("temporarySsh.connecting");
-            self.shell
-                .set_status("wait for the pending session to finish connecting".to_string());
-            cx.notify();
-            return false;
-        }
-
         match self.session.dialogs.temporary_link_protocol() {
             TemporaryLinkProtocol::Ssh => self.submit_temporary_ssh_link(cx),
             TemporaryLinkProtocol::Telnet => self.submit_temporary_telnet_link(cx),

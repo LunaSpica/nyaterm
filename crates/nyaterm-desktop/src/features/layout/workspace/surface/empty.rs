@@ -1,9 +1,9 @@
-use std::time::Duration;
-
-use gpui::{AnimationExt, Context, FontWeight, IntoElement, div, prelude::*, px, rgb, svg};
+use gpui::{Context, FontWeight, IntoElement, SharedString, div, prelude::*, px, rgb, svg};
 use nyaterm_core::truncate_preview;
 
-use crate::features::view_widgets::{empty_workspace_action, nyaterm_logo_mark};
+use crate::features::view_widgets::{
+    connection_spinner, empty_workspace_action, nyaterm_logo_mark,
+};
 use crate::features::{NyaTermApp, text_inputs::TextInputSetup};
 use crate::models::BottomPanelMode;
 use crate::models::NavItem;
@@ -121,21 +121,11 @@ impl NyaTermApp {
             .justify_center()
             .gap_3()
             .bg(self.shell_surface_color(self.terminal_theme_palette().terminal_bg))
-            .child(
-                svg()
-                    .size(px(28.))
-                    .path("icons/conn/connect.svg")
-                    .text_color(rgb(palette.primary))
-                    .with_animation(
-                        "pending-workspace-spinner",
-                        gpui::Animation::new(Duration::from_millis(900)).repeat(),
-                        |svg, delta| {
-                            svg.with_transformation(gpui::Transformation::rotate(gpui::percentage(
-                                delta,
-                            )))
-                        },
-                    ),
-            )
+            .child(connection_spinner(
+                SharedString::from("pending-workspace-spinner"),
+                rgb(palette.primary).into(),
+                24.,
+            ))
             .child(
                 div()
                     .max_w(px(320.))

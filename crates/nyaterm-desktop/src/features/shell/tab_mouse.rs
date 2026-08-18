@@ -376,7 +376,7 @@ impl NyaTermApp {
                 self.session.is_disconnected(&pane_id)
                     && self.tab_action_can_spawn_session(&pane_id)
                     && !self.session.session_is_busy(&pane_id)
-                    && !self.session.start_has_pending()
+                    && !self.session.start_reconnect_is_pending(&pane_id)
             }
             "disconnect_session" => {
                 !self.session.session_is_busy(&pane_id) && !self.session.is_disconnected(&pane_id)

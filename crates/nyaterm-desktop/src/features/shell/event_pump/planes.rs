@@ -278,15 +278,12 @@ impl NyaTermApp {
                 control_plane_ms = control.duration.as_millis(),
                 control_session_start_ms = control.timings.session_start.as_millis(),
                 control_prompts_ms = control.timings.prompts.as_millis(),
-                control_saved_connection_queue_ms =
-                    control.timings.saved_connection_queue.as_millis(),
                 session_events_ms = session_events_duration.as_millis(),
                 background_runtime_ms = data.background_total.as_millis(),
                 terminal_frames_deferred = data.background_timings.terminal_frames_deferred,
                 terminal_frames_deferred_after_output = data.defer_terminal_frame_after_output,
                 terminal_frames_deferred_for_pacing = data.terminal_frame_apply_paced,
                 startup_restore_ms = idle.startup_restore.as_millis(),
-                saved_connection_queue_ms = control.timings.saved_connection_queue.as_millis(),
                 terminal_resize_ms = idle.terminal_resize.as_millis(),
                 render_requests_ms = idle.render_requests.as_millis(),
                 render_requests_output_pressure = idle.render_request_output_pressure,
@@ -305,7 +302,6 @@ impl NyaTermApp {
                 frame_event_wake_count = self.terminal.frame_queue_metrics().event_wake_count,
                 pending_frame_events = self.terminal.frame_queue_metrics().pending_event_count,
                 pending_session_starts = self.session.start_pending_count(),
-                queued_saved_connection_starts = self.session.start_saved_connection_queue_len(),
                 output_pressure,
                 next_tick_delay_ms = self.window_runtime_tick_delay().as_millis(),
                 visual_dirty,
@@ -418,7 +414,7 @@ impl NyaTermApp {
 
     pub(super) fn drive_runtime_control_plane(
         &mut self,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) -> RuntimeControlPlaneResult {
         let started_at = Instant::now();
@@ -428,7 +424,6 @@ impl NyaTermApp {
         // Common idle path: no connecting sessions and no auth/SFTP prompts.
         if !self.session.start_has_pending()
             && !self.session.start_has_cancelled_results()
-            && !self.session.start_has_queued_saved_connections()
             && !self.session.prompt_has_pending_or_active_prompt()
         {
             return RuntimeControlPlaneResult {
@@ -449,10 +444,6 @@ impl NyaTermApp {
             | self.drain_duplicate_prompts()
             | self.refresh_keyboard_interactive_totp();
         timings.prompts = stage_started_at.elapsed();
-
-        let stage_started_at = Instant::now();
-        dirty |= self.drive_saved_connection_start_queue(window, cx);
-        timings.saved_connection_queue = stage_started_at.elapsed();
 
         RuntimeControlPlaneResult {
             dirty,
@@ -676,11 +667,8 @@ impl NyaTermApp {
             // Cursor blink is terminal-local; do not rebuild full shell.
             self.notify_active_terminal_surface(cx);
         }
-        let render_work_pressure = terminal_render_work_pressure_active(
-            output_pressure,
-            self.session.start_has_pending(),
-            self.session.start_has_queued_saved_connections(),
-        );
+        let render_work_pressure =
+            terminal_render_work_pressure_active(output_pressure, self.session.start_has_pending());
         // Large-output protection recovery accounting.
         // Under pressure only touch views that already need recovery accounting.
         let visible_session_ids = self.visible_terminal_session_ids();

@@ -21,9 +21,9 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.session.start_has_pending() {
+        if self.session.start_has_active_pending() || self.session.start_has_active_failed() {
             self.shell
-                .set_status("wait for the pending session to finish connecting".to_string());
+                .set_status("select a connected session before duplicating".to_string());
             cx.notify();
             return;
         }
@@ -44,6 +44,7 @@ impl NyaTermApp {
             .custom_name(&source_session_id)
             .map(str::to_string);
         let custom_color = self.session.tab_color(&source_session_id);
+        let workspace_split = self.session.start_take_pending_workspace_split();
 
         match metadata.launch_config.clone() {
             SessionLaunchConfig::Local(mut config) => {
@@ -58,6 +59,7 @@ impl NyaTermApp {
                         tab_color: custom_color,
                         after_session_id: Some(source_session_id),
                         startup_command,
+                        workspace_split: workspace_split.clone(),
                         ..Default::default()
                     },
                     cx,
@@ -74,6 +76,7 @@ impl NyaTermApp {
                         tab_color: custom_color,
                         after_session_id: Some(source_session_id),
                         startup_command,
+                        workspace_split: workspace_split.clone(),
                         ..Default::default()
                     },
                     cx,
@@ -90,6 +93,7 @@ impl NyaTermApp {
                         tab_color: custom_color,
                         after_session_id: Some(source_session_id),
                         startup_command,
+                        workspace_split: workspace_split.clone(),
                         ..Default::default()
                     },
                     cx,
@@ -106,6 +110,7 @@ impl NyaTermApp {
                         tab_color: custom_color,
                         after_session_id: Some(source_session_id),
                         startup_command,
+                        workspace_split: workspace_split.clone(),
                         ..Default::default()
                     },
                     cx,
@@ -134,9 +139,9 @@ impl NyaTermApp {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.session.start_has_pending() {
+        if self.session.start_has_active_pending() || self.session.start_has_active_failed() {
             self.shell
-                .set_status("wait for the pending session to finish connecting".to_string());
+                .set_status("select a connected session before multiplexing".to_string());
             cx.notify();
             return;
         }
@@ -292,9 +297,9 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        if self.session.start_has_pending() {
+        if self.session.start_reconnect_is_pending(&session_id) {
             self.shell
-                .set_status("wait for the pending session to finish connecting".to_string());
+                .set_status("session is already reconnecting".to_string());
             cx.notify();
             return;
         }
@@ -349,8 +354,6 @@ impl NyaTermApp {
         let source_connection_id = metadata.source_connection_id;
         let ai_execution_profile = metadata.ai_execution_profile;
         let seed = Some(seed_output);
-        self.session.start.set_reconnect_target(old_id.clone());
-
         match launch_config {
             SessionLaunchConfig::Local(mut config) => {
                 self.apply_desired_geometry_to_local_config(&mut config);
@@ -364,6 +367,7 @@ impl NyaTermApp {
                         tab_color: custom_color,
                         insert_index: Some(source_index),
                         seed_output: seed,
+                        reconnect_session_id: Some(old_id.clone()),
                         ..Default::default()
                     },
                     cx,
@@ -380,6 +384,7 @@ impl NyaTermApp {
                         tab_color: custom_color,
                         insert_index: Some(source_index),
                         seed_output: seed,
+                        reconnect_session_id: Some(old_id.clone()),
                         ..Default::default()
                     },
                     cx,
@@ -396,6 +401,7 @@ impl NyaTermApp {
                         tab_color: custom_color,
                         insert_index: Some(source_index),
                         seed_output: seed,
+                        reconnect_session_id: Some(old_id.clone()),
                         ..Default::default()
                     },
                     cx,
@@ -412,6 +418,7 @@ impl NyaTermApp {
                         tab_color: custom_color,
                         insert_index: Some(source_index),
                         seed_output: seed,
+                        reconnect_session_id: Some(old_id.clone()),
                         ..Default::default()
                     },
                     cx,

@@ -1,8 +1,8 @@
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use gpui::{
-    AnimationExt, ClickEvent, Context, FontWeight, IntoElement, MouseButton, ScrollDelta,
-    ScrollWheelEvent, SharedString, div, point, prelude::*, px, rgb, rgba, svg,
+    ClickEvent, Context, FontWeight, IntoElement, MouseButton, ScrollDelta, ScrollWheelEvent,
+    SharedString, div, point, prelude::*, px, rgb, rgba, svg,
 };
 use nyaterm_core::truncate_preview;
 
@@ -10,7 +10,7 @@ use crate::features::NyaTermApp;
 use crate::features::formatting::session_kind_label;
 use crate::features::icons::resolve_connection_icon;
 use crate::features::shell::{SessionTabDragPayload, SessionTabDragPreview, SessionTabTooltip};
-use crate::features::view_widgets::themed_icon;
+use crate::features::view_widgets::{connection_spinner, themed_icon};
 
 use super::super::super::view_helpers::session_kind_icon_path;
 
@@ -91,21 +91,11 @@ impl NyaTermApp {
                     .flex()
                     .items_center()
                     .justify_center()
-                    .child(
-                        svg()
-                            .size(px(12.))
-                            .path("icons/conn/connect.svg")
-                            .text_color(rgb(palette.primary))
-                            .with_animation(
-                                spinner_id,
-                                gpui::Animation::new(Duration::from_millis(900)).repeat(),
-                                |svg, delta| {
-                                    svg.with_transformation(gpui::Transformation::rotate(
-                                        gpui::percentage(delta),
-                                    ))
-                                },
-                            ),
-                    ),
+                    .child(connection_spinner(
+                        spinner_id,
+                        rgb(palette.primary).into(),
+                        14.,
+                    )),
             )
             .child(
                 div()

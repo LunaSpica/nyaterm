@@ -1,13 +1,11 @@
-use std::time::Duration;
-
 use gpui::{
-    AnimationExt, Context, FontWeight, IntoElement, SharedString, div, prelude::*, px, relative,
-    rgb, svg,
+    Context, FontWeight, IntoElement, SharedString, div, prelude::*, px, relative, rgb, svg,
 };
 
 use super::super::super::NyaTermApp;
 use super::PaneBorderEdges;
 use crate::features::formatting::short_id;
+use crate::features::view_widgets::connection_spinner;
 use crate::models::{WorkspacePaneNode, WorkspaceSplitDirection};
 use crate::widgets::small_button;
 use nyaterm_core::truncate_preview;
@@ -30,21 +28,11 @@ impl NyaTermApp {
             .justify_center()
             .gap_3()
             .bg(self.shell_transparent_color(self.terminal_theme_palette().terminal_bg))
-            .child(
-                svg()
-                    .size(px(28.))
-                    .path("icons/conn/connect.svg")
-                    .text_color(rgb(palette.primary))
-                    .with_animation(
-                        SharedString::from(format!("reconnect-spinner-{session_id}")),
-                        gpui::Animation::new(Duration::from_millis(900)).repeat(),
-                        |svg, delta| {
-                            svg.with_transformation(gpui::Transformation::rotate(gpui::percentage(
-                                delta,
-                            )))
-                        },
-                    ),
-            )
+            .child(connection_spinner(
+                SharedString::from(format!("reconnect-spinner-{session_id}")),
+                rgb(palette.primary).into(),
+                32.,
+            ))
             .child(
                 div()
                     .flex()

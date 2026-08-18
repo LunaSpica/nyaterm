@@ -60,8 +60,10 @@ impl NyaTermApp {
         let can_spawn_session = self.tab_action_can_spawn_session(&session_id);
         let can_session_info = self.tab_action_can_show_session_info(&session_id);
         let can_multiplex = active_session.kind == SessionKind::Ssh && !is_busy && !is_disconnected;
-        let can_reconnect =
-            is_disconnected && can_spawn_session && !is_busy && !self.session.start_has_pending();
+        let can_reconnect = is_disconnected
+            && can_spawn_session
+            && !is_busy
+            && !self.session.start_reconnect_is_pending(&session_id);
         let can_disconnect = !is_busy && !is_disconnected;
         let can_use_ai = !is_busy && !is_disconnected;
         let tab_sessions = self.ordered_tab_sessions();

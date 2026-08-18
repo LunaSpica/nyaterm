@@ -20,8 +20,8 @@ pub(in crate::features) use rows::{CloudSyncHistoryRowLabels, cloud_sync_history
 
 mod icons;
 pub(in crate::features) use icons::{
-    activity_icon, color_icon, connection_type_icon, mono_icon, nyaterm_app_icon,
-    nyaterm_logo_mark, themed_icon, transfer_entry_icon,
+    activity_icon, color_icon, connection_spinner, connection_type_icon, mono_icon,
+    nyaterm_app_icon, nyaterm_logo_mark, themed_icon, transfer_entry_icon,
 };
 
 mod markdown;

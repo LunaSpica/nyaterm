@@ -45,10 +45,9 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        let queued = self.enqueue_saved_connection_starts(selected, cx);
+        let started = self.start_saved_connection_starts(selected, window, cx);
         self.shell
-            .set_status(format!("queued {queued} connection(s)"));
-        self.drive_saved_connection_start_queue(window, cx);
+            .set_status(format!("starting {started} connection(s)"));
     }
 
     pub(in crate::features) fn start_group_connections(
@@ -66,10 +65,9 @@ impl NyaTermApp {
             cx.notify();
             return;
         }
-        let queued = self.enqueue_saved_connection_starts(connections, cx);
+        let started = self.start_saved_connection_starts(connections, window, cx);
         self.shell
-            .set_status(format!("queued {queued} connection(s) from group"));
-        self.drive_saved_connection_start_queue(window, cx);
+            .set_status(format!("starting {started} connection(s) from group"));
     }
 
     pub(in crate::features) fn open_connection_group_open_confirm(
@@ -114,88 +112,28 @@ impl NyaTermApp {
         );
     }
 
-    pub(in crate::features) fn enqueue_saved_connection_start(
-        &mut self,
-        connection: SavedConnection,
-        cx: &mut Context<Self>,
-    ) -> bool {
-        self.enqueue_saved_connection_start_with_options(
-            connection,
-            SavedConnectionStartOptions::default(),
-            cx,
-        )
-    }
-
-    pub(in crate::features) fn enqueue_saved_connection_start_with_options(
-        &mut self,
-        connection: SavedConnection,
-        options: SavedConnectionStartOptions,
-        cx: &mut Context<Self>,
-    ) -> bool {
-        if self
-            .session
-            .start_saved_connection_is_pending_or_queued(&connection)
-        {
-            self.shell
-                .set_status(format!("{} is already queued", connection.name));
-            self.shell.show_workspace();
-            cx.notify();
-            return false;
-        }
-        let name = connection.name.clone();
-        let pending_count = self
-            .session
-            .start_queue_saved_connection(connection, options);
-        self.shell
-            .set_status(format!("queued {name} ({} pending)", pending_count));
-        self.shell.show_workspace();
-        cx.notify();
-        true
-    }
-
-    fn enqueue_saved_connection_starts(
+    fn start_saved_connection_starts(
         &mut self,
         connections: Vec<SavedConnection>,
-        cx: &mut Context<Self>,
-    ) -> usize {
-        let mut queued = 0usize;
-        for connection in connections {
-            if self.enqueue_saved_connection_start(connection, cx) {
-                queued = queued.saturating_add(1);
-            }
-        }
-        queued
-    }
-
-    pub(in crate::features) fn drive_saved_connection_start_queue(
-        &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) -> bool {
-        if !self.session.start_has_queued_saved_connections() || self.session.start_has_pending() {
-            return false;
-        }
-        let mut dirty = false;
-        while !self.session.start_has_pending() {
-            let Some(start) = self.session.start_pop_saved_connection() else {
-                return dirty;
-            };
+    ) -> usize {
+        let mut started = 0usize;
+        for connection in connections {
             if self
                 .session
-                .start_saved_connection_is_pending(&start.connection)
+                .start_saved_connection_is_pending_or_preparing(&connection)
             {
-                dirty = true;
                 continue;
             }
-            let before_pending_count = self.session.start_pending_count();
-            self.start_saved_connection_with_options(start.connection, start.options, window, cx);
-            dirty = true;
-            if self.session.start_has_pending()
-                || self.session.start_pending_count() > before_pending_count
-            {
-                return true;
-            }
+            self.start_saved_connection_with_options(
+                connection,
+                SavedConnectionStartOptions::default(),
+                window,
+                cx,
+            );
+            started = started.saturating_add(1);
         }
-        dirty
+        started
     }
 }

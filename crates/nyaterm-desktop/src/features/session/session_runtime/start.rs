@@ -89,24 +89,16 @@ impl NyaTermApp {
         options: SavedConnectionStartOptions,
         cx: &mut Context<Self>,
     ) {
-        if self
-            .session
-            .start_saved_connection_is_pending_or_queued(&connection)
-        {
-            self.shell.set_status(format!(
-                "{} is already connecting or queued",
-                connection.name
-            ));
+        if !self.session.start_reserve_saved_connection(&connection.id) {
+            self.shell
+                .set_status(format!("{} is already connecting", connection.name));
             self.shell.show_workspace();
             cx.notify();
             return;
         }
-        if self.session.start_has_pending() {
-            self.enqueue_saved_connection_start_with_options(connection, options, cx);
-            return;
-        }
 
         if let Some(password_id) = saved_connection_password_id(&connection) {
+            let connection_id = connection.id.clone();
             let connection_name = connection.name.clone();
             self.shell
                 .set_status(format!("loading saved credentials for {connection_name}"));
@@ -121,6 +113,8 @@ impl NyaTermApp {
                             .password
                             .filter(|password| !password.trim().is_empty()),
                         Ok(None) => {
+                            this.session
+                                .start_release_saved_connection(&connection_id);
                             this.shell.set_status(format!(
                                 "failed to start {connection_name}: saved password was not found"
                             ));
@@ -128,6 +122,8 @@ impl NyaTermApp {
                             return;
                         }
                         Err(error) => {
+                            this.session
+                                .start_release_saved_connection(&connection_id);
                             this.shell.set_status(format!(
                                 "failed to start {connection_name}: could not load saved password: {error}"
                             ));
@@ -136,6 +132,8 @@ impl NyaTermApp {
                         }
                     };
                     let Some(password) = password else {
+                        this.session
+                            .start_release_saved_connection(&connection_id);
                         this.shell.set_status(format!(
                             "failed to start {connection_name}: saved password is empty or locked"
                         ));
@@ -147,7 +145,7 @@ impl NyaTermApp {
                         auth.password = Some(password);
                         auth.has_password = false;
                     }
-                    this.continue_saved_connection_start(connection, options, cx);
+                    this.start_saved_connection_ready(connection, options, cx);
                 },
                 cx,
             );
@@ -164,6 +162,8 @@ impl NyaTermApp {
         options: SavedConnectionStartOptions,
         cx: &mut Context<Self>,
     ) {
+        let connection_id = connection.id.clone();
+        let workspace_split = options.workspace_split.clone();
         match connection.config.clone() {
             ConnectionType::LocalTerminal {
                 shell_path,
@@ -351,7 +351,10 @@ impl NyaTermApp {
                         }
                         self.persist_connection_used(connection.id.clone(), cx);
                         self.activate_session_id(&session_id);
-                        self.apply_pending_workspace_split_for_duplicate(&session_id);
+                        self.apply_workspace_split_for_duplicate(
+                            workspace_split.clone(),
+                            &session_id,
+                        );
                         self.shell
                             .set_status(format!("connecting RDP {}", connection.name));
                     }
@@ -450,7 +453,10 @@ impl NyaTermApp {
                         }
                         self.persist_connection_used(connection.id.clone(), cx);
                         self.activate_session_id(&session_id);
-                        self.apply_pending_workspace_split_for_duplicate(&session_id);
+                        self.apply_workspace_split_for_duplicate(
+                            workspace_split.clone(),
+                            &session_id,
+                        );
                         self.shell
                             .set_status(format!("connecting VNC {}", connection.name));
                     }
@@ -486,6 +492,7 @@ impl NyaTermApp {
                 cx.notify();
             }
         }
+        self.session.start_release_saved_connection(&connection_id);
     }
 
     pub(in crate::features) fn begin_background_saved_ssh_start(
@@ -503,12 +510,14 @@ impl NyaTermApp {
             insert_index,
             seed_output,
             startup_command,
+            reconnect_session_id,
+            workspace_split,
         } = options;
         let connection_name = connection.name.clone();
         let source_connection_id = Some(connection.id.clone());
         let geometry_session_hint = after_session_id
             .as_deref()
-            .or(self.session.start.reconnect_target());
+            .or(reconnect_session_id.as_deref());
         let desired_geometry =
             self.desired_terminal_resize_geometry_for_session_hint(geometry_session_hint);
         let build_context = self.ssh_session_config_build_context();
@@ -527,6 +536,8 @@ impl NyaTermApp {
                 startup_command,
                 multiplex_key: None,
                 source_connection_id,
+                reconnect_session_id,
+                workspace_split,
                 status_message: format!("connecting to {connection_name}"),
                 append_start_log: true,
             },

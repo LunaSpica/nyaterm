@@ -281,28 +281,6 @@ impl SessionFeatureState {
         self.start.failed_entries()
     }
 
-    pub(in crate::features) fn start_queue_saved_connection(
-        &mut self,
-        connection: SavedConnection,
-        options: SavedConnectionStartOptions,
-    ) -> usize {
-        self.start.queue_saved_connection(connection, options)
-    }
-
-    pub(in crate::features) fn start_pop_saved_connection(
-        &mut self,
-    ) -> Option<PendingSavedConnectionStart> {
-        self.start.pop_saved_connection()
-    }
-
-    pub(in crate::features) fn start_saved_connection_queue_len(&self) -> usize {
-        self.start.saved_connection_queue_len()
-    }
-
-    pub(in crate::features) fn start_has_queued_saved_connections(&self) -> bool {
-        self.start.has_queued_saved_connections()
-    }
-
     pub(in crate::features) fn start_saved_connection_is_pending(
         &self,
         connection: &SavedConnection,
@@ -310,12 +288,23 @@ impl SessionFeatureState {
         self.start.source_connection_is_pending(&connection.id)
     }
 
-    pub(in crate::features) fn start_saved_connection_is_pending_or_queued(
+    pub(in crate::features) fn start_saved_connection_is_pending_or_preparing(
         &self,
         connection: &SavedConnection,
     ) -> bool {
         self.start_saved_connection_is_pending(connection)
-            || self.start.saved_connection_is_queued(&connection.id)
+            || self.start.saved_connection_is_preparing(&connection.id)
+    }
+
+    pub(in crate::features) fn start_reserve_saved_connection(
+        &mut self,
+        connection_id: &str,
+    ) -> bool {
+        self.start.reserve_saved_connection_start(connection_id)
+    }
+
+    pub(in crate::features) fn start_release_saved_connection(&mut self, connection_id: &str) {
+        self.start.release_saved_connection_start(connection_id);
     }
 
     pub(in crate::features) fn start_reconnect_is_pending(&self, session_id: &str) -> bool {
@@ -2109,6 +2098,7 @@ pub(in crate::features) struct PendingSessionStart {
     pub startup_command: Option<StartupCommandRequest>,
     pub multiplex_key: Option<String>,
     pub source_connection_id: Option<String>,
+    pub workspace_split: Option<(WorkspaceSplitDirection, String)>,
     /// Existing pane being replaced by this request, when this is a reconnect.
     pub reconnect_session_id: Option<String>,
 }
@@ -2131,10 +2121,9 @@ pub(super) struct SessionStartFeatureState {
     failed: HashMap<String, FailedSessionStart>,
     active_failed: Option<String>,
     cancelled: HashSet<String>,
-    reconnect_replace_id: Option<String>,
     reconnect_failures: HashMap<String, String>,
     pending_workspace_split: Option<(WorkspaceSplitDirection, String)>,
-    saved_connection_queue: VecDeque<PendingSavedConnectionStart>,
+    preparing_saved_connections: HashSet<String>,
 }
 
 pub(in crate::features) enum SessionStartEventRequest {
@@ -2154,12 +2143,8 @@ pub(in crate::features) struct SavedConnectionStartOptions {
     pub insert_index: Option<usize>,
     pub seed_output: Option<String>,
     pub startup_command: Option<StartupCommandRequest>,
-}
-
-#[derive(Clone)]
-pub(in crate::features) struct PendingSavedConnectionStart {
-    pub connection: SavedConnection,
-    pub options: SavedConnectionStartOptions,
+    pub reconnect_session_id: Option<String>,
+    pub workspace_split: Option<(WorkspaceSplitDirection, String)>,
 }
 
 impl SessionStartFeatureState {
@@ -2173,10 +2158,9 @@ impl SessionStartFeatureState {
             failed: HashMap::new(),
             active_failed: None,
             cancelled: HashSet::new(),
-            reconnect_replace_id: None,
             reconnect_failures: HashMap::new(),
             pending_workspace_split: None,
-            saved_connection_queue: VecDeque::new(),
+            preparing_saved_connections: HashSet::new(),
         }
     }
 
@@ -2235,45 +2219,33 @@ impl SessionStartFeatureState {
             .any(|pending| pending.source_connection_id.as_deref() == Some(connection_id))
     }
 
-    pub(in crate::features) fn queue_saved_connection(
+    pub(in crate::features) fn reserve_saved_connection_start(
         &mut self,
-        connection: SavedConnection,
-        options: SavedConnectionStartOptions,
-    ) -> usize {
-        self.saved_connection_queue
-            .push_back(PendingSavedConnectionStart {
-                connection,
-                options,
-            });
-        self.saved_connection_queue.len()
+        connection_id: &str,
+    ) -> bool {
+        if self.source_connection_is_pending(connection_id)
+            || !self
+                .preparing_saved_connections
+                .insert(connection_id.to_string())
+        {
+            return false;
+        }
+        true
     }
 
-    pub(in crate::features) fn pop_saved_connection(
-        &mut self,
-    ) -> Option<PendingSavedConnectionStart> {
-        self.saved_connection_queue.pop_front()
+    pub(in crate::features) fn release_saved_connection_start(&mut self, connection_id: &str) {
+        self.preparing_saved_connections.remove(connection_id);
     }
 
-    pub(in crate::features) fn saved_connection_queue_len(&self) -> usize {
-        self.saved_connection_queue.len()
-    }
-
-    pub(in crate::features) fn has_queued_saved_connections(&self) -> bool {
-        !self.saved_connection_queue.is_empty()
-    }
-
-    pub(in crate::features) fn saved_connection_is_queued(&self, connection_id: &str) -> bool {
-        self.saved_connection_queue
-            .iter()
-            .any(|queued| queued.connection.id == connection_id)
+    pub(in crate::features) fn saved_connection_is_preparing(&self, connection_id: &str) -> bool {
+        self.preparing_saved_connections.contains(connection_id)
     }
 
     pub(in crate::features) fn register_pending(
         &mut self,
         request_id: String,
-        mut pending: PendingSessionStart,
+        pending: PendingSessionStart,
     ) -> bool {
-        pending.reconnect_session_id = self.reconnect_replace_id.clone();
         let reconnecting = pending.reconnect_session_id.is_some();
         self.pending.insert(request_id.clone(), pending);
         if !reconnecting {
@@ -2303,14 +2275,11 @@ impl SessionStartFeatureState {
 
     pub(in crate::features) fn complete_success(
         &mut self,
-        reconnecting: bool,
         was_active: bool,
         no_active_session: bool,
     ) -> bool {
-        if reconnecting {
-            self.reconnect_replace_id = None;
-        }
-        was_active || (self.active_pending.is_none() && no_active_session)
+        was_active
+            || (self.active_pending.is_none() && self.active_failed.is_none() && no_active_session)
     }
 
     pub(in crate::features) fn record_failure(
@@ -2325,7 +2294,6 @@ impl SessionStartFeatureState {
             .as_ref()
             .and_then(|pending| pending.reconnect_session_id.clone());
         if let Some(session_id) = reconnect_session_id {
-            self.reconnect_replace_id = None;
             if reconnect_session_exists {
                 self.reconnect_failures.insert(session_id, error);
             }
@@ -2349,18 +2317,6 @@ impl SessionStartFeatureState {
     pub(in crate::features) fn clear_active_selection(&mut self) {
         self.active_pending = None;
         self.active_failed = None;
-    }
-
-    pub(in crate::features) fn reconnect_target(&self) -> Option<&str> {
-        self.reconnect_replace_id.as_deref()
-    }
-
-    pub(in crate::features) fn set_reconnect_target(&mut self, session_id: String) {
-        self.reconnect_replace_id = Some(session_id);
-    }
-
-    pub(in crate::features) fn clear_reconnect_target(&mut self) {
-        self.reconnect_replace_id = None;
     }
 
     pub(in crate::features) fn reconnect_is_pending(&self, session_id: &str) -> bool {

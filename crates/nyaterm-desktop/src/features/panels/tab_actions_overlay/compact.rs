@@ -506,7 +506,9 @@ impl NyaTermApp {
                             this.select_session(reconnect_session_id.clone(), cx);
                             this.close_tab_actions(cx);
                             if this.session.session_is_busy(&reconnect_session_id)
-                                || this.session.start_has_pending()
+                                || this
+                                    .session
+                                    .start_reconnect_is_pending(&reconnect_session_id)
                             {
                                 cx.notify();
                                 return;

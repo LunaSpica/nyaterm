@@ -98,7 +98,6 @@ pub(super) struct RuntimeVisualPlaneResult {
 pub(super) struct RuntimeControlPlaneDrainTimings {
     pub(super) session_start: Duration,
     pub(super) prompts: Duration,
-    pub(super) saved_connection_queue: Duration,
 }
 
 #[derive(Clone, Copy)]
@@ -345,9 +344,8 @@ pub(super) fn terminal_input_idle_remaining_delay(
 pub(super) fn terminal_render_work_pressure_active(
     runtime_output_pressure: bool,
     pending_session_start: bool,
-    queued_saved_connection_start: bool,
 ) -> bool {
-    runtime_output_pressure || pending_session_start || queued_saved_connection_start
+    runtime_output_pressure || pending_session_start
 }
 
 pub(super) fn runtime_idle_plane_allowed(runtime_output_pressure: bool) -> bool {
@@ -890,10 +888,9 @@ mod tests {
 
     #[test]
     fn terminal_render_work_pressure_includes_pending_connection_work() {
-        assert!(!terminal_render_work_pressure_active(false, false, false));
-        assert!(terminal_render_work_pressure_active(true, false, false));
-        assert!(terminal_render_work_pressure_active(false, true, false));
-        assert!(terminal_render_work_pressure_active(false, false, true));
+        assert!(!terminal_render_work_pressure_active(false, false));
+        assert!(terminal_render_work_pressure_active(true, false));
+        assert!(terminal_render_work_pressure_active(false, true));
     }
 
     #[test]

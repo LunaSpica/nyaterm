@@ -187,9 +187,9 @@ impl NyaTermApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.session.start_has_pending() {
+        if self.session.start_has_active_pending() || self.session.start_has_active_failed() {
             self.shell
-                .set_status("wait for the pending session to finish connecting".to_string());
+                .set_status("select a connected session before splitting".to_string());
             cx.notify();
             return;
         }
@@ -210,13 +210,12 @@ impl NyaTermApp {
         self.duplicate_active_session(window, cx);
     }
 
-    pub(in crate::features) fn apply_pending_workspace_split_for_duplicate(
+    pub(in crate::features) fn apply_workspace_split_for_duplicate(
         &mut self,
+        workspace_split: Option<(WorkspaceSplitDirection, String)>,
         new_session_id: &str,
     ) {
-        let Some((direction, source_session_id)) =
-            self.session.start_take_pending_workspace_split()
-        else {
+        let Some((direction, source_session_id)) = workspace_split else {
             return;
         };
         self.attach_workspace_split(direction, source_session_id, new_session_id.to_string());

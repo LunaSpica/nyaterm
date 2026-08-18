@@ -2,7 +2,7 @@ use std::sync::{Arc, mpsc};
 use std::time::Instant;
 
 use gpui::TestAppContext;
-use nyaterm_core::{AiExecutionProfile, ConnectionType, SavedConnection, uuid};
+use nyaterm_core::{AiExecutionProfile, uuid};
 use nyaterm_store::{StoreConfig, StoreRuntime};
 use nyaterm_transport::{
     LocalSessionConfig, SessionEvent, SessionKind, SessionManager, SshCredentialPrompt,
@@ -22,9 +22,8 @@ use super::{
     AgentPromptBroker, CredentialPromptBroker, CredentialPromptState, FailedSessionStart,
     HostKeyPromptBroker, HostKeyPromptRequest, KeyboardInteractivePromptState,
     NativeOtpCodePreview, NativeOtpProvider, PendingSessionStart, PromptResolution,
-    RenameSessionSubmission, SavedConnectionStartOptions, SessionFeatureFocus, SessionFeatureState,
-    SessionPromptState, SessionStartEventRequest, SessionStartFeatureState,
-    SftpDuplicatePromptBroker,
+    RenameSessionSubmission, SessionFeatureFocus, SessionFeatureState, SessionPromptState,
+    SessionStartEventRequest, SessionStartFeatureState, SftpDuplicatePromptBroker,
 };
 
 fn pending(name: &str) -> PendingSessionStart {
@@ -43,37 +42,8 @@ fn pending(name: &str) -> PendingSessionStart {
         startup_command: None,
         multiplex_key: None,
         source_connection_id: None,
+        workspace_split: None,
         reconnect_session_id: None,
-    }
-}
-
-fn saved_connection(id: &str) -> SavedConnection {
-    SavedConnection {
-        id: id.to_string(),
-        name: id.to_string(),
-        config: ConnectionType::LocalTerminal {
-            shell_path: String::new(),
-            shell_args: String::new(),
-            working_dir: None,
-            ai_execution_profile: AiExecutionProfile::Auto,
-            encoding: String::new(),
-        },
-        group_id: None,
-        description: None,
-        sort_order: 0,
-        icon: None,
-        icon_auto_detect: None,
-        auth: None,
-        recording: None,
-        ssh_algorithms: None,
-        ssh_profile: Default::default(),
-        terminal_type: None,
-        sftp: Default::default(),
-        network: None,
-        post_login: None,
-        created_at_ms: None,
-        updated_at_ms: None,
-        last_used_at_ms: None,
     }
 }
 
@@ -833,11 +803,77 @@ fn session_start_registration_owns_fresh_and_reconnect_selection() {
     assert_eq!(fresh.pending_count(), 1);
 
     let mut reconnect = SessionStartFeatureState::new();
-    reconnect.set_reconnect_target("session-old".to_string());
-    assert!(reconnect.register_pending("request-reconnect".to_string(), pending("reconnect")));
+    let mut reconnect_request = pending("reconnect");
+    reconnect_request.reconnect_session_id = Some("session-old".to_string());
+    assert!(reconnect.register_pending("request-reconnect".to_string(), reconnect_request));
     assert!(!reconnect.has_active_pending());
     assert!(reconnect.reconnect_is_pending("session-old"));
-    assert_eq!(reconnect.reconnect_target(), Some("session-old"));
+}
+
+#[test]
+fn concurrent_session_starts_keep_the_latest_request_active() {
+    let mut starts = SessionStartFeatureState::new();
+    starts.register_pending("request-a".to_string(), pending("slow-a"));
+    starts.register_pending("request-b".to_string(), pending("fast-b"));
+
+    assert_eq!(starts.pending_count(), 2);
+    assert!(!starts.request_is_active("request-a"));
+    assert!(starts.request_is_active("request-b"));
+
+    let SessionStartEventRequest::Pending {
+        was_active: a_was_active,
+        ..
+    } = starts.take_event_request("request-a")
+    else {
+        panic!("request A should remain independently addressable");
+    };
+    assert!(!a_was_active);
+    assert!(!starts.complete_success(a_was_active, false));
+    assert!(starts.request_is_active("request-b"));
+
+    let SessionStartEventRequest::Pending {
+        was_active: b_was_active,
+        ..
+    } = starts.take_event_request("request-b")
+    else {
+        panic!("request B should remain independently addressable");
+    };
+    assert!(b_was_active);
+    assert!(starts.complete_success(b_was_active, false));
+}
+
+#[test]
+fn older_success_does_not_replace_the_selected_newer_failure() {
+    let mut starts = SessionStartFeatureState::new();
+    starts.register_pending("request-a".to_string(), pending("slow-a"));
+    starts.register_pending("request-b".to_string(), pending("fast-b"));
+
+    let SessionStartEventRequest::Pending {
+        pending: pending_b,
+        was_active: b_was_active,
+    } = starts.take_event_request("request-b")
+    else {
+        panic!("request B should remain independently addressable");
+    };
+    assert!(!starts.record_failure(
+        "request-b".to_string(),
+        pending_b,
+        "connection failed".to_string(),
+        b_was_active,
+        false,
+    ));
+    assert!(starts.request_is_active("request-b"));
+
+    let SessionStartEventRequest::Pending {
+        was_active: a_was_active,
+        ..
+    } = starts.take_event_request("request-a")
+    else {
+        panic!("request A should remain independently addressable");
+    };
+    assert!(!a_was_active);
+    assert!(!starts.complete_success(a_was_active, true));
+    assert!(starts.request_is_active("request-b"));
 }
 
 #[test]
@@ -870,8 +906,9 @@ fn session_start_results_route_normal_and_reconnect_failures_atomically() {
     );
 
     let mut reconnect = SessionStartFeatureState::new();
-    reconnect.set_reconnect_target("session-old".to_string());
-    reconnect.register_pending("request-reconnect".to_string(), pending("reconnect"));
+    let mut reconnect_request = pending("reconnect");
+    reconnect_request.reconnect_session_id = Some("session-old".to_string());
+    reconnect.register_pending("request-reconnect".to_string(), reconnect_request);
     let SessionStartEventRequest::Pending {
         pending: pending_state,
         was_active,
@@ -892,15 +929,12 @@ fn session_start_results_route_normal_and_reconnect_failures_atomically() {
         reconnect.reconnect_failure("session-old"),
         Some("reconnect failed")
     );
-    assert!(reconnect.reconnect_target().is_none());
 }
 
 #[test]
 fn session_start_success_and_workspace_split_are_single_owner_transitions() {
     let mut starts = SessionStartFeatureState::new();
-    starts.set_reconnect_target("session-old".to_string());
-    assert!(!starts.complete_success(true, false, false));
-    assert!(starts.reconnect_target().is_none());
+    assert!(!starts.complete_success(false, false));
 
     starts.set_pending_workspace_split(
         WorkspaceSplitDirection::Horizontal,
@@ -914,25 +948,40 @@ fn session_start_success_and_workspace_split_are_single_owner_transitions() {
 }
 
 #[test]
-fn session_start_state_owns_saved_connection_queue_lifecycle() {
+fn session_start_state_reserves_saved_connections_during_preparation() {
     let mut starts = SessionStartFeatureState::new();
 
-    assert!(!starts.has_queued_saved_connections());
-    assert_eq!(
-        starts.queue_saved_connection(
-            saved_connection("connection-1"),
-            SavedConnectionStartOptions::default(),
-        ),
-        1
-    );
-    assert!(starts.saved_connection_is_queued("connection-1"));
-    assert!(!starts.saved_connection_is_queued("connection-2"));
+    assert!(starts.reserve_saved_connection_start("connection-1"));
+    assert!(starts.saved_connection_is_preparing("connection-1"));
+    assert!(!starts.reserve_saved_connection_start("connection-1"));
+    assert!(starts.reserve_saved_connection_start("connection-2"));
 
-    let queued = starts
-        .pop_saved_connection()
-        .expect("queued saved connection should remain owned by session starts");
-    assert_eq!(queued.connection.id, "connection-1");
-    assert!(!starts.has_queued_saved_connections());
+    starts.release_saved_connection_start("connection-1");
+    assert!(!starts.saved_connection_is_preparing("connection-1"));
+    assert!(starts.reserve_saved_connection_start("connection-1"));
+}
+
+#[test]
+fn reconnect_targets_are_owned_by_each_pending_request() {
+    let mut starts = SessionStartFeatureState::new();
+    let mut reconnect_a = pending("reconnect-a");
+    reconnect_a.reconnect_session_id = Some("session-a".to_string());
+    let mut reconnect_b = pending("reconnect-b");
+    reconnect_b.reconnect_session_id = Some("session-b".to_string());
+
+    assert!(starts.register_pending("request-a".to_string(), reconnect_a));
+    assert!(starts.register_pending("request-b".to_string(), reconnect_b));
+    assert!(starts.reconnect_is_pending("session-a"));
+    assert!(starts.reconnect_is_pending("session-b"));
+
+    assert!(!starts.register_pending("request-fresh".to_string(), pending("fresh")));
+    assert!(starts.request_is_active("request-fresh"));
+    assert!(
+        starts
+            .pending
+            .get("request-fresh")
+            .is_some_and(|pending| pending.reconnect_session_id.is_none())
+    );
 }
 
 #[test]
