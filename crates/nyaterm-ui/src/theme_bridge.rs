@@ -110,7 +110,6 @@ pub fn apply_component_theme(palette: ThemePalette, cx: &mut App) {
     component_theme.colors.accent = color(palette.hover);
     component_theme.colors.accent_foreground = color(palette.text);
     component_theme.colors.accordion = color(palette.surface);
-    component_theme.colors.accordion_hover = color(palette.hover);
     component_theme.colors.description_list_label = color(palette.surface_elevated);
     component_theme.colors.description_list_label_foreground = color(palette.text_muted);
     component_theme.colors.drag_border = color(palette.focus_ring);

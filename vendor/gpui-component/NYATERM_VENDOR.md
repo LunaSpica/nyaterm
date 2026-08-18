@@ -3,38 +3,49 @@
 Upstream: <https://github.com/longbridge/gpui-component>
 
 Vendored version: `gpui-component` `0.5.2` at commit
+`b1e78a515716b232a7d731cc092bdc25f3bfd787`, from upstream `main` on
+2026-08-18. The previous NyaTerm snapshot was
 `e1570bdc8fd2dc17d38cab09e74b1783bdf3b24b`.
 
-Reason: `gpui-component` `0.5.2` contains the newer `NumberInput`
-implementation with default numeric masking, centered text, and internal
-step/min/max handling. NyaTerm uses it through `nyaterm-ui` while preserving
-the desktop boundary that feature modules do not import `gpui_component`
-directly.
+Reason: NyaTerm uses gpui-component through the stable `nyaterm-ui` facade.
+The complete upstream workspace is vendored, including the newer
+`crates/base` and `crates/fps` members, while all GPUI types remain shared with
+the sibling `vendor/zed` snapshot.
 
-Current status: wired into the root workspace via
-`gpui-component = { path = "vendor/gpui-component/crates/ui" }`. Its workspace
-dependencies for GPUI crates point at the sibling `vendor/zed` snapshot so
-NyaTerm and `gpui-component` use the same active `gpui` types.
-
-Local modifications:
+Local modifications and integration notes:
 
 - Repointed `gpui`, `gpui_platform`, `gpui_web`, `gpui_macros`, and
-  `reqwest_client` workspace dependencies to the sibling `vendor/zed`
-  snapshot.
-- Kept the registry `zed-reqwest` dependency and features used by the Zed
-  `reqwest_client` integration.
-- Adjusted segmented `TabBar` layout so indicator bounds wrappers preserve
-  full-width equal tab segments used by NyaTerm forms.
-- Removed upstream `.git` metadata. All other source is the fixed upstream
-  snapshot.
+  `reqwest_client` workspace dependencies to sibling paths under
+  `vendor/zed`.
+- Preserved the registry `zed-reqwest` dependency and feature strategy used by
+  Zed's `reqwest_client` integration.
+- Reapplied NyaTerm's segmented `TabBar` layout: the bar fills the available
+  width and segmented tab wrappers use equal flexible widths without changing
+  the public NyaTerm tab facade.
+- Adapted the upstream Input/Textarea state split inside `nyaterm-ui`, keeping
+  `NyaInput`, `NyaInputState::multi_line`, `NyaNumberInput`, selection, and
+  other desktop call sites stable.
+- Preserved ordinary-input focus when users click prefixes, suffixes, or the
+  input shell instead of the text editing surface.
+- Made the base dialog backdrop event wrapper fill the viewport so backdrop
+  presses close the top dialog while continuing to block lower pointer events.
+- Removed upstream `.git` metadata after vendoring.
 
-Validation performed on 2026-08-05:
+Validation performed on 2026-08-18:
 
-- `cargo tree -i gpui` shows one `gpui v0.2.2`, from `vendor/zed`.
-- `cargo test -p nyaterm-ui` passed (30 tests).
-- `cargo test -p nyaterm-desktop` passed (812 tests).
-- `cargo test -p nyaterm-terminal-gpui` passed (124 tests; 1 ignored).
-- `cargo check -p nyaterm-app` passed.
-- `bash scripts/check-architecture-boundaries.sh` passed.
-- The Linux binary started and rendered the root view without crashing. Visual
-  control checks were not possible because no display service was available.
+- `cargo tree -i gpui` reports one active `gpui v0.2.2`, from
+  `vendor/zed/crates/gpui`.
+- `cargo check --workspace` passed on `x86_64-unknown-linux-gnu`.
+- Package tests passed: `nyaterm-ui` (41), `nyaterm-desktop` (932, 4 ignored),
+  `nyaterm-terminal-gpui` (127, 1 ignored), and `nyaterm-remote-desktop` (17).
+- Input focus, dialog backdrop behavior, and segmented tab facade tests passed.
+- `cargo fmt --all -- --check` and
+  `cargo clippy --workspace --all-targets` passed. Clippy reported existing
+  non-fatal workspace warnings.
+- The installed Windows GNU Rust target could not complete because the host
+  lacks `x86_64-w64-mingw32-gcc`; it stopped while building `aws-lc-sys`.
+- No macOS Rust target or macOS host is installed, so macOS compilation and
+  runtime behavior remain part of the platform release matrix.
+- `scripts/check-architecture-boundaries.sh` is referenced by repository
+  documentation but is not present in this checkout, so that command could
+  not be run.

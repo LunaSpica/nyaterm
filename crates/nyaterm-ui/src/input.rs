@@ -5,7 +5,7 @@ use gpui::{
     px,
 };
 use gpui_component::input::SelectAll;
-use gpui_component::input::{Input, InputEvent, InputState};
+use gpui_component::input::{Input, InputEvent, InputState, Textarea, TextareaState};
 use gpui_component::{Icon, IconName, Sizable, Size};
 
 use crate::input_focus::{preserve_nya_input_focus_on_pointer_down, register_nya_input_focus};
@@ -17,8 +17,48 @@ pub enum NyaInputEvent {
     Blurred(String),
 }
 
+#[derive(Clone)]
+enum ComponentState {
+    Input(Entity<InputState>),
+    Textarea(Entity<TextareaState>),
+}
+
+impl ComponentState {
+    fn value(&self, cx: &App) -> String {
+        match self {
+            Self::Input(state) => state.read(cx).value().to_string(),
+            Self::Textarea(state) => state.read(cx).value().to_string(),
+        }
+    }
+
+    fn focus_handle(&self, cx: &App) -> FocusHandle {
+        match self {
+            Self::Input(state) => state.read(cx).focus_handle(cx),
+            Self::Textarea(state) => state.read(cx).focus_handle(cx),
+        }
+    }
+
+    fn focus(&self, window: &mut Window, cx: &mut App) {
+        match self {
+            Self::Input(state) => state.update(cx, |state, cx| state.focus(window, cx)),
+            Self::Textarea(state) => state.update(cx, |state, cx| state.focus(window, cx)),
+        }
+    }
+
+    fn set_value(&self, value: SharedString, window: &mut Window, cx: &mut App) {
+        match self {
+            Self::Input(state) => {
+                state.update(cx, |state, cx| state.set_value(value.clone(), window, cx))
+            }
+            Self::Textarea(state) => {
+                state.update(cx, |state, cx| state.set_value(value.clone(), window, cx))
+            }
+        }
+    }
+}
+
 pub struct NyaInputState {
-    state: Option<Entity<InputState>>,
+    state: Option<ComponentState>,
     seed: SharedString,
     pending_value: Option<SharedString>,
     placeholder: SharedString,
@@ -112,7 +152,7 @@ impl NyaInputState {
 
     pub fn value(&self, cx: &App) -> String {
         if let Some(state) = &self.state {
-            state.read(cx).value().to_string()
+            state.value(cx)
         } else if let Some(value) = &self.pending_value {
             value.to_string()
         } else {
@@ -131,7 +171,7 @@ impl NyaInputState {
 
     pub fn select_all(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let state = self.ensure_component(window, cx);
-        state.update(cx, |state, cx| state.focus(window, cx));
+        state.focus(window, cx);
         window.dispatch_action(SelectAll.boxed_clone(), cx);
     }
 
@@ -142,7 +182,7 @@ impl NyaInputState {
     pub fn component_focus_handle(&self, cx: &App) -> FocusHandle {
         self.state
             .as_ref()
-            .map(|state| state.read(cx).focus_handle(cx))
+            .map(|state| state.focus_handle(cx))
             .unwrap_or_else(|| self.focus.clone())
     }
 
@@ -151,17 +191,16 @@ impl NyaInputState {
     }
 
     pub fn component_state(&self) -> Option<Entity<InputState>> {
-        self.state.clone()
+        match self.state.as_ref() {
+            Some(ComponentState::Input(state)) => Some(state.clone()),
+            _ => None,
+        }
     }
 
-    fn ensure_component(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Entity<InputState> {
+    fn ensure_component(&mut self, window: &mut Window, cx: &mut Context<Self>) -> ComponentState {
         if let Some(state) = self.state.clone() {
             if let Some(value) = self.pending_value.take() {
-                state.update(cx, |state, cx| state.set_value(value, window, cx));
+                state.set_value(value, window, cx);
             }
             return state;
         }
@@ -174,42 +213,58 @@ impl NyaInputState {
         let multi_line = self.multi_line;
         let placeholder = component_placeholder(self.placeholder.clone(), multi_line);
         let rows = self.rows;
-        let state = cx.new(|cx| {
-            let mut input = InputState::new(window, cx)
-                .default_value(value)
-                .placeholder(placeholder)
-                .multi_line(multi_line);
-            if let Some(rows) = rows {
-                input = input.rows(rows);
-            }
-            if masked && !multi_line {
-                input = input.masked(true);
-            }
-            input
-        });
-        register_nya_input_focus(&state.read(cx).focus_handle(cx), cx);
-        let subscription =
-            cx.subscribe(&state, |this, input, event: &InputEvent, cx| match event {
-                InputEvent::Change => {
-                    cx.emit(NyaInputEvent::Changed(input.read(cx).value().to_string()))
+        let (state, subscription) = if multi_line {
+            let state = cx.new(|cx| {
+                let mut input = TextareaState::new(window, cx)
+                    .default_value(value)
+                    .placeholder(placeholder);
+                if let Some(rows) = rows {
+                    input = input.rows(rows);
                 }
-                InputEvent::PressEnter { .. } => {
-                    cx.emit(NyaInputEvent::Submitted(input.read(cx).value().to_string()))
-                }
-                InputEvent::Focus => {
-                    this.focused = true;
-                    cx.notify();
-                }
-                InputEvent::Blur => {
-                    this.focused = false;
-                    cx.emit(NyaInputEvent::Blurred(input.read(cx).value().to_string()));
-                    cx.notify();
-                }
+                input
             });
+            let subscription = cx.subscribe(&state, |this, input, event: &InputEvent, cx| {
+                forward_input_event(this, input.read(cx).value().to_string(), event, cx)
+            });
+            (ComponentState::Textarea(state), subscription)
+        } else {
+            let state = cx.new(|cx| {
+                InputState::new(window, cx)
+                    .default_value(value)
+                    .placeholder(placeholder)
+                    .masked(masked)
+            });
+            let subscription = cx.subscribe(&state, |this, input, event: &InputEvent, cx| {
+                forward_input_event(this, input.read(cx).value().to_string(), event, cx)
+            });
+            (ComponentState::Input(state), subscription)
+        };
+        register_nya_input_focus(&state.focus_handle(cx), cx);
         self.subscription = Some(subscription);
         self.state = Some(state.clone());
         self.applied_masked = masked;
         state
+    }
+}
+
+fn forward_input_event(
+    state: &mut NyaInputState,
+    value: String,
+    event: &InputEvent,
+    cx: &mut Context<NyaInputState>,
+) {
+    match event {
+        InputEvent::Change => cx.emit(NyaInputEvent::Changed(value)),
+        InputEvent::PressEnter { .. } => cx.emit(NyaInputEvent::Submitted(value)),
+        InputEvent::Focus => {
+            state.focused = true;
+            cx.notify();
+        }
+        InputEvent::Blur => {
+            state.focused = false;
+            cx.emit(NyaInputEvent::Blurred(value));
+            cx.notify();
+        }
     }
 }
 
@@ -245,21 +300,28 @@ impl Focusable for NyaInputState {
 impl Render for NyaInputState {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let state = self.ensure_component(window, cx);
-        if !self.multi_line && self.applied_masked != self.masked {
+        if let ComponentState::Input(input) = &state
+            && self.applied_masked != self.masked
+        {
             let masked = self.masked;
-            state.update(cx, |state, cx| state.set_masked(masked, window, cx));
+            input.update(cx, |state, cx| state.set_masked(masked, window, cx));
             self.applied_masked = masked;
         }
-        let component_focus = state.read(cx).focus_handle(cx);
+        let component_focus = state.focus_handle(cx);
         if self.focus.is_focused(window) && !component_focus.is_focused(window) {
-            state.update(cx, |state, cx| state.focus(window, cx));
+            state.focus(window, cx);
         }
         self.focused = self.focus.is_focused(window) || component_focus.is_focused(window);
-        let input = Input::new(&state).disabled(self.disabled);
-        if self.multi_line {
-            input.h_full()
-        } else {
-            input
+        match state {
+            ComponentState::Input(state) => Input::new(&state)
+                .disabled(self.disabled)
+                .readonly(self.readonly)
+                .into_any_element(),
+            ComponentState::Textarea(state) => Textarea::new(&state)
+                .disabled(self.disabled)
+                .readonly(self.readonly)
+                .h_full()
+                .into_any_element(),
         }
     }
 }
@@ -279,24 +341,39 @@ impl NyaInput {
 
 impl RenderOnce for NyaInput {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let (state, disabled, multi_line) = prepare_input_component(&self.state, window, cx);
-        let input = Input::new(&state)
-            .xsmall()
-            .appearance(false)
-            .bordered(false)
-            .focus_bordered(false)
-            .disabled(disabled);
+        let (state, disabled, readonly, multi_line) =
+            prepare_input_component(&self.state, window, cx);
+        let focus_state = state.clone();
+        let input = match state {
+            ComponentState::Input(state) => Input::new(&state)
+                .xsmall()
+                .appearance(false)
+                .bordered(false)
+                .focus_bordered(false)
+                .disabled(disabled)
+                .readonly(readonly)
+                .into_any_element(),
+            ComponentState::Textarea(state) => Textarea::new(&state)
+                .appearance(false)
+                .bordered(false)
+                .disabled(disabled)
+                .readonly(readonly)
+                .h_full()
+                .text_xs()
+                .into_any_element(),
+        };
         div()
             .size_full()
             .when(!multi_line, |this| this.flex().items_center())
             .capture_any_mouse_down(|_, _, cx| {
                 preserve_nya_input_focus_on_pointer_down(cx);
             })
-            .child(if multi_line {
-                input.h_full().into_any_element()
-            } else {
-                input.into_any_element()
+            .on_any_mouse_down(move |_, window, cx| {
+                if !disabled {
+                    focus_state.focus(window, cx);
+                }
             })
+            .child(input)
     }
 }
 
@@ -306,30 +383,33 @@ fn prepare_input_component(
     input_state: &Entity<NyaInputState>,
     window: &mut Window,
     cx: &mut App,
-) -> (Entity<InputState>, bool, bool) {
-    let (state, disabled, multi_line, focused) = input_state.update(cx, |input, cx| {
+) -> (ComponentState, bool, bool, bool) {
+    let (state, disabled, readonly, multi_line, focused) = input_state.update(cx, |input, cx| {
         let state = input.ensure_component(window, cx);
-        if !input.multi_line && input.applied_masked != input.masked {
+        if let ComponentState::Input(component) = &state
+            && input.applied_masked != input.masked
+        {
             let masked = input.masked;
-            state.update(cx, |component, cx| component.set_masked(masked, window, cx));
+            component.update(cx, |component, cx| component.set_masked(masked, window, cx));
             input.applied_masked = masked;
         }
         (
             state,
             input.disabled,
+            input.readonly,
             input.multi_line,
             input.focus.is_focused(window),
         )
     });
     if focused {
-        state.update(cx, |state, cx| state.focus(window, cx));
+        state.focus(window, cx);
     }
     input_state.update(cx, |input_state, cx| {
-        let component_focus = state.read(cx).focus_handle(cx);
+        let component_focus = state.focus_handle(cx);
         input_state.focused =
             input_state.focus.is_focused(window) || component_focus.is_focused(window);
     });
-    (state, disabled, multi_line)
+    (state, disabled, readonly, multi_line)
 }
 
 #[derive(IntoElement)]
@@ -380,37 +460,63 @@ impl NyaInputShell {
 
 impl RenderOnce for NyaInputShell {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let (state, disabled, state_multi_line) = prepare_input_component(&self.state, window, cx);
-        let debug_selector = self.id.to_string();
-        let prefix_debug_selector = format!("{}-prefix", self.id);
-        let mut input = Input::new(&state)
-            .with_size(Size::Medium)
-            .disabled(disabled);
-        if self.multi_line || state_multi_line {
-            input = input.h(px(88.));
-        }
-        if self.search {
-            input = input.prefix(
-                div()
-                    .debug_selector(move || prefix_debug_selector.clone())
-                    .flex()
-                    .items_center()
-                    .child(Icon::new(IconName::Search).small()),
-            );
-        }
-        if !self.trailing.is_empty() {
-            input = input.suffix(div().flex().items_center().gap_1().children(self.trailing));
-        }
+        let NyaInputShell {
+            id,
+            state,
+            multi_line,
+            search,
+            trailing,
+            on_key_down,
+        } = self;
+        let (state, disabled, readonly, state_multi_line) =
+            prepare_input_component(&state, window, cx);
+        let focus_state = state.clone();
+        let debug_selector = id.to_string();
+        let prefix_debug_selector = format!("{}-prefix", id);
+        let input = match state {
+            ComponentState::Input(state) => {
+                let mut input = Input::new(&state)
+                    .with_size(Size::Medium)
+                    .disabled(disabled)
+                    .readonly(readonly);
+                if multi_line || state_multi_line {
+                    input = input.h(px(88.));
+                }
+                if search {
+                    input = input.prefix(
+                        div()
+                            .debug_selector(move || prefix_debug_selector.clone())
+                            .flex()
+                            .items_center()
+                            .child(Icon::new(IconName::Search).small()),
+                    );
+                }
+                if !trailing.is_empty() {
+                    input = input.suffix(div().flex().items_center().gap_1().children(trailing));
+                }
+                input.into_any_element()
+            }
+            ComponentState::Textarea(state) => Textarea::new(&state)
+                .disabled(disabled)
+                .readonly(readonly)
+                .h(px(88.))
+                .into_any_element(),
+        };
 
         let mut container = div()
-            .id(self.id)
+            .id(id)
             .debug_selector(move || debug_selector.clone())
             .w_full()
             .min_w_0()
             .capture_any_mouse_down(|_, _, cx| {
                 preserve_nya_input_focus_on_pointer_down(cx);
+            })
+            .on_any_mouse_down(move |_, window, cx| {
+                if !disabled {
+                    focus_state.focus(window, cx);
+                }
             });
-        if let Some(handler) = self.on_key_down {
+        if let Some(handler) = on_key_down {
             container = container.on_key_down(handler);
         }
         container.child(input)

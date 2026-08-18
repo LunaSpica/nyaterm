@@ -305,8 +305,6 @@ impl WgpuAtlasState {
             let Some(texture) = self.storage.get(upload.id) else {
                 continue;
             };
-            let bytes_per_pixel = texture.bytes_per_pixel();
-
             self.queue.write_texture(
                 wgpu::TexelCopyTextureInfo {
                     texture: &texture.texture,

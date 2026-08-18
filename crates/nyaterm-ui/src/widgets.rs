@@ -4,7 +4,7 @@ use gpui::{
     AnyElement, App, ClickEvent, FontWeight, Hsla, IntoElement, Pixels, RenderOnce, ScrollHandle,
     SharedString, UniformListScrollHandle, Window, div, prelude::*, px, rgb,
 };
-use gpui_component::scroll::{Scrollbar, ScrollbarShow};
+use gpui_component::scroll::{Scrollbar, ScrollbarMode};
 
 fn platform_code_font_family() -> &'static str {
     if cfg!(target_os = "windows") {
@@ -85,7 +85,7 @@ impl RenderOnce for NyaScrollArea {
                     .child(
                         Scrollbar::vertical(&scroll_handle)
                             .id(scrollbar_id)
-                            .scrollbar_show(ScrollbarShow::Always),
+                            .mode(ScrollbarMode::Always),
                     ),
             )
     }
@@ -127,7 +127,7 @@ impl RenderOnce for NyaHorizontalScrollbar {
     fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
         Scrollbar::horizontal(&self.handle)
             .id(self.id)
-            .scrollbar_show(ScrollbarShow::Always)
+            .mode(ScrollbarMode::Always)
     }
 }
 
@@ -135,7 +135,7 @@ impl RenderOnce for NyaUniformListScrollbar {
     fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
         Scrollbar::vertical(&self.handle)
             .id(self.id)
-            .scrollbar_show(ScrollbarShow::Always)
+            .mode(ScrollbarMode::Always)
     }
 }
 
