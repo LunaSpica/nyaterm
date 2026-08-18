@@ -1,5 +1,3 @@
-use std::time::Instant;
-
 use gpui::{
     ClickEvent, Context, FontWeight, IntoElement, MouseButton, ScrollDelta, ScrollWheelEvent,
     SharedString, div, point, prelude::*, px, rgb, rgba, svg,
@@ -38,7 +36,15 @@ fn tab_scroll_x(current_x: f32, max_x: f32, delta_x: f32, delta_y: f32) -> f32 {
     (current_x + dominant).clamp(-max_x.max(0.), 0.)
 }
 
-type TransientSessionTab = (usize, Instant, String, String, String, Option<String>);
+type TransientSessionTab = (usize, u64, String, String, String, Option<String>);
+type SessionTabOrderKey = (usize, u64);
+
+fn transient_tab_precedes_session(
+    transient: &TransientSessionTab,
+    session_key: SessionTabOrderKey,
+) -> bool {
+    (transient.0, transient.1) < session_key
+}
 
 impl NyaTermApp {
     fn pending_session_tab(
@@ -320,11 +326,22 @@ impl NyaTermApp {
                 let after_position = pending.after_session_id.as_ref().and_then(|after_id| {
                     sessions.iter().position(|session| session.id == *after_id)
                 });
-                let index =
-                    pending_tab_insert_index(session_count, after_position, pending.insert_index);
+                let index = pending.tab_placement.map_or_else(
+                    || {
+                        pending_tab_insert_index(
+                            session_count,
+                            after_position,
+                            pending.insert_index,
+                        )
+                    },
+                    |placement| placement.insert_index,
+                );
                 Some((
                     index,
-                    pending.requested_at,
+                    pending
+                        .tab_placement
+                        .map(|placement| placement.request_sequence)
+                        .unwrap_or(u64::MAX),
                     pending.connection_name.clone(),
                     request_id.clone(),
                     name,
@@ -347,14 +364,22 @@ impl NyaTermApp {
                     let after_position = pending.after_session_id.as_ref().and_then(|after_id| {
                         sessions.iter().position(|session| session.id == *after_id)
                     });
-                    let index = pending_tab_insert_index(
-                        session_count,
-                        after_position,
-                        pending.insert_index,
+                    let index = pending.tab_placement.map_or_else(
+                        || {
+                            pending_tab_insert_index(
+                                session_count,
+                                after_position,
+                                pending.insert_index,
+                            )
+                        },
+                        |placement| placement.insert_index,
                     );
                     (
                         index,
-                        pending.requested_at,
+                        pending
+                            .tab_placement
+                            .map(|placement| placement.request_sequence)
+                            .unwrap_or(u64::MAX),
                         pending.connection_name.clone(),
                         request_id.clone(),
                         name,
@@ -375,9 +400,14 @@ impl NyaTermApp {
                     .iter()
                     .position(|session| session.id == self.tab_root_for_session(active_id))
             {
+                let active_key = self
+                    .session
+                    .session_start_tab_placement(&sessions[index].id)
+                    .map(|placement| (placement.insert_index, placement.request_sequence))
+                    .unwrap_or((index, u64::MAX));
                 let pending_count = transient_tabs
                     .iter()
-                    .filter(|(pending_index, _, _, _, _, _)| *pending_index <= index)
+                    .filter(|transient| transient_tab_precedes_session(transient, active_key))
                     .count();
                 let child_index = index + pending_count;
                 self.shell
@@ -417,8 +447,13 @@ impl NyaTermApp {
 
         let mut transient_cursor = 0usize;
         for (tab_index, session) in sessions.into_iter().enumerate() {
+            let session_key = self
+                .session
+                .session_start_tab_placement(&session.id)
+                .map(|placement| (placement.insert_index, placement.request_sequence))
+                .unwrap_or((tab_index, u64::MAX));
             while transient_cursor < transient_tabs.len()
-                && transient_tabs[transient_cursor].0 == tab_index
+                && transient_tab_precedes_session(&transient_tabs[transient_cursor], session_key)
             {
                 let (_, _, _, request_id, name, error) = transient_tabs[transient_cursor].clone();
                 let tab_number = tab_index + transient_cursor + 1;
@@ -949,7 +984,48 @@ impl NyaTermApp {
 
 #[cfg(test)]
 mod tests {
-    use super::{pending_tab_insert_index, tab_drop_insert_after, tab_scroll_x};
+    use super::{
+        SessionTabOrderKey, TransientSessionTab, pending_tab_insert_index, tab_drop_insert_after,
+        tab_scroll_x, transient_tab_precedes_session,
+    };
+
+    fn merged_tab_order(
+        sessions: &[(&str, SessionTabOrderKey)],
+        transient: &[(&str, SessionTabOrderKey)],
+    ) -> Vec<String> {
+        let mut transient_tabs = transient
+            .iter()
+            .map(|(name, (index, sequence))| {
+                (
+                    *index,
+                    *sequence,
+                    String::new(),
+                    String::new(),
+                    (*name).to_string(),
+                    None,
+                )
+            })
+            .collect::<Vec<TransientSessionTab>>();
+        transient_tabs.sort_by_key(|tab| (tab.0, tab.1));
+
+        let mut merged = Vec::new();
+        let mut transient_cursor = 0;
+        for (name, session_key) in sessions {
+            while transient_cursor < transient_tabs.len()
+                && transient_tab_precedes_session(&transient_tabs[transient_cursor], *session_key)
+            {
+                merged.push(transient_tabs[transient_cursor].4.clone());
+                transient_cursor += 1;
+            }
+            merged.push((*name).to_string());
+        }
+        merged.extend(
+            transient_tabs[transient_cursor..]
+                .iter()
+                .map(|tab| tab.4.clone()),
+        );
+        merged
+    }
 
     #[test]
     fn pending_tab_position_matches_tauri_insertion_rules() {
@@ -973,5 +1049,21 @@ mod tests {
         assert_eq!(tab_scroll_x(-110., 120., 0., -40.), -120.);
         assert_eq!(tab_scroll_x(-10., 120., 0., 40.), 0.);
         assert_eq!(tab_scroll_x(-10., 0., 0., -40.), 0.);
+    }
+
+    #[test]
+    fn concurrent_session_tabs_merge_by_reserved_submission_order() {
+        assert_eq!(
+            merged_tab_order(&[("C", (2, 2))], &[("A", (0, 0)), ("B", (1, 1))]),
+            ["A", "B", "C"]
+        );
+        assert_eq!(
+            merged_tab_order(&[("B", (1, 1)), ("C", (2, 2))], &[("A", (0, 0))]),
+            ["A", "B", "C"]
+        );
+        assert_eq!(
+            merged_tab_order(&[("X", (0, u64::MAX)), ("B", (2, 1))], &[("A", (1, 0))],),
+            ["X", "A", "B"]
+        );
     }
 }

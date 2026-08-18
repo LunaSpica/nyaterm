@@ -43,6 +43,7 @@ fn pending(name: &str) -> PendingSessionStart {
         multiplex_key: None,
         source_connection_id: None,
         workspace_split: None,
+        tab_placement: None,
         reconnect_session_id: None,
     }
 }
@@ -457,6 +458,69 @@ fn session_catalog_registration_and_reordering_stay_synchronized() {
         ["session-c", "session-b", "session-a"]
     );
     assert!(!sessions.move_session_after("missing", "session-a"));
+}
+
+#[test]
+fn session_catalog_inserts_out_of_order_completions_at_reserved_positions() {
+    let cx = TestAppContext::single();
+    let mut sessions = session_state(&cx);
+    let mut starts = SessionStartFeatureState::new();
+    let session_a = starts.allocate_tab_placement(0);
+    let session_b = starts.allocate_tab_placement(1);
+    let session_c = starts.allocate_tab_placement(2);
+
+    sessions.register_session_metadata_for_start(
+        "session-c",
+        session_metadata("third", None),
+        Some(session_c),
+        None,
+    );
+    sessions.register_session_metadata_for_start(
+        "session-b",
+        session_metadata("second", None),
+        Some(session_b),
+        None,
+    );
+    assert_eq!(sessions.session_order(), ["session-b", "session-c"]);
+
+    sessions.register_session_metadata_for_start(
+        "session-a",
+        session_metadata("first", None),
+        Some(session_a),
+        None,
+    );
+    assert_eq!(
+        sessions.session_order(),
+        ["session-a", "session-b", "session-c"]
+    );
+}
+
+#[test]
+fn session_catalog_keeps_existing_tabs_before_reserved_appends() {
+    let cx = TestAppContext::single();
+    let mut sessions = session_state(&cx);
+    let mut starts = SessionStartFeatureState::new();
+    sessions.register_session_metadata("session-x", session_metadata("existing", None));
+    let session_a = starts.allocate_tab_placement(1);
+    let session_b = starts.allocate_tab_placement(2);
+
+    sessions.register_session_metadata_for_start(
+        "session-b",
+        session_metadata("second", None),
+        Some(session_b),
+        None,
+    );
+    sessions.register_session_metadata_for_start(
+        "session-a",
+        session_metadata("first", None),
+        Some(session_a),
+        None,
+    );
+
+    assert_eq!(
+        sessions.session_order(),
+        ["session-x", "session-a", "session-b"]
+    );
 }
 
 #[test]
@@ -950,15 +1014,63 @@ fn session_start_success_and_workspace_split_are_single_owner_transitions() {
 #[test]
 fn session_start_state_reserves_saved_connections_during_preparation() {
     let mut starts = SessionStartFeatureState::new();
+    let connection_1 = starts.allocate_tab_placement(0);
+    let connection_2 = starts.allocate_tab_placement(1);
 
-    assert!(starts.reserve_saved_connection_start("connection-1"));
+    assert!(starts.reserve_saved_connection_start("connection-1", connection_1));
     assert!(starts.saved_connection_is_preparing("connection-1"));
-    assert!(!starts.reserve_saved_connection_start("connection-1"));
-    assert!(starts.reserve_saved_connection_start("connection-2"));
+    assert!(!starts.reserve_saved_connection_start("connection-1", connection_1));
+    assert!(starts.reserve_saved_connection_start("connection-2", connection_2));
+    assert_eq!(starts.visible_tab_reservation_count(), 2);
+    assert_eq!(connection_1.insert_index, 0);
+    assert_eq!(connection_2.insert_index, 1);
+    assert!(connection_1.request_sequence < connection_2.request_sequence);
 
     starts.release_saved_connection_start("connection-1");
     assert!(!starts.saved_connection_is_preparing("connection-1"));
-    assert!(starts.reserve_saved_connection_start("connection-1"));
+    assert!(starts.reserve_saved_connection_start("connection-1", connection_1));
+}
+
+#[test]
+fn pending_registration_promotes_saved_preparation_without_changing_placement() {
+    let mut starts = SessionStartFeatureState::new();
+    let placement = starts.allocate_tab_placement(3);
+    assert!(starts.reserve_saved_connection_start("connection-1", placement));
+
+    let mut request = pending("saved");
+    request.source_connection_id = Some("connection-1".to_string());
+    request.tab_placement = Some(placement);
+    starts.register_pending("request-1".to_string(), request);
+
+    assert!(!starts.saved_connection_is_preparing("connection-1"));
+    assert_eq!(starts.visible_tab_reservation_count(), 1);
+    let pending = starts
+        .pending
+        .get("request-1")
+        .expect("saved preparation should become pending");
+    assert_eq!(
+        pending
+            .tab_placement
+            .expect("pending start should retain its tab placement")
+            .insert_index,
+        3
+    );
+}
+
+#[test]
+fn unrelated_start_from_same_connection_does_not_release_preparation() {
+    let mut starts = SessionStartFeatureState::new();
+    let preparing = starts.allocate_tab_placement(0);
+    let duplicate = starts.allocate_tab_placement(1);
+    assert!(starts.reserve_saved_connection_start("connection-1", preparing));
+
+    let mut duplicate_request = pending("duplicate");
+    duplicate_request.source_connection_id = Some("connection-1".to_string());
+    duplicate_request.tab_placement = Some(duplicate);
+    starts.register_pending("request-duplicate".to_string(), duplicate_request);
+
+    assert!(starts.saved_connection_is_preparing("connection-1"));
+    assert_eq!(starts.visible_tab_reservation_count(), 2);
 }
 
 #[test]

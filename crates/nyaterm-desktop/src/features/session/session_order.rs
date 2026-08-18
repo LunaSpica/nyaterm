@@ -1,6 +1,7 @@
 use nyaterm_transport::SessionInfo;
 
 use crate::features::NyaTermApp;
+use crate::features::session::SessionStartTabPlacement;
 use crate::models::SessionRuntimeMetadata;
 
 impl NyaTermApp {
@@ -12,6 +13,33 @@ impl NyaTermApp {
         let encoding = metadata.launch_config.encoding().map(ToOwned::to_owned);
         let is_terminal = encoding.is_some();
         self.session.register_session_metadata(session_id, metadata);
+        self.finish_session_registration(session_id, encoding, is_terminal);
+    }
+
+    pub(in crate::features) fn register_session_for_start(
+        &mut self,
+        session_id: &str,
+        metadata: SessionRuntimeMetadata,
+        tab_placement: Option<SessionStartTabPlacement>,
+        insert_index: Option<usize>,
+    ) {
+        let encoding = metadata.launch_config.encoding().map(ToOwned::to_owned);
+        let is_terminal = encoding.is_some();
+        self.session.register_session_metadata_for_start(
+            session_id,
+            metadata,
+            tab_placement,
+            insert_index,
+        );
+        self.finish_session_registration(session_id, encoding, is_terminal);
+    }
+
+    fn finish_session_registration(
+        &mut self,
+        session_id: &str,
+        encoding: Option<String>,
+        is_terminal: bool,
+    ) {
         if let Some(encoding) = encoding {
             self.terminal.ensure_frame_session(
                 session_id.to_string(),
@@ -25,6 +53,12 @@ impl NyaTermApp {
         }
         if self.session.restore_is_complete() {
             self.persist_open_tabs();
+        }
+    }
+
+    pub(in crate::features) fn settle_session_start_tab_placements_if_idle(&mut self) {
+        if self.session.start_visible_tab_reservation_count() == 0 {
+            self.session.clear_start_tab_placements();
         }
     }
 

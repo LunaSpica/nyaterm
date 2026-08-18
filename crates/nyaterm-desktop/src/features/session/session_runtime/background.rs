@@ -20,6 +20,32 @@ use crate::models::{NavItem, SessionLaunchConfig, SessionRuntimeMetadata};
 const SESSION_START_EVENT_DRAIN_LIMIT: usize = 8;
 
 impl NyaTermApp {
+    pub(in crate::features) fn prepare_session_start_options(
+        &mut self,
+        mut options: SavedConnectionStartOptions,
+    ) -> SavedConnectionStartOptions {
+        if options.reconnect_session_id.is_some() || options.tab_placement.is_some() {
+            return options;
+        }
+
+        let insert_index = options
+            .insert_index
+            .or_else(|| {
+                options.after_session_id.as_ref().and_then(|after_id| {
+                    self.ordered_tab_sessions()
+                        .iter()
+                        .position(|session| session.id == *after_id)
+                        .map(|index| index + 1)
+                })
+            })
+            .unwrap_or_else(|| {
+                self.ordered_tab_session_count()
+                    .saturating_add(self.session.start_visible_tab_reservation_count())
+            });
+        options.tab_placement = Some(self.session.start.allocate_tab_placement(insert_index));
+        options
+    }
+
     pub(in crate::features) fn select_pending_session_start(
         &mut self,
         request_id: String,
@@ -46,6 +72,7 @@ impl NyaTermApp {
             "cancelled connection {}",
             pending_session_start_display_name(&pending)
         ));
+        self.settle_session_start_tab_placements_if_idle();
         cx.notify();
     }
 
@@ -78,6 +105,7 @@ impl NyaTermApp {
             "closed failed connection {}",
             failed_session_start_display_name(&failed)
         ));
+        self.settle_session_start_tab_placements_if_idle();
         cx.notify();
     }
 
@@ -87,7 +115,6 @@ impl NyaTermApp {
         cx: &mut Context<Self>,
     ) -> String {
         let request_id = uuid();
-        let requested_at = Instant::now();
         let PendingSessionStartRegistration {
             connection_name,
             launch_config,
@@ -104,15 +131,13 @@ impl NyaTermApp {
             source_connection_id,
             reconnect_session_id,
             workspace_split,
+            tab_placement,
             status_message,
             append_start_log,
         } = registration;
-
-        if let Some(connection_id) = source_connection_id.as_deref() {
-            self.session
-                .start
-                .release_saved_connection_start(connection_id);
-        }
+        let requested_at = tab_placement
+            .map(|placement| placement.requested_at)
+            .unwrap_or_else(Instant::now);
 
         let reconnecting = self.session.start.register_pending(
             request_id.clone(),
@@ -132,6 +157,7 @@ impl NyaTermApp {
                 multiplex_key,
                 source_connection_id,
                 workspace_split,
+                tab_placement,
                 reconnect_session_id,
             },
         );
@@ -156,6 +182,7 @@ impl NyaTermApp {
         options: SavedConnectionStartOptions,
         cx: &mut Context<Self>,
     ) {
+        let options = self.prepare_session_start_options(options);
         let SavedConnectionStartOptions {
             custom_name,
             tab_color,
@@ -166,6 +193,7 @@ impl NyaTermApp {
             startup_command,
             reconnect_session_id,
             workspace_split,
+            tab_placement,
         } = options;
         let kind = session_kind_for_launch_config(&launch_config);
         let request_id = self.register_pending_session_start(
@@ -185,6 +213,7 @@ impl NyaTermApp {
                 source_connection_id,
                 reconnect_session_id,
                 workspace_split,
+                tab_placement,
                 status_message: format!("connecting to {connection_name}"),
                 append_start_log: true,
             },
@@ -224,6 +253,7 @@ impl NyaTermApp {
         options: SavedConnectionStartOptions,
         cx: &mut Context<Self>,
     ) {
+        let options = self.prepare_session_start_options(options);
         let SavedConnectionStartOptions {
             custom_name,
             tab_color,
@@ -234,6 +264,7 @@ impl NyaTermApp {
             startup_command,
             reconnect_session_id,
             workspace_split,
+            tab_placement,
         } = options;
         config.deferred_pty = true;
         let geometry_session_hint = after_session_id
@@ -264,6 +295,7 @@ impl NyaTermApp {
                 source_connection_id,
                 reconnect_session_id,
                 workspace_split,
+                tab_placement,
                 status_message: format!("connecting to {connection_name}"),
                 append_start_log: true,
             },
@@ -308,6 +340,7 @@ impl NyaTermApp {
             options,
             existing_multiplex,
         } = request;
+        let options = self.prepare_session_start_options(options);
         let SavedConnectionStartOptions {
             custom_name,
             tab_color,
@@ -318,6 +351,7 @@ impl NyaTermApp {
             startup_command,
             reconnect_session_id,
             workspace_split,
+            tab_placement,
         } = options;
         config.deferred_pty = true;
         let geometry_session_hint = after_session_id
@@ -349,6 +383,7 @@ impl NyaTermApp {
                 source_connection_id,
                 reconnect_session_id,
                 workspace_split,
+                tab_placement,
                 status_message: format!("multiplexing SSH session {connection_name}"),
                 append_start_log: false,
             },
@@ -512,6 +547,11 @@ impl NyaTermApp {
                     let source_connection_id = pending
                         .as_ref()
                         .and_then(|pending| pending.source_connection_id.clone());
+                    let tab_placement = pending.as_ref().and_then(|pending| pending.tab_placement);
+                    let fallback_insert_index = pending
+                        .as_ref()
+                        .and_then(|pending| pending.insert_index)
+                        .filter(|_| tab_placement.is_none());
                     if let Some(connection_id) = source_connection_id.as_ref() {
                         self.persist_connection_used(connection_id.clone(), cx);
                     }
@@ -519,7 +559,7 @@ impl NyaTermApp {
                         .as_ref()
                         .map(|pending| pending.ai_execution_profile)
                         .unwrap_or(AiExecutionProfile::SendOnly);
-                    self.register_session(
+                    self.register_session_for_start(
                         &session_id,
                         SessionRuntimeMetadata {
                             ssh_config,
@@ -529,6 +569,8 @@ impl NyaTermApp {
                             launch_config,
                             disconnected: false,
                         },
+                        tab_placement,
+                        fallback_insert_index,
                     );
                     if let Some(custom_name) = pending
                         .as_ref()
@@ -564,18 +606,14 @@ impl NyaTermApp {
                         self.terminal
                             .seed_session_view(session_id.clone(), seed_output, &encoding);
                     }
-                    if let Some(after_session_id) = pending
-                        .as_ref()
-                        .and_then(|pending| pending.after_session_id.clone())
+                    if tab_placement.is_none()
+                        && fallback_insert_index.is_none()
+                        && let Some(after_session_id) = pending
+                            .as_ref()
+                            .and_then(|pending| pending.after_session_id.clone())
                     {
                         self.session
                             .move_session_after(&session_id, &after_session_id);
-                    }
-                    if let Some(insert_index) =
-                        pending.as_ref().and_then(|pending| pending.insert_index)
-                    {
-                        self.session
-                            .move_session_to_index(&session_id, insert_index);
                     }
                     if let Some(stale_id) = reconnect_session_id
                         && stale_id != session_id
@@ -695,6 +733,7 @@ impl NyaTermApp {
                     );
                 }
             }
+            self.settle_session_start_tab_placements_if_idle();
         }
         dirty
     }

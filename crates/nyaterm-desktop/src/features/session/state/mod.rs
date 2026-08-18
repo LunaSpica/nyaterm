@@ -45,6 +45,7 @@ pub(in crate::features) struct SessionFeatureState {
     active: ActiveSessionState,
     order: Vec<String>,
     metadata: HashMap<String, SessionRuntimeMetadata>,
+    start_tab_placements: HashMap<String, SessionStartTabPlacement>,
     custom_names: HashMap<String, String>,
     /// OSC 0/2 titles from the session PTY (fall back when no custom rename).
     dynamic_titles: HashMap<String, String>,
@@ -207,6 +208,7 @@ impl SessionFeatureState {
             active: ActiveSessionState::default(),
             order: Vec::new(),
             metadata: HashMap::new(),
+            start_tab_placements: HashMap::new(),
             custom_names: HashMap::new(),
             dynamic_titles: HashMap::new(),
             cwds: HashMap::new(),
@@ -251,6 +253,10 @@ impl SessionFeatureState {
 
     pub(in crate::features) fn start_pending_count(&self) -> usize {
         self.start.pending_count()
+    }
+
+    pub(in crate::features) fn start_visible_tab_reservation_count(&self) -> usize {
+        self.start.visible_tab_reservation_count()
     }
 
     pub(in crate::features) fn start_has_cancelled_results(&self) -> bool {
@@ -299,12 +305,17 @@ impl SessionFeatureState {
     pub(in crate::features) fn start_reserve_saved_connection(
         &mut self,
         connection_id: &str,
+        placement: SessionStartTabPlacement,
     ) -> bool {
-        self.start.reserve_saved_connection_start(connection_id)
+        self.start
+            .reserve_saved_connection_start(connection_id, placement)
     }
 
     pub(in crate::features) fn start_release_saved_connection(&mut self, connection_id: &str) {
         self.start.release_saved_connection_start(connection_id);
+        if self.start.visible_tab_reservation_count() == 0 {
+            self.clear_start_tab_placements();
+        }
     }
 
     pub(in crate::features) fn start_reconnect_is_pending(&self, session_id: &str) -> bool {
@@ -905,6 +916,13 @@ impl SessionFeatureState {
         self.order.iter().position(|id| id == session_id)
     }
 
+    pub(in crate::features) fn session_start_tab_placement(
+        &self,
+        session_id: &str,
+    ) -> Option<SessionStartTabPlacement> {
+        self.start_tab_placements.get(session_id).copied()
+    }
+
     pub(in crate::features) fn metadata(
         &self,
         session_id: &str,
@@ -940,10 +958,46 @@ impl SessionFeatureState {
         session_id: &str,
         metadata: SessionRuntimeMetadata,
     ) {
+        self.register_session_metadata_for_start(session_id, metadata, None, None);
+    }
+
+    pub(in crate::features) fn register_session_metadata_for_start(
+        &mut self,
+        session_id: &str,
+        metadata: SessionRuntimeMetadata,
+        tab_placement: Option<SessionStartTabPlacement>,
+        insert_index: Option<usize>,
+    ) {
         if !self.order.iter().any(|id| id == session_id) {
             self.order.push(session_id.to_string());
         }
         self.metadata.insert(session_id.to_string(), metadata);
+        if let Some(tab_placement) = tab_placement {
+            self.start_tab_placements
+                .insert(session_id.to_string(), tab_placement);
+            self.order.retain(|id| id != session_id);
+            let target_key = (tab_placement.insert_index, tab_placement.request_sequence);
+            let insert_index = self
+                .order
+                .iter()
+                .enumerate()
+                .find_map(|(index, existing_id)| {
+                    if let Some(existing) = self.start_tab_placements.get(existing_id) {
+                        ((existing.insert_index, existing.request_sequence) > target_key)
+                            .then_some(index)
+                    } else {
+                        (index >= tab_placement.insert_index).then_some(index)
+                    }
+                })
+                .unwrap_or(self.order.len());
+            self.order.insert(insert_index, session_id.to_string());
+        } else if let Some(insert_index) = insert_index {
+            self.move_session_to_index(session_id, insert_index);
+        }
+    }
+
+    pub(in crate::features) fn clear_start_tab_placements(&mut self) {
+        self.start_tab_placements.clear();
     }
 
     pub(in crate::features) fn move_session_after(
@@ -1384,6 +1438,7 @@ impl SessionFeatureState {
         self.remove_trzsz_session_runtime(session_id);
         self.remove_remote_file_service(session_id);
         self.order.retain(|id| id != session_id);
+        self.start_tab_placements.remove(session_id);
         let multiplex_key = self
             .metadata
             .remove(session_id)
@@ -2099,6 +2154,7 @@ pub(in crate::features) struct PendingSessionStart {
     pub multiplex_key: Option<String>,
     pub source_connection_id: Option<String>,
     pub workspace_split: Option<(WorkspaceSplitDirection, String)>,
+    pub tab_placement: Option<SessionStartTabPlacement>,
     /// Existing pane being replaced by this request, when this is a reconnect.
     pub reconnect_session_id: Option<String>,
 }
@@ -2113,6 +2169,13 @@ pub(in crate::features) struct FailedSessionStart {
     pub error: String,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub(in crate::features) struct SessionStartTabPlacement {
+    pub(in crate::features) insert_index: usize,
+    pub(in crate::features) request_sequence: u64,
+    pub(in crate::features) requested_at: Instant,
+}
+
 pub(super) struct SessionStartFeatureState {
     tx: mpsc::Sender<SessionStartResult>,
     rx: mpsc::Receiver<SessionStartResult>,
@@ -2123,7 +2186,8 @@ pub(super) struct SessionStartFeatureState {
     cancelled: HashSet<String>,
     reconnect_failures: HashMap<String, String>,
     pending_workspace_split: Option<(WorkspaceSplitDirection, String)>,
-    preparing_saved_connections: HashSet<String>,
+    preparing_saved_connections: HashMap<String, SessionStartTabPlacement>,
+    next_request_sequence: u64,
 }
 
 pub(in crate::features) enum SessionStartEventRequest {
@@ -2145,6 +2209,7 @@ pub(in crate::features) struct SavedConnectionStartOptions {
     pub startup_command: Option<StartupCommandRequest>,
     pub reconnect_session_id: Option<String>,
     pub workspace_split: Option<(WorkspaceSplitDirection, String)>,
+    pub tab_placement: Option<SessionStartTabPlacement>,
 }
 
 impl SessionStartFeatureState {
@@ -2160,7 +2225,8 @@ impl SessionStartFeatureState {
             cancelled: HashSet::new(),
             reconnect_failures: HashMap::new(),
             pending_workspace_split: None,
-            preparing_saved_connections: HashSet::new(),
+            preparing_saved_connections: HashMap::new(),
+            next_request_sequence: 0,
         }
     }
 
@@ -2182,6 +2248,28 @@ impl SessionStartFeatureState {
 
     pub(in crate::features) fn pending_count(&self) -> usize {
         self.pending.len()
+    }
+
+    pub(in crate::features) fn visible_tab_reservation_count(&self) -> usize {
+        self.pending
+            .values()
+            .filter(|pending| pending.reconnect_session_id.is_none())
+            .count()
+            .saturating_add(self.failed.len())
+            .saturating_add(self.preparing_saved_connections.len())
+    }
+
+    pub(in crate::features) fn allocate_tab_placement(
+        &mut self,
+        insert_index: usize,
+    ) -> SessionStartTabPlacement {
+        let placement = SessionStartTabPlacement {
+            insert_index,
+            request_sequence: self.next_request_sequence,
+            requested_at: Instant::now(),
+        };
+        self.next_request_sequence = self.next_request_sequence.saturating_add(1);
+        placement
     }
 
     pub(in crate::features) fn has_cancelled_results(&self) -> bool {
@@ -2222,14 +2310,15 @@ impl SessionStartFeatureState {
     pub(in crate::features) fn reserve_saved_connection_start(
         &mut self,
         connection_id: &str,
+        placement: SessionStartTabPlacement,
     ) -> bool {
         if self.source_connection_is_pending(connection_id)
-            || !self
-                .preparing_saved_connections
-                .insert(connection_id.to_string())
+            || self.preparing_saved_connections.contains_key(connection_id)
         {
             return false;
         }
+        self.preparing_saved_connections
+            .insert(connection_id.to_string(), placement);
         true
     }
 
@@ -2238,7 +2327,7 @@ impl SessionStartFeatureState {
     }
 
     pub(in crate::features) fn saved_connection_is_preparing(&self, connection_id: &str) -> bool {
-        self.preparing_saved_connections.contains(connection_id)
+        self.preparing_saved_connections.contains_key(connection_id)
     }
 
     pub(in crate::features) fn register_pending(
@@ -2246,6 +2335,16 @@ impl SessionStartFeatureState {
         request_id: String,
         pending: PendingSessionStart,
     ) -> bool {
+        if let (Some(connection_id), Some(placement)) = (
+            pending.source_connection_id.as_deref(),
+            pending.tab_placement,
+        ) && self
+            .preparing_saved_connections
+            .get(connection_id)
+            .is_some_and(|preparing| preparing.request_sequence == placement.request_sequence)
+        {
+            self.preparing_saved_connections.remove(connection_id);
+        }
         let reconnecting = pending.reconnect_session_id.is_some();
         self.pending.insert(request_id.clone(), pending);
         if !reconnecting {

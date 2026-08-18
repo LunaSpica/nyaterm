@@ -89,7 +89,20 @@ impl NyaTermApp {
         options: SavedConnectionStartOptions,
         cx: &mut Context<Self>,
     ) {
-        if !self.session.start_reserve_saved_connection(&connection.id) {
+        let options = self.prepare_session_start_options(options);
+        let Some(placement) = options.tab_placement else {
+            self.shell.set_status(format!(
+                "{} could not reserve a tab position",
+                connection.name
+            ));
+            self.shell.show_workspace();
+            cx.notify();
+            return;
+        };
+        if !self
+            .session
+            .start_reserve_saved_connection(&connection.id, placement)
+        {
             self.shell
                 .set_status(format!("{} is already connecting", connection.name));
             self.shell.show_workspace();
@@ -164,6 +177,8 @@ impl NyaTermApp {
     ) {
         let connection_id = connection.id.clone();
         let workspace_split = options.workspace_split.clone();
+        let tab_placement = options.tab_placement;
+        let fallback_insert_index = options.insert_index.filter(|_| tab_placement.is_none());
         match connection.config.clone() {
             ConnectionType::LocalTerminal {
                 shell_path,
@@ -320,7 +335,7 @@ impl NyaTermApp {
                 match self.create_rdp_runtime(config.clone()) {
                     Ok(session_id) => {
                         let source_connection_id = Some(connection.id.clone());
-                        self.register_session(
+                        self.register_session_for_start(
                             &session_id,
                             crate::models::SessionRuntimeMetadata {
                                 ssh_config: None,
@@ -330,6 +345,8 @@ impl NyaTermApp {
                                 launch_config: SessionLaunchConfig::Rdp(config),
                                 disconnected: false,
                             },
+                            tab_placement,
+                            fallback_insert_index,
                         );
                         if let Some(custom_name) = options.custom_name {
                             self.session
@@ -341,13 +358,12 @@ impl NyaTermApp {
                         if options.locked {
                             self.session.set_tab_locked(&session_id, true);
                         }
-                        if let Some(after_session_id) = options.after_session_id {
+                        if tab_placement.is_none()
+                            && fallback_insert_index.is_none()
+                            && let Some(after_session_id) = options.after_session_id
+                        {
                             self.session
                                 .move_session_after(&session_id, &after_session_id);
-                        }
-                        if let Some(insert_index) = options.insert_index {
-                            self.session
-                                .move_session_to_index(&session_id, insert_index);
                         }
                         self.persist_connection_used(connection.id.clone(), cx);
                         self.activate_session_id(&session_id);
@@ -361,7 +377,7 @@ impl NyaTermApp {
                     Err(error) => {
                         let message = format!("RDP connection failed: {error}");
                         let session_id = self.create_failed_rdp_runtime(error);
-                        self.register_session(
+                        self.register_session_for_start(
                             &session_id,
                             crate::models::SessionRuntimeMetadata {
                                 ssh_config: None,
@@ -371,6 +387,8 @@ impl NyaTermApp {
                                 launch_config: SessionLaunchConfig::Rdp(config),
                                 disconnected: false,
                             },
+                            tab_placement,
+                            fallback_insert_index,
                         );
                         if let Some(custom_name) = options.custom_name {
                             self.session
@@ -422,7 +440,7 @@ impl NyaTermApp {
                 };
                 match self.create_vnc_runtime(config.clone()) {
                     Ok(session_id) => {
-                        self.register_session(
+                        self.register_session_for_start(
                             &session_id,
                             crate::models::SessionRuntimeMetadata {
                                 ssh_config: None,
@@ -432,6 +450,8 @@ impl NyaTermApp {
                                 launch_config: SessionLaunchConfig::Vnc(config),
                                 disconnected: false,
                             },
+                            tab_placement,
+                            fallback_insert_index,
                         );
                         if let Some(custom_name) = options.custom_name {
                             self.session
@@ -443,13 +463,12 @@ impl NyaTermApp {
                         if options.locked {
                             self.session.set_tab_locked(&session_id, true);
                         }
-                        if let Some(after_session_id) = options.after_session_id {
+                        if tab_placement.is_none()
+                            && fallback_insert_index.is_none()
+                            && let Some(after_session_id) = options.after_session_id
+                        {
                             self.session
                                 .move_session_after(&session_id, &after_session_id);
-                        }
-                        if let Some(insert_index) = options.insert_index {
-                            self.session
-                                .move_session_to_index(&session_id, insert_index);
                         }
                         self.persist_connection_used(connection.id.clone(), cx);
                         self.activate_session_id(&session_id);
@@ -463,7 +482,7 @@ impl NyaTermApp {
                     Err(error) => {
                         let message = format!("VNC connection failed: {error}");
                         let session_id = self.create_failed_vnc_runtime(error);
-                        self.register_session(
+                        self.register_session_for_start(
                             &session_id,
                             crate::models::SessionRuntimeMetadata {
                                 ssh_config: None,
@@ -473,6 +492,8 @@ impl NyaTermApp {
                                 launch_config: SessionLaunchConfig::Vnc(config),
                                 disconnected: false,
                             },
+                            tab_placement,
+                            fallback_insert_index,
                         );
                         if let Some(custom_name) = options.custom_name {
                             self.session
@@ -512,6 +533,7 @@ impl NyaTermApp {
             startup_command,
             reconnect_session_id,
             workspace_split,
+            tab_placement,
         } = options;
         let connection_name = connection.name.clone();
         let source_connection_id = Some(connection.id.clone());
@@ -538,6 +560,7 @@ impl NyaTermApp {
                 source_connection_id,
                 reconnect_session_id,
                 workspace_split,
+                tab_placement,
                 status_message: format!("connecting to {connection_name}"),
                 append_start_log: true,
             },
